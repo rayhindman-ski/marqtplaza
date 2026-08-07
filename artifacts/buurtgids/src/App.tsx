@@ -81,10 +81,11 @@ function SearchState({
 }: {
   language: Language;
   onLanguageChange: (language: Language) => void;
-  onSearch: (locId: string) => void;
+  onSearch: (locId: string, neighborhood?: string) => void;
 }) {
   const [query, setQuery] = useState('');
   const [error, setError] = useState('');
+  const [selectedCityId, setSelectedCityId] = useState<string | null>(null);
   const t = translations[language];
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -165,13 +166,48 @@ function SearchState({
           <p className="text-xs text-muted-foreground mb-4 uppercase tracking-widest font-bold">{t.popularDestinations}</p>
           <div className="flex flex-wrap justify-center gap-2.5">
             {LOCATIONS.map(loc => (
-              <button
+              <div
                 key={loc.id}
-                onClick={() => onSearch(loc.id)}
-                className="px-4 py-2 bg-card/80 backdrop-blur-sm border border-border/60 rounded-full text-sm font-semibold text-foreground hover:border-primary/50 hover:text-primary transition-all shadow-sm hover:shadow-md"
+                className={cn(
+                  "flex flex-col items-center gap-2 rounded-2xl p-1.5 transition-colors",
+                  selectedCityId === loc.id && "bg-primary/5 ring-1 ring-primary/20",
+                )}
               >
-                {getLocationName(loc, language)}
-              </button>
+                <button
+                  type="button"
+                  aria-pressed={selectedCityId === loc.id}
+                  onClick={() => setSelectedCityId(loc.id)}
+                  className={cn(
+                    "px-4 py-2 backdrop-blur-sm border rounded-full text-sm font-semibold transition-all shadow-sm hover:shadow-md",
+                    selectedCityId === loc.id
+                      ? "bg-foreground text-background border-foreground"
+                      : "bg-card/80 border-border/60 text-foreground hover:border-primary/50 hover:text-primary",
+                  )}
+                >
+                  {getLocationName(loc, language)}
+                </button>
+                {selectedCityId === loc.id && (
+                  <div className="flex max-w-[230px] flex-wrap justify-center gap-1.5 animate-in fade-in slide-in-from-top-1 duration-300">
+                    {loc.neighborhoods.map((neighborhood) => (
+                      <button
+                        key={neighborhood}
+                        type="button"
+                        onClick={() => onSearch(loc.id, neighborhood)}
+                        className="rounded-full border border-border/50 bg-card/80 px-2.5 py-1 text-[11px] font-semibold text-muted-foreground transition-all hover:border-primary/50 hover:bg-primary/5 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                      >
+                        {neighborhood}
+                      </button>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() => onSearch(loc.id)}
+                      className="rounded-full border border-primary/40 bg-primary/10 px-2.5 py-1 text-[11px] font-bold text-primary transition-all hover:bg-primary hover:text-primary-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                    >
+                      {t.exploreCity(getLocationName(loc, language))}
+                    </button>
+                  </div>
+                )}
+              </div>
             ))}
           </div>
         </div>
@@ -180,41 +216,59 @@ function SearchState({
   );
 }
 
-function SchematicMap({ locationId }: { locationId: string }) {
+const CITY_LABELS = {
+  amsterdam: [
+    { text: 'Jordaan', x: 250, y: 400 },
+    { text: 'De Pijp', x: 600, y: 800 },
+    { text: 'Oud-West', x: 200, y: 650 },
+  ],
+  rotterdam: [
+    { text: 'Kop van Zuid', x: 600, y: 550 },
+    { text: 'Kralingen', x: 800, y: 300 },
+    { text: 'Delfshaven', x: 300, y: 450 },
+  ],
+  utrecht: [
+    { text: 'Wittevrouwen', x: 650, y: 350 },
+    { text: 'Lombok', x: 250, y: 500 },
+    { text: 'Oudwijk', x: 700, y: 650 },
+  ],
+  denhaag: [
+    { text: 'Scheveningen', x: 350, y: 250 },
+    { text: 'Statenkwartier', x: 450, y: 450 },
+    { text: 'Schilderswijk', x: 650, y: 700 },
+  ],
+  eindhoven: [
+    { text: 'Strijp-S', x: 350, y: 400 },
+    { text: 'Woensel', x: 600, y: 250 },
+    { text: 'Stratum', x: 650, y: 750 },
+  ],
+} as const;
+
+function getNeighborhoodFocus(
+  locationId: string,
+  selectedNeighborhood: string | null,
+) {
+  const loc = LOCATIONS.find((location) => location.id === locationId);
+  if (!loc || !selectedNeighborhood) return null;
+  return CITY_LABELS[loc.mapType].find(
+    (label) => label.text === selectedNeighborhood,
+  ) ?? null;
+}
+
+function SchematicMap({
+  locationId,
+  selectedNeighborhood,
+}: {
+  locationId: string;
+  selectedNeighborhood: string | null;
+}) {
   const loc = LOCATIONS.find(l => l.id === locationId);
   if (!loc) return null;
-
-  const cityLabels = {
-    amsterdam: [
-      { text: 'Jordaan', x: 250, y: 400 },
-      { text: 'De Pijp', x: 600, y: 800 },
-      { text: 'Oud-West', x: 200, y: 650 }
-    ],
-    rotterdam: [
-      { text: 'Kop van Zuid', x: 600, y: 550 },
-      { text: 'Kralingen', x: 800, y: 300 },
-      { text: 'Delfshaven', x: 300, y: 450 }
-    ],
-    utrecht: [
-      { text: 'Wittevrouwen', x: 650, y: 350 },
-      { text: 'Lombok', x: 250, y: 500 },
-      { text: 'Oudwijk', x: 700, y: 650 }
-    ],
-    denhaag: [
-      { text: 'Scheveningen', x: 350, y: 250 },
-      { text: 'Statenkwartier', x: 450, y: 450 },
-      { text: 'Schilderswijk', x: 650, y: 700 }
-    ],
-    eindhoven: [
-      { text: 'Strijp-S', x: 350, y: 400 },
-      { text: 'Woensel', x: 600, y: 250 },
-      { text: 'Stratum', x: 650, y: 750 }
-    ]
-  };
+  const cityLabels = CITY_LABELS[loc.mapType];
 
   return (
     <div className="absolute inset-0 bg-accent/30 z-0 overflow-hidden border-l border-border pointer-events-none" aria-hidden="true">
-      <svg viewBox="0 0 1000 1000" preserveAspectRatio="xMidYMid slice" className="w-full h-full opacity-60">
+       <svg viewBox="0 0 1000 1000" preserveAspectRatio="xMidYMid slice" className="w-full h-full opacity-60">
         <defs>
           <pattern id="city-grid" width="50" height="50" patternUnits="userSpaceOnUse">
             <path d="M 50 0 L 0 0 0 50" fill="none" stroke="currentColor" className="text-secondary/5" strokeWidth="1" />
@@ -274,7 +328,12 @@ function SchematicMap({ locationId }: { locationId: string }) {
             y={lbl.y}
             fill="currentColor"
             className="text-secondary font-extrabold text-5xl uppercase tracking-[0.2em] pointer-events-none"
-            style={{ opacity: 0.15 }}
+            style={{
+              opacity: selectedNeighborhood === lbl.text ? 0.45 : 0.15,
+              fill: selectedNeighborhood === lbl.text
+                ? 'hsl(var(--primary))'
+                : undefined,
+            }}
           >
             {lbl.text}
           </text>
@@ -391,11 +450,13 @@ function MarkerCard({
 function DiscoveryState({
   language,
   locationId,
+  initialNeighborhood,
   onBack,
   onLanguageChange,
 }: {
   language: Language;
   locationId: string;
+  initialNeighborhood?: string;
   onBack: () => void;
   onLanguageChange: (language: Language) => void;
 }) {
@@ -406,6 +467,9 @@ function DiscoveryState({
     Events: true,
     Specials: true
   });
+  const [selectedNeighborhood, setSelectedNeighborhood] = useState<string | null>(
+    initialNeighborhood ?? null,
+  );
   const [selectedMarker, setSelectedMarker] = useState<string | null>(null);
   const [view, setView] = useState<'map' | 'list'>('map');
 
@@ -460,6 +524,50 @@ function DiscoveryState({
               </button>
             ))}
           </div>
+          <div className="mt-5 border-t border-border/70 pt-4">
+            <p className="mb-2 text-xs font-bold uppercase tracking-widest text-muted-foreground">
+              {t.neighborhoods}
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => setSelectedNeighborhood(null)}
+                aria-pressed={selectedNeighborhood === null}
+                className={cn(
+                  "rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+                  selectedNeighborhood === null
+                    ? "border-foreground bg-foreground text-background"
+                    : "border-border bg-card text-muted-foreground hover:border-primary/50 hover:text-primary",
+                )}
+              >
+                {t.allNeighborhoods}
+              </button>
+              {location.neighborhoods.map((neighborhood) => (
+                <button
+                  type="button"
+                  key={neighborhood}
+                  onClick={() => {
+                    setSelectedNeighborhood(neighborhood);
+                    setSelectedMarker(null);
+                  }}
+                  aria-pressed={selectedNeighborhood === neighborhood}
+                  className={cn(
+                    "rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+                    selectedNeighborhood === neighborhood
+                      ? "border-primary bg-primary text-primary-foreground"
+                      : "border-border bg-card text-muted-foreground hover:border-primary/50 hover:text-primary",
+                  )}
+                >
+                  {neighborhood}
+                </button>
+              ))}
+            </div>
+            {selectedNeighborhood && (
+              <p className="mt-2 text-xs font-medium text-muted-foreground">
+                {t.neighborhoodLabel}: <span className="font-bold text-foreground">{selectedNeighborhood}</span>
+              </p>
+            )}
+          </div>
         </div>
 
         <div className="flex-1 overflow-y-auto p-6 scroll-smooth">
@@ -506,7 +614,10 @@ function DiscoveryState({
 
       {/* Map Area */}
       <div className="flex-1 relative h-full w-full overflow-hidden bg-background">
-        <SchematicMap locationId={location.id} />
+         <SchematicMap
+           locationId={location.id}
+           selectedNeighborhood={selectedNeighborhood}
+         />
         
         {filteredMarkers.map(m => (
           <MapPin
@@ -537,6 +648,7 @@ function DiscoveryState({
 
 function MainApp() {
   const [activeLocationId, setActiveLocationId] = useState<string | null>(null);
+  const [activeNeighborhood, setActiveNeighborhood] = useState<string | undefined>();
   const [language, setLanguage] = useState<Language>(() => {
     if (typeof window === 'undefined') return 'nl';
     return window.localStorage.getItem('buurtplaza-language') === 'en' ? 'en' : 'nl';
@@ -552,7 +664,10 @@ function MainApp() {
       <SearchState
         language={language}
         onLanguageChange={setLanguage}
-        onSearch={setActiveLocationId}
+        onSearch={(locationId, neighborhood) => {
+          setActiveLocationId(locationId);
+          setActiveNeighborhood(neighborhood);
+        }}
       />
     );
   }
@@ -561,6 +676,7 @@ function MainApp() {
     <DiscoveryState 
       language={language}
       locationId={activeLocationId} 
+      initialNeighborhood={activeNeighborhood}
       onBack={() => setActiveLocationId(null)} 
       onLanguageChange={setLanguage}
     />

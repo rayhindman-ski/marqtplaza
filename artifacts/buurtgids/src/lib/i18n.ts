@@ -14,6 +14,11 @@ export const translations = {
     placeholder: 'Voer stad of postcode in (bijv. Amsterdam, 1011)',
     explore: 'Ontdek',
     popularDestinations: 'Populaire bestemmingen',
+    neighborhoods: 'Buurten',
+    neighborhoodLabel: 'Buurt',
+    allNeighborhoods: 'Alle buurten',
+    chooseNeighborhood: (city: string) => `Kies een buurt in ${city}`,
+    exploreCity: (city: string) => `Ontdek ${city}`,
     emptySearch: 'Vul een stad of postcode in.',
     locationNotFound:
       'Locatie niet gevonden. Probeer Amsterdam, Rotterdam, Utrecht, Den Haag of Eindhoven.',
@@ -47,6 +52,11 @@ export const translations = {
     placeholder: 'Enter city or postcode (e.g. Amsterdam, 1011)',
     explore: 'Explore',
     popularDestinations: 'Popular destinations',
+    neighborhoods: 'Neighborhoods',
+    neighborhoodLabel: 'Neighborhood',
+    allNeighborhoods: 'All neighborhoods',
+    chooseNeighborhood: (city: string) => `Choose a neighborhood in ${city}`,
+    exploreCity: (city: string) => `Explore ${city}`,
     emptySearch: 'Please enter a city or postcode.',
     locationNotFound:
       'Location not found. Try Amsterdam, Rotterdam, Utrecht, The Hague, or Eindhoven.',

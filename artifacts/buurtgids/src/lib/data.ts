@@ -6,6 +6,7 @@ export interface Location {
   postcodes: string[];
   description: string;
   mapType: 'amsterdam' | 'rotterdam' | 'utrecht' | 'denhaag' | 'eindhoven';
+  neighborhoods: string[];
 }
 
 export interface Marker {
@@ -20,11 +21,11 @@ export interface Marker {
 }
 
 export const LOCATIONS: Location[] = [
-  { id: 'ams', name: 'Amsterdam', postcodes: ['1011', '1012', '1013', '1014'], description: 'The historic capital, rich in canals and culture.', mapType: 'amsterdam' },
-  { id: 'rot', name: 'Rotterdam', postcodes: ['3011', '3012', '3013'], description: 'Modern architecture and the mighty Maas.', mapType: 'rotterdam' },
-  { id: 'utr', name: 'Utrecht', postcodes: ['3511', '3512'], description: 'The beating heart of the Netherlands.', mapType: 'utrecht' },
-  { id: 'dhg', name: 'The Hague', postcodes: ['2511', '2512'], description: 'City of peace, justice, and the sea.', mapType: 'denhaag' },
-  { id: 'ein', name: 'Eindhoven', postcodes: ['5611', '5612'], description: 'The city of light and innovation.', mapType: 'eindhoven' },
+  { id: 'ams', name: 'Amsterdam', postcodes: ['1011', '1012', '1013', '1014'], description: 'The historic capital, rich in canals and culture.', mapType: 'amsterdam', neighborhoods: ['Jordaan', 'De Pijp', 'Oud-West'] },
+  { id: 'rot', name: 'Rotterdam', postcodes: ['3011', '3012', '3013'], description: 'Modern architecture and the mighty Maas.', mapType: 'rotterdam', neighborhoods: ['Kop van Zuid', 'Kralingen', 'Delfshaven'] },
+  { id: 'utr', name: 'Utrecht', postcodes: ['3511', '3512'], description: 'The beating heart of the Netherlands.', mapType: 'utrecht', neighborhoods: ['Wittevrouwen', 'Lombok', 'Oudwijk'] },
+  { id: 'dhg', name: 'The Hague', postcodes: ['2511', '2512'], description: 'City of peace, justice, and the sea.', mapType: 'denhaag', neighborhoods: ['Scheveningen', 'Statenkwartier', 'Schilderswijk'] },
+  { id: 'ein', name: 'Eindhoven', postcodes: ['5611', '5612'], description: 'The city of light and innovation.', mapType: 'eindhoven', neighborhoods: ['Strijp-S', 'Woensel', 'Stratum'] },
 ];
 
 export const MARKERS: Marker[] = [
