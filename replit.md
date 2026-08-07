@@ -1,6 +1,6 @@
-# [Project name]
+# buurtplaza.nl
 
-_Replace the heading above with the project's name, and this line with one sentence describing what this app does for users._
+Een hyperlokale gids voor het ontdekken van bedrijven, evenementen en specials in Nederlandse buurten.
 
 ## Run & Operate
 

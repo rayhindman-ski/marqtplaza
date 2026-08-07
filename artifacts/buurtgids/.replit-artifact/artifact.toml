@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "buurtplaza.nl"
+description = "Een hyperlokale gids voor het ontdekken van bedrijven, evenementen en specials in Nederlandse buurten."
+version = "1.0.0"
+id = "artifacts/buurtgids"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 22571
+
+[services.development]
+run = "pnpm --filter @workspace/buurtgids run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/buurtgids", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/buurtgids/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "22571"
+BASE_PATH = "/"
