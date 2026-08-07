@@ -1,12 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Route, Switch, Router as WouterRouter } from 'wouter';
 import { 
   Search, Compass, MapPinOff, ArrowLeft, Briefcase, 
-  Calendar, Sparkles, Map as MapIcon, List, Clock, Tag, Globe2
+  Calendar, Sparkles, Map as MapIcon, List, Clock, Tag,
+  Globe2, Bookmark, BookmarkCheck, X, ChevronDown, ChevronUp
 } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
-import { LOCATIONS, MARKERS, type Category, type Location, type Marker } from './lib/data';
+import { LOCATIONS, MARKERS, type Category, type Marker } from './lib/data';
 import {
   getLocationName,
   getMarkerCopy,
@@ -19,8 +20,7 @@ function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-// --- Components ---
-
+const STORAGE_KEY = 'buurtgids_saved_places';
 function LanguageSelector({
   language,
   onLanguageChange,
@@ -74,14 +74,37 @@ function ReferenceCategoryNav({ language }: { language: Language }) {
   );
 }
 
+function SaveButton({ saved, onToggle }: { saved: boolean; onToggle: (e: React.MouseEvent) => void }) {
+  return (
+    <button
+      onClick={onToggle}
+      aria-label={saved ? 'Remove from saved' : 'Save this place'}
+      className={cn(
+        "p-1.5 rounded-lg transition-all duration-200 shrink-0",
+        saved
+          ? "text-primary bg-primary/10 hover:bg-primary/20"
+          : "text-muted-foreground hover:text-primary hover:bg-primary/5"
+      )}
+    >
+      {saved
+        ? <BookmarkCheck className="w-4 h-4" />
+        : <Bookmark className="w-4 h-4" />
+      }
+    </button>
+  );
+}
 function SearchState({
   language,
   onLanguageChange,
   onSearch,
+  savedCount,
+  onViewSaved,
 }: {
   language: Language;
   onLanguageChange: (language: Language) => void;
   onSearch: (locId: string, neighborhood?: string) => void;
+  savedCount: number;
+  onViewSaved: () => void;
 }) {
   const [query, setQuery] = useState('');
   const [error, setError] = useState('');
@@ -111,12 +134,24 @@ function SearchState({
     <div className="flex-1 flex flex-col items-center justify-center min-h-screen p-6 relative overflow-hidden bg-background">
       <ReferenceCategoryNav language={language} />
       <LanguageSelector language={language} onLanguageChange={onLanguageChange} />
+
       {/* Decorative background */}
       <div className="absolute inset-0 z-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-accent/60 via-background to-background" />
       <div className="absolute inset-0 z-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCAgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48Y2lyY2xlIGN4PSIyIiBjeT0iMiIgcj0iMSIgZmlsbD0iIzAwMDAwMCIgZmlsbC1vcGFjaXR5PSIwLjAzIi8+PC9zdmc+')] mix-blend-multiply pointer-events-none" />
       
       <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-primary/10 rounded-full blur-3xl pointer-events-none" />
       <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-secondary/5 rounded-full blur-3xl pointer-events-none" />
+
+      {/* Saved places shortcut */}
+      {savedCount > 0 && (
+        <button
+          onClick={onViewSaved}
+          className="absolute bottom-8 right-6 z-10 flex items-center gap-2 px-4 py-2.5 bg-card/90 backdrop-blur-sm border border-border/60 rounded-full text-sm font-bold text-foreground hover:border-primary/50 hover:text-primary shadow-md hover:shadow-lg transition-all sm:bottom-auto sm:top-16 sm:right-7"
+        >
+          <BookmarkCheck className="w-4 h-4 text-primary" />
+          <span>{t.savedCount(savedCount)}</span>
+        </button>
+      )}
 
       <div className="z-10 max-w-xl w-full text-center space-y-10 animate-in fade-in slide-in-from-bottom-8 duration-700 ease-out">
         <div className="space-y-5">
@@ -351,12 +386,16 @@ function MapPin({
   language,
   marker,
   isSelected,
+  isSaved,
   onClick,
+  onSave,
 }: {
   language: Language;
   marker: Marker;
   isSelected: boolean;
+  isSaved: boolean;
   onClick: () => void;
+  onSave: (e: React.MouseEvent) => void;
 }) {
   const Icon = CATEGORY_ICONS[marker.category];
   const t = translations[language];
@@ -370,13 +409,18 @@ function MapPin({
         isSelected ? "scale-[1.35] z-30" : "scale-100 hover:scale-[1.15] hover:z-20"
       )}
       style={{ left: `${marker.x}%`, top: `${marker.y}%` }}
-       aria-label={t.selectMarker(marker.name)}
+      aria-label={t.selectMarker(marker.name)}
     >
       <div className={cn(
         "relative flex items-center justify-center w-11 h-11 rounded-full shadow-lg backdrop-blur-md border-2 transition-colors duration-300",
         isSelected ? "bg-primary text-primary-foreground border-primary" : "bg-card/95 text-foreground border-border group-hover:border-primary/50 group-focus-visible:ring-4 group-focus-visible:ring-primary/30",
       )}>
         <Icon className="w-5 h-5" />
+        {isSaved && (
+          <span className="absolute -top-1 -right-1 w-4 h-4 bg-primary rounded-full flex items-center justify-center border-2 border-background">
+            <BookmarkCheck className="w-2.5 h-2.5 text-primary-foreground" />
+          </span>
+        )}
         {isSelected && (
           <span className="absolute flex h-full w-full rounded-full">
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-50" />
@@ -384,11 +428,31 @@ function MapPin({
         )}
       </div>
       <div className={cn(
-        "absolute top-full mt-3 left-1/2 -translate-x-1/2 px-3.5 py-2 rounded-xl bg-card shadow-xl border border-border whitespace-nowrap pointer-events-none transition-all duration-300 ease-out",
+        "absolute top-full mt-3 left-1/2 -translate-x-1/2 rounded-xl bg-card shadow-xl border border-border whitespace-nowrap pointer-events-none transition-all duration-300 ease-out",
         isSelected ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-2 group-hover:opacity-100 group-hover:translate-y-0"
       )}>
-        <p className="text-sm font-bold text-foreground">{marker.name}</p>
-         <p className="text-xs font-semibold text-muted-foreground mt-0.5">{t.categories[marker.category]}</p>
+        <div className="px-3.5 py-2">
+          <p className="text-sm font-bold text-foreground">{marker.name}</p>
+          <p className="text-xs font-semibold text-muted-foreground mt-0.5">{t.categories[marker.category]}</p>
+        </div>
+        {isSelected && (
+          <div className="border-t border-border px-3 py-1.5 pointer-events-auto" onClick={e => e.stopPropagation()}>
+            <button
+              onClick={onSave}
+              className={cn(
+                "w-full flex items-center justify-center gap-1.5 text-xs font-bold py-1 rounded-md transition-colors",
+                isSaved
+                  ? "text-primary hover:text-destructive"
+                  : "text-muted-foreground hover:text-primary"
+              )}
+            >
+              {isSaved
+                ? <><BookmarkCheck className="w-3.5 h-3.5" /> {t.saved}</>
+                : <><Bookmark className="w-3.5 h-3.5" /> {t.savePlace}</>
+              }
+            </button>
+          </div>
+        )}
       </div>
     </button>
   );
@@ -398,12 +462,16 @@ function MarkerCard({
   language,
   marker,
   isSelected,
+  isSaved,
   onClick,
+  onSave,
 }: {
   language: Language;
   marker: Marker;
   isSelected: boolean;
+  isSaved: boolean;
   onClick: () => void;
+  onSave: (e: React.MouseEvent) => void;
 }) {
   const Icon = CATEGORY_ICONS[marker.category];
   const DetailIcon = DETAIL_ICONS[marker.category];
@@ -435,6 +503,7 @@ function MarkerCard({
               "font-bold text-base truncate transition-colors",
               isSelected ? "text-primary" : "text-foreground group-hover:text-primary"
             )}>{marker.name}</h3>
+            <SaveButton saved={isSaved} onToggle={onSave} />
           </div>
           <p className="text-muted-foreground text-sm mb-3 line-clamp-2 leading-relaxed">{copy.description}</p>
           <div className="flex items-center gap-1.5 text-xs font-semibold text-secondary bg-secondary/5 w-fit px-2.5 py-1 rounded-md">
@@ -447,18 +516,105 @@ function MarkerCard({
   );
 }
 
+function SavedCategorySection({
+  language,
+  category,
+  markers,
+  onRemove,
+}: {
+  language: Language;
+  category: Category;
+  markers: Marker[];
+  onRemove: (id: string) => void;
+}) {
+  const [collapsed, setCollapsed] = useState(false);
+  const Icon = CATEGORY_ICONS[category];
+  const DetailIcon = DETAIL_ICONS[category];
+  const t = translations[language];
+
+  if (markers.length === 0) return null;
+
+  return (
+    <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+      <button
+        onClick={() => setCollapsed(c => !c)}
+        className="w-full flex items-center gap-3 mb-4 group focus-visible:outline-none"
+      >
+        <div className="p-2 bg-primary/10 rounded-xl">
+          <Icon className="w-5 h-5 text-primary" />
+        </div>
+        <h3 className="text-lg font-extrabold text-foreground group-hover:text-primary transition-colors">
+          {t.categories[category]}
+        </h3>
+        <span className="text-xs font-bold text-muted-foreground bg-muted px-2 py-0.5 rounded-full">{markers.length}</span>
+        <div className="ml-auto text-muted-foreground">
+          {collapsed ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4" />}
+        </div>
+      </button>
+
+      {!collapsed && (
+        <div className="flex flex-col gap-3 mb-8">
+          {markers.map(marker => {
+            const location = LOCATIONS.find(l => l.id === marker.locationId);
+            const copy = getMarkerCopy(marker, language);
+            return (
+              <div
+                key={marker.id}
+                className="flex items-start gap-4 p-4 bg-card border border-border rounded-2xl hover:border-primary/30 hover:shadow-md transition-all duration-300 group"
+              >
+                <div className="p-2.5 bg-muted rounded-xl shrink-0 group-hover:bg-primary/10 transition-colors">
+                  <Icon className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-start justify-between gap-2 mb-1">
+                    <h4 className="font-bold text-sm text-foreground truncate">{marker.name}</h4>
+                    <button
+                      onClick={() => onRemove(marker.id)}
+                      aria-label={`${t.removeSaved} ${marker.name}`}
+                      className="p-1 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all shrink-0"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                  <p className="text-xs text-muted-foreground line-clamp-2 mb-2 leading-relaxed">{copy.description}</p>
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <div className="flex items-center gap-1 text-xs font-semibold text-secondary bg-secondary/5 px-2 py-0.5 rounded-md">
+                      <DetailIcon className="w-3 h-3 opacity-70" />
+                      {copy.details}
+                    </div>
+                    {location && (
+                      <span className="text-xs text-muted-foreground font-medium">
+                        {getLocationName(location, language)}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
 function DiscoveryState({
   language,
   locationId,
   initialNeighborhood,
   onBack,
   onLanguageChange,
+  savedIds,
+  onToggle,
+  onViewSaved,
 }: {
   language: Language;
   locationId: string;
   initialNeighborhood?: string;
   onBack: () => void;
   onLanguageChange: (language: Language) => void;
+  savedIds: Set<string>;
+  onToggle: (id: string) => void;
+  onViewSaved: () => void;
 }) {
   const location = LOCATIONS.find(l => l.id === locationId);
   const t = translations[language];
@@ -484,9 +640,12 @@ function DiscoveryState({
     m => m.locationId === location.id && categories[m.category]
   );
 
+  const savedCount = savedIds.size;
+
   return (
     <div className="flex h-screen w-full overflow-hidden bg-background">
       <LanguageSelector language={language} onLanguageChange={onLanguageChange} />
+
       {/* Sidebar List */}
       <div className={cn(
         "w-full md:w-[420px] h-full flex flex-col bg-card/95 backdrop-blur-xl md:bg-card border-r border-border shadow-2xl z-20 absolute md:relative transition-transform duration-500 ease-[cubic-bezier(0.32,0.72,0,1)]",
@@ -497,14 +656,31 @@ function DiscoveryState({
             <button 
               onClick={onBack} 
               className="p-2 hover:bg-muted rounded-full transition-colors text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-               aria-label={t.backToSearch}
+              aria-label={t.backToSearch}
             >
               <ArrowLeft className="w-6 h-6" />
             </button>
-            <div>
+            <div className="flex-1 min-w-0">
               <h2 className="text-3xl font-extrabold text-foreground tracking-tight">{getLocationName(location, language)}</h2>
               <p className="text-sm text-muted-foreground font-medium">{t.discoveriesNearby(filteredMarkers.length)}</p>
             </div>
+            <button
+              onClick={onViewSaved}
+              aria-label={t.savedPlaces}
+              className={cn(
+                "relative p-2.5 rounded-xl transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+                savedCount > 0
+                  ? "bg-primary/10 text-primary hover:bg-primary/20"
+                  : "bg-muted text-muted-foreground hover:text-foreground hover:bg-muted/80"
+              )}
+            >
+              <BookmarkCheck className="w-5 h-5" />
+              {savedCount > 0 && (
+                <span className="absolute -top-1 -right-1 w-5 h-5 bg-primary rounded-full flex items-center justify-center text-[10px] font-black text-primary-foreground">
+                  {savedCount > 9 ? '9+' : savedCount}
+                </span>
+              )}
+            </button>
           </div>
           
           <div className="flex flex-wrap gap-2.5">
@@ -578,11 +754,13 @@ function DiscoveryState({
                 className="animate-in fade-in slide-in-from-bottom-4 duration-500 fill-mode-both"
                 style={{ animationDelay: `${i * 50}ms` }}
               >
-                <MarkerCard 
+                <MarkerCard
                   language={language}
                   marker={m}
-                  isSelected={selectedMarker === m.id} 
-                  onClick={() => setSelectedMarker(m.id)} 
+                  isSelected={selectedMarker === m.id}
+                  isSaved={savedIds.has(m.id)}
+                  onClick={() => setSelectedMarker(m.id)}
+                  onSave={(e) => { e.stopPropagation(); onToggle(m.id); }}
                 />
               </div>
             ))}
@@ -625,7 +803,9 @@ function DiscoveryState({
             language={language}
             marker={m}
             isSelected={selectedMarker === m.id}
+            isSaved={savedIds.has(m.id)}
             onClick={() => setSelectedMarker(m.id)}
+            onSave={(e) => { e.stopPropagation(); onToggle(m.id); }}
           />
         ))}
 
@@ -644,41 +824,56 @@ function DiscoveryState({
   );
 }
 
-// --- Main App Route ---
-
+type AppScreen =
+  | { kind: 'search' }
+  | { kind: 'discovery'; locationId: string; neighborhood?: string }
+  | { kind: 'saved' };
 function MainApp() {
-  const [activeLocationId, setActiveLocationId] = useState<string | null>(null);
-  const [activeNeighborhood, setActiveNeighborhood] = useState<string | undefined>();
+  const [screen, setScreen] = useState<AppScreen>({ kind: 'search' });
   const [language, setLanguage] = useState<Language>(() => {
     if (typeof window === 'undefined') return 'nl';
     return window.localStorage.getItem('buurtplaza-language') === 'en' ? 'en' : 'nl';
   });
+  const { savedIds, toggle, savedCount } = useSavedPlaces();
 
   useEffect(() => {
     window.localStorage.setItem('buurtplaza-language', language);
     document.documentElement.lang = language;
   }, [language]);
 
-  if (!activeLocationId) {
+  if (screen.kind === 'saved') {
     return (
-      <SearchState
+      <SavedView
         language={language}
+        savedIds={savedIds}
+        onToggle={toggle}
+        onBack={() => setScreen({ kind: 'search' })}
+      />
+    );
+  }
+
+  if (screen.kind === 'discovery') {
+    return (
+      <DiscoveryState
+        language={language}
+        locationId={screen.locationId}
+        initialNeighborhood={screen.neighborhood}
+        onBack={() => setScreen({ kind: 'search' })}
         onLanguageChange={setLanguage}
-        onSearch={(locationId, neighborhood) => {
-          setActiveLocationId(locationId);
-          setActiveNeighborhood(neighborhood);
-        }}
+        savedIds={savedIds}
+        onToggle={toggle}
+        onViewSaved={() => setScreen({ kind: 'saved' })}
       />
     );
   }
 
   return (
-    <DiscoveryState 
+    <SearchState
       language={language}
-      locationId={activeLocationId} 
-      initialNeighborhood={activeNeighborhood}
-      onBack={() => setActiveLocationId(null)} 
       onLanguageChange={setLanguage}
+      onSearch={(locId, neighborhood) => setScreen({ kind: 'discovery', locationId: locId, neighborhood })}
+      savedCount={savedCount}
+      onViewSaved={() => setScreen({ kind: 'saved' })}
     />
   );
 }
@@ -698,5 +893,114 @@ export default function App() {
         </Route>
       </Switch>
     </WouterRouter>
+  );
+}
+
+function useSavedPlaces() {
+  const [savedIds, setSavedIds] = useState<Set<string>>(() => {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY);
+      return stored ? new Set(JSON.parse(stored) as string[]) : new Set();
+    } catch {
+      return new Set();
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify([...savedIds]));
+    } catch {
+      // localStorage unavailable; state still works in-memory
+    }
+  }, [savedIds]);
+
+  const toggle = useCallback((id: string) => {
+    setSavedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const savedCount = savedIds.size;
+
+  return { savedIds, toggle, savedCount };
+}
+
+function SavedView({
+  language,
+  savedIds,
+  onToggle,
+  onBack,
+}: {
+  language: Language;
+  savedIds: Set<string>;
+  onToggle: (id: string) => void;
+  onBack: () => void;
+}) {
+  const t = translations[language];
+  const savedMarkers = MARKERS.filter(m => savedIds.has(m.id));
+  const byCategory: Record<Category, Marker[]> = {
+    Businesses: savedMarkers.filter(m => m.category === 'Businesses'),
+    Events: savedMarkers.filter(m => m.category === 'Events'),
+    Specials: savedMarkers.filter(m => m.category === 'Specials'),
+  };
+
+  return (
+    <div className="min-h-screen bg-background">
+      {/* Header */}
+      <div className="sticky top-0 z-20 bg-card/95 backdrop-blur-xl border-b border-border px-6 py-5 shadow-sm">
+        <div className="max-w-2xl mx-auto flex items-center gap-4">
+          <button
+            onClick={onBack}
+            className="p-2 hover:bg-muted rounded-full transition-colors text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            aria-label={t.backToSearch}
+          >
+            <ArrowLeft className="w-6 h-6" />
+          </button>
+          <div>
+            <h1 className="text-2xl font-extrabold text-foreground tracking-tight">{t.savedPlaces}</h1>
+            <p className="text-sm text-muted-foreground font-medium">{t.savedCount(savedMarkers.length)}</p>
+          </div>
+          <div className="ml-auto p-2.5 bg-primary/10 rounded-xl">
+            <BookmarkCheck className="w-5 h-5 text-primary" />
+          </div>
+        </div>
+      </div>
+
+      {/* Content */}
+      <div className="max-w-2xl mx-auto px-6 py-8">
+        {savedMarkers.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-24 text-center animate-in fade-in zoom-in-95 duration-500">
+            <div className="w-20 h-20 bg-muted rounded-full flex items-center justify-center mb-6">
+              <Bookmark className="w-9 h-9 text-muted-foreground" />
+            </div>
+            <h2 className="text-xl font-bold text-foreground mb-2">{t.noSavedPlaces}</h2>
+            <p className="text-sm text-muted-foreground max-w-xs leading-relaxed mb-8">
+              {t.noSavedPlacesDescription}
+            </p>
+            <button
+              onClick={onBack}
+              className="px-6 py-3 bg-primary text-primary-foreground rounded-full font-bold text-sm hover:bg-primary/90 transition-colors"
+            >
+              {t.exploreNeighbourhoods}
+            </button>
+          </div>
+        ) : (
+          <div>
+            {(['Businesses', 'Events', 'Specials'] as Category[]).map(cat => (
+              <SavedCategorySection
+                key={cat}
+                language={language}
+                category={cat}
+                markers={byCategory[cat]}
+                onRemove={onToggle}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
   );
 }

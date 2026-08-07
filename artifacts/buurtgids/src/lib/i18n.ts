@@ -45,6 +45,16 @@ export const translations = {
       { id: 'food-drink', label: 'Eten en drinken' },
       { id: 'shopping', label: 'Winkelen' },
     ],
+    // Saved places
+    savedPlaces: 'Opgeslagen plekken',
+    savedCount: (n: number) => `${n} opgeslagen`,
+    savePlace: 'Sla op',
+    saved: 'Opgeslagen',
+    removeSaved: 'Verwijder',
+    noSavedPlaces: 'Nog geen opgeslagen plekken',
+    noSavedPlacesDescription:
+      'Tik op het bladwijzerpictogram bij een bedrijf, evenement of aanbieding om het hier op te slaan.',
+    exploreNeighbourhoods: 'Ontdek buurten',
   },
   en: {
     languageLabel: 'Language',
@@ -83,6 +93,16 @@ export const translations = {
       { id: 'food-drink', label: 'Food & drink' },
       { id: 'shopping', label: 'Shopping' },
     ],
+    // Saved places
+    savedPlaces: 'Saved Places',
+    savedCount: (n: number) => `${n} saved`,
+    savePlace: 'Save place',
+    saved: 'Saved',
+    removeSaved: 'Remove',
+    noSavedPlaces: 'No saved places yet',
+    noSavedPlacesDescription:
+      'Tap the bookmark icon on any business, event, or special to save it here for later.',
+    exploreNeighbourhoods: 'Explore Neighbourhoods',
   },
 } as const;
 
@@ -123,43 +143,43 @@ const dutchMarkerCopy: Record<
     details: 'Open tot 18:00',
   },
   m8: {
-    description: 'Ontdekkingstours over daken met uitzicht op de stad.',
+    description: 'Daktours met uitzicht op plekken die je normaal nooit ziet.',
     details: '4 jun, 10:00',
   },
   m9: {
-    description: 'Gratis borrelplank bij twee signature drankjes.',
-    details: 'Deze week geldig',
+    description: 'Gratis proeverij bij twee signature drankjes.',
+    details: 'Geldig deze week',
   },
   m19: {
-    description: 'Third-wave koffiebar met uitzicht over de haven.',
+    description: 'Derdegolfkoffiebar met uitzicht op de haven.',
     details: 'Open tot 16:00',
   },
   m20: {
-    description: 'Avondloop over de iconische Zwaanbrug.',
+    description: 'Nachtloop over de iconische Zwanenbrug.',
     details: 'Vrijdag, 20:00',
   },
   m10: {
-    description: 'Zeldzame vondsten en knusse leeshoeken in een historische kelder.',
+    description: 'Zeldzame vondsten en knus lezen in een historische kelder.',
     details: 'Open tot 20:00',
   },
   m11: {
-    description: 'Vintage en ambachtelijke producten langs de werf.',
+    description: 'Vintage en artisanale producten langs de verzonken gracht.',
     details: 'Zaterdag, 08:00',
   },
   m12: {
-    description: 'Proeverij van vier lokale microbrouwsels voor €10.',
-    details: 'Geldig in de avond',
+    description: 'Proefvlucht van 4 lokale microbrouwerijen voor €10.',
+    details: 'Geldig \'s avonds',
   },
   m21: {
-    description: 'Intieme jazzsessies in de lounge op het dak.',
+    description: 'Intieme jazzsessies in het daklounge.',
     details: 'Vanavond, 22:00',
   },
   m22: {
-    description: 'Plantaardige lunchroom met terras.',
+    description: 'Plantaardig lunchrestaurant met terras.',
     details: 'Open tot 16:00',
   },
   m13: {
-    description: 'Geselecteerde koninklijke vondsten en historische objecten.',
+    description: 'Geselecteerde koninklijke vondsten en historische artefacten.',
     details: 'Open tot 17:00',
   },
   m14: {
