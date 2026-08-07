@@ -321,7 +321,7 @@ function SchematicMap({
         )}
 
         {/* Neighbourhood Labels */}
-        {cityLabels[loc.mapType].map((lbl, i) => (
+        {cityLabels.map((lbl, i) => (
           <text
             key={i}
             x={lbl.x}
