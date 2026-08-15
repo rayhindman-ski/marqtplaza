@@ -1,0 +1,1 @@
+- [Overpass API fetch pattern](overpass-fetch.md) — must use GET with `?data=` param and a User-Agent header; POST and text/plain body returns 406/504 from Node.js fetch.

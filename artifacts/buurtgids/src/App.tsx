@@ -1,13 +1,15 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Route, Switch, Router as WouterRouter, Link } from 'wouter';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { 
   Search, Compass, MapPinOff, ArrowLeft, Briefcase, 
   Calendar, Sparkles, Map as MapIcon, List, Clock, Tag,
   Globe2, Bookmark, BookmarkCheck, X, ChevronDown, ChevronUp,
-  ScanSearch,
+  ScanSearch, RefreshCw, WifiOff, Radio
 } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+import { useGetListings } from '@workspace/api-client-react';
 import { LOCATIONS, MARKERS, type Category, type Marker } from './lib/data';
 import { SchematicMap } from './components/SchematicMap';
 import CaptureView from './pages/CaptureView';
@@ -420,7 +422,7 @@ function SavedCategorySection({
   language: Language;
   category: Category;
   markers: Marker[];
-  onRemove: (id: string) => void;
+  onRemove: (marker: Marker) => void;
 }) {
   const [collapsed, setCollapsed] = useState(false);
   const Icon = CATEGORY_ICONS[category];
@@ -464,7 +466,7 @@ function SavedCategorySection({
                   <div className="flex items-start justify-between gap-2 mb-1">
                     <h4 className="font-bold text-sm text-foreground truncate">{marker.name}</h4>
                     <button
-                      onClick={() => onRemove(marker.id)}
+                      onClick={() => onRemove(marker)}
                       aria-label={`${t.removeSaved} ${marker.name}`}
                       className="p-1 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all shrink-0"
                     >
@@ -508,7 +510,7 @@ function DiscoveryState({
   onBack: () => void;
   onLanguageChange: (language: Language) => void;
   savedIds: Set<string>;
-  onToggle: (id: string) => void;
+  onToggle: (marker: Marker) => void;
   onViewSaved: () => void;
 }) {
   const location = LOCATIONS.find(l => l.id === locationId);
@@ -524,6 +526,9 @@ function DiscoveryState({
   const [selectedMarker, setSelectedMarker] = useState<string | null>(null);
   const [view, setView] = useState<'map' | 'list'>('map');
 
+  // Fetch live listings from the API
+  const { data, isLoading, isError, refetch } = useGetListings({ cityId: locationId });
+
   if (!location) return null;
 
   const toggleCategory = (cat: Category) => {
@@ -531,9 +536,21 @@ function DiscoveryState({
     setSelectedMarker(null);
   };
 
-  const filteredMarkers = MARKERS.filter(
-    m => m.locationId === location.id && categories[m.category]
-  );
+  // Use API data when available, fall back to static markers otherwise
+  const allMarkers: Marker[] = (data?.listings ?? MARKERS.filter(m => m.locationId === location.id)).map(l => ({
+    id: l.id,
+    locationId: l.locationId,
+    category: l.category as Category,
+    name: l.name,
+    description: l.description,
+    x: l.x,
+    y: l.y,
+    details: l.details,
+  }));
+
+  const filteredMarkers = allMarkers.filter(m => categories[m.category]);
+  const isLive = data?.source === 'live';
+  const isFallback = data?.source === 'fallback';
 
   const savedCount = savedIds.size;
 
@@ -641,9 +658,67 @@ function DiscoveryState({
           </div>
         </div>
 
+        {/* Data source badge */}
+        {!isLoading && (
+          <div className="px-6 pb-2 flex items-center gap-2">
+            {isLive ? (
+              <span className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-full">
+                <Radio className="w-3 h-3" />
+                {t.liveDataBadge}
+              </span>
+            ) : isFallback ? (
+              <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-600 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-full">
+                <WifiOff className="w-3 h-3" />
+                {t.curatedDataBadge}
+              </span>
+            ) : null}
+            {isFallback && data?.message && (
+              <span className="text-xs text-muted-foreground">{data.message}</span>
+            )}
+          </div>
+        )}
+
         <div className="flex-1 overflow-y-auto p-6 scroll-smooth">
           <div className="flex flex-col gap-4 pb-20 md:pb-0">
-            {filteredMarkers.map((m, i) => (
+            {/* Loading skeleton */}
+            {isLoading && (
+              <div className="flex flex-col gap-4 animate-in fade-in duration-300">
+                {[1, 2, 3, 4].map(i => (
+                  <div key={i} className="p-4 rounded-2xl border border-border bg-card animate-pulse">
+                    <div className="flex items-start gap-4">
+                      <div className="w-11 h-11 rounded-xl bg-muted shrink-0" />
+                      <div className="flex-1 space-y-2">
+                        <div className="h-4 bg-muted rounded w-3/4" />
+                        <div className="h-3 bg-muted rounded w-full" />
+                        <div className="h-3 bg-muted rounded w-1/2" />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                <p className="text-center text-sm text-muted-foreground mt-2">{t.loadingListings}</p>
+              </div>
+            )}
+
+            {/* Error state */}
+            {isError && !isLoading && (
+              <div className="flex flex-col items-center justify-center py-12 px-4 text-center animate-in fade-in zoom-in-95 duration-500">
+                <div className="w-14 h-14 bg-destructive/10 rounded-full flex items-center justify-center mb-4">
+                  <WifiOff className="w-7 h-7 text-destructive" />
+                </div>
+                <h3 className="text-base font-bold text-foreground mb-1">{t.listingsError}</h3>
+                <p className="text-xs text-muted-foreground max-w-[220px] mb-4">{t.dataUnavailable}</p>
+                <button
+                  onClick={() => refetch()}
+                  className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-full text-sm font-bold hover:bg-primary/90 transition-colors"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  {t.retryButton}
+                </button>
+              </div>
+            )}
+
+            {/* Listings */}
+            {!isLoading && filteredMarkers.map((m, i) => (
               <div 
                 key={m.id} 
                 className="animate-in fade-in slide-in-from-bottom-4 duration-500 fill-mode-both"
@@ -655,12 +730,12 @@ function DiscoveryState({
                   isSelected={selectedMarker === m.id}
                   isSaved={savedIds.has(m.id)}
                   onClick={() => setSelectedMarker(m.id)}
-                  onSave={(e) => { e.stopPropagation(); onToggle(m.id); }}
+                  onSave={(e) => { e.stopPropagation(); onToggle(m); }}
                 />
               </div>
             ))}
             
-            {filteredMarkers.length === 0 && (
+            {!isLoading && filteredMarkers.length === 0 && !isError && (
               <div className="flex flex-col items-center justify-center py-20 px-4 text-center animate-in fade-in zoom-in-95 duration-500">
                 <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mb-5">
                   <MapPinOff className="w-8 h-8 text-muted-foreground" />
@@ -692,7 +767,7 @@ function DiscoveryState({
            selectedNeighborhood={selectedNeighborhood}
          />
         
-        {filteredMarkers.map(m => (
+        {!isLoading && filteredMarkers.map(m => (
           <MapPin
             key={m.id}
             language={language}
@@ -700,7 +775,7 @@ function DiscoveryState({
             isSelected={selectedMarker === m.id}
             isSaved={savedIds.has(m.id)}
             onClick={() => setSelectedMarker(m.id)}
-            onSave={(e) => { e.stopPropagation(); onToggle(m.id); }}
+            onSave={(e) => { e.stopPropagation(); onToggle(m); }}
           />
         ))}
 
@@ -729,7 +804,7 @@ function MainApp() {
     if (typeof window === 'undefined') return 'nl';
     return window.localStorage.getItem('buurtplaza-language') === 'en' ? 'en' : 'nl';
   });
-  const { savedIds, toggle, savedCount } = useSavedPlaces();
+  const { savedIds, savedMarkers, toggle, savedCount } = useSavedPlaces();
 
   useEffect(() => {
     window.localStorage.setItem('buurtplaza-language', language);
@@ -740,7 +815,7 @@ function MainApp() {
     return (
       <SavedView
         language={language}
-        savedIds={savedIds}
+        savedMarkers={savedMarkers}
         onToggle={toggle}
         onBack={() => setScreen({ kind: 'search' })}
       />
@@ -783,72 +858,89 @@ function CaptureRoute() {
 
 export default function App() {
   return (
-    <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}>
-      <Switch>
-        <Route path="/" component={MainApp} />
-        <Route path="/capture" component={CaptureRoute} />
-        <Route>
-          <div className="min-h-screen flex items-center justify-center bg-background text-foreground">
-            <div className="text-center">
-              <h1 className="text-4xl font-bold mb-2">404</h1>
-              <p className="text-muted-foreground">Page not found</p>
+    <QueryClientProvider client={queryClient}>
+      <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}>
+        <Switch>
+          <Route path="/" component={MainApp} />
+          <Route path="/capture" component={CaptureRoute} />
+          <Route>
+            <div className="min-h-screen flex items-center justify-center bg-background text-foreground">
+              <div className="text-center">
+                <h1 className="text-4xl font-bold mb-2">404</h1>
+                <p className="text-muted-foreground">Page not found</p>
+              </div>
             </div>
-          </div>
-        </Route>
-      </Switch>
-    </WouterRouter>
+          </Route>
+        </Switch>
+      </WouterRouter>
+    </QueryClientProvider>
   );
 }
 
 function useSavedPlaces() {
-  const [savedIds, setSavedIds] = useState<Set<string>>(() => {
+  const [savedMarkers, setSavedMarkers] = useState<Map<string, Marker>>(() => {
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
-      return stored ? new Set(JSON.parse(stored) as string[]) : new Set();
+      if (!stored) return new Map();
+      // Support both the old format (string[]) and the new format (Marker[])
+      const parsed = JSON.parse(stored) as unknown[];
+      if (parsed.length === 0) return new Map();
+      if (typeof parsed[0] === 'string') {
+        // Legacy: IDs only – look up in static MARKERS
+        const ids = new Set(parsed as string[]);
+        const map = new Map<string, Marker>();
+        MARKERS.filter(m => ids.has(m.id)).forEach(m => map.set(m.id, m));
+        return map;
+      }
+      // New format: full marker objects
+      const map = new Map<string, Marker>();
+      (parsed as Marker[]).forEach(m => map.set(m.id, m));
+      return map;
     } catch {
-      return new Set();
+      return new Map();
     }
   });
 
   useEffect(() => {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify([...savedIds]));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify([...savedMarkers.values()]));
     } catch {
       // localStorage unavailable; state still works in-memory
     }
-  }, [savedIds]);
+  }, [savedMarkers]);
 
-  const toggle = useCallback((id: string) => {
-    setSavedIds(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
+  const toggle = useCallback((marker: Marker) => {
+    setSavedMarkers(prev => {
+      const next = new Map(prev);
+      if (next.has(marker.id)) next.delete(marker.id);
+      else next.set(marker.id, marker);
       return next;
     });
   }, []);
 
-  const savedCount = savedIds.size;
+  const savedIds = useMemo(() => new Set(savedMarkers.keys()), [savedMarkers]);
+  const savedCount = savedMarkers.size;
 
-  return { savedIds, toggle, savedCount };
+  return { savedIds, savedMarkers, toggle, savedCount };
 }
 
 function SavedView({
   language,
-  savedIds,
+  savedMarkers,
   onToggle,
   onBack,
 }: {
   language: Language;
-  savedIds: Set<string>;
-  onToggle: (id: string) => void;
+  savedMarkers: Map<string, Marker>;
+  onToggle: (marker: Marker) => void;
   onBack: () => void;
 }) {
   const t = translations[language];
-  const savedMarkers = MARKERS.filter(m => savedIds.has(m.id));
+  const savedList = [...savedMarkers.values()];
   const byCategory: Record<Category, Marker[]> = {
-    Businesses: savedMarkers.filter(m => m.category === 'Businesses'),
-    Events: savedMarkers.filter(m => m.category === 'Events'),
-    Specials: savedMarkers.filter(m => m.category === 'Specials'),
+    Businesses: savedList.filter(m => m.category === 'Businesses'),
+    Events: savedList.filter(m => m.category === 'Events'),
+    Specials: savedList.filter(m => m.category === 'Specials'),
   };
 
   return (
@@ -865,7 +957,7 @@ function SavedView({
           </button>
           <div>
             <h1 className="text-2xl font-extrabold text-foreground tracking-tight">{t.savedPlaces}</h1>
-            <p className="text-sm text-muted-foreground font-medium">{t.savedCount(savedMarkers.length)}</p>
+            <p className="text-sm text-muted-foreground font-medium">{t.savedCount(savedList.length)}</p>
           </div>
           <div className="ml-auto p-2.5 bg-primary/10 rounded-xl">
             <BookmarkCheck className="w-5 h-5 text-primary" />
@@ -875,7 +967,7 @@ function SavedView({
 
       {/* Content */}
       <div className="max-w-2xl mx-auto px-6 py-8">
-        {savedMarkers.length === 0 ? (
+        {savedList.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-24 text-center animate-in fade-in zoom-in-95 duration-500">
             <div className="w-20 h-20 bg-muted rounded-full flex items-center justify-center mb-6">
               <Bookmark className="w-9 h-9 text-muted-foreground" />
@@ -908,3 +1000,12 @@ function SavedView({
     </div>
   );
 }
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 5 * 60 * 1000, // 5 minutes
+      retry: 1,
+    },
+  },
+});

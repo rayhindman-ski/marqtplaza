@@ -9,6 +9,8 @@ export interface HealthStatus {
   status: string;
 }
 
+export type ListingCategory = typeof ListingCategory[keyof typeof ListingCategory];
+
 export interface CaptureSearchRequest {
   url?: string;
   businessName?: string;
@@ -71,3 +73,40 @@ export interface PersistOutcome {
   saved: number;
 }
 
+
+export interface Listing {
+  id: string;
+  locationId: string;
+  category: ListingCategory;
+  name: string;
+  description: string;
+  x: number;
+  y: number;
+  details: string;
+}
+
+export type GetListingsParams = {
+/**
+ * The city identifier (ams, rot, utr, dhg, ein)
+ */
+cityId: string;
+};
+
+export const ListingCategory = {
+  Businesses: 'Businesses',
+  Events: 'Events',
+  Specials: 'Specials',
+} as const;
+
+export type ListingsResponseSource = typeof ListingsResponseSource[keyof typeof ListingsResponseSource];
+
+export interface ListingsResponse {
+  listings: Listing[];
+  source: ListingsResponseSource;
+  message?: string;
+}
+
+export const ListingsResponseSource = {
+  live: 'live',
+  fallback: 'fallback',
+} as const;

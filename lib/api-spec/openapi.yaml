@@ -12,6 +12,8 @@ tags:
     description: Health operations
   - name: capture
     description: Business event capture operations
+  - name: listings
+    description: Local business and event listings
 paths:
   /healthz:
     get:
@@ -83,6 +85,33 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/PersistOutcome"
+
+  /listings:
+    get:
+      operationId: getListings
+      tags: [listings]
+      summary: Get local listings for a city
+      description: Returns businesses, events, and specials for a given city. Falls back gracefully when the live data provider is unavailable.
+      parameters:
+        - name: cityId
+          in: query
+          required: true
+          schema:
+            type: string
+          description: The city identifier (ams, rot, utr, dhg, ein)
+      responses:
+        "200":
+          description: Listings result (live or fallback)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListingsResponse"
+        "400":
+          description: Unknown city
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListingsResponse"
 
 components:
   schemas:
@@ -196,3 +225,49 @@ components:
         saved:
           type: number
       required: [saved]
+
+    Listing:
+      type: object
+      properties:
+        id:
+          type: string
+        locationId:
+          type: string
+        category:
+          type: string
+          enum: [Businesses, Events, Specials]
+        name:
+          type: string
+        description:
+          type: string
+        x:
+          type: number
+        y:
+          type: number
+        details:
+          type: string
+      required:
+        - id
+        - locationId
+        - category
+        - name
+        - description
+        - x
+        - y
+        - details
+
+    ListingsResponse:
+      type: object
+      properties:
+        listings:
+          type: array
+          items:
+            $ref: "#/components/schemas/Listing"
+        source:
+          type: string
+          enum: [live, fallback]
+        message:
+          type: string
+      required:
+        - listings
+        - source

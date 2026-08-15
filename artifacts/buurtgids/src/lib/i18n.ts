@@ -55,6 +55,13 @@ export const translations = {
     noSavedPlacesDescription:
       'Tik op het bladwijzerpictogram bij een bedrijf, evenement of aanbieding om het hier op te slaan.',
     exploreNeighbourhoods: 'Ontdek buurten',
+    // Live data
+    loadingListings: 'Live gegevens ophalen…',
+    listingsError: 'Kon live gegevens niet laden',
+    retryButton: 'Opnieuw proberen',
+    liveDataBadge: 'Live',
+    curatedDataBadge: 'Samengesteld',
+    dataUnavailable: 'Live data tijdelijk niet beschikbaar – gecureerde vermeldingen worden weergegeven',
     // Capture page
     capture: 'Vastleggen',
     captureTitle: 'Bedrijven vastleggen',
@@ -133,6 +140,13 @@ export const translations = {
     noSavedPlacesDescription:
       'Tap the bookmark icon on any business, event, or special to save it here for later.',
     exploreNeighbourhoods: 'Explore Neighbourhoods',
+    // Live data
+    loadingListings: 'Fetching live data…',
+    listingsError: 'Could not load live listings',
+    retryButton: 'Try again',
+    liveDataBadge: 'Live',
+    curatedDataBadge: 'Curated',
+    dataUnavailable: 'Live data temporarily unavailable – showing curated listings',
     // Capture page
     capture: 'Capture',
     captureTitle: 'Capture Businesses',
