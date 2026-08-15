@@ -11,7 +11,7 @@ import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { useGetListings } from '@workspace/api-client-react';
 import { LOCATIONS, MARKERS, type Category, type Marker } from './lib/data';
-import { SchematicMap } from './components/SchematicMap';
+import { GoogleMapView } from './components/GoogleMapView';
 import CaptureView from './pages/CaptureView';
 import {
   getLocationName,
@@ -536,17 +536,29 @@ function DiscoveryState({
     setSelectedMarker(null);
   };
 
-  // Use API data when available, fall back to static markers otherwise
-  const allMarkers: Marker[] = (data?.listings ?? MARKERS.filter(m => m.locationId === location.id)).map(l => ({
-    id: l.id,
-    locationId: l.locationId,
-    category: l.category as Category,
-    name: l.name,
-    description: l.description,
-    x: l.x,
-    y: l.y,
-    details: l.details,
-  }));
+  // Static markers indexed by ID so we can look up coordinates when API data lacks them
+  const staticMarkerById = useMemo(
+    () => new Map(MARKERS.map(m => [m.id, m])),
+    [],
+  );
+
+  // Use API data when available, fall back to static markers otherwise.
+  // Always supply lat/lng by joining with the static record when the API listing omits them.
+  const allMarkers: Marker[] = (data?.listings ?? MARKERS.filter(m => m.locationId === location.id)).map(l => {
+    const staticFallback = staticMarkerById.get(l.id);
+    return {
+      id: l.id,
+      locationId: l.locationId,
+      category: l.category as Category,
+      name: l.name,
+      description: l.description,
+      x: l.x,
+      y: l.y,
+      details: l.details,
+      lat: (l as Marker).lat ?? staticFallback?.lat,
+      lng: (l as Marker).lng ?? staticFallback?.lng,
+    };
+  });
 
   const filteredMarkers = allMarkers.filter(m => categories[m.category]);
   const isLive = data?.source === 'live';
@@ -762,22 +774,14 @@ function DiscoveryState({
 
       {/* Map Area */}
       <div className="flex-1 relative h-full w-full overflow-hidden bg-background">
-         <SchematicMap
-           locationId={location.id}
-           selectedNeighborhood={selectedNeighborhood}
-         />
-        
-        {!isLoading && filteredMarkers.map(m => (
-          <MapPin
-            key={m.id}
-            language={language}
-            marker={m}
-            isSelected={selectedMarker === m.id}
-            isSaved={savedIds.has(m.id)}
-            onClick={() => setSelectedMarker(m.id)}
-            onSave={(e) => { e.stopPropagation(); onToggle(m); }}
-          />
-        ))}
+        <GoogleMapView
+          locationId={location.id}
+          selectedNeighborhood={selectedNeighborhood}
+          markers={filteredMarkers}
+          selectedMarkerId={selectedMarker}
+          savedIds={savedIds}
+          onMarkerClick={(id) => setSelectedMarker(prev => prev === id ? null : id)}
+        />
 
         {/* Mobile Toggle Overlay */}
         <div className="md:hidden absolute bottom-8 left-1/2 -translate-x-1/2 z-30">
