@@ -10,6 +10,8 @@ servers:
 tags:
   - name: health
     description: Health operations
+  - name: capture
+    description: Business event capture operations
 paths:
   /healthz:
     get:
@@ -24,6 +26,64 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /capture/search:
+    post:
+      operationId: captureSearch
+      tags: [capture]
+      summary: Search for businesses
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CaptureSearchRequest"
+      responses:
+        "200":
+          description: List of matching businesses
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BusinessListResult"
+
+  /capture/scan:
+    post:
+      operationId: captureScan
+      tags: [capture]
+      summary: Scan a business for events, news, and ads
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CaptureScanRequest"
+      responses:
+        "200":
+          description: Scan results (events, news, ads)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScanResultList"
+
+  /capture/persist:
+    post:
+      operationId: capturePersist
+      tags: [capture]
+      summary: Persist selected scan results to the database
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CapturePersistRequest"
+      responses:
+        "200":
+          description: Number of saved rows
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PersistOutcome"
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +94,105 @@ components:
       required:
         - status
 
+    CaptureSearchRequest:
+      type: object
+      properties:
+        url:
+          type: string
+        businessName:
+          type: string
+        zipCode:
+          type: string
+        neighbourhood:
+          type: string
+
+    CaptureSearchBusiness:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        zipCode:
+          type: string
+        address:
+          type: string
+      required: [id, name, zipCode, address]
+
+    BusinessListResult:
+      type: object
+      properties:
+        businesses:
+          type: array
+          items:
+            $ref: "#/components/schemas/CaptureSearchBusiness"
+      required: [businesses]
+
+    CaptureScanRequest:
+      type: object
+      properties:
+        businessId:
+          type: string
+        name:
+          type: string
+        url:
+          type: string
+      required: []
+
+    CaptureScanResult:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [news, event, ad]
+        title:
+          type: string
+        sourceUrl:
+          type: string
+        publishedAt:
+          type: string
+      required: [type, title]
+
+    ScanResultList:
+      type: object
+      properties:
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/CaptureScanResult"
+      required: [results]
+
+    CapturePersistResult:
+      type: object
+      properties:
+        type:
+          type: string
+        title:
+          type: string
+        sourceUrl:
+          type: string
+        publishedAt:
+          type: string
+      required: [type, title]
+
+    CapturePersistRequest:
+      type: object
+      properties:
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/CapturePersistResult"
+        businessName:
+          type: string
+        businessUrl:
+          type: string
+        zipCode:
+          type: string
+      required: [results]
+
+    PersistOutcome:
+      type: object
+      properties:
+        saved:
+          type: number
+      required: [saved]

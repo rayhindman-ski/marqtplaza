@@ -6,6 +6,9 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface HealthStatus {
-  status: string;
+export interface CaptureSearchBusiness {
+  id: string;
+  name: string;
+  zipCode: string;
+  address: string;
 }
