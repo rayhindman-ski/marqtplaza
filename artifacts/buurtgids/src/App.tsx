@@ -13,6 +13,7 @@ import { useGetListings } from '@workspace/api-client-react';
 import { LOCATIONS, MARKERS, type Category, type Marker } from './lib/data';
 import { GoogleMapView } from './components/GoogleMapView';
 import CaptureView from './pages/CaptureView';
+import SourceDirectoryView from './pages/SourceDirectoryView';
 import {
   getLocationName,
   getMarkerCopy,
@@ -60,7 +61,7 @@ function ReferenceCategoryNav({ language }: { language: Language }) {
 
   return (
     <nav
-      aria-label={language === 'nl' ? 'Categorieën' : 'Categories'}
+      aria-label="Categories"
       className="absolute left-0 top-0 z-30 hidden w-full border-b border-border/70 bg-card/85 px-6 py-4 backdrop-blur-md lg:block"
     >
       <div className="mx-auto flex max-w-6xl items-center justify-center gap-7">
@@ -80,6 +81,15 @@ function ReferenceCategoryNav({ language }: { language: Language }) {
           >
             <ScanSearch className="h-4 w-4" />
             {t.capture}
+          </button>
+        </Link>
+        <Link href="/bronnen">
+          <button
+            type="button"
+            className="inline-flex items-center gap-1.5 text-sm font-extrabold text-foreground transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          >
+            <Radio className="h-4 w-4" />
+            Sources
           </button>
         </Link>
         <Search className="h-5 w-5 text-foreground" aria-label={t.explore} />
@@ -806,7 +816,7 @@ function MainApp() {
   const [screen, setScreen] = useState<AppScreen>({ kind: 'search' });
   const [language, setLanguage] = useState<Language>(() => {
     if (typeof window === 'undefined') return 'nl';
-    return window.localStorage.getItem('buurtplaza-language') === 'en' ? 'en' : 'nl';
+    return window.localStorage.getItem('buurtplaza-language') === 'nl' ? 'nl' : 'en';
   });
   const { savedIds, savedMarkers, toggle, savedCount } = useSavedPlaces();
 
@@ -854,8 +864,8 @@ function MainApp() {
 
 function CaptureRoute() {
   const [language] = useState<Language>(() => {
-    if (typeof window === 'undefined') return 'nl';
-    return window.localStorage.getItem('buurtplaza-language') === 'en' ? 'en' : 'nl';
+    if (typeof window === 'undefined') return 'en';
+    return window.localStorage.getItem('buurtplaza-language') === 'nl' ? 'nl' : 'en';
   });
   return <CaptureView language={language} />;
 }
@@ -867,6 +877,7 @@ export default function App() {
         <Switch>
           <Route path="/" component={MainApp} />
           <Route path="/capture" component={CaptureRoute} />
+          <Route path="/bronnen" component={SourceDirectoryView} />
           <Route>
             <div className="min-h-screen flex items-center justify-center bg-background text-foreground">
               <div className="text-center">
