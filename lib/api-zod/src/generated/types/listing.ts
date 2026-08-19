@@ -16,4 +16,8 @@ export interface Listing {
   x: number;
   y: number;
   details: string;
+  /** WGS 84 latitude for displaying the activity on the map. */
+  lat: number;
+  /** WGS 84 longitude for displaying the activity on the map. */
+  lng: number;
 }

@@ -16,14 +16,6 @@ export const HealthCheckResponse = zod.object({
   "status": zod.string()
 })
 
-/**
- * Returns businesses, events, and specials for a given city. Falls back gracefully when the live data provider is unavailable.
- * @summary Get local listings for a city
- */
-export const GetListingsQueryParams = zod.object({
-  "cityId": zod.coerce.string().describe('The city identifier (ams, rot, utr, dhg, ein)')
-})
-
 
 /**
  * @summary Search for businesses
@@ -84,6 +76,14 @@ export const CapturePersistResponse = zod.object({
 })
 
 
+/**
+ * Returns businesses, events, and specials for a given city. Falls back gracefully when the live data provider is unavailable.
+ * @summary Get local listings for a city
+ */
+export const GetListingsQueryParams = zod.object({
+  "cityId": zod.coerce.string().describe('The city identifier (ams, rot, utr, dhg, ein)')
+})
+
 export const GetListingsResponse = zod.object({
   "listings": zod.array(zod.object({
   "id": zod.string(),
@@ -93,8 +93,12 @@ export const GetListingsResponse = zod.object({
   "description": zod.string(),
   "x": zod.number(),
   "y": zod.number(),
-  "details": zod.string()
+  "details": zod.string(),
+  "lat": zod.number().describe('WGS 84 latitude for displaying the activity on the map.'),
+  "lng": zod.number().describe('WGS 84 longitude for displaying the activity on the map.')
 })),
   "source": zod.enum(['live', 'fallback']),
   "message": zod.string().optional()
 })
+
+

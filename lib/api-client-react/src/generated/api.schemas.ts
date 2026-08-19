@@ -9,8 +9,6 @@ export interface HealthStatus {
   status: string;
 }
 
-export type ListingCategory = typeof ListingCategory[keyof typeof ListingCategory];
-
 export interface CaptureSearchRequest {
   url?: string;
   businessName?: string;
@@ -73,6 +71,14 @@ export interface PersistOutcome {
   saved: number;
 }
 
+export type ListingCategory = typeof ListingCategory[keyof typeof ListingCategory];
+
+
+export const ListingCategory = {
+  Businesses: 'Businesses',
+  Events: 'Events',
+  Specials: 'Specials',
+} as const;
 
 export interface Listing {
   id: string;
@@ -83,6 +89,24 @@ export interface Listing {
   x: number;
   y: number;
   details: string;
+  /** WGS 84 latitude for displaying the activity on the map. */
+  lat: number;
+  /** WGS 84 longitude for displaying the activity on the map. */
+  lng: number;
+}
+
+export type ListingsResponseSource = typeof ListingsResponseSource[keyof typeof ListingsResponseSource];
+
+
+export const ListingsResponseSource = {
+  live: 'live',
+  fallback: 'fallback',
+} as const;
+
+export interface ListingsResponse {
+  listings: Listing[];
+  source: ListingsResponseSource;
+  message?: string;
 }
 
 export type GetListingsParams = {
@@ -92,21 +116,3 @@ export type GetListingsParams = {
 cityId: string;
 };
 
-export const ListingCategory = {
-  Businesses: 'Businesses',
-  Events: 'Events',
-  Specials: 'Specials',
-} as const;
-
-export type ListingsResponseSource = typeof ListingsResponseSource[keyof typeof ListingsResponseSource];
-
-export interface ListingsResponse {
-  listings: Listing[];
-  source: ListingsResponseSource;
-  message?: string;
-}
-
-export const ListingsResponseSource = {
-  live: 'live',
-  fallback: 'fallback',
-} as const;

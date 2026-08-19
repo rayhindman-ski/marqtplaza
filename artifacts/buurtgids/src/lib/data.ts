@@ -22,8 +22,8 @@ export interface Marker {
   x: number;
   y: number;
   details: string;
-  lat?: number;
-  lng?: number;
+  lat: number;
+  lng: number;
 }
 
 export const LOCATIONS: Location[] = [
@@ -124,6 +124,8 @@ export const MARKERS: Marker[] = [
   { id: 'm9',  locationId: 'rot', category: 'Specials',   name: 'Markthal Bites',      description: 'Free tasting platter when ordering two signature drinks.',      x: 55, y: 55, details: 'Valid this week', lat: 51.9200, lng: 4.4840 },
   { id: 'm19', locationId: 'rot', category: 'Businesses', name: 'Kop van Zuid Roasters', description: 'Third-wave coffee bar overlooking the harbor.',              x: 70, y: 30, details: 'Open until 16:00', lat: 51.9055, lng: 4.4833 },
   { id: 'm20', locationId: 'rot', category: 'Events',     name: 'Erasmusbrug Run',     description: 'Night run across the iconic Swan bridge.',                     x: 50, y: 50, details: 'Friday, 20:00',  lat: 51.9118, lng: 4.4845 },
+  { id: 'm27', locationId: 'rot', category: 'Events',     name: 'Kralingen Culture Walk', description: 'A self-guided route through local parks, galleries, and cafés.', x: 82, y: 24, details: 'Available daily', lat: 51.9231, lng: 4.5249 },
+  { id: 'm28', locationId: 'rot', category: 'Events',     name: 'Delfshaven Makers Market', description: 'Weekend market celebrating local makers and vintage finds.', x: 12, y: 62, details: 'Saturday, 10:00', lat: 51.9101, lng: 4.4425 },
 
   // Utrecht
   { id: 'm10', locationId: 'utr', category: 'Businesses', name: 'Domstad Books',       description: 'Rare finds and cozy reading nooks in a historic cellar.',      x: 50, y: 45, details: 'Open until 20:00', lat: 52.0907, lng: 5.1214 },
@@ -145,4 +147,5 @@ export const MARKERS: Marker[] = [
   { id: 'm18', locationId: 'ein', category: 'Specials',   name: 'Philips Heritage',   description: 'Half price entry to the historic museum.',                     x: 50, y: 40, details: 'Valid weekends',  lat: 51.4400, lng: 5.4760 },
   { id: 'm25', locationId: 'ein', category: 'Events',     name: 'Design Academy Show', description: 'Graduation exhibition from emerging designers.',              x: 45, y: 50, details: 'Starts tomorrow', lat: 51.4430, lng: 5.4730 },
   { id: 'm26', locationId: 'ein', category: 'Businesses', name: 'Klokgebouw Coffee',  description: 'Industrial coffee bar serving single-origin beans.',            x: 30, y: 40, details: 'Open until 18:00', lat: 51.4480, lng: 5.4510 },
+  { id: 'm29', locationId: 'ein', category: 'Events',     name: 'Woensel Food & Music Night', description: 'An evening of local food stalls and live neighbourhood music.', x: 62, y: 20, details: 'Friday, 18:00', lat: 51.4663, lng: 5.4752 },
 ];

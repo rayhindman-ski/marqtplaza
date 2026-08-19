@@ -5,7 +5,7 @@ import {
   Search, Compass, MapPinOff, ArrowLeft, Briefcase, 
   Calendar, Sparkles, Map as MapIcon, List, Clock, Tag,
   Globe2, Bookmark, BookmarkCheck, X, ChevronDown, ChevronUp,
-  ScanSearch, RefreshCw, WifiOff, Radio
+  ScanSearch, RefreshCw, WifiOff, Radio, MapPinned
 } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -24,6 +24,19 @@ import {
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
+}
+
+function getDistanceKm(latA: number, lngA: number, latB: number, lngB: number) {
+  const earthRadiusKm = 6371;
+  const toRadians = (degrees: number) => (degrees * Math.PI) / 180;
+  const latitudeDelta = toRadians(latB - latA);
+  const longitudeDelta = toRadians(lngB - lngA);
+  const a =
+    Math.sin(latitudeDelta / 2) ** 2 +
+    Math.cos(toRadians(latA)) *
+      Math.cos(toRadians(latB)) *
+      Math.sin(longitudeDelta / 2) ** 2;
+  return 2 * earthRadiusKm * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
 const STORAGE_KEY = 'buurtgids_saved_places';
@@ -56,7 +69,13 @@ function LanguageSelector({
   );
 }
 
-function ReferenceCategoryNav({ language }: { language: Language }) {
+function ReferenceCategoryNav({
+  language,
+  onThingsToDo,
+}: {
+  language: Language;
+  onThingsToDo: () => void;
+}) {
   const t = translations[language];
 
   return (
@@ -69,6 +88,8 @@ function ReferenceCategoryNav({ language }: { language: Language }) {
           <button
             type="button"
             key={category.id}
+            onClick={category.id === 'things-to-do' ? onThingsToDo : undefined}
+            aria-haspopup={category.id === 'things-to-do' ? 'dialog' : undefined}
             className="text-sm font-extrabold text-foreground transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
           >
             {category.label}
@@ -133,6 +154,7 @@ function SearchState({
   const [query, setQuery] = useState('');
   const [error, setError] = useState('');
   const [selectedCityId, setSelectedCityId] = useState<string | null>(null);
+  const [activityChooserOpen, setActivityChooserOpen] = useState(false);
   const t = translations[language];
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -156,7 +178,19 @@ function SearchState({
 
   return (
     <div className="flex-1 flex flex-col items-center justify-center min-h-screen p-6 relative overflow-hidden bg-background">
-      <ReferenceCategoryNav language={language} />
+      <ReferenceCategoryNav
+        language={language}
+        onThingsToDo={() => {
+          setActivityChooserOpen(true);
+          setSelectedCityId(null);
+          requestAnimationFrame(() => {
+            document.getElementById('activity-area-picker')?.scrollIntoView({
+              behavior: 'smooth',
+              block: 'center',
+            });
+          });
+        }}
+      />
       <LanguageSelector language={language} onLanguageChange={onLanguageChange} />
 
       {/* Decorative background */}
@@ -232,7 +266,19 @@ function SearchState({
           )}
         </form>
 
-        <div className="pt-6">
+        <div id="activity-area-picker" className="pt-6" tabIndex={-1}>
+          {activityChooserOpen && (
+            <div
+              role="dialog"
+              aria-label="Choose an area for activities"
+              className="mb-5 rounded-2xl border border-primary/25 bg-primary/5 px-4 py-3 text-left shadow-sm animate-in fade-in slide-in-from-top-2 duration-300"
+            >
+              <p className="text-sm font-extrabold text-foreground">Choose an area for things to do</p>
+              <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                Select a city, then choose a neighbourhood or explore the whole city.
+              </p>
+            </div>
+          )}
           <p className="text-xs text-muted-foreground mb-4 uppercase tracking-widest font-bold">{t.popularDestinations}</p>
           <div className="flex flex-wrap justify-center gap-2.5">
             {LOCATIONS.map(loc => (
@@ -308,8 +354,16 @@ function MapPin({
   const t = translations[language];
 
   return (
-    <button
+    <div
+      role="button"
+      tabIndex={0}
       onClick={onClick}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          onClick();
+        }
+      }}
       className={cn(
         "absolute transform -translate-x-1/2 -translate-y-1/2 z-10 group outline-none rounded-full",
         "transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)]",
@@ -361,7 +415,7 @@ function MapPin({
           </div>
         )}
       </div>
-    </button>
+    </div>
   );
 }
 
@@ -385,8 +439,16 @@ function MarkerCard({
   const copy = getMarkerCopy(marker, language);
 
   return (
-    <button
+    <div
+      role="button"
+      tabIndex={0}
       onClick={onClick}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          onClick();
+        }
+      }}
       className={cn(
         "w-full text-left p-4 rounded-2xl border transition-all duration-300 relative group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:border-transparent",
         isSelected
@@ -417,9 +479,13 @@ function MarkerCard({
             <DetailIcon className="w-3.5 h-3.5 opacity-70" />
             {copy.details}
           </div>
+          <div className="mt-2 flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
+            <MapPinned className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
+            <span>Lat {marker.lat.toFixed(5)} · Lng {marker.lng.toFixed(5)}</span>
+          </div>
         </div>
       </div>
-    </button>
+    </div>
   );
 }
 
@@ -546,16 +612,8 @@ function DiscoveryState({
     setSelectedMarker(null);
   };
 
-  // Static markers indexed by ID so we can look up coordinates when API data lacks them
-  const staticMarkerById = useMemo(
-    () => new Map(MARKERS.map(m => [m.id, m])),
-    [],
-  );
-
-  // Use API data when available, fall back to static markers otherwise.
-  // Always supply lat/lng by joining with the static record when the API listing omits them.
+  // Use API data when available, fall back to coordinate-complete static activities otherwise.
   const allMarkers: Marker[] = (data?.listings ?? MARKERS.filter(m => m.locationId === location.id)).map(l => {
-    const staticFallback = staticMarkerById.get(l.id);
     return {
       id: l.id,
       locationId: l.locationId,
@@ -565,12 +623,19 @@ function DiscoveryState({
       x: l.x,
       y: l.y,
       details: l.details,
-      lat: (l as Marker).lat ?? staticFallback?.lat,
-      lng: (l as Marker).lng ?? staticFallback?.lng,
+      lat: l.lat,
+      lng: l.lng,
     };
   });
 
-  const filteredMarkers = allMarkers.filter(m => categories[m.category]);
+  const selectedArea = selectedNeighborhood
+    ? location.neighborhoodCoords[selectedNeighborhood]
+    : null;
+  const filteredMarkers = allMarkers.filter((marker) => {
+    if (!categories[marker.category]) return false;
+    if (!selectedArea) return true;
+    return getDistanceKm(marker.lat, marker.lng, selectedArea.lat, selectedArea.lng) <= 2.5;
+  });
   const isLive = data?.source === 'live';
   const isFallback = data?.source === 'fallback';
 
@@ -815,7 +880,7 @@ type AppScreen =
 function MainApp() {
   const [screen, setScreen] = useState<AppScreen>({ kind: 'search' });
   const [language, setLanguage] = useState<Language>(() => {
-    if (typeof window === 'undefined') return 'nl';
+    if (typeof window === 'undefined') return 'en';
     return window.localStorage.getItem('buurtplaza-language') === 'nl' ? 'nl' : 'en';
   });
   const { savedIds, savedMarkers, toggle, savedCount } = useSavedPlaces();

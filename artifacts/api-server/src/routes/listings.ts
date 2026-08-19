@@ -214,6 +214,8 @@ router.get("/listings", async (req, res) => {
         x: number;
         y: number;
         details: string;
+        lat: number;
+        lng: number;
       }>>((acc, el) => {
         const category = classifyNode(el.tags);
         if (!category) return acc;
@@ -230,6 +232,8 @@ router.get("/listings", async (req, res) => {
           x,
           y,
           details: detailsFromTags(el.tags, category),
+          lat: el.lat,
+          lng: el.lon,
         });
         return acc;
       }, []);

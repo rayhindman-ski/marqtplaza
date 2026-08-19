@@ -246,6 +246,12 @@ components:
           type: number
         details:
           type: string
+        lat:
+          type: number
+          description: WGS 84 latitude for displaying the activity on the map.
+        lng:
+          type: number
+          description: WGS 84 longitude for displaying the activity on the map.
       required:
         - id
         - locationId
@@ -255,6 +261,8 @@ components:
         - x
         - y
         - details
+        - lat
+        - lng
 
     ListingsResponse:
       type: object

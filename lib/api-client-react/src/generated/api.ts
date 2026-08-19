@@ -32,7 +32,7 @@ import type {
 } from './api.schemas';
 
 import { customFetch } from '../custom-fetch';
-import type { ErrorType, BodyType } from '../custom-fetch';
+import type { ErrorType , BodyType } from '../custom-fetch';
 
 type AwaitedInput<T> = PromiseLike<T> | T;
 
@@ -40,6 +40,7 @@ type AwaitedInput<T> = PromiseLike<T> | T;
 
 
 type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
+
 
 
 const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKey: K } => {
@@ -58,6 +59,8 @@ const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKe
 };
 
 export const getHealthCheckUrl = () => {
+
+
 
 
   return `/api/healthz`
@@ -79,6 +82,9 @@ export const healthCheck = async ( options?: Parameters<typeof customFetch>[1]):
 );}
 
 
+
+
+
 export const getHealthCheckQueryKey = () => {
     return [
     `/api/healthz`
@@ -94,7 +100,11 @@ const {query: queryOptions, request: requestOptions} = options ?? {};
   const queryKey =  queryOptions?.queryKey ?? getHealthCheckQueryKey();
 
 
+
     const queryFn: QueryFunction<Awaited<ReturnType<typeof healthCheck>>> = ({ signal }) => healthCheck({ signal, ...requestOptions });
+
+
+
 
 
    return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof healthCheck>>, TError, TData> & { queryKey: QueryKey }
@@ -120,23 +130,15 @@ export function useHealthCheck<TData = Awaited<ReturnType<typeof healthCheck>>, 
   return withQueryKey(query, queryOptions.queryKey);
 }
 
-export const getGetListingsUrl = (params: GetListingsParams,) => {
-  const normalizedParams = new URLSearchParams();
 
-  Object.entries(params || {}).forEach(([key, value]) => {
 
-    if (value !== undefined) {
-      normalizedParams.append(key, value === null ? 'null' : String(value))
-    }
-  });
 
-  const stringifiedParams = normalizedParams.toString();
 
-  return stringifiedParams.length > 0 ? `/api/listings?${stringifiedParams}` : `/api/listings`
-}
 
 
 export const getCaptureSearchUrl = () => {
+
+
 
 
   return `/api/capture/search`
@@ -157,6 +159,9 @@ export const captureSearch = async (captureSearchRequest?: CaptureSearchRequest,
 );}
 
 
+
+
+
 export const getCaptureSearchMutationOptions = <TError = ErrorType<unknown>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof captureSearch>>, TError,{data?: BodyType<CaptureSearchRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
 ): UseMutationOptions<Awaited<ReturnType<typeof captureSearch>>, TError,{data?: BodyType<CaptureSearchRequest>}, TContext> => {
@@ -169,11 +174,17 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       : {mutation: { mutationKey, }, request: undefined};
 
 
+
+
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof captureSearch>>, {data?: BodyType<CaptureSearchRequest>}> = (props) => {
           const {data} = props ?? {};
 
           return  captureSearch(data,requestOptions)
         }
+
+
+
+
 
 
   return  { mutationFn, ...mutationOptions }}
@@ -199,6 +210,8 @@ export const useCaptureSearch = <TError = ErrorType<unknown>,
 export const getCaptureScanUrl = () => {
 
 
+
+
   return `/api/capture/scan`
 }
 
@@ -217,6 +230,9 @@ export const captureScan = async (captureScanRequest: CaptureScanRequest, option
 );}
 
 
+
+
+
 export const getCaptureScanMutationOptions = <TError = ErrorType<unknown>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof captureScan>>, TError,{data: BodyType<CaptureScanRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
 ): UseMutationOptions<Awaited<ReturnType<typeof captureScan>>, TError,{data: BodyType<CaptureScanRequest>}, TContext> => {
@@ -229,11 +245,17 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       : {mutation: { mutationKey, }, request: undefined};
 
 
+
+
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof captureScan>>, {data: BodyType<CaptureScanRequest>}> = (props) => {
           const {data} = props ?? {};
 
           return  captureScan(data,requestOptions)
         }
+
+
+
+
 
 
   return  { mutationFn, ...mutationOptions }}
@@ -259,6 +281,8 @@ export const useCaptureScan = <TError = ErrorType<unknown>,
 export const getCapturePersistUrl = () => {
 
 
+
+
   return `/api/capture/persist`
 }
 
@@ -277,6 +301,9 @@ export const capturePersist = async (capturePersistRequest: CapturePersistReques
 );}
 
 
+
+
+
 export const getCapturePersistMutationOptions = <TError = ErrorType<unknown>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof capturePersist>>, TError,{data: BodyType<CapturePersistRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
 ): UseMutationOptions<Awaited<ReturnType<typeof capturePersist>>, TError,{data: BodyType<CapturePersistRequest>}, TContext> => {
@@ -289,11 +316,17 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       : {mutation: { mutationKey, }, request: undefined};
 
 
+
+
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof capturePersist>>, {data: BodyType<CapturePersistRequest>}> = (props) => {
           const {data} = props ?? {};
 
           return  capturePersist(data,requestOptions)
         }
+
+
+
+
 
 
   return  { mutationFn, ...mutationOptions }}
@@ -316,6 +349,67 @@ export const useCapturePersist = <TError = ErrorType<unknown>,
       return useMutation(getCapturePersistMutationOptions(options));
     }
 
+export const getGetListingsUrl = (params: GetListingsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/listings?${stringifiedParams}` : `/api/listings`
+}
+
+/**
+ * Returns businesses, events, and specials for a given city. Falls back gracefully when the live data provider is unavailable.
+ * @summary Get local listings for a city
+ */
+export const getListings = async (params: GetListingsParams, options?: Parameters<typeof customFetch>[1]): Promise<ListingsResponse> => {
+
+  return customFetch<ListingsResponse>(getGetListingsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetListingsQueryKey = (params?: GetListingsParams,) => {
+    return [
+    `/api/listings`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetListingsQueryOptions = <TData = Awaited<ReturnType<typeof getListings>>, TError = ErrorType<ListingsResponse>>(params: GetListingsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getListings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetListingsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getListings>>> = ({ signal }) => getListings(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getListings>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetListingsQueryResult = NonNullable<Awaited<ReturnType<typeof getListings>>>
+export type GetListingsQueryError = ErrorType<ListingsResponse>
 
 
 /**
@@ -334,41 +428,9 @@ export function useGetListings<TData = Awaited<ReturnType<typeof getListings>>, 
   return withQueryKey(query, queryOptions.queryKey);
 }
 
-export type GetListingsQueryError = ErrorType<ListingsResponse>
-
-export const getGetListingsQueryKey = (params?: GetListingsParams,) => {
-    return [
-    `/api/listings`, ...(params ? [params] : [])
-    ] as const;
-    }
-
-/**
- * Returns businesses, events, and specials for a given city. Falls back gracefully when the live data provider is unavailable.
- * @summary Get local listings for a city
- */
-export const getListings = async (params: GetListingsParams, options?: Parameters<typeof customFetch>[1]): Promise<ListingsResponse> => {
-
-  return customFetch<ListingsResponse>(getGetListingsUrl(params),
-  {
-    ...options,
-    method: 'GET'
 
 
-  }
-);}
-
-export type GetListingsQueryResult = NonNullable<Awaited<ReturnType<typeof getListings>>>
-
-export const getGetListingsQueryOptions = <TData = Awaited<ReturnType<typeof getListings>>, TError = ErrorType<ListingsResponse>>(params: GetListingsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getListings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
-) => {
-
-const {query: queryOptions, request: requestOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getGetListingsQueryKey(params);
 
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getListings>>> = ({ signal }) => getListings(params, { signal, ...requestOptions });
 
 
-   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getListings>>, TError, TData> & { queryKey: QueryKey }
-}
