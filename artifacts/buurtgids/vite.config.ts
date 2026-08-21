@@ -20,6 +20,8 @@ if (Number.isNaN(port) || port <= 0) {
 }
 
 const basePath = process.env.BASE_PATH;
+const googleMapsBrowserKey = process.env.GOOGLE_MAPS_API_KEY?.trim();
+const googleMapsBrowserKeyPattern = /^AIza[0-9A-Za-z_-]{35}$/;
 
 if (!basePath) {
   throw new Error(
@@ -31,7 +33,9 @@ export default defineConfig({
   base: basePath,
   define: {
     'import.meta.env.VITE_GOOGLE_MAPS_API_KEY': JSON.stringify(
-      process.env.GOOGLE_MAPS_API_KEY ?? '',
+      googleMapsBrowserKeyPattern.test(googleMapsBrowserKey ?? '')
+        ? googleMapsBrowserKey
+        : '',
     ),
   },
   plugins: [
