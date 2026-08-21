@@ -75,9 +75,12 @@ export type ListingCategory = typeof ListingCategory[keyof typeof ListingCategor
 
 
 export const ListingCategory = {
-  Businesses: 'Businesses',
-  Events: 'Events',
-  Specials: 'Specials',
+  Museums: 'Museums',
+  Tours: 'Tours',
+  Family: 'Family',
+  Entertainment: 'Entertainment',
+  Outdoors: 'Outdoors',
+  Markets: 'Markets',
 } as const;
 
 export interface Listing {
@@ -93,6 +96,8 @@ export interface Listing {
   lat: number;
   /** WGS 84 longitude for displaying the activity on the map. */
   lng: number;
+  /** Link to the website where this activity was listed. */
+  sourceUrl?: string;
 }
 
 export type ListingsResponseSource = typeof ListingsResponseSource[keyof typeof ListingsResponseSource];
@@ -101,6 +106,7 @@ export type ListingsResponseSource = typeof ListingsResponseSource[keyof typeof 
 export const ListingsResponseSource = {
   live: 'live',
   fallback: 'fallback',
+  curated: 'curated',
 } as const;
 
 export interface ListingsResponse {

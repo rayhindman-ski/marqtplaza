@@ -10,7 +10,10 @@ export type ListingCategory = typeof ListingCategory[keyof typeof ListingCategor
 
 
 export const ListingCategory = {
-  Businesses: 'Businesses',
-  Events: 'Events',
-  Specials: 'Specials',
+  Museums: 'Museums',
+  Tours: 'Tours',
+  Family: 'Family',
+  Entertainment: 'Entertainment',
+  Outdoors: 'Outdoors',
+  Markets: 'Markets',
 } as const;

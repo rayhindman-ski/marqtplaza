@@ -12,65 +12,68 @@ const CITY_BOUNDS: Record<string, { s: number; w: number; n: number; e: number }
   ein: { s: 51.41, w: 5.43, n: 51.47, e: 5.52 },
 };
 
-// Map amenity/shop/leisure tags to our app categories
+// Map amenity/shop/leisure tags to our 6 app categories
 const AMENITY_TO_CATEGORY: Record<string, string> = {
-  // Businesses
-  cafe: "Businesses",
-  restaurant: "Businesses",
-  bar: "Businesses",
-  pub: "Businesses",
-  bakery: "Businesses",
-  pharmacy: "Businesses",
-  library: "Businesses",
-  bank: "Businesses",
-  hairdresser: "Businesses",
-  florist: "Businesses",
-  butcher: "Businesses",
-  supermarket: "Businesses",
-  // Events
-  theatre: "Events",
-  cinema: "Events",
-  arts_centre: "Events",
-  community_centre: "Events",
-  events_venue: "Events",
-  nightclub: "Events",
-  music_venue: "Events",
-  social_centre: "Events",
-  // Specials
-  fast_food: "Specials",
-  ice_cream: "Specials",
-  food_court: "Specials",
-  marketplace: "Specials",
-  market: "Specials",
+  // Markets — food, drink, everyday commerce
+  cafe: "Markets",
+  restaurant: "Markets",
+  bar: "Markets",
+  pub: "Markets",
+  bakery: "Markets",
+  pharmacy: "Markets",
+  bank: "Markets",
+  hairdresser: "Markets",
+  florist: "Markets",
+  butcher: "Markets",
+  supermarket: "Markets",
+  fast_food: "Markets",
+  ice_cream: "Markets",
+  food_court: "Markets",
+  marketplace: "Markets",
+  market: "Markets",
+  // Entertainment — performances, nightlife, venues
+  theatre: "Entertainment",
+  cinema: "Entertainment",
+  arts_centre: "Entertainment",
+  community_centre: "Entertainment",
+  events_venue: "Entertainment",
+  nightclub: "Entertainment",
+  music_venue: "Entertainment",
+  social_centre: "Entertainment",
+  // Museums — cultural institutions
+  library: "Museums",
 };
 
 const SHOP_TO_CATEGORY: Record<string, string> = {
-  books: "Businesses",
-  clothes: "Businesses",
-  bicycle: "Businesses",
-  furniture: "Businesses",
-  gift: "Businesses",
-  jewelry: "Businesses",
-  shoes: "Businesses",
-  sports: "Businesses",
-  toys: "Businesses",
-  electronics: "Businesses",
-  convenience: "Businesses",
-  deli: "Specials",
-  confectionery: "Specials",
+  books: "Markets",
+  clothes: "Markets",
+  bicycle: "Markets",
+  furniture: "Markets",
+  gift: "Markets",
+  jewelry: "Markets",
+  shoes: "Markets",
+  sports: "Markets",
+  toys: "Markets",
+  electronics: "Markets",
+  convenience: "Markets",
+  deli: "Markets",
+  confectionery: "Markets",
 };
 
 const LEISURE_TO_CATEGORY: Record<string, string> = {
-  fitness_centre: "Events",
-  sports_centre: "Events",
-  stadium: "Events",
-  park: "Events",
+  fitness_centre: "Outdoors",
+  sports_centre: "Outdoors",
+  stadium: "Entertainment",
+  park: "Outdoors",
+  nature_reserve: "Outdoors",
+  beach: "Outdoors",
 };
 
 const TOURISM_TO_CATEGORY: Record<string, string> = {
-  museum: "Events",
-  gallery: "Events",
-  attraction: "Events",
+  museum: "Museums",
+  gallery: "Museums",
+  attraction: "Tours",
+  viewpoint: "Outdoors",
 };
 
 function classifyNode(tags: Record<string, string>): string | null {
@@ -124,7 +127,7 @@ function descriptionFromTags(tags: Record<string, string>): string {
 
 // Build a short details string from OSM tags
 function detailsFromTags(tags: Record<string, string>, category: string): string {
-  if (category === "Businesses") {
+  if (category === "Markets") {
     const hours = tags["opening_hours"];
     if (hours) {
       const match = hours.match(/\d{2}:\d{2}/g);
@@ -132,8 +135,8 @@ function detailsFromTags(tags: Record<string, string>, category: string): string
     }
     return "Open today";
   }
-  if (category === "Events") return "Check venue for schedule";
-  if (category === "Specials") return "Ask inside for today's offer";
+  if (category === "Entertainment") return "Check venue for schedule";
+  if (category === "Museums") return "Open during regular hours";
   return "";
 }
 
@@ -196,11 +199,22 @@ router.get("/listings", async (req, res) => {
     return;
   }
 
+  // Den Haag has a hand-curated dataset of 23 real activities across all 6 categories.
+  // Always serve it directly — live OSM data lacks the Family category and cannot reproduce
+  // the curated selection quality.
+  if (cityId === "dhg") {
+    const curated = MARKERS.filter((m) => m.locationId === "dhg");
+    res.json({ listings: curated, source: "curated" });
+    return;
+  }
+
   try {
     const elements = await fetchCityListings(bounds);
 
     // Classify elements into categories (max 20 per category)
-    const counts: Record<string, number> = { Businesses: 0, Events: 0, Specials: 0 };
+    const counts: Record<string, number> = {
+      Museums: 0, Tours: 0, Family: 0, Entertainment: 0, Outdoors: 0, Markets: 0,
+    };
     const MAX_PER_CATEGORY = 20;
 
     const listings = elements
@@ -216,6 +230,7 @@ router.get("/listings", async (req, res) => {
         details: string;
         lat: number;
         lng: number;
+        sourceUrl?: string;
       }>>((acc, el) => {
         const category = classifyNode(el.tags);
         if (!category) return acc;
@@ -234,6 +249,7 @@ router.get("/listings", async (req, res) => {
           details: detailsFromTags(el.tags, category),
           lat: el.lat,
           lng: el.lon,
+          // sourceUrl not available for live OSM entries
         });
         return acc;
       }, []);

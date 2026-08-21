@@ -3,15 +3,21 @@ import { importLibrary, setOptions } from '@googlemaps/js-api-loader';
 import { type Marker as MarkerData, LOCATIONS, type Category } from '../lib/data';
 
 const CATEGORY_COLORS: Record<Category, string> = {
-  Businesses: '#f36c21',
-  Events: '#6366f1',
-  Specials: '#10b981',
+  Museums:       '#8b5cf6',
+  Tours:         '#f36c21',
+  Family:        '#ec4899',
+  Entertainment: '#6366f1',
+  Outdoors:      '#10b981',
+  Markets:       '#f59e0b',
 };
 
 const CATEGORY_LETTERS: Record<Category, string> = {
-  Businesses: 'B',
-  Events: 'E',
-  Specials: 'S',
+  Museums:       'M',
+  Tours:         'T',
+  Family:        'F',
+  Entertainment: 'E',
+  Outdoors:      'O',
+  Markets:       'Mk',
 };
 
 const MAP_STYLES: google.maps.MapTypeStyle[] = [

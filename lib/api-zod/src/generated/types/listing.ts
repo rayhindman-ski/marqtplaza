@@ -20,4 +20,6 @@ export interface Listing {
   lat: number;
   /** WGS 84 longitude for displaying the activity on the map. */
   lng: number;
+  /** Link to the website where this activity was listed. */
+  sourceUrl?: string;
 }

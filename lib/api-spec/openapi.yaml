@@ -235,7 +235,7 @@ components:
           type: string
         category:
           type: string
-          enum: [Businesses, Events, Specials]
+          enum: [Museums, Tours, Family, Entertainment, Outdoors, Markets]
         name:
           type: string
         description:
@@ -252,6 +252,9 @@ components:
         lng:
           type: number
           description: WGS 84 longitude for displaying the activity on the map.
+        sourceUrl:
+          type: string
+          description: Link to the website where this activity was listed.
       required:
         - id
         - locationId
@@ -273,7 +276,7 @@ components:
             $ref: "#/components/schemas/Listing"
         source:
           type: string
-          enum: [live, fallback]
+          enum: [live, fallback, curated]
         message:
           type: string
       required:

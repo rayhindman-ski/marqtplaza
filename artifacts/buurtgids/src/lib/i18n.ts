@@ -1,4 +1,4 @@
-import type { Location, Marker } from './data';
+import type { Location, Marker, Category } from './data';
 
 export type Language = 'nl' | 'en';
 
@@ -23,9 +23,12 @@ export const translations = {
     locationNotFound:
       'Locatie niet gevonden. Probeer Amsterdam, Rotterdam, Utrecht, Den Haag of Eindhoven.',
     categories: {
-      Businesses: 'Bedrijven',
-      Events: 'Evenementen',
-      Specials: 'Aanbiedingen',
+      Museums: 'Musea',
+      Tours: 'Rondleidingen',
+      Family: 'Gezin & Kinderen',
+      Entertainment: 'Entertainment',
+      Outdoors: 'Buiten & Sport',
+      Markets: 'Markten & Food',
     },
     backToSearch: 'Terug naar zoeken',
     discoveriesNearby: (count: number) =>
@@ -108,9 +111,12 @@ export const translations = {
     locationNotFound:
       'Location not found. Try Amsterdam, Rotterdam, Utrecht, The Hague, or Eindhoven.',
     categories: {
-      Businesses: 'Businesses',
-      Events: 'Events',
-      Specials: 'Specials',
+      Museums: 'Museums',
+      Tours: 'Tours',
+      Family: 'Family & Kids',
+      Entertainment: 'Entertainment',
+      Outdoors: 'Outdoors',
+      Markets: 'Food & Markets',
     },
     backToSearch: 'Back to search',
     discoveriesNearby: (count: number) =>

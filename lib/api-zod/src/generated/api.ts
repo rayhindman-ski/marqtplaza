@@ -88,16 +88,17 @@ export const GetListingsResponse = zod.object({
   "listings": zod.array(zod.object({
   "id": zod.string(),
   "locationId": zod.string(),
-  "category": zod.enum(['Businesses', 'Events', 'Specials']),
+  "category": zod.enum(['Museums', 'Tours', 'Family', 'Entertainment', 'Outdoors', 'Markets']),
   "name": zod.string(),
   "description": zod.string(),
   "x": zod.number(),
   "y": zod.number(),
   "details": zod.string(),
   "lat": zod.number().describe('WGS 84 latitude for displaying the activity on the map.'),
-  "lng": zod.number().describe('WGS 84 longitude for displaying the activity on the map.')
+  "lng": zod.number().describe('WGS 84 longitude for displaying the activity on the map.'),
+  "sourceUrl": zod.string().optional().describe('Link to the website where this activity was listed.')
 })),
-  "source": zod.enum(['live', 'fallback']),
+  "source": zod.enum(['live', 'fallback', 'curated']),
   "message": zod.string().optional()
 })
 

@@ -2,15 +2,16 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Route, Switch, Router as WouterRouter, Link } from 'wouter';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { 
-  Search, Compass, MapPinOff, ArrowLeft, Briefcase, 
-  Calendar, Sparkles, Map as MapIcon, List, Clock, Tag,
+  Search, Compass, MapPinOff, ArrowLeft,
+  Map as MapIcon, List, Clock,
   Globe2, Bookmark, BookmarkCheck, X, ChevronDown, ChevronUp,
-  ScanSearch, RefreshCw, WifiOff, Radio, MapPinned
+  ScanSearch, RefreshCw, WifiOff, Radio, MapPinned,
+  Landmark, Route as RouteIcon, Baby, Gamepad2, Waves, ShoppingBag, ExternalLink
 } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { useGetListings } from '@workspace/api-client-react';
-import { LOCATIONS, MARKERS, type Category, type Marker } from './lib/data';
+import { LOCATIONS, MARKERS, ALL_CATEGORIES, type Category, type Marker } from './lib/data';
 import { GoogleMapView } from './components/GoogleMapView';
 import CaptureView from './pages/CaptureView';
 import SourceDirectoryView from './pages/SourceDirectoryView';
@@ -332,8 +333,22 @@ function SearchState({
   );
 }
 
-const CATEGORY_ICONS = { Businesses: Briefcase, Events: Calendar, Specials: Sparkles };
-const DETAIL_ICONS = { Businesses: Clock, Events: Calendar, Specials: Tag };
+const CATEGORY_ICONS: Record<Category, React.ElementType> = {
+  Museums: Landmark,
+  Tours: RouteIcon,
+  Family: Baby,
+  Entertainment: Gamepad2,
+  Outdoors: Waves,
+  Markets: ShoppingBag,
+};
+const DETAIL_ICONS: Record<Category, React.ElementType> = {
+  Museums: Clock,
+  Tours: MapPinned,
+  Family: Clock,
+  Entertainment: Clock,
+  Outdoors: MapPinned,
+  Markets: Clock,
+};
 
 function MapPin({
   language,
@@ -479,9 +494,22 @@ function MarkerCard({
             <DetailIcon className="w-3.5 h-3.5 opacity-70" />
             {copy.details}
           </div>
-          <div className="mt-2 flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
-            <MapPinned className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
-            <span>Lat {marker.lat.toFixed(5)} · Lng {marker.lng.toFixed(5)}</span>
+          <div className="mt-2 flex items-center justify-between gap-2">
+            <div className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
+              <MapPinned className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
+              <span>Lat {marker.lat.toFixed(5)} · Lng {marker.lng.toFixed(5)}</span>
+            </div>
+            {marker.sourceUrl && (
+              <a
+                href={marker.sourceUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={e => e.stopPropagation()}
+                className="flex items-center gap-0.5 text-[11px] font-semibold text-primary hover:underline shrink-0"
+              >
+                Source <ExternalLink className="h-2.5 w-2.5" />
+              </a>
+            )}
           </div>
         </div>
       </div>
@@ -592,9 +620,12 @@ function DiscoveryState({
   const location = LOCATIONS.find(l => l.id === locationId);
   const t = translations[language];
   const [categories, setCategories] = useState<Record<Category, boolean>>({
-    Businesses: true,
-    Events: true,
-    Specials: true
+    Museums: true,
+    Tours: true,
+    Family: true,
+    Entertainment: true,
+    Outdoors: true,
+    Markets: true,
   });
   const [selectedNeighborhood, setSelectedNeighborhood] = useState<string | null>(
     initialNeighborhood ?? null,
@@ -625,6 +656,7 @@ function DiscoveryState({
       details: l.details,
       lat: l.lat,
       lng: l.lng,
+      sourceUrl: (l as { sourceUrl?: string }).sourceUrl,
     };
   });
 
@@ -638,6 +670,7 @@ function DiscoveryState({
   });
   const isLive = data?.source === 'live';
   const isFallback = data?.source === 'fallback';
+  const isCurated = data?.source === 'curated';
 
   const savedCount = savedIds.size;
 
@@ -682,22 +715,26 @@ function DiscoveryState({
             </button>
           </div>
           
-          <div className="flex flex-wrap gap-2.5">
-            {(['Businesses', 'Events', 'Specials'] as Category[]).map(cat => (
-              <button
-                key={cat}
-                onClick={() => toggleCategory(cat)}
-                aria-pressed={categories[cat]}
-                className={cn(
-                  "px-4 py-2 rounded-full text-sm font-semibold transition-all duration-300 border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-card",
-                  categories[cat]
-                    ? "bg-foreground text-background border-foreground shadow-md"
-                    : "bg-muted text-muted-foreground border-transparent hover:bg-muted/80 hover:text-foreground"
-                )}
-              >
-                {t.categories[cat]}
-              </button>
-            ))}
+          <div className="flex flex-wrap gap-2">
+            {ALL_CATEGORIES.map(cat => {
+              const Icon = CATEGORY_ICONS[cat];
+              return (
+                <button
+                  key={cat}
+                  onClick={() => toggleCategory(cat)}
+                  aria-pressed={categories[cat]}
+                  className={cn(
+                    "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all duration-200 border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-card",
+                    categories[cat]
+                      ? "bg-foreground text-background border-foreground shadow-sm"
+                      : "bg-muted text-muted-foreground border-transparent hover:bg-muted/80 hover:text-foreground"
+                  )}
+                >
+                  <Icon className="w-3 h-3" />
+                  {t.categories[cat]}
+                </button>
+              );
+            })}
           </div>
           <div className="mt-5 border-t border-border/70 pt-4">
             <p className="mb-2 text-xs font-bold uppercase tracking-widest text-muted-foreground">
@@ -752,6 +789,11 @@ function DiscoveryState({
               <span className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-full">
                 <Radio className="w-3 h-3" />
                 {t.liveDataBadge}
+              </span>
+            ) : isCurated ? (
+              <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary bg-primary/5 border border-primary/20 px-2.5 py-1 rounded-full">
+                <Landmark className="w-3 h-3" />
+                {language === 'nl' ? 'Samengestelde selectie' : 'Curated selection'}
               </span>
             ) : isFallback ? (
               <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-600 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-full">
@@ -1018,9 +1060,12 @@ function SavedView({
   const t = translations[language];
   const savedList = [...savedMarkers.values()];
   const byCategory: Record<Category, Marker[]> = {
-    Businesses: savedList.filter(m => m.category === 'Businesses'),
-    Events: savedList.filter(m => m.category === 'Events'),
-    Specials: savedList.filter(m => m.category === 'Specials'),
+    Museums:       savedList.filter(m => m.category === 'Museums'),
+    Tours:         savedList.filter(m => m.category === 'Tours'),
+    Family:        savedList.filter(m => m.category === 'Family'),
+    Entertainment: savedList.filter(m => m.category === 'Entertainment'),
+    Outdoors:      savedList.filter(m => m.category === 'Outdoors'),
+    Markets:       savedList.filter(m => m.category === 'Markets'),
   };
 
   return (
@@ -1065,7 +1110,7 @@ function SavedView({
           </div>
         ) : (
           <div>
-            {(['Businesses', 'Events', 'Specials'] as Category[]).map(cat => (
+            {ALL_CATEGORIES.map(cat => (
               <SavedCategorySection
                 key={cat}
                 language={language}

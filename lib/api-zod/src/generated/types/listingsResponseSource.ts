@@ -12,4 +12,5 @@ export type ListingsResponseSource = typeof ListingsResponseSource[keyof typeof 
 export const ListingsResponseSource = {
   live: 'live',
   fallback: 'fallback',
+  curated: 'curated',
 } as const;
