@@ -229,7 +229,6 @@ function SearchState({
             src="/marqtplaza-logo.png"
             alt="marqtplaza.com — The Digital Village Square"
             className="h-20 md:h-28 w-auto mx-auto"
-            style={{ mixBlendMode: 'multiply' }}
           />
           <p className="text-xl text-muted-foreground font-medium max-w-md mx-auto leading-relaxed">
             {t.searchDescription}
