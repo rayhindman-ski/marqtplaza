@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Route, Switch, Router as WouterRouter, Link } from 'wouter';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { 
-  Search, Compass, MapPinOff, ArrowLeft,
+  Search, MapPinOff, ArrowLeft,
   Map as MapIcon, List, Clock,
   Globe2, Bookmark, BookmarkCheck, X, ChevronDown, ChevronUp,
   ScanSearch, RefreshCw, WifiOff, Radio, MapPinned,
@@ -225,12 +225,12 @@ function SearchState({
 
       <div className="z-10 max-w-xl w-full text-center space-y-10 animate-in fade-in slide-in-from-bottom-8 duration-700 ease-out">
         <div className="space-y-5">
-          <div className="inline-flex items-center justify-center p-3.5 bg-card shadow-sm border border-border/50 rounded-2xl mb-2">
-            <Compass className="w-10 h-10 text-primary" />
-          </div>
-          <h1 className="text-5xl md:text-6xl font-extrabold tracking-tight text-foreground">
-            buurt<span className="text-primary">plaza.nl</span>
-          </h1>
+          <img
+            src="/marqtplaza-logo.png"
+            alt="marqtplaza.com — The Digital Village Square"
+            className="h-20 md:h-28 w-auto mx-auto"
+            style={{ mixBlendMode: 'multiply' }}
+          />
           <p className="text-xl text-muted-foreground font-medium max-w-md mx-auto leading-relaxed">
             {t.searchDescription}
           </p>

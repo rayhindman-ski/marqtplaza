@@ -1,2 +1,3 @@
 - [Overpass API fetch pattern](overpass-fetch.md) — must use GET with `?data=` param and a User-Agent header; POST and text/plain body returns 406/504 from Node.js fetch.
 - [Browser map credentials](browser-map-credentials.md) — only load Google Maps for an exact browser-key format; otherwise use generic tiles before coordinate fallback.
+- [buurtplaza Location interface](buurtplaza-location-interface.md) — Location type needs postcodes, neighborhoods, and mapType fields; SchematicMap and CaptureView depend on them.

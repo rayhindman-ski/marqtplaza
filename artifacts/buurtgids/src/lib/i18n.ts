@@ -258,25 +258,98 @@ const dutchMarkerCopy: Record<
     description: 'Plantaardig lunchrestaurant met terras.',
     details: 'Open tot 16:00',
   },
-  m13: {
-    description: 'Geselecteerde koninklijke vondsten en historische artefacten.',
-    details: 'Open tot 17:00',
+  // ── Den Haag ──────────────────────────────────────────────────────────────
+  'dhg-m1': {
+    description: 'Thuisbasis van Vermeers Meisje met de Parel en Rembrandts De Anatomische Les.',
+    details: 'Open di–zo 10:00–18:00',
   },
-  m14: {
-    description: 'Samen maken we het strand van Scheveningen schoon.',
-    details: 'Zondag, 10:00',
+  'dhg-m2': {
+    description: 'Grootste Mondriaancollectie ter wereld in een schitterend art-decogebouw uit 1935.',
+    details: 'Open di–zo 10:00–17:00',
   },
-  m15: {
-    description: 'Verse Hollandse Nieuwe met korting.',
-    details: 'Vandaag geldig',
+  'dhg-m3': {
+    description: 'Stap in een schilderij uit 1881 van Scheveningen — het grootste ronde panorama ter wereld.',
+    details: 'Dagelijks open 10:00–17:00',
   },
-  m23: {
-    description: 'Exclusieve rondleiding buiten openingstijd langs meesterwerken.',
-    details: 'Donderdag, 19:00',
+  'dhg-m4': {
+    description: 'M.C. Eschers verbluffende grafiek in een voormalig koninklijk paleis aan het Lange Voorhout.',
+    details: 'Open di–zo 11:00–17:00',
   },
-  m24: {
-    description: 'Antiek- en boekenmarkt onder de lindebomen.',
-    details: 'Zondag, 11:00',
+  'dhg-m5': {
+    description: 'Oudste privécollectie klassieke auto\'s ter wereld — meer dan 230 voertuigen vanaf 1886.',
+    details: 'Open di–zo 10:00–17:00',
+  },
+  'dhg-t1': {
+    description: 'Gratis rondleiding op fooi langs de geschiedenis, architectuur en koninklijke hoogtepunten van Den Haag.',
+    details: 'Dagelijks 10:30 & 14:00',
+  },
+  'dhg-t2': {
+    description: 'Ontdek de mooiste plekken van de stad per fiets met een ervaren lokale gids.',
+    details: 'Vooraf boeken',
+  },
+  'dhg-t3': {
+    description: 'Rondleiding door de opkomende creatieve wijk Binckhorst — murals en urban art.',
+    details: 'Weekend, 13:00',
+  },
+  'dhg-t4': {
+    description: 'Los het mysterie op van de ontsnapping van Hugo de Groot in dit buiten historisch stadsspel.',
+    details: 'Dagelijks beschikbaar',
+  },
+  'dhg-t5': {
+    description: 'Bezoek de iconische zetel van internationale gerechtigheid — rondleidingen en een interactief bezoekerscentrum.',
+    details: 'Bezoekerscentrum dagelijks open',
+  },
+  'dhg-f1': {
+    description: 'Verken een miniatuur Nederland op schaal 1:25 — molens, grachten en een werkend vliegveld.',
+    details: 'Dagelijks open 09:00–19:00',
+  },
+  'dhg-f2': {
+    description: 'Loop door een onderwateroceaantunnel en ontdek honderden zeewezens.',
+    details: 'Dagelijks open 10:00–19:00',
+  },
+  'dhg-f3': {
+    description: 'Hands-on wetenschapsmuseum met een 360° koepelbioscoop voor films over aarde en ruimte.',
+    details: 'Dagelijks open 10:00–17:00',
+  },
+  'dhg-f4': {
+    description: 'Overdekte strandtuin voor kinderen — glijbanen, zandbakken en planspeelbassins.',
+    details: 'Dagelijks open 10:00–18:00',
+  },
+  'dhg-e1': {
+    description: 'Bekroonde escape rooms met ★4,9 op Google door 1.294 bezoekers — boek vooruit in het weekend.',
+    details: 'Dagelijks open 10:00–23:00',
+  },
+  'dhg-e2': {
+    description: 'Meeslepende VR-ervaringen: horror, avontuur en multiplayer gaming in gedeelde virtuele werelden.',
+    details: 'Open di–zo 11:00–22:00',
+  },
+  'dhg-e3': {
+    description: 'Bioscoop aan de Scheveningse boulevard — de nieuwste films met zeezicht.',
+    details: 'Tijden online bekijken',
+  },
+  'dhg-e4': {
+    description: 'Opvallend theater direct op het strand van Scheveningen — een unieke plek voor live voorstellingen.',
+    details: 'Zie website voor programma',
+  },
+  'dhg-o1': {
+    description: '11 km zandstrand met strandtenten, watersport en onvergetelijke zonsondergangen boven de Noordzee.',
+    details: '24/7 open',
+  },
+  'dhg-o2': {
+    description: 'Zandduinnatuurreservaat tot aan het strand van Kijkduin — ideaal voor wandelen en fietsen.',
+    details: '24/7 open',
+  },
+  'dhg-o3': {
+    description: 'Oud koninklijk bos aan de rand van de stad — hardlooppaadjes, reeën en een verborgen paleis.',
+    details: 'Dagelijks open, gratis toegang',
+  },
+  'dhg-mk1': {
+    description: 'Een van de grootste buitenmarkten van Europa — verse producten, streetfood en wereldse smaken.',
+    details: 'Ma, wo, vr & za 08:00–17:00',
+  },
+  'dhg-mk2': {
+    description: 'Antieke boeken, kunst en curiosa onder de historische lindebomen van het Lange Voorhout.',
+    details: 'Zondag 11:00–17:00',
   },
   m16: {
     description: 'Open werkplaats met 3D-printers en prototypingtools.',

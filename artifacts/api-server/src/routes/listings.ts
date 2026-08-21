@@ -199,11 +199,11 @@ router.get("/listings", async (req, res) => {
     return;
   }
 
-  // Den Haag has a hand-curated dataset of 23 real activities across all 6 categories.
-  // Always serve it directly — live OSM data lacks the Family category and cannot reproduce
-  // the curated selection quality.
-  if (cityId === "dhg") {
-    const curated = MARKERS.filter((m) => m.locationId === "dhg");
+  // All cities now have hand-curated datasets with real activities across all 6 categories.
+  // Serve curated data directly — live OSM data lacks the Family category and cannot match
+  // the quality of the curated selection. This also avoids Overpass latency (10+ seconds).
+  const curated = MARKERS.filter((m) => m.locationId === cityId);
+  if (curated.length > 0) {
     res.json({ listings: curated, source: "curated" });
     return;
   }
