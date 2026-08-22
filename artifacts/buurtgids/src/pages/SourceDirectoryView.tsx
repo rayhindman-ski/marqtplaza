@@ -256,6 +256,12 @@ export default function SourceDirectoryView() {
               {sources.map((source) => {
                 const isSelected = selectedIds.includes(source.id);
                 const progress = sourceProgress[source.id];
+                const scanResult = scanResults.find((result) => result.sourceId === source.id);
+                const completedButtonLabel = scanResult
+                  ? scanResult.eventsAdded > 0 || scanResult.eventsUpdated === 0
+                    ? `${scanResult.eventsAdded} added`
+                    : `0 added · ${scanResult.eventsUpdated} updated`
+                  : 'Scan';
                 return (
                   <article key={source.id} className="flex flex-col gap-3 px-4 py-4 transition-colors hover:bg-muted/35 sm:flex-row sm:items-center sm:gap-4 sm:px-5">
                     <label className="flex min-w-0 flex-1 cursor-pointer items-start gap-3">
@@ -286,10 +292,10 @@ export default function SourceDirectoryView() {
                         type="button"
                         onClick={() => scanSources([source.id])}
                         disabled={isScanning}
-                        className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-3 py-2 text-xs font-extrabold text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
+                        className="inline-flex min-w-[88px] items-center justify-center gap-1.5 rounded-xl bg-primary px-3 py-2 text-xs font-extrabold text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
                       >
                         {progress === 'scanning' ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <ScanSearch className="h-3.5 w-3.5" />}
-                        {progress === 'scanning' ? 'Scanning…' : progress === 'queued' ? 'Queued' : 'Scan'}
+                        {progress === 'scanning' ? 'Scanning…' : progress === 'queued' ? 'Queued' : completedButtonLabel}
                       </button>
                       {progress && (
                         <span className={`rounded-full px-2 py-1 text-[10px] font-extrabold ${
