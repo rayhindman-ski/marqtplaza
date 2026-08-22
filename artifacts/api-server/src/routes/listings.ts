@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { and, desc, eq, gte } from "drizzle-orm";
+import { and, asc, desc, eq, gte } from "drizzle-orm";
 import { db } from "@workspace/db";
 import { discoveredEventsTable } from "@workspace/db/schema";
 import { MARKERS } from "../lib/static-listings.js";
@@ -237,7 +237,7 @@ router.get("/listings", async (req, res) => {
           eq(discoveredEventsTable.locationId, "dhg"),
           gte(discoveredEventsTable.startsAt, today),
         ))
-        .orderBy(desc(discoveredEventsTable.lastSeenAt));
+        .orderBy(asc(discoveredEventsTable.startsAt), desc(discoveredEventsTable.lastSeenAt));
       const curatedUrls = new Set(
         curated.map((listing) => canonicalExternalUrl(listing.sourceUrl)).filter((url): url is string => Boolean(url)),
       );

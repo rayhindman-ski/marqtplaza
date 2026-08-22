@@ -91,6 +91,14 @@ export const scanActivitySourcesResponseScansItemEventLinksReadMin = 0;
 
 export const scanActivitySourcesResponseScansItemEventsCapturedMin = 0;
 
+export const scanActivitySourcesResponseScansItemEventsEligibleMin = 0;
+
+export const scanActivitySourcesResponseScansItemEventsMissingDateMin = 0;
+
+export const scanActivitySourcesResponseScansItemEventsOutOfWindowMin = 0;
+
+export const scanActivitySourcesResponseScansItemEventsMissingLocalityMin = 0;
+
 export const scanActivitySourcesResponseScansItemPagesReadMin = 0;
 
 export const scanActivitySourcesResponseScansItemPagesFailedMin = 0;
@@ -131,6 +139,10 @@ export const ScanActivitySourcesResponse = zod.object({
 })),
   "eventLinksRead": zod.number().min(scanActivitySourcesResponseScansItemEventLinksReadMin).describe('Number of same-source links examined across approved index and detail pages.'),
   "eventsCaptured": zod.number().min(scanActivitySourcesResponseScansItemEventsCapturedMin).describe('Number of unique event links captured from the source page.'),
+  "eventsEligible": zod.number().min(scanActivitySourcesResponseScansItemEventsEligibleMin).describe('Captured events with a verified upcoming date and Den Haag evidence that are eligible for publication.'),
+  "eventsMissingDate": zod.number().min(scanActivitySourcesResponseScansItemEventsMissingDateMin).describe('Captured events excluded because no explicit event date could be parsed.'),
+  "eventsOutOfWindow": zod.number().min(scanActivitySourcesResponseScansItemEventsOutOfWindowMin).describe('Captured events excluded because their date is past or more than 18 months away.'),
+  "eventsMissingLocality": zod.number().min(scanActivitySourcesResponseScansItemEventsMissingLocalityMin).describe('Captured events excluded because no Den Haag location evidence was found.'),
   "pagesRead": zod.number().min(scanActivitySourcesResponseScansItemPagesReadMin).describe('Number of approved source pages read during the bounded crawl.'),
   "pagesFailed": zod.number().min(scanActivitySourcesResponseScansItemPagesFailedMin).describe('Number of approved source pages that could not be read.'),
   "pagesSkipped": zod.number().min(scanActivitySourcesResponseScansItemPagesSkippedMin).describe('Discovered pages skipped because a safe crawl budget was reached.'),
@@ -141,7 +153,7 @@ export const ScanActivitySourcesResponse = zod.object({
   "crawlLimitReached": zod.boolean().describe('Whether one or more safe per-source crawl limits truncated further discovery.'),
   "eventsAdded": zod.number().min(scanActivitySourcesResponseScansItemEventsAddedMin).describe('Number of newly persisted events added to the Den Haag activity list.'),
   "eventsUpdated": zod.number().min(scanActivitySourcesResponseScansItemEventsUpdatedMin).describe('Number of previously discovered events refreshed by this scan.'),
-  "eventsSkipped": zod.number().min(scanActivitySourcesResponseScansItemEventsSkippedMin).describe('Candidate events skipped because they were duplicates, incomplete, or beyond safe crawl limits.'),
+  "eventsSkipped": zod.number().min(scanActivitySourcesResponseScansItemEventsSkippedMin).describe('Captured events excluded from public listings because they did not meet publication checks.'),
   "message": zod.string().optional()
 })),
   "error": zod.string().optional()

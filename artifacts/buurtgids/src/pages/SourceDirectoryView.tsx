@@ -82,6 +82,10 @@ export default function SourceDirectoryView() {
       crawlLimitReached: summary.crawlLimitReached || scan.crawlLimitReached,
       eventLinksRead: summary.eventLinksRead + (scan.eventLinksRead ?? scan.events.length),
       eventsCaptured: summary.eventsCaptured + (scan.eventsCaptured ?? scan.events.length),
+      eventsEligible: summary.eventsEligible + scan.eventsEligible,
+      eventsMissingDate: summary.eventsMissingDate + scan.eventsMissingDate,
+      eventsOutOfWindow: summary.eventsOutOfWindow + scan.eventsOutOfWindow,
+      eventsMissingLocality: summary.eventsMissingLocality + scan.eventsMissingLocality,
       eventsAdded: summary.eventsAdded + scan.eventsAdded,
       eventsUpdated: summary.eventsUpdated + scan.eventsUpdated,
       eventsSkipped: summary.eventsSkipped + scan.eventsSkipped,
@@ -97,6 +101,10 @@ export default function SourceDirectoryView() {
       crawlLimitReached: false,
       eventLinksRead: 0,
       eventsCaptured: 0,
+      eventsEligible: 0,
+      eventsMissingDate: 0,
+      eventsOutOfWindow: 0,
+      eventsMissingLocality: 0,
       eventsAdded: 0,
       eventsUpdated: 0,
       eventsSkipped: 0,
@@ -398,10 +406,10 @@ export default function SourceDirectoryView() {
                 <span className="block text-sm font-extrabold text-foreground">
                   {scanSummary.eventsCaptured} event{scanSummary.eventsCaptured === 1 ? '' : 's'} captured
                 </span>
-                {scanSummary.eventsAdded} new · {scanSummary.eventsUpdated} updated · {scanResults.length} source{scanResults.length === 1 ? '' : 's'} scanned
+                {scanSummary.eventsEligible} eligible · {scanSummary.eventsAdded} new · {scanSummary.eventsUpdated} updated · {scanResults.length} source{scanResults.length === 1 ? '' : 's'} scanned
               </span>
             </div>
-            <div className="mb-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+            <div className="mb-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
               <div className="flex items-center gap-3 rounded-2xl border border-border bg-card px-4 py-3 shadow-sm">
                 <BookOpenCheck className="h-5 w-5 shrink-0 text-primary" />
                 <div>
@@ -424,6 +432,13 @@ export default function SourceDirectoryView() {
                 </div>
               </div>
               <div className="flex items-center gap-3 rounded-2xl border border-border bg-card px-4 py-3 shadow-sm">
+                <ShieldCheck className="h-5 w-5 shrink-0 text-emerald-600" />
+                <div>
+                  <p className="text-2xl font-extrabold leading-none text-foreground">{scanSummary.eventsEligible}</p>
+                  <p className="mt-1 text-xs font-bold text-muted-foreground">Eligible to publish</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3 rounded-2xl border border-border bg-card px-4 py-3 shadow-sm">
                 <ListPlus className="h-5 w-5 shrink-0 text-secondary" />
                 <div>
                   <p className="text-2xl font-extrabold leading-none text-foreground">{scanSummary.eventsAdded}</p>
@@ -442,6 +457,9 @@ export default function SourceDirectoryView() {
               <p className="text-sm font-semibold text-secondary">
                 {scanSummary.eventsAdded} new event{scanSummary.eventsAdded === 1 ? '' : 's'} added to the Den Haag activity list.
                 {scanSummary.eventsUpdated > 0 ? ` ${scanSummary.eventsUpdated} existing event${scanSummary.eventsUpdated === 1 ? '' : 's'} refreshed.` : ''}
+                {scanSummary.eventsCaptured > scanSummary.eventsEligible
+                  ? ` ${scanSummary.eventsMissingDate} needed an explicit date, ${scanSummary.eventsOutOfWindow} were outside the upcoming period, and ${scanSummary.eventsMissingLocality} needed Den Haag evidence.`
+                  : ''}
                 {scanSummary.pagesFailed > 0 ? ` ${scanSummary.pagesFailed} page${scanSummary.pagesFailed === 1 ? '' : 's'} could not be read.` : ''}
                 {scanSummary.crawlLimitReached ? ` The scan reached a safe coverage limit; ${scanSummary.pagesSkipped} queued page${scanSummary.pagesSkipped === 1 ? '' : 's'} were skipped.` : ''}
               </p>
@@ -489,6 +507,9 @@ export default function SourceDirectoryView() {
                     Coverage: {scan.indexPagesRead} index page{scan.indexPagesRead === 1 ? '' : 's'} · {scan.detailPagesRead} detail page{scan.detailPagesRead === 1 ? '' : 's'} · {scan.sitemapsRead} sitemap{scan.sitemapsRead === 1 ? '' : 's'}
                     {scan.pagesSkipped > 0 ? ` · ${scan.pagesSkipped} page${scan.pagesSkipped === 1 ? '' : 's'} skipped at the safe limit` : ''}
                     {scan.robotsPagesSkipped > 0 ? ` · ${scan.robotsPagesSkipped} page${scan.robotsPagesSkipped === 1 ? '' : 's'} protected by robots.txt` : ''}
+                  </p>
+                  <p className="mb-3 rounded-lg border border-primary/15 bg-primary/5 px-3 py-2 text-xs font-semibold text-muted-foreground">
+                    Eligibility: <span className="text-foreground">{scan.eventsEligible} publishable</span> · {scan.eventsMissingDate} no explicit date · {scan.eventsOutOfWindow} outside the upcoming period · {scan.eventsMissingLocality} without verified Den Haag evidence
                   </p>
                   {scan.events.length > 0 ? (
                     <ul className="space-y-2">

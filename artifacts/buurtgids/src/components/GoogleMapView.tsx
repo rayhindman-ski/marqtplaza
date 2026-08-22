@@ -193,7 +193,7 @@ function CoordinateMapFallback({
             key={point.id}
             type="button"
             onClick={() => onMarkerClick(point.id)}
-            className="absolute z-10 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow-lg transition-transform hover:scale-110 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/35"
+            className="absolute z-10 flex items-center justify-center -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow-lg transition-transform hover:scale-110 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/35"
             style={{
               left: `${Math.max(5, Math.min(95, left))}%`,
               top: `${Math.max(10, Math.min(92, top))}%`,
@@ -446,7 +446,7 @@ function TileMapView({
               event.stopPropagation();
               onMarkerClick(point.id);
             }}
-            className="absolute z-10 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white font-black text-white shadow-lg transition-transform hover:scale-110 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/35"
+             className="absolute z-10 flex items-center justify-center -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white font-black text-white shadow-lg transition-transform hover:scale-110 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/35"
             style={{
               left,
               top,

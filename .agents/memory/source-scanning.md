@@ -16,3 +16,9 @@ Only publish a scanned activity to the public event list when it has a valid upc
 **Why:** Source landing pages and evergreen articles produce many event-like links that otherwise accumulate as stale or non-local public listings.
 
 **How to apply:** Treat “captured” and “published” as different counts, filter public listings to upcoming dated records, and disclose any city-centre fallback map pin as approximate.
+
+Publication metrics must distinguish inspected links from captured events. Only a captured event that fails a publication check belongs in a rejection count; page and link-volume limits must be reported separately.
+
+**Why:** A crawler can inspect thousands of safe same-origin links while finding only a few candidates. Reporting the difference as rejected events makes source quality and coverage look far worse than they are.
+
+**How to apply:** Report pages/links examined, captured events, eligible events, and each explicit publication reason independently. Never treat a source-listing URL as event-locality proof; require event-specific venue/address/description evidence or in-bounds coordinates.

@@ -308,6 +308,22 @@ components:
           type: number
           minimum: 0
           description: Number of unique event links captured from the source page.
+        eventsEligible:
+          type: number
+          minimum: 0
+          description: Captured events with a verified upcoming date and Den Haag evidence that are eligible for publication.
+        eventsMissingDate:
+          type: number
+          minimum: 0
+          description: Captured events excluded because no explicit event date could be parsed.
+        eventsOutOfWindow:
+          type: number
+          minimum: 0
+          description: Captured events excluded because their date is past or more than 18 months away.
+        eventsMissingLocality:
+          type: number
+          minimum: 0
+          description: Captured events excluded because no Den Haag location evidence was found.
         pagesRead:
           type: number
           minimum: 0
@@ -350,10 +366,10 @@ components:
         eventsSkipped:
           type: number
           minimum: 0
-          description: Candidate events skipped because they were duplicates, incomplete, or beyond safe crawl limits.
+          description: Captured events excluded from public listings because they did not meet publication checks.
         message:
           type: string
-      required: [sourceId, sourceName, scannedUrl, status, events, eventLinksRead, eventsCaptured, pagesRead, pagesFailed, pagesSkipped, indexPagesRead, detailPagesRead, sitemapsRead, robotsPagesSkipped, crawlLimitReached, eventsAdded, eventsUpdated, eventsSkipped]
+      required: [sourceId, sourceName, scannedUrl, status, events, eventLinksRead, eventsCaptured, eventsEligible, eventsMissingDate, eventsOutOfWindow, eventsMissingLocality, pagesRead, pagesFailed, pagesSkipped, indexPagesRead, detailPagesRead, sitemapsRead, robotsPagesSkipped, crawlLimitReached, eventsAdded, eventsUpdated, eventsSkipped]
 
     SourceScanResponse:
       type: object

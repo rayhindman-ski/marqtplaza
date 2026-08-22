@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { inArray } from "drizzle-orm";
+import { inArray, sql } from "drizzle-orm";
 import { db } from "@workspace/db";
 import { discoveredEventsTable } from "@workspace/db/schema";
 
@@ -42,6 +42,10 @@ type RobotsRule = {
 type ScanMetrics = {
   eventLinksRead: number;
   eventsCaptured: number;
+  eventsEligible: number;
+  eventsMissingDate: number;
+  eventsOutOfWindow: number;
+  eventsMissingLocality: number;
   pagesRead: number;
   pagesFailed: number;
   eventsAdded: number;
@@ -97,13 +101,13 @@ const NAVIGATION_LINK_TITLES = new Set([
   "highlights of the hague", "sport and outdoor", "cycling routes", "walking routes",
   "top 10 must-sees", "royal the hague", "the hague's districts", "the hague & sustainability",
 ]);
-const MAX_PAGES_PER_SOURCE = 52;
-const MAX_INDEX_PAGES = 14;
-const MAX_DETAIL_PAGES = 36;
-const MAX_SITEMAP_PAGES = 6;
-const MAX_EVENTS_PER_SOURCE = 160;
-const MAX_LINKS_PER_PAGE = 400;
-const MAX_SITEMAP_URLS = 180;
+const MAX_PAGES_PER_SOURCE = 100;
+const MAX_INDEX_PAGES = 24;
+const MAX_DETAIL_PAGES = 68;
+const MAX_SITEMAP_PAGES = 8;
+const MAX_EVENTS_PER_SOURCE = 240;
+const MAX_LINKS_PER_PAGE = 600;
+const MAX_SITEMAP_URLS = 300;
 const MAX_RESPONSE_CHARS = 700_000;
 const FETCH_TIMEOUT_MS = 9_000;
 const MAX_REDIRECTS = 3;
@@ -117,6 +121,10 @@ function emptyMetrics(): ScanMetrics {
   return {
     eventLinksRead: 0,
     eventsCaptured: 0,
+    eventsEligible: 0,
+    eventsMissingDate: 0,
+    eventsOutOfWindow: 0,
+    eventsMissingLocality: 0,
     pagesRead: 0,
     pagesFailed: 0,
     eventsAdded: 0,
@@ -270,30 +278,74 @@ function venueFromLocation(value: unknown): string | undefined {
 const DUTCH_MONTHS: Record<string, string> = {
   januari: "01", februari: "02", maart: "03", april: "04", mei: "05", juni: "06",
   juli: "07", augustus: "08", september: "09", oktober: "10", november: "11", december: "12",
+  jan: "01", feb: "02", mrt: "03", apr: "04", jun: "06", jul: "07", aug: "08",
+  sep: "09", sept: "09", okt: "10", nov: "11", dec: "12",
 };
 const ENGLISH_MONTHS: Record<string, string> = {
   january: "01", february: "02", march: "03", april: "04", may: "05", june: "06",
   july: "07", august: "08", september: "09", october: "10", november: "11", december: "12",
+  jan: "01", feb: "02", mar: "03", apr: "04", jun: "06", jul: "07", aug: "08",
+  sep: "09", sept: "09", oct: "10", nov: "11", dec: "12",
 };
 const MONTHS: Record<string, string> = { ...DUTCH_MONTHS, ...ENGLISH_MONTHS };
 
+function normalizedDate(
+  year: string,
+  month: string,
+  day: string,
+  time?: RegExpMatchArray | null,
+): string | undefined {
+  const numericYear = Number(year);
+  const numericMonth = Number(month);
+  const numericDay = Number(day);
+  const calendarDate = new Date(Date.UTC(numericYear, numericMonth - 1, numericDay));
+  if (
+    calendarDate.getUTCFullYear() !== numericYear
+    || calendarDate.getUTCMonth() !== numericMonth - 1
+    || calendarDate.getUTCDate() !== numericDay
+  ) {
+    return undefined;
+  }
+  const base = `${year.padStart(4, "0")}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
+  return time ? `${base}T${time[1].padStart(2, "0")}:${time[2]}:00` : base;
+}
+
 function normalizeDateValue(value: string | undefined): string | undefined {
   if (!value) return undefined;
-  const clean = stripMarkup(value).replace(/\s+/g, " ").trim();
-  const iso = clean.match(/\b\d{4}-\d{2}-\d{2}(?:[T\s]\d{2}:\d{2}(?::\d{2})?(?:[+\-]\d{2}:?\d{2}|Z)?)?\b/);
-  if (iso) return iso[0].replace(" ", "T");
+  const clean = stripMarkup(value).replace(/[–—]/g, "-").replace(/\s+/g, " ").trim();
+  const time = clean.match(/\b([01]?\d|2[0-3]):([0-5]\d)\b/);
+  const iso = clean.match(/\b(\d{4})-(\d{2})-(\d{2})(?:[T\s]([01]?\d|2[0-3]):([0-5]\d)(?::[0-5]\d)?(?:\.\d+)?(?:[+\-]\d{2}:?\d{2}|Z)?)?\b/);
+  if (iso) {
+    return normalizedDate(iso[1], iso[2], iso[3], iso[4] && iso[5] ? [iso[0], iso[4], iso[5]] : time);
+  }
 
-  const dayFirst = clean.match(/\b(\d{1,2})\s+([A-Za-zÀ-ÿ]+)\s+(\d{4})\b/);
+  const numericDayFirst = clean.match(/\b(\d{1,2})[./-](\d{1,2})[./-](\d{4})\b/);
+  if (numericDayFirst) {
+    return normalizedDate(numericDayFirst[3], numericDayFirst[2], numericDayFirst[1], time);
+  }
+
+  const dayFirst = clean.match(/\b(\d{1,2})(?:\s*(?:-|t\/m|tot)\s*\d{1,2})?\s+([A-Za-zÀ-ÿ.]+)\s+(\d{4})\b/i);
   const monthFirst = clean.match(/\b([A-Za-zÀ-ÿ]+)\s+(\d{1,2}),?\s+(\d{4})\b/);
   const named = dayFirst ?? monthFirst;
   if (!named) return undefined;
   const day = dayFirst ? named[1] : named[2];
-  const monthName = dayFirst ? named[2] : named[1];
+  const monthName = (dayFirst ? named[2] : named[1]).replace(/\.$/, "");
   const year = named[3];
   const month = MONTHS[monthName.toLowerCase()];
   if (!month) return undefined;
-  const time = clean.match(/\b([01]?\d|2[0-3]):([0-5]\d)\b/);
-  return `${year}-${month}-${day.padStart(2, "0")}${time ? `T${time[1].padStart(2, "0")}:${time[2]}:00` : ""}`;
+  return normalizedDate(year, month, day, time);
+}
+
+function firstDateValue(value: unknown): string | undefined {
+  if (typeof value === "string") return normalizeDateValue(value);
+  if (Array.isArray(value)) {
+    return value.map(firstDateValue).find((date): date is string => Boolean(date));
+  }
+  if (value && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    return firstDateValue(record.startDate);
+  }
+  return undefined;
 }
 
 function eventFromStructuredNode(
@@ -321,7 +373,10 @@ function eventFromStructuredNode(
   const locationRecord = location && typeof location === "object" ? location as Record<string, unknown> : null;
   const coordinates = parseCoordinates(locationRecord?.geo ?? node.geo);
   const description = shorten(typeof node.description === "string" ? node.description : undefined);
-  const startsAt = normalizeDateValue(typeof node.startDate === "string" ? node.startDate : undefined);
+  const schedule = node.eventSchedule && typeof node.eventSchedule === "object"
+    ? node.eventSchedule as Record<string, unknown>
+    : undefined;
+  const startsAt = firstDateValue(node.startDate) ?? firstDateValue(schedule?.startDate);
 
   return {
     title,
@@ -384,11 +439,19 @@ function pageTitle(html: string): string | undefined {
 }
 
 function pageDate(html: string): string | undefined {
-  const datetime = html.match(/<time\b[^>]*datetime=["']([^"']+)["'][^>]*>/i)
-    ?? html.match(/(?:itemprop|data-start-date)=["'](?:startDate|start-date)?["'][^>]*value=["']([^"']+)["']/i);
-  if (datetime?.[1]) return normalizeDateValue(datetime[1]);
-  const timeText = html.match(/<time\b[^>]*>([\s\S]*?)<\/time>/i);
-  return normalizeDateValue(timeText?.[1]);
+  const candidates: string[] = [];
+  for (const match of html.matchAll(/<time\b([^>]*)>([\s\S]*?)<\/time>/gi)) {
+    const datetime = match[1].match(/\bdatetime=["']([^"']+)["']/i);
+    candidates.push(datetime?.[1] ?? match[2]);
+  }
+  for (const match of html.matchAll(/<(?:meta|div|span|p)\b([^>]*)>/gi)) {
+    const attributes = match[1];
+    const isStartDate = /\b(?:itemprop|property|name)=["'][^"']*(?:startdate|start-date|event-start)[^"']*["']|\bdata-(?:start-?date|event-start)\s*=/i.test(attributes);
+    if (!isStartDate) continue;
+    const value = attributes.match(/\b(?:datetime|content|value|data-start-date|data-event-start)=["']([^"']+)["']/i);
+    if (value?.[1]) candidates.push(value[1]);
+  }
+  return candidates.map(normalizeDateValue).find((date): date is string => Boolean(date));
 }
 
 function pageVenue(html: string): string | undefined {
@@ -601,15 +664,17 @@ function mapCoordinates(event: SourceScanEvent): {
   };
 }
 
-function isPublishableEvent(event: SourceScanEvent): boolean {
+type PublicationStatus = "eligible" | "missing_date" | "out_of_window" | "missing_locality";
+
+function publicationStatus(event: SourceScanEvent): PublicationStatus {
   const startsAt = event.startsAt ? Date.parse(event.startsAt) : Number.NaN;
-  if (!Number.isFinite(startsAt)) return false;
+  if (!Number.isFinite(startsAt)) return "missing_date";
 
   const now = new Date();
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
   const latestAcceptedDate = new Date(now);
   latestAcceptedDate.setMonth(latestAcceptedDate.getMonth() + 18);
-  if (startsAt < today || startsAt > latestAcceptedDate.getTime()) return false;
+  if (startsAt < today || startsAt > latestAcceptedDate.getTime()) return "out_of_window";
 
   if (
     Number.isFinite(event.lat) &&
@@ -619,11 +684,11 @@ function isPublishableEvent(event: SourceScanEvent): boolean {
     event.lng! >= DEN_HAAG_BOUNDS.west &&
     event.lng! <= DEN_HAAG_BOUNDS.east
   ) {
-    return true;
+    return "eligible";
   }
   return /\b(den haag|the hague|scheveningen|kijkduin|loosduinen)\b/i.test(
     `${event.venue ?? ""} ${event.description ?? ""}`,
-  );
+  ) ? "eligible" : "missing_locality";
 }
 
 async function persistEvents(source: SourceDefinition, events: SourceScanEvent[]): Promise<Pick<ScanMetrics, "eventsAdded" | "eventsUpdated">> {
@@ -638,10 +703,6 @@ async function persistEvents(source: SourceDefinition, events: SourceScanEvent[]
 
   for (const event of events) {
     const coordinates = mapCoordinates(event);
-    const details = [
-      event.startsAt ? event.startsAt.replace("T", " ").slice(0, 16) : "Date not provided",
-      event.venue ?? "Venue not provided",
-    ].join(" · ");
     await db.insert(discoveredEventsTable).values({
       locationId: "dhg",
       sourceId: source.id,
@@ -661,11 +722,17 @@ async function persistEvents(source: SourceDefinition, events: SourceScanEvent[]
         sourceId: source.id,
         sourceName: source.name,
         title: event.title,
-        description: event.description ?? `${source.name} activity listing.`,
-        startsAt: event.startsAt ?? null,
-        venue: event.venue ?? null,
+        description: event.description ? sql`excluded.description` : sql`${discoveredEventsTable.description}`,
+        startsAt: event.startsAt ? sql`excluded.starts_at` : sql`${discoveredEventsTable.startsAt}`,
+        venue: event.venue ? sql`excluded.venue` : sql`${discoveredEventsTable.venue}`,
         category: event.category ?? "Entertainment",
-        ...coordinates,
+        lat: coordinates.isApproximateLocation ? sql`${discoveredEventsTable.lat}` : sql`excluded.lat`,
+        lng: coordinates.isApproximateLocation ? sql`${discoveredEventsTable.lng}` : sql`excluded.lng`,
+        x: coordinates.isApproximateLocation ? sql`${discoveredEventsTable.x}` : sql`excluded.x`,
+        y: coordinates.isApproximateLocation ? sql`${discoveredEventsTable.y}` : sql`excluded.y`,
+        isApproximateLocation: coordinates.isApproximateLocation
+          ? sql`${discoveredEventsTable.isApproximateLocation}`
+          : false,
         lastSeenAt: now,
         updatedAt: now,
       },
@@ -813,8 +880,21 @@ async function scanSource(source: SourceDefinition) {
 
   const events = [...captured.values()].slice(0, MAX_EVENTS_PER_SOURCE);
   metrics.eventsCaptured = events.length;
-  const publishableEvents = events.filter(isPublishableEvent);
-  metrics.eventsSkipped = Math.max(0, metrics.eventLinksRead - events.length) + (events.length - publishableEvents.length);
+  const publishableEvents: SourceScanEvent[] = [];
+  for (const event of events) {
+    const status = publicationStatus(event);
+    if (status === "eligible") {
+      metrics.eventsEligible += 1;
+      publishableEvents.push(event);
+    } else if (status === "missing_date") {
+      metrics.eventsMissingDate += 1;
+    } else if (status === "out_of_window") {
+      metrics.eventsOutOfWindow += 1;
+    } else {
+      metrics.eventsMissingLocality += 1;
+    }
+  }
+  metrics.eventsSkipped = events.length - publishableEvents.length;
   metrics.crawlLimitReached ||= queue.length > 0 || visited.size >= MAX_PAGES_PER_SOURCE || captured.size >= MAX_EVENTS_PER_SOURCE;
 
   if (publishableEvents.length > 0) {
@@ -848,7 +928,7 @@ async function scanSource(source: SourceDefinition) {
       ? "No source pages could be read."
       : status === "no_events"
         ? "The approved pages were read, but no event pages were detected."
-        : `${metrics.eventsCaptured} event${metrics.eventsCaptured === 1 ? "" : "s"} captured from ${metrics.indexPagesRead} calendar/index page${metrics.indexPagesRead === 1 ? "" : "s"} and ${metrics.detailPagesRead} detail page${metrics.detailPagesRead === 1 ? "" : "s"}; ${metrics.eventsAdded} added and ${metrics.eventsUpdated} updated in the Den Haag activity list.${events.length > publishableEvents.length ? ` ${events.length - publishableEvents.length} captured event${events.length - publishableEvents.length === 1 ? "" : "s"} did not include a verified upcoming date and Den Haag location, so ${events.length - publishableEvents.length === 1 ? "it was" : "they were"} not published.` : ""}${status === "partial" ? " Some pages could not be read or a safe crawl limit was reached." : ""}`;
+        : `${metrics.eventsCaptured} event${metrics.eventsCaptured === 1 ? "" : "s"} captured from ${metrics.indexPagesRead} calendar/index page${metrics.indexPagesRead === 1 ? "" : "s"} and ${metrics.detailPagesRead} detail page${metrics.detailPagesRead === 1 ? "" : "s"}; ${metrics.eventsEligible} eligible, ${metrics.eventsAdded} added, and ${metrics.eventsUpdated} updated in the Den Haag activity list.${events.length > publishableEvents.length ? ` ${metrics.eventsMissingDate} lacked a date, ${metrics.eventsOutOfWindow} were outside the upcoming window, and ${metrics.eventsMissingLocality} lacked verified Den Haag evidence.` : ""}${status === "partial" ? " Some pages could not be read or a safe crawl limit was reached." : ""}`;
 
   return {
     sourceId: source.id,

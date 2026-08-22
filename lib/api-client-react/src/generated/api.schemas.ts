@@ -129,6 +129,26 @@ export interface SourceScanResult {
      */
   eventsCaptured: number;
   /**
+     * Captured events with a verified upcoming date and Den Haag evidence that are eligible for publication.
+     * @minimum 0
+     */
+  eventsEligible: number;
+  /**
+     * Captured events excluded because no explicit event date could be parsed.
+     * @minimum 0
+     */
+  eventsMissingDate: number;
+  /**
+     * Captured events excluded because their date is past or more than 18 months away.
+     * @minimum 0
+     */
+  eventsOutOfWindow: number;
+  /**
+     * Captured events excluded because no Den Haag location evidence was found.
+     * @minimum 0
+     */
+  eventsMissingLocality: number;
+  /**
      * Number of approved source pages read during the bounded crawl.
      * @minimum 0
      */
@@ -176,7 +196,7 @@ export interface SourceScanResult {
      */
   eventsUpdated: number;
   /**
-     * Candidate events skipped because they were duplicates, incomplete, or beyond safe crawl limits.
+     * Captured events excluded from public listings because they did not meet publication checks.
      * @minimum 0
      */
   eventsSkipped: number;
