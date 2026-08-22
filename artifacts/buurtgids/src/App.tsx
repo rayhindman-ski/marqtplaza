@@ -212,16 +212,27 @@ function SearchState({
         </button>
       )}
 
-      {/* Mobile Capture shortcut (category nav is desktop-only) */}
-      <Link href="/capture">
-        <button
-          type="button"
-          className="lg:hidden absolute bottom-8 left-6 z-10 flex items-center gap-2 px-4 py-2.5 bg-card/90 backdrop-blur-sm border border-border/60 rounded-full text-sm font-bold text-foreground hover:border-primary/50 hover:text-primary shadow-md hover:shadow-lg transition-all"
-        >
-          <ScanSearch className="w-4 h-4 text-primary" />
-          <span>{t.capture}</span>
-        </button>
-      </Link>
+      {/* Mobile shortcuts (the desktop category nav is hidden below lg) */}
+      <div className="lg:hidden absolute bottom-8 left-6 z-10 flex items-center gap-2">
+        <Link href="/capture">
+          <button
+            type="button"
+            className="flex items-center gap-2 px-4 py-2.5 bg-card/90 backdrop-blur-sm border border-border/60 rounded-full text-sm font-bold text-foreground hover:border-primary/50 hover:text-primary shadow-md hover:shadow-lg transition-all"
+          >
+            <ScanSearch className="w-4 h-4 text-primary" />
+            <span>{t.capture}</span>
+          </button>
+        </Link>
+        <Link href="/bronnen">
+          <button
+            type="button"
+            className="flex items-center gap-2 px-4 py-2.5 bg-card/90 backdrop-blur-sm border border-border/60 rounded-full text-sm font-bold text-foreground hover:border-primary/50 hover:text-primary shadow-md hover:shadow-lg transition-all"
+          >
+            <Radio className="w-4 h-4 text-primary" />
+            <span>Sources</span>
+          </button>
+        </Link>
+      </div>
 
       <div className="z-10 max-w-xl w-full text-center space-y-10 animate-in fade-in slide-in-from-bottom-8 duration-700 ease-out">
         <div className="space-y-5">
