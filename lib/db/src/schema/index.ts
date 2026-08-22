@@ -19,3 +19,4 @@
 
 export * from "./captureResults";
 export * from "./discoveredEvents";
+export * from "./newsArticles";

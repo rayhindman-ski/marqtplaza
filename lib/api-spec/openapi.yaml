@@ -16,6 +16,8 @@ tags:
     description: Local business and event listings
   - name: source-scanning
     description: Den Haag activity source scanning
+  - name: news
+    description: Den Haag news aggregation
 paths:
   /healthz:
     get:
@@ -139,6 +141,71 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ListingsResponse"
+
+  /news:
+    get:
+      operationId: getNews
+      tags: [news]
+      summary: Get published Den Haag news
+      parameters:
+        - name: subcategory
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/NewsSubcategory"
+      responses:
+        "200":
+          description: Published news feed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NewsFeed"
+
+  /news/{id}:
+    get:
+      operationId: getNewsArticle
+      tags: [news]
+      summary: Get one published news article
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: number
+      responses:
+        "200":
+          description: Published article
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NewsArticle"
+        "404":
+          description: Article not found
+
+  /news/scan:
+    post:
+      operationId: scanNewsSources
+      tags: [news]
+      summary: Crawl selected approved Den Haag news sources
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NewsScanRequest"
+      responses:
+        "200":
+          description: Per-source news crawl results
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NewsScanResponse"
+        "400":
+          description: Invalid source selection
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NewsScanResponse"
 
 components:
   schemas:
@@ -443,3 +510,93 @@ components:
       required:
         - listings
         - source
+
+    NewsSubcategory:
+      type: string
+      enum: [city, politics, safety, culture, sport, business, community]
+
+    NewsArticle:
+      type: object
+      properties:
+        id:
+          type: number
+        title:
+          type: string
+        summary:
+          type: string
+        sourceName:
+          type: string
+        sourceUrl:
+          type: string
+        subcategory:
+          $ref: "#/components/schemas/NewsSubcategory"
+        publishedAt:
+          type: ["string", "null"]
+      required: [id, title, summary, sourceName, sourceUrl, subcategory, publishedAt]
+
+    NewsFeed:
+      type: object
+      properties:
+        articles:
+          type: array
+          items:
+            $ref: "#/components/schemas/NewsArticle"
+        availableSubcategories:
+          type: array
+          items:
+            $ref: "#/components/schemas/NewsSubcategory"
+      required: [articles, availableSubcategories]
+
+    NewsScanRequest:
+      type: object
+      properties:
+        sourceIds:
+          type: array
+          minItems: 1
+          maxItems: 23
+          items:
+            type: string
+      required: [sourceIds]
+
+    NewsSourceScan:
+      type: object
+      properties:
+        sourceId:
+          type: string
+        sourceName:
+          type: string
+        scannedUrl:
+          type: string
+        status:
+          type: string
+          enum: [found, partial, no_articles, blocked, error]
+        articlesCaptured:
+          type: number
+        articlesPublished:
+          type: number
+        articlesUpdated:
+          type: number
+        articlesRejected:
+          type: number
+        pagesRead:
+          type: number
+        pagesFailed:
+          type: number
+        crawlLimitReached:
+          type: boolean
+        message:
+          type: string
+      required: [sourceId, sourceName, scannedUrl, status, articlesCaptured, articlesPublished, articlesUpdated, articlesRejected, pagesRead, pagesFailed, crawlLimitReached, message]
+
+    NewsScanResponse:
+      type: object
+      properties:
+        scannedAt:
+          type: string
+        scans:
+          type: array
+          items:
+            $ref: "#/components/schemas/NewsSourceScan"
+        error:
+          type: string
+      required: [scannedAt, scans]

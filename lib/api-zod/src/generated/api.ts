@@ -188,3 +188,73 @@ export const GetListingsResponse = zod.object({
 })
 
 
+/**
+ * @summary Get published Den Haag news
+ */
+export const GetNewsQueryParams = zod.object({
+  "subcategory": zod.enum(['city', 'politics', 'safety', 'culture', 'sport', 'business', 'community']).optional()
+})
+
+export const GetNewsResponse = zod.object({
+  "articles": zod.array(zod.object({
+  "id": zod.number(),
+  "title": zod.string(),
+  "summary": zod.string(),
+  "sourceName": zod.string(),
+  "sourceUrl": zod.string(),
+  "subcategory": zod.enum(['city', 'politics', 'safety', 'culture', 'sport', 'business', 'community']),
+  "publishedAt": zod.string().nullable()
+})),
+  "availableSubcategories": zod.array(zod.enum(['city', 'politics', 'safety', 'culture', 'sport', 'business', 'community']))
+})
+
+
+/**
+ * @summary Get one published news article
+ */
+export const GetNewsArticleParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GetNewsArticleResponse = zod.object({
+  "id": zod.number(),
+  "title": zod.string(),
+  "summary": zod.string(),
+  "sourceName": zod.string(),
+  "sourceUrl": zod.string(),
+  "subcategory": zod.enum(['city', 'politics', 'safety', 'culture', 'sport', 'business', 'community']),
+  "publishedAt": zod.string().nullable()
+})
+
+
+/**
+ * @summary Crawl selected approved Den Haag news sources
+ */
+export const scanNewsSourcesBodySourceIdsMax = 23;
+
+
+
+export const ScanNewsSourcesBody = zod.object({
+  "sourceIds": zod.array(zod.string()).min(1).max(scanNewsSourcesBodySourceIdsMax)
+})
+
+export const ScanNewsSourcesResponse = zod.object({
+  "scannedAt": zod.string(),
+  "scans": zod.array(zod.object({
+  "sourceId": zod.string(),
+  "sourceName": zod.string(),
+  "scannedUrl": zod.string(),
+  "status": zod.enum(['found', 'partial', 'no_articles', 'blocked', 'error']),
+  "articlesCaptured": zod.number(),
+  "articlesPublished": zod.number(),
+  "articlesUpdated": zod.number(),
+  "articlesRejected": zod.number(),
+  "pagesRead": zod.number(),
+  "pagesFailed": zod.number(),
+  "crawlLimitReached": zod.boolean(),
+  "message": zod.string()
+})),
+  "error": zod.string().optional()
+})
+
+

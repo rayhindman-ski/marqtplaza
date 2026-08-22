@@ -25,8 +25,13 @@ import type {
   CaptureScanRequest,
   CaptureSearchRequest,
   GetListingsParams,
+  GetNewsParams,
   HealthStatus,
   ListingsResponse,
+  NewsArticle,
+  NewsFeed,
+  NewsScanRequest,
+  NewsScanResponse,
   PersistOutcome,
   ScanResultList,
   SourceScanRequest,
@@ -506,4 +511,236 @@ export function useGetListings<TData = Awaited<ReturnType<typeof getListings>>, 
 
 
 
+
+export const getGetNewsUrl = (params?: GetNewsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/news?${stringifiedParams}` : `/api/news`
+}
+
+/**
+ * @summary Get published Den Haag news
+ */
+export const getNews = async (params?: GetNewsParams, options?: Parameters<typeof customFetch>[1]): Promise<NewsFeed> => {
+
+  return customFetch<NewsFeed>(getGetNewsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetNewsQueryKey = (params?: GetNewsParams,) => {
+    return [
+    `/api/news`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetNewsQueryOptions = <TData = Awaited<ReturnType<typeof getNews>>, TError = ErrorType<unknown>>(params?: GetNewsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getNews>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetNewsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getNews>>> = ({ signal }) => getNews(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getNews>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetNewsQueryResult = NonNullable<Awaited<ReturnType<typeof getNews>>>
+export type GetNewsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get published Den Haag news
+ */
+
+export function useGetNews<TData = Awaited<ReturnType<typeof getNews>>, TError = ErrorType<unknown>>(
+ params?: GetNewsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getNews>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetNewsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetNewsArticleUrl = (id: number,) => {
+
+
+
+
+  return `/api/news/${id}`
+}
+
+/**
+ * @summary Get one published news article
+ */
+export const getNewsArticle = async (id: number, options?: Parameters<typeof customFetch>[1]): Promise<NewsArticle> => {
+
+  return customFetch<NewsArticle>(getGetNewsArticleUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetNewsArticleQueryKey = (id: number,) => {
+    return [
+    `/api/news/${id}`
+    ] as const;
+    }
+
+
+export const getGetNewsArticleQueryOptions = <TData = Awaited<ReturnType<typeof getNewsArticle>>, TError = ErrorType<void>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getNewsArticle>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetNewsArticleQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getNewsArticle>>> = ({ signal }) => getNewsArticle(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getNewsArticle>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetNewsArticleQueryResult = NonNullable<Awaited<ReturnType<typeof getNewsArticle>>>
+export type GetNewsArticleQueryError = ErrorType<void>
+
+
+/**
+ * @summary Get one published news article
+ */
+
+export function useGetNewsArticle<TData = Awaited<ReturnType<typeof getNewsArticle>>, TError = ErrorType<void>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getNewsArticle>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetNewsArticleQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getScanNewsSourcesUrl = () => {
+
+
+
+
+  return `/api/news/scan`
+}
+
+/**
+ * @summary Crawl selected approved Den Haag news sources
+ */
+export const scanNewsSources = async (newsScanRequest: NewsScanRequest, options?: Parameters<typeof customFetch>[1]): Promise<NewsScanResponse> => {
+
+  return customFetch<NewsScanResponse>(getScanNewsSourcesUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(newsScanRequest)
+  }
+);}
+
+
+
+
+
+export const getScanNewsSourcesMutationOptions = <TError = ErrorType<NewsScanResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof scanNewsSources>>, TError,{data: BodyType<NewsScanRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof scanNewsSources>>, TError,{data: BodyType<NewsScanRequest>}, TContext> => {
+
+const mutationKey = ['scanNewsSources'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof scanNewsSources>>, {data: BodyType<NewsScanRequest>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  scanNewsSources(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ScanNewsSourcesMutationResult = NonNullable<Awaited<ReturnType<typeof scanNewsSources>>>
+    export type ScanNewsSourcesMutationBody = BodyType<NewsScanRequest>
+    export type ScanNewsSourcesMutationError = ErrorType<NewsScanResponse>
+
+    /**
+ * @summary Crawl selected approved Den Haag news sources
+ */
+export const useScanNewsSources = <TError = ErrorType<NewsScanResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof scanNewsSources>>, TError,{data: BodyType<NewsScanRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof scanNewsSources>>,
+        TError,
+        {data: BodyType<NewsScanRequest>},
+        TContext
+      > => {
+      return useMutation(getScanNewsSourcesMutationOptions(options));
+    }
 

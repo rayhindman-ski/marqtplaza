@@ -182,14 +182,8 @@ export default function SourceDirectoryView() {
     <main className="min-h-screen bg-background">
       <header className="sticky top-0 z-30 border-b border-border bg-card/90 backdrop-blur-xl">
         <div className="mx-auto flex max-w-7xl items-center gap-4 px-5 py-4 sm:px-7">
-          <Link href="/">
-            <button
-              type="button"
-              aria-label="Back to the home page"
-              className="rounded-full p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-            >
-              <ArrowLeft className="h-5 w-5" />
-            </button>
+          <Link href="/" aria-label="Back to the home page" className="rounded-full p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
+            <ArrowLeft className="h-6 w-6" aria-hidden="true" />
           </Link>
           <div className="min-w-0">
             <p className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-primary">The Hague scanner</p>
@@ -463,10 +457,8 @@ export default function SourceDirectoryView() {
                 {scanSummary.pagesFailed > 0 ? ` ${scanSummary.pagesFailed} page${scanSummary.pagesFailed === 1 ? '' : 's'} could not be read.` : ''}
                 {scanSummary.crawlLimitReached ? ` The scan reached a safe coverage limit; ${scanSummary.pagesSkipped} queued page${scanSummary.pagesSkipped === 1 ? '' : 's'} were skipped.` : ''}
               </p>
-              <Link href="/activiteiten/den-haag">
-                <button type="button" className="rounded-xl bg-secondary px-3 py-2 text-xs font-extrabold text-secondary-foreground transition-colors hover:bg-secondary/90">
-                  View Den Haag activities
-                </button>
+              <Link href="/activiteiten/den-haag" className="rounded-xl bg-secondary px-3 py-2 text-xs font-extrabold text-secondary-foreground transition-colors hover:bg-secondary/90">
+                View Den Haag activities
               </Link>
             </div>
             <div className="grid gap-4 lg:grid-cols-2">

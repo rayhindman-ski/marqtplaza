@@ -3,7 +3,7 @@ import { Route, Switch, Router as WouterRouter, Link, useLocation, useRoute } fr
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { 
   Search, MapPinOff, ArrowLeft,
-  Map as MapIcon, List, Clock,
+  Map as MapIcon, List, Clock, Newspaper,
   Globe2, Bookmark, BookmarkCheck, X, ChevronDown, ChevronUp,
   ScanSearch, RefreshCw, WifiOff, Radio, MapPinned,
   Landmark, Route as RouteIcon, Baby, Gamepad2, Waves, ShoppingBag, ExternalLink
@@ -15,6 +15,8 @@ import { LOCATIONS, MARKERS, ALL_CATEGORIES, type Category, type Marker } from '
 import { GoogleMapView } from './components/GoogleMapView';
 import CaptureView from './pages/CaptureView';
 import SourceDirectoryView from './pages/SourceDirectoryView';
+import NewsFeedView from './pages/NewsFeedView';
+import NewsArticleView from './pages/NewsArticleView';
 import {
   getLocationName,
   getMarkerCopy,
@@ -85,34 +87,43 @@ function ReferenceCategoryNav({
       className="absolute left-0 top-0 z-30 hidden w-full border-b border-border/70 bg-card/85 px-6 py-4 backdrop-blur-md lg:block"
     >
       <div className="mx-auto flex max-w-6xl items-center justify-center gap-7">
-        {t.navCategories.map((category) => (
-          <button
-            type="button"
-            key={category.id}
-            onClick={category.id === 'things-to-do' ? onThingsToDo : undefined}
-            aria-haspopup={category.id === 'things-to-do' ? 'dialog' : undefined}
-            className="text-sm font-extrabold text-foreground transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-          >
-            {category.label}
-          </button>
-        ))}
-        <Link href="/capture">
-          <button
-            type="button"
-            className="inline-flex items-center gap-1.5 text-sm font-extrabold text-foreground transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-          >
-            <ScanSearch className="h-4 w-4" />
-            {t.capture}
-          </button>
+        {t.navCategories.map((category) => {
+          if (category.id === 'news') {
+            return (
+              <Link
+                href="/nieuws"
+                key={category.id}
+                className="text-sm font-extrabold text-foreground transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              >
+                {category.label}
+              </Link>
+            );
+          }
+          return (
+            <button
+              type="button"
+              key={category.id}
+              onClick={category.id === 'things-to-do' ? onThingsToDo : undefined}
+              aria-haspopup={category.id === 'things-to-do' ? 'dialog' : undefined}
+              className="text-sm font-extrabold text-foreground transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            >
+              {category.label}
+            </button>
+          );
+        })}
+        <Link
+          href="/capture"
+          className="inline-flex items-center gap-1.5 text-sm font-extrabold text-foreground transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+        >
+          <ScanSearch className="h-4 w-4" />
+          {t.capture}
         </Link>
-        <Link href="/bronnen">
-          <button
-            type="button"
-            className="inline-flex items-center gap-1.5 text-sm font-extrabold text-foreground transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-          >
-            <Radio className="h-4 w-4" />
-            Sources
-          </button>
+        <Link
+          href="/bronnen"
+          className="inline-flex items-center gap-1.5 text-sm font-extrabold text-foreground transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+        >
+          <Radio className="h-4 w-4" />
+          Sources
         </Link>
         <Search className="h-5 w-5 text-foreground" aria-label={t.explore} />
       </div>
@@ -213,24 +224,18 @@ function SearchState({
       )}
 
       {/* Mobile shortcuts (the desktop category nav is hidden below lg) */}
-      <div className="lg:hidden absolute bottom-8 left-6 z-10 flex items-center gap-2">
-        <Link href="/capture">
-          <button
-            type="button"
-            className="flex items-center gap-2 px-4 py-2.5 bg-card/90 backdrop-blur-sm border border-border/60 rounded-full text-sm font-bold text-foreground hover:border-primary/50 hover:text-primary shadow-md hover:shadow-lg transition-all"
-          >
-            <ScanSearch className="w-4 h-4 text-primary" />
-            <span>{t.capture}</span>
-          </button>
+      <div className="lg:hidden absolute bottom-8 left-6 z-10 flex items-center gap-2 flex-wrap">
+        <Link href="/nieuws" className="flex items-center gap-2 px-4 py-2.5 bg-card/90 backdrop-blur-sm border border-border/60 rounded-full text-sm font-bold text-foreground hover:border-primary/50 hover:text-primary shadow-md hover:shadow-lg transition-all">
+          <Newspaper className="w-4 h-4 text-primary" />
+          <span>Nieuws</span>
         </Link>
-        <Link href="/bronnen">
-          <button
-            type="button"
-            className="flex items-center gap-2 px-4 py-2.5 bg-card/90 backdrop-blur-sm border border-border/60 rounded-full text-sm font-bold text-foreground hover:border-primary/50 hover:text-primary shadow-md hover:shadow-lg transition-all"
-          >
-            <Radio className="w-4 h-4 text-primary" />
-            <span>Sources</span>
-          </button>
+        <Link href="/capture" className="flex items-center gap-2 px-4 py-2.5 bg-card/90 backdrop-blur-sm border border-border/60 rounded-full text-sm font-bold text-foreground hover:border-primary/50 hover:text-primary shadow-md hover:shadow-lg transition-all">
+          <ScanSearch className="w-4 h-4 text-primary" />
+          <span>{t.capture}</span>
+        </Link>
+        <Link href="/bronnen" className="flex items-center gap-2 px-4 py-2.5 bg-card/90 backdrop-blur-sm border border-border/60 rounded-full text-sm font-bold text-foreground hover:border-primary/50 hover:text-primary shadow-md hover:shadow-lg transition-all">
+          <Radio className="w-4 h-4 text-primary" />
+          <span>Sources</span>
         </Link>
       </div>
 
@@ -1152,6 +1157,8 @@ export default function App() {
           </Route>
           <Route path="/capture" component={CaptureRoute} />
           <Route path="/bronnen" component={SourceDirectoryView} />
+          <Route path="/nieuws" component={NewsFeedView} />
+          <Route path="/nieuws/:id" component={NewsArticleView} />
           <Route>
             <div className="min-h-screen flex items-center justify-center bg-background text-foreground">
               <div className="text-center">

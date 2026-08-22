@@ -239,14 +239,8 @@ export default function CaptureView({ language }: { language: Language }) {
     <div className="flex flex-col h-screen bg-background text-foreground overflow-hidden">
       {/* Header */}
       <header className="shrink-0 flex items-center gap-3 px-5 py-4 border-b border-border bg-card/80 backdrop-blur-md z-20">
-        <Link href="/">
-          <button
-            type="button"
-            className="p-2 rounded-full hover:bg-muted transition-colors text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-            aria-label={t.backToSearch}
-          >
-            <ArrowLeft className="w-5 h-5" />
-          </button>
+        <Link href="/" aria-label={t.backToSearch} className="p-2 rounded-full hover:bg-muted transition-colors text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
+          <ArrowLeft className="w-5 h-5" />
         </Link>
         <ScanSearch className="w-5 h-5 text-primary" />
         <div>

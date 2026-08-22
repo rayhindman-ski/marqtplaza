@@ -255,10 +255,83 @@ export interface ListingsResponse {
   message?: string;
 }
 
+export type NewsSubcategory = typeof NewsSubcategory[keyof typeof NewsSubcategory];
+
+
+export const NewsSubcategory = {
+  city: 'city',
+  politics: 'politics',
+  safety: 'safety',
+  culture: 'culture',
+  sport: 'sport',
+  business: 'business',
+  community: 'community',
+} as const;
+
+export interface NewsArticle {
+  id: number;
+  title: string;
+  summary: string;
+  sourceName: string;
+  sourceUrl: string;
+  subcategory: NewsSubcategory;
+  /** @nullable */
+  publishedAt: string | null;
+}
+
+export interface NewsFeed {
+  articles: NewsArticle[];
+  availableSubcategories: NewsSubcategory[];
+}
+
+export interface NewsScanRequest {
+  /**
+     * @minItems 1
+     * @maxItems 23
+     */
+  sourceIds: string[];
+}
+
+export type NewsSourceScanStatus = typeof NewsSourceScanStatus[keyof typeof NewsSourceScanStatus];
+
+
+export const NewsSourceScanStatus = {
+  found: 'found',
+  partial: 'partial',
+  no_articles: 'no_articles',
+  blocked: 'blocked',
+  error: 'error',
+} as const;
+
+export interface NewsSourceScan {
+  sourceId: string;
+  sourceName: string;
+  scannedUrl: string;
+  status: NewsSourceScanStatus;
+  articlesCaptured: number;
+  articlesPublished: number;
+  articlesUpdated: number;
+  articlesRejected: number;
+  pagesRead: number;
+  pagesFailed: number;
+  crawlLimitReached: boolean;
+  message: string;
+}
+
+export interface NewsScanResponse {
+  scannedAt: string;
+  scans: NewsSourceScan[];
+  error?: string;
+}
+
 export type GetListingsParams = {
 /**
  * The city identifier (ams, rot, utr, dhg, ein)
  */
 cityId: string;
+};
+
+export type GetNewsParams = {
+subcategory?: NewsSubcategory;
 };
 
