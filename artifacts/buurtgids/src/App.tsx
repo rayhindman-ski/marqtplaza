@@ -382,6 +382,7 @@ function MapPin({
     <div
       role="button"
       tabIndex={0}
+      aria-pressed={isSelected}
       onClick={onClick}
       onKeyDown={(event) => {
         if (event.key === 'Enter' || event.key === ' ') {
@@ -653,6 +654,34 @@ function DiscoveryState({
     setSelectedMarker(null);
   };
 
+  const handleMarkerClick = (id: string) => {
+    setSelectedMarker(id);
+    setView('list');
+  };
+
+  useEffect(() => {
+    if (!selectedMarker) return;
+    const scrollToSelectedCard = () => {
+      const card = document.getElementById(`event-${selectedMarker}`);
+      const list = document.querySelector<HTMLElement>('[data-event-list]');
+      if (!card || !list) return;
+
+      const cardRect = card.getBoundingClientRect();
+      const listRect = list.getBoundingClientRect();
+      const targetScrollTop = list.scrollTop
+        + cardRect.top
+        - listRect.top
+        - (list.clientHeight - cardRect.height) / 2;
+      list.scrollTo({ top: Math.max(0, targetScrollTop), behavior: 'auto' });
+    };
+    const frame = window.requestAnimationFrame(scrollToSelectedCard);
+    const timer = window.setTimeout(scrollToSelectedCard, 550);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.clearTimeout(timer);
+    };
+  }, [selectedMarker, view]);
+
   // Use API data when available, fall back to coordinate-complete static activities otherwise.
   const allMarkers: Marker[] = (data?.listings ?? MARKERS.filter(m => m.locationId === location.id)).map(l => {
     return {
@@ -693,7 +722,7 @@ function DiscoveryState({
         "w-full md:w-[420px] h-full flex flex-col bg-card/95 backdrop-blur-xl md:bg-card border-r border-border shadow-2xl z-20 absolute md:relative transition-transform duration-500 ease-[cubic-bezier(0.32,0.72,0,1)]",
         view === 'list' ? "translate-y-0" : "translate-y-full md:translate-y-0"
       )}>
-        <div className="p-6 border-b border-border shrink-0 bg-card">
+        <div className="max-h-[48vh] shrink-0 overflow-y-auto border-b border-border bg-card p-6 md:max-h-none md:overflow-visible">
           <div className="flex items-center gap-4 mb-6">
             <button 
               onClick={onBack} 
@@ -817,7 +846,7 @@ function DiscoveryState({
           </div>
         )}
 
-        <div className="flex-1 overflow-y-auto p-6 scroll-smooth">
+        <div data-event-list className="flex-1 overflow-y-auto p-6 scroll-smooth">
           <div className="flex flex-col gap-4 pb-20 md:pb-0">
             {/* Loading skeleton */}
             {isLoading && (
@@ -860,6 +889,8 @@ function DiscoveryState({
             {!isLoading && filteredMarkers.map((m, i) => (
               <div 
                 key={m.id} 
+                id={`event-${m.id}`}
+                data-selected={selectedMarker === m.id || undefined}
                 className="animate-in fade-in slide-in-from-bottom-4 duration-500 fill-mode-both"
                 style={{ animationDelay: `${i * 50}ms` }}
               >
@@ -907,7 +938,7 @@ function DiscoveryState({
           markers={filteredMarkers}
           selectedMarkerId={selectedMarker}
           savedIds={savedIds}
-          onMarkerClick={(id) => setSelectedMarker(prev => prev === id ? null : id)}
+          onMarkerClick={handleMarkerClick}
         />
 
         {/* Mobile Toggle Overlay */}

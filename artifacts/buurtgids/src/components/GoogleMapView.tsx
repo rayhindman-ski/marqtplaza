@@ -62,7 +62,7 @@ interface TileViewport {
   zoom: number;
 }
 
-type MapPoint = Omit<Pick<MarkerData, 'id' | 'name' | 'category' | 'lat' | 'lng' | 'sourceUrl'>, 'category'> & {
+type MapPoint = Omit<Pick<MarkerData, 'id' | 'name' | 'category' | 'lat' | 'lng'>, 'category'> & {
   category: MapCategory;
 };
 
@@ -196,24 +196,8 @@ function CoordinateMapFallback({
           height: isSelected ? 48 : 38,
           backgroundColor: color,
         };
-        const ariaLabel = `Open ${point.name} at ${point.lat.toFixed(5)}, ${point.lng.toFixed(5)}`;
+        const ariaLabel = `Show ${point.name} at ${point.lat.toFixed(5)}, ${point.lng.toFixed(5)}`;
         const icon = <Icon className="h-5 w-5 text-white" strokeWidth={2.5} aria-hidden="true" />;
-
-        if (point.sourceUrl) {
-          return (
-            <a
-              key={point.id}
-              href={point.sourceUrl}
-              target="_blank"
-              rel="noreferrer"
-              className={className}
-              style={style}
-              aria-label={ariaLabel}
-            >
-              {icon}
-            </a>
-          );
-        }
 
         return (
           <button
@@ -479,24 +463,6 @@ function TileMapView({
           </>
         );
 
-        if (point.sourceUrl) {
-          return (
-            <a
-              key={point.id}
-              href={point.sourceUrl}
-              target="_blank"
-              rel="noreferrer"
-              data-map-pin
-              onPointerDown={(event) => event.stopPropagation()}
-              className={className}
-              style={style}
-              aria-label={ariaLabel}
-            >
-              {icon}
-            </a>
-          );
-        }
-
         return (
           <button
             key={point.id}
@@ -570,7 +536,7 @@ function GoogleMapCanvas({
   const buildMarkerEl = useCallback(
     (marker: MarkerData, isSelected: boolean, isSaved: boolean): HTMLElement => {
       const color = getCategoryColor(marker.category);
-      const element = document.createElement(marker.sourceUrl ? 'a' : 'button');
+       const element = document.createElement('button');
       const size = isSelected ? 50 : 43;
       element.style.cssText = [
         'display:flex',
@@ -587,13 +553,7 @@ function GoogleMapCanvas({
         'text-decoration:none',
         'padding:0',
       ].join(';');
-      if (marker.sourceUrl) {
-        element.setAttribute('href', marker.sourceUrl);
-        element.setAttribute('target', '_blank');
-        element.setAttribute('rel', 'noreferrer');
-      } else {
-        element.setAttribute('type', 'button');
-      }
+      element.setAttribute('type', 'button');
       const icon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
       icon.setAttribute('viewBox', '0 0 24 24');
       icon.setAttribute('width', '20');
@@ -707,9 +667,7 @@ function GoogleMapCanvas({
         title: marker.name,
         zIndex: isSelected ? 100 : 1,
       });
-       if (!marker.sourceUrl) {
-         mapMarker.addListener('click', () => onMarkerClick(marker.id));
-       }
+       mapMarker.addListener('click', () => onMarkerClick(marker.id));
       markersRef.current.set(marker.id, mapMarker);
     }
   }, [buildMarkerEl, mapReady, markers, onMarkerClick, savedIds, selectedMarkerId]);
