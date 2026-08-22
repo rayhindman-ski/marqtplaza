@@ -62,7 +62,7 @@ interface TileViewport {
   zoom: number;
 }
 
-type MapPoint = Omit<Pick<MarkerData, 'id' | 'name' | 'category' | 'lat' | 'lng'>, 'category'> & {
+type MapPoint = Omit<Pick<MarkerData, 'id' | 'name' | 'category' | 'lat' | 'lng' | 'sourceUrl'>, 'category'> & {
   category: MapCategory;
 };
 
@@ -188,22 +188,43 @@ function CoordinateMapFallback({
         const color = getCategoryColor(point.category);
         const Icon = getCategoryIcon(point.category);
 
+        const className = "absolute z-10 flex items-center justify-center -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow-lg transition-transform hover:scale-110 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/35";
+        const style = {
+          left: `${Math.max(5, Math.min(95, left))}%`,
+          top: `${Math.max(10, Math.min(92, top))}%`,
+          width: isSelected ? 48 : 38,
+          height: isSelected ? 48 : 38,
+          backgroundColor: color,
+        };
+        const ariaLabel = `Open ${point.name} at ${point.lat.toFixed(5)}, ${point.lng.toFixed(5)}`;
+        const icon = <Icon className="h-5 w-5 text-white" strokeWidth={2.5} aria-hidden="true" />;
+
+        if (point.sourceUrl) {
+          return (
+            <a
+              key={point.id}
+              href={point.sourceUrl}
+              target="_blank"
+              rel="noreferrer"
+              className={className}
+              style={style}
+              aria-label={ariaLabel}
+            >
+              {icon}
+            </a>
+          );
+        }
+
         return (
           <button
             key={point.id}
             type="button"
             onClick={() => onMarkerClick(point.id)}
-            className="absolute z-10 flex items-center justify-center -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow-lg transition-transform hover:scale-110 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/35"
-            style={{
-              left: `${Math.max(5, Math.min(95, left))}%`,
-              top: `${Math.max(10, Math.min(92, top))}%`,
-               width: isSelected ? 48 : 38,
-               height: isSelected ? 48 : 38,
-              backgroundColor: color,
-            }}
+            className={className}
+            style={style}
             aria-label={`Show ${point.name} at ${point.lat.toFixed(5)}, ${point.lng.toFixed(5)}`}
           >
-            <Icon className="h-5 w-5 text-white" strokeWidth={2.5} aria-hidden="true" />
+            {icon}
           </button>
         );
       })}
@@ -436,6 +457,46 @@ function TileMapView({
         const color = getCategoryColor(point.category);
         const Icon = getCategoryIcon(point.category);
 
+        const className = "absolute z-10 flex items-center justify-center -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white font-black text-white shadow-lg transition-transform hover:scale-110 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/35";
+        const style = {
+          left,
+          top,
+          width: isSelected ? 50 : 43,
+          height: isSelected ? 50 : 43,
+          backgroundColor: color,
+          boxShadow: isSelected ? `0 0 0 4px ${color}55, 0 2px 10px rgba(0,0,0,0.22)` : undefined,
+        };
+        const ariaLabel = `Open ${point.name} at ${point.lat.toFixed(5)}, ${point.lng.toFixed(5)}${savedIds.has(point.id) ? ', saved' : ''}`;
+        const icon = (
+          <>
+            <Icon className="h-5 w-5 text-white" strokeWidth={2.5} aria-hidden="true" />
+            {savedIds.has(point.id) && (
+              <span
+                className="absolute -right-1 -top-1 h-3 w-3 rounded-full border-2 border-white"
+                style={{ backgroundColor: color }}
+              />
+            )}
+          </>
+        );
+
+        if (point.sourceUrl) {
+          return (
+            <a
+              key={point.id}
+              href={point.sourceUrl}
+              target="_blank"
+              rel="noreferrer"
+              data-map-pin
+              onPointerDown={(event) => event.stopPropagation()}
+              className={className}
+              style={style}
+              aria-label={ariaLabel}
+            >
+              {icon}
+            </a>
+          );
+        }
+
         return (
           <button
             key={point.id}
@@ -446,24 +507,11 @@ function TileMapView({
               event.stopPropagation();
               onMarkerClick(point.id);
             }}
-             className="absolute z-10 flex items-center justify-center -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white font-black text-white shadow-lg transition-transform hover:scale-110 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/35"
-            style={{
-              left,
-              top,
-               width: isSelected ? 50 : 43,
-               height: isSelected ? 50 : 43,
-              backgroundColor: color,
-              boxShadow: isSelected ? `0 0 0 4px ${color}55, 0 2px 10px rgba(0,0,0,0.22)` : undefined,
-            }}
+            className={className}
+            style={style}
             aria-label={`Show ${point.name} at ${point.lat.toFixed(5)}, ${point.lng.toFixed(5)}${savedIds.has(point.id) ? ', saved' : ''}`}
           >
-             <Icon className="h-5 w-5 text-white" strokeWidth={2.5} aria-hidden="true" />
-            {savedIds.has(point.id) && (
-              <span
-                className="absolute -right-1 -top-1 h-3 w-3 rounded-full border-2 border-white"
-                style={{ backgroundColor: color }}
-              />
-            )}
+            {icon}
           </button>
         );
       })}
@@ -522,7 +570,7 @@ function GoogleMapCanvas({
   const buildMarkerEl = useCallback(
     (marker: MarkerData, isSelected: boolean, isSaved: boolean): HTMLElement => {
       const color = getCategoryColor(marker.category);
-      const element = document.createElement('div');
+      const element = document.createElement(marker.sourceUrl ? 'a' : 'button');
       const size = isSelected ? 50 : 43;
       element.style.cssText = [
         'display:flex',
@@ -536,7 +584,16 @@ function GoogleMapCanvas({
         'box-shadow:0 2px 10px rgba(0,0,0,0.22)',
         `color:${isSelected ? '#fff' : color}`,
         'cursor:pointer',
+        'text-decoration:none',
+        'padding:0',
       ].join(';');
+      if (marker.sourceUrl) {
+        element.setAttribute('href', marker.sourceUrl);
+        element.setAttribute('target', '_blank');
+        element.setAttribute('rel', 'noreferrer');
+      } else {
+        element.setAttribute('type', 'button');
+      }
       const icon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
       icon.setAttribute('viewBox', '0 0 24 24');
       icon.setAttribute('width', '20');
@@ -650,7 +707,9 @@ function GoogleMapCanvas({
         title: marker.name,
         zIndex: isSelected ? 100 : 1,
       });
-      mapMarker.addListener('click', () => onMarkerClick(marker.id));
+       if (!marker.sourceUrl) {
+         mapMarker.addListener('click', () => onMarkerClick(marker.id));
+       }
       markersRef.current.set(marker.id, mapMarker);
     }
   }, [buildMarkerEl, mapReady, markers, onMarkerClick, savedIds, selectedMarkerId]);
