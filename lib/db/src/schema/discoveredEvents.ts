@@ -20,6 +20,7 @@ export const discoveredEventsTable = pgTable(
     title: text("title").notNull(),
     description: text("description").notNull(),
     startsAt: text("starts_at"),
+    openingTimes: text("opening_times"),
     venue: text("venue"),
     category: text("category").notNull(),
     lat: doublePrecision("lat").notNull(),

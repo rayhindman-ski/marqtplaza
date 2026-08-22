@@ -19,6 +19,7 @@ type SourceScanEvent = {
   context?: string;
   description?: string;
   startsAt?: string;
+  openingTimes?: string;
   venue?: string;
   category?: EventCategory;
   lat?: number;
@@ -108,6 +109,8 @@ const MAX_SITEMAP_PAGES = 8;
 const MAX_EVENTS_PER_SOURCE = 240;
 const MAX_LINKS_PER_PAGE = 600;
 const MAX_SITEMAP_URLS = 300;
+const MAX_LOCALITY_RESCUES_PER_SOURCE = 12;
+const LOCALITY_RESCUE_CONCURRENCY = 3;
 const MAX_RESPONSE_CHARS = 700_000;
 const FETCH_TIMEOUT_MS = 9_000;
 const MAX_REDIRECTS = 3;
@@ -269,10 +272,27 @@ function venueFromLocation(value: unknown): string | undefined {
     : address && typeof address === "object"
       ? [
           (address as Record<string, unknown>).streetAddress,
+          (address as Record<string, unknown>).postalCode,
           (address as Record<string, unknown>).addressLocality,
         ].filter((part): part is string => typeof part === "string").join(", ")
       : "";
   return shorten([name, addressText].filter(Boolean).join(" · "), 180);
+}
+
+function openingTimesFromStructuredNode(node: Record<string, unknown>, schedule?: Record<string, unknown>): string | undefined {
+  const values = [node.openingHours, node.openingHoursSpecification, schedule?.openingHours]
+    .flatMap((value) => Array.isArray(value) ? value : [value])
+    .map((value) => {
+      if (typeof value === "string") return value;
+      if (!value || typeof value !== "object") return "";
+      const record = value as Record<string, unknown>;
+      const day = Array.isArray(record.dayOfWeek) ? record.dayOfWeek.join(", ") : String(record.dayOfWeek ?? "");
+      const opens = typeof record.opens === "string" ? record.opens : "";
+      const closes = typeof record.closes === "string" ? record.closes : "";
+      return [day, opens && closes ? `${opens}-${closes}` : opens || closes].filter(Boolean).join(" ");
+    })
+    .filter(Boolean);
+  return values.length > 0 ? values.join(" · ").slice(0, 240) : undefined;
 }
 
 const DUTCH_MONTHS: Record<string, string> = {
@@ -314,8 +334,12 @@ function normalizeDateValue(value: string | undefined): string | undefined {
   if (!value) return undefined;
   const clean = stripMarkup(value).replace(/[–—]/g, "-").replace(/\s+/g, " ").trim();
   const time = clean.match(/\b([01]?\d|2[0-3]):([0-5]\d)\b/);
-  const iso = clean.match(/\b(\d{4})-(\d{2})-(\d{2})(?:[T\s]([01]?\d|2[0-3]):([0-5]\d)(?::[0-5]\d)?(?:\.\d+)?(?:[+\-]\d{2}:?\d{2}|Z)?)?\b/);
+  const iso = clean.match(/\b(\d{4})-(\d{2})-(\d{2})(?:[T\s]([01]?\d|2[0-3]):([0-5]\d)(?::[0-5]\d)?(?:\.\d+)?([+\-]\d{2}:?\d{2}|Z)?)?\b/);
   if (iso) {
+    if (iso[6]) {
+      const timestamp = new Date(iso[0]);
+      if (!Number.isNaN(timestamp.getTime())) return formatAmsterdamDateTime(timestamp);
+    }
     return normalizedDate(iso[1], iso[2], iso[3], iso[4] && iso[5] ? [iso[0], iso[4], iso[5]] : time);
   }
 
@@ -383,6 +407,7 @@ function eventFromStructuredNode(
     url,
     description,
     startsAt,
+    openingTimes: openingTimesFromStructuredNode(node, schedule),
     venue: venueFromLocation(location),
     category: classifyEvent(`${title} ${description ?? ""}`),
     ...coordinates,
@@ -438,8 +463,37 @@ function pageTitle(html: string): string | undefined {
   return shorten(h1?.[1] ?? meta?.[1], 180);
 }
 
+function formatAmsterdamDateTime(value: Date): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Amsterdam",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(value);
+  const partValue = (type: Intl.DateTimeFormatPartTypes) => parts.find((part) => part.type === type)?.value ?? "";
+  return `${partValue("year")}-${partValue("month")}-${partValue("day")}T${partValue("hour")}:${partValue("minute")}:00`;
+}
+
+function calendarDateTime(year: string, month: string, day: string, hour: string, minute: string, isUtc: boolean): string {
+  return isUtc
+    ? formatAmsterdamDateTime(new Date(Date.UTC(Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute))))
+    : `${year}-${month}-${day}T${hour}:${minute}:00`;
+}
+
 function pageDate(html: string): string | undefined {
   const candidates: string[] = [];
+  for (const match of html.matchAll(/data:text\/calendar[^,]*,([A-Za-z0-9+/=]+)/gi)) {
+    try {
+      const calendar = Buffer.from(match[1], "base64").toString("utf8");
+      const start = calendar.match(/^DTSTART(?:;[^:]*)?:(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(?:\d{2})?(Z?)/m);
+      if (start) candidates.push(calendarDateTime(start[1], start[2], start[3], start[4], start[5], start[6] === "Z"));
+    } catch {
+      // A malformed calendar link should not make the page unusable.
+    }
+  }
   for (const match of html.matchAll(/<time\b([^>]*)>([\s\S]*?)<\/time>/gi)) {
     const datetime = match[1].match(/\bdatetime=["']([^"']+)["']/i);
     candidates.push(datetime?.[1] ?? match[2]);
@@ -458,6 +512,33 @@ function pageVenue(html: string): string | undefined {
   const address = html.match(/<address\b[^>]*>([\s\S]*?)<\/address>/i)
     ?? html.match(/<(?:div|span|p)\b[^>]*(?:itemprop=["'](?:location|venue)["']|class=["'][^"']*(?:venue|location)[^"']*)[^>]*>([\s\S]*?)<\/(?:div|span|p)>/i);
   return shorten(address?.[1] ?? address?.[2], 180);
+}
+
+function pageOpeningTimes(html: string): string | undefined {
+  const values = [
+    ...html.matchAll(/<(?:meta|time|div|span|p)\b([^>]*)>/gi),
+  ].map((match) => {
+    const attributes = match[1];
+    if (!/(opening|hours|opening-hours|event-time|start-time)/i.test(attributes)) return "";
+    return attributes.match(/\b(?:content|datetime|data-opening-hours|data-event-time|data-start-time)=["']([^"']+)["']/i)?.[1] ?? "";
+  }).filter(Boolean);
+  const calendarTimes: string[] = [];
+  for (const match of html.matchAll(/data:text\/calendar[^,]*,([A-Za-z0-9+/=]+)/gi)) {
+    try {
+      const calendar = Buffer.from(match[1], "base64").toString("utf8");
+      const start = calendar.match(/^DTSTART(?:;[^:]*)?:(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(?:\d{2})?(Z?)/m);
+      const end = calendar.match(/^DTEND(?:;[^:]*)?:(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(?:\d{2})?(Z?)/m);
+      if (start && end) {
+        const localStart = calendarDateTime(start[1], start[2], start[3], start[4], start[5], start[6] === "Z");
+        const localEnd = calendarDateTime(end[1], end[2], end[3], end[4], end[5], end[6] === "Z");
+        calendarTimes.push(`${localStart.slice(11, 16)}-${localEnd.slice(11, 16)}`);
+      }
+    } catch {
+      // A malformed calendar link should not make the page unusable.
+    }
+  }
+  const result = calendarTimes.length > 0 ? calendarTimes : values;
+  return result.length > 0 ? [...new Set(result)].join(" · ").slice(0, 240) : undefined;
 }
 
 function linkCandidatesFromPage(
@@ -541,6 +622,7 @@ function htmlEventFromPage(
     url: pageUrl,
     description,
     startsAt: pageDate(html),
+    openingTimes: pageOpeningTimes(html),
     venue: pageVenue(html),
     category: classifyEvent(`${title} ${description ?? ""}`),
   };
@@ -686,8 +768,8 @@ function publicationStatus(event: SourceScanEvent): PublicationStatus {
   ) {
     return "eligible";
   }
-  return /\b(den haag|the hague|scheveningen|kijkduin|loosduinen)\b/i.test(
-    `${event.venue ?? ""} ${event.description ?? ""}`,
+  return /\b(den haag|the hague|scheveningen|kijkduin|loosduinen|leyweg|haagse markt|the hague market)\b/i.test(
+    `${event.title} ${event.venue ?? ""} ${event.description ?? ""}`,
   ) ? "eligible" : "missing_locality";
 }
 
@@ -711,6 +793,7 @@ async function persistEvents(source: SourceDefinition, events: SourceScanEvent[]
       title: event.title,
       description: event.description ?? `${source.name} activity listing.`,
       startsAt: event.startsAt ?? null,
+      openingTimes: event.openingTimes ?? null,
       venue: event.venue ?? null,
       category: event.category ?? "Entertainment",
       ...coordinates,
@@ -724,6 +807,7 @@ async function persistEvents(source: SourceDefinition, events: SourceScanEvent[]
         title: event.title,
         description: event.description ? sql`excluded.description` : sql`${discoveredEventsTable.description}`,
         startsAt: event.startsAt ? sql`excluded.starts_at` : sql`${discoveredEventsTable.startsAt}`,
+        openingTimes: event.openingTimes ? sql`excluded.opening_times` : sql`${discoveredEventsTable.openingTimes}`,
         venue: event.venue ? sql`excluded.venue` : sql`${discoveredEventsTable.venue}`,
         category: event.category ?? "Entertainment",
         lat: coordinates.isApproximateLocation ? sql`${discoveredEventsTable.lat}` : sql`excluded.lat`,
@@ -842,6 +926,7 @@ async function scanSource(source: SourceDefinition) {
         ...existing,
         ...event,
         startsAt: event.startsAt ?? existing?.startsAt,
+        openingTimes: event.openingTimes ?? existing?.openingTimes,
         venue: event.venue ?? existing?.venue,
         description: event.description ?? existing?.description,
       });
@@ -854,7 +939,8 @@ async function scanSource(source: SourceDefinition) {
         captured.set(extracted.url, {
           ...extracted,
           ...existing,
-          startsAt: existing?.startsAt ?? extracted.startsAt,
+          startsAt: extracted.startsAt ?? existing?.startsAt,
+          openingTimes: extracted.openingTimes ?? existing?.openingTimes,
           venue: existing?.venue ?? extracted.venue,
           description: existing?.description ?? extracted.description,
         });
@@ -879,6 +965,42 @@ async function scanSource(source: SourceDefinition) {
   }
 
   const events = [...captured.values()].slice(0, MAX_EVENTS_PER_SOURCE);
+  const rescueIndexes = events
+    .map((event, index) => ({ event, index }))
+    .map(({ event, index }) => ({ event, index, status: publicationStatus(event) }))
+    .filter(({ status }) => status === "missing_locality" || status === "missing_date")
+    .sort((left, right) => (left.status === "missing_locality" ? -1 : 1) - (right.status === "missing_locality" ? -1 : 1))
+    .slice(0, MAX_LOCALITY_RESCUES_PER_SOURCE)
+    .map(({ index }) => index);
+  for (let batchStart = 0; batchStart < rescueIndexes.length; batchStart += LOCALITY_RESCUE_CONCURRENCY) {
+    await Promise.all(rescueIndexes.slice(batchStart, batchStart + LOCALITY_RESCUE_CONCURRENCY).map(async (index) => {
+      const event = events[index];
+      const detail = await fetchApprovedPage(event.url, source, robotsRules);
+      if ("error" in detail) {
+        if (!detail.robotsDisallowed) metrics.pagesFailed += 1;
+        return;
+      }
+      metrics.pagesRead += 1;
+      metrics.detailPagesRead += 1;
+      const structured = structuredEventsFromPage(detail.html, detail.url, source)
+        .find((candidate) => candidate.url === event.url);
+      const extracted = htmlEventFromPage(detail.html, detail.url, source, event.title);
+      const enriched = structured ?? extracted;
+      if (!enriched) return;
+      events[index] = {
+        ...event,
+        ...enriched,
+        title: event.title || enriched.title,
+        url: event.url,
+        startsAt: extracted?.startsAt ?? structured?.startsAt ?? event.startsAt,
+        openingTimes: extracted?.openingTimes ?? structured?.openingTimes ?? event.openingTimes,
+        venue: enriched.venue ?? event.venue,
+        description: enriched.description ?? event.description,
+        lat: enriched.lat ?? event.lat,
+        lng: enriched.lng ?? event.lng,
+      };
+    }));
+  }
   metrics.eventsCaptured = events.length;
   const publishableEvents: SourceScanEvent[] = [];
   for (const event of events) {

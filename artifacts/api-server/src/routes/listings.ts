@@ -257,6 +257,7 @@ router.get("/listings", async (req, res) => {
         y: event.y,
         details: [
           event.startsAt ? event.startsAt.replace("T", " ").slice(0, 16) : "Date not provided",
+          event.openingTimes ? `Opening times: ${event.openingTimes}` : "",
           event.venue ?? "Venue not provided",
           event.isApproximateLocation ? "Map pin: Den Haag city centre (exact coordinates unavailable)" : "",
           `Source: ${event.sourceName}`,
