@@ -995,7 +995,7 @@ export default function App() {
       <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}>
         <Switch>
           <Route path="/">
-            <MainApp />
+            <MainApp initialLocationId="dhg" />
           </Route>
           <Route path="/activiteiten/den-haag">
             <MainApp initialLocationId="dhg" />

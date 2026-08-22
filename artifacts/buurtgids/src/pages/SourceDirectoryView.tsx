@@ -249,6 +249,15 @@ export default function SourceDirectoryView() {
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <p className="text-sm font-bold text-foreground">{sources.length} of {DEN_HAAG_ACTIVITY_SOURCES.length} sources shown</p>
           <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => scanSources(DEN_HAAG_ACTIVITY_SOURCES.map((source) => source.id))}
+              disabled={isScanning}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-primary/30 bg-primary/5 px-3 py-2 text-xs font-extrabold text-primary transition-colors hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${isScanning ? 'animate-spin' : ''}`} />
+              Scan all {DEN_HAAG_ACTIVITY_SOURCES.length} sources
+            </button>
             <label className="inline-flex cursor-pointer items-center gap-2 text-sm font-bold text-foreground">
               <input
                 type="checkbox"
