@@ -2,3 +2,4 @@
 - [Browser map credentials](browser-map-credentials.md) — only load Google Maps for an exact browser-key format; otherwise use generic tiles before coordinate fallback.
 - [buurtplaza Location interface](buurtplaza-location-interface.md) — Location type needs postcodes, neighborhoods, and mapType fields; SchematicMap and CaptureView depend on them.
 - [External source scanning](source-scanning.md) — server-side scans only allow approved source IDs and must report blocked sources instead of treating them as empty.
+- [OpenAPI numeric counts](openapi-numeric-counts.md) — use `number`, not `integer`, for generated count schemas in this workspace’s Orval/Zod toolchain.

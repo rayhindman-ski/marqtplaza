@@ -291,9 +291,17 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/SourceScanEvent"
+        eventLinksRead:
+          type: number
+          minimum: 0
+          description: Number of event-like links read from the source page before deduplication and filtering.
+        eventsCaptured:
+          type: number
+          minimum: 0
+          description: Number of unique event links captured from the source page.
         message:
           type: string
-      required: [sourceId, sourceName, scannedUrl, status, events]
+      required: [sourceId, sourceName, scannedUrl, status, events, eventLinksRead, eventsCaptured]
 
     SourceScanResponse:
       type: object

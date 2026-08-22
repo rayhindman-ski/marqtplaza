@@ -2,8 +2,11 @@ import { useMemo, useState } from 'react';
 import { Link } from 'wouter';
 import {
   ArrowLeft,
+  BookOpenCheck,
+  CheckCircle2,
   ExternalLink,
   Filter,
+  ListPlus,
   LoaderCircle,
   Search,
   ShieldCheck,
@@ -38,6 +41,7 @@ export default function SourceDirectoryView() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [scanResults, setScanResults] = useState<SourceScanResult[]>([]);
   const [scanError, setScanError] = useState('');
+  const [scanningIds, setScanningIds] = useState<string[]>([]);
   const scanMutation = useScanActivitySources();
 
   const models = useMemo(
@@ -63,6 +67,14 @@ export default function SourceDirectoryView() {
   }, [coverage, model, query]);
 
   const allVisibleSelected = sources.length > 0 && sources.every((source) => selectedIds.includes(source.id));
+  const scanSummary = useMemo(() => scanResults.reduce(
+    (summary, scan) => ({
+      eventLinksRead: summary.eventLinksRead + (scan.eventLinksRead ?? scan.events.length),
+      eventsCaptured: summary.eventsCaptured + (scan.eventsCaptured ?? scan.events.length),
+      eventsAdded: summary.eventsAdded + scan.events.length,
+    }),
+    { eventLinksRead: 0, eventsCaptured: 0, eventsAdded: 0 },
+  ), [scanResults]);
 
   function toggleSource(sourceId: string) {
     setSelectedIds((current) =>
@@ -84,12 +96,16 @@ export default function SourceDirectoryView() {
   async function scanSources(sourceIds: string[]) {
     if (sourceIds.length === 0) return;
     setScanError('');
+    setScanResults([]);
+    setScanningIds(sourceIds);
 
     try {
       const response = await scanMutation.mutateAsync({ data: { sourceIds } });
       setScanResults(response.scans);
     } catch {
       setScanError('The scan could not be started. Please try again.');
+    } finally {
+      setScanningIds([]);
     }
   }
 
@@ -222,8 +238,8 @@ export default function SourceDirectoryView() {
                         disabled={scanMutation.isPending}
                         className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-3 py-2 text-xs font-extrabold text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
                       >
-                        {scanMutation.isPending ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <ScanSearch className="h-3.5 w-3.5" />}
-                        Scan
+                        {scanningIds.includes(source.id) ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <ScanSearch className="h-3.5 w-3.5" />}
+                        {scanningIds.includes(source.id) ? 'Scanning…' : 'Scan'}
                       </button>
                       <a
                         href={source.activityUrl}
@@ -261,6 +277,20 @@ export default function SourceDirectoryView() {
           </div>
         )}
 
+        {scanMutation.isPending && (
+          <div role="status" aria-live="polite" className="mt-5 flex items-center gap-3 rounded-2xl border border-primary/20 bg-primary/5 px-4 py-4 text-primary">
+            <LoaderCircle className="h-5 w-5 shrink-0 animate-spin" />
+            <div className="min-w-0">
+              <p className="font-extrabold">
+                Scanning {scanningIds.length} source{scanningIds.length === 1 ? '' : 's'}…
+              </p>
+              <p className="mt-0.5 text-sm font-medium text-muted-foreground">
+                Reading public activity pages and capturing event links. This may take a moment.
+              </p>
+            </div>
+          </div>
+        )}
+
         {scanError && (
           <p role="alert" className="mt-5 rounded-2xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm font-semibold text-destructive">
             {scanError}
@@ -274,7 +304,35 @@ export default function SourceDirectoryView() {
                 <p className="text-sm font-bold text-primary">Latest scan</p>
                 <h2 className="text-2xl font-extrabold tracking-tight text-foreground">Source scan results</h2>
               </div>
-              <span className="text-xs font-semibold text-muted-foreground">{scanResults.length} source{scanResults.length === 1 ? '' : 's'} scanned</span>
+              <span className="text-right text-xs font-semibold text-muted-foreground">
+                <span className="block text-sm font-extrabold text-foreground">
+                  {scanSummary.eventsAdded} event{scanSummary.eventsAdded === 1 ? '' : 's'} added
+                </span>
+                {scanResults.length} source{scanResults.length === 1 ? '' : 's'} scanned
+              </span>
+            </div>
+            <div className="mb-4 grid gap-2 sm:grid-cols-3">
+              <div className="flex items-center gap-3 rounded-2xl border border-border bg-card px-4 py-3 shadow-sm">
+                <BookOpenCheck className="h-5 w-5 shrink-0 text-primary" />
+                <div>
+                  <p className="text-2xl font-extrabold leading-none text-foreground">{scanSummary.eventLinksRead}</p>
+                  <p className="mt-1 text-xs font-bold text-muted-foreground">Event links read</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3 rounded-2xl border border-border bg-card px-4 py-3 shadow-sm">
+                <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-600" />
+                <div>
+                  <p className="text-2xl font-extrabold leading-none text-foreground">{scanSummary.eventsCaptured}</p>
+                  <p className="mt-1 text-xs font-bold text-muted-foreground">Events captured</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3 rounded-2xl border border-border bg-card px-4 py-3 shadow-sm">
+                <ListPlus className="h-5 w-5 shrink-0 text-secondary" />
+                <div>
+                  <p className="text-2xl font-extrabold leading-none text-foreground">{scanSummary.eventsAdded}</p>
+                  <p className="mt-1 text-xs font-bold text-muted-foreground">Added to list</p>
+                </div>
+              </div>
             </div>
             <div className="grid gap-4 lg:grid-cols-2">
               {scanResults.map((scan) => (
@@ -287,6 +345,20 @@ export default function SourceDirectoryView() {
                     <span className={scan.status === 'found' ? 'rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-bold text-emerald-700' : 'rounded-full bg-muted px-2.5 py-1 text-[11px] font-bold text-muted-foreground'}>
                       {scan.status === 'found' ? `${scan.events.length} found` : scan.status.replace('_', ' ')}
                     </span>
+                  </div>
+                  <div className="mb-3 grid grid-cols-3 gap-2 rounded-xl bg-muted/45 px-3 py-2 text-center">
+                    <div>
+                      <p className="text-sm font-extrabold text-foreground">{scan.eventLinksRead ?? scan.events.length}</p>
+                      <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Read</p>
+                    </div>
+                    <div>
+                      <p className="text-sm font-extrabold text-foreground">{scan.eventsCaptured ?? scan.events.length}</p>
+                      <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Captured</p>
+                    </div>
+                    <div>
+                      <p className="text-sm font-extrabold text-foreground">{scan.events.length}</p>
+                      <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Added</p>
+                    </div>
                   </div>
                   {scan.events.length > 0 ? (
                     <ul className="space-y-2">

@@ -101,6 +101,16 @@ export interface SourceScanResult {
   scannedUrl: string;
   status: SourceScanResultStatus;
   events: SourceScanEvent[];
+  /**
+     * Number of event-like links read from the source page before deduplication and filtering.
+     * @minimum 0
+     */
+  eventLinksRead: number;
+  /**
+     * Number of unique event links captured from the source page.
+     * @minimum 0
+     */
+  eventsCaptured: number;
   message?: string;
 }
 

@@ -87,6 +87,12 @@ export const ScanActivitySourcesBody = zod.object({
   "sourceIds": zod.array(zod.string()).min(1).max(scanActivitySourcesBodySourceIdsMax)
 })
 
+export const scanActivitySourcesResponseScansItemEventLinksReadMin = 0;
+
+export const scanActivitySourcesResponseScansItemEventsCapturedMin = 0;
+
+
+
 export const ScanActivitySourcesResponse = zod.object({
   "scannedAt": zod.string(),
   "scans": zod.array(zod.object({
@@ -99,6 +105,8 @@ export const ScanActivitySourcesResponse = zod.object({
   "url": zod.string(),
   "context": zod.string().optional()
 })),
+  "eventLinksRead": zod.number().min(scanActivitySourcesResponseScansItemEventLinksReadMin).describe('Number of event-like links read from the source page before deduplication and filtering.'),
+  "eventsCaptured": zod.number().min(scanActivitySourcesResponseScansItemEventsCapturedMin).describe('Number of unique event links captured from the source page.'),
   "message": zod.string().optional()
 })),
   "error": zod.string().optional()

@@ -66,13 +66,14 @@ function decodeEntities(value: string): string {
     .replace(/&gt;/g, ">");
 }
 
-function extractEventLinks(html: string, baseUrl: string): SourceScanEvent[] {
+function extractEventLinks(html: string, baseUrl: string): { events: SourceScanEvent[]; eventLinksRead: number } {
   const page = html
     .slice(0, 600_000)
     .replace(/<script[\s\S]*?<\/script>/gi, " ")
     .replace(/<style[\s\S]*?<\/style>/gi, " ");
   const events: SourceScanEvent[] = [];
   const seen = new Set<string>();
+  let eventLinksRead = 0;
   const anchorPattern = /<a\b[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
 
   for (const match of page.matchAll(anchorPattern)) {
@@ -81,6 +82,7 @@ function extractEventLinks(html: string, baseUrl: string): SourceScanEvent[] {
     if (title.length < 4 || title.length > 180 || !EVENT_TERMS.some((term) => searchable.includes(term))) {
       continue;
     }
+    eventLinksRead += 1;
 
     let url: URL;
     try {
@@ -102,7 +104,7 @@ function extractEventLinks(html: string, baseUrl: string): SourceScanEvent[] {
     if (events.length >= 12) break;
   }
 
-  return events;
+  return { events, eventLinksRead };
 }
 
 async function scanSource(source: SourceDefinition) {
@@ -123,19 +125,23 @@ async function scanSource(source: SourceDefinition) {
         scannedUrl: source.activityUrl,
         status: blocked ? "blocked" : "error",
         events: [] as SourceScanEvent[],
+        eventLinksRead: 0,
+        eventsCaptured: 0,
         message: blocked
           ? `The source denied automated access (HTTP ${response.status}).`
           : `The source returned HTTP ${response.status}.`,
       };
     }
 
-    const events = extractEventLinks(await response.text(), source.activityUrl);
+    const { events, eventLinksRead } = extractEventLinks(await response.text(), source.activityUrl);
     return {
       sourceId: source.id,
       sourceName: source.name,
       scannedUrl: source.activityUrl,
       status: events.length > 0 ? "found" : "no_events",
       events,
+      eventLinksRead,
+      eventsCaptured: events.length,
       message: events.length > 0
         ? `${events.length} event link${events.length === 1 ? "" : "s"} found.`
         : "The page loaded, but no event-like links were detected.",
@@ -150,6 +156,8 @@ async function scanSource(source: SourceDefinition) {
       scannedUrl: source.activityUrl,
       status: "error",
       events: [] as SourceScanEvent[],
+      eventLinksRead: 0,
+      eventsCaptured: 0,
       message,
     };
   }
