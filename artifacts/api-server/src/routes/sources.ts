@@ -25,10 +25,18 @@ type SourceScanEvent = {
   lng?: number;
 };
 
+type CrawlPageType = "index" | "detail" | "sitemap" | "robots";
+
 type CrawlPage = {
   url: string;
   depth: number;
+  type: CrawlPageType;
   fallbackTitle?: string;
+};
+
+type RobotsRule = {
+  path: string;
+  allow: boolean;
 };
 
 type ScanMetrics = {
@@ -39,6 +47,12 @@ type ScanMetrics = {
   eventsAdded: number;
   eventsUpdated: number;
   eventsSkipped: number;
+  pagesSkipped: number;
+  indexPagesRead: number;
+  detailPagesRead: number;
+  sitemapsRead: number;
+  robotsPagesSkipped: number;
+  crawlLimitReached: boolean;
 };
 
 const DEN_HAAG_SOURCES: SourceDefinition[] = [
@@ -73,19 +87,28 @@ const EVENT_TERMS = [
   "agenda", "calendar", "event", "events", "activit", "uitje", "uitagenda",
   "festival", "concert", "workshop", "markt", "market", "theater", "theatre",
   "tentoonstelling", "expositie", "exhibition", "expo", "tour", "show",
-  "optreden", "performance", "what's on", "things to do",
+  "optreden", "performance", "what's on", "things to do", "film", "comedy",
+  "dance", "jazz", "music", "lecture", "lezing", "cabaret",
 ];
 const NAVIGATION_LINK_TITLES = new Set([
   "nederlands", "english", "frans", "deutsch", "skip filters", "skip to content",
   "excursions & activities", "activities", "agenda", "calendar", "events",
+  "directly to content", "shopping", "food, drinks & nightlife", "museums & attractions",
+  "highlights of the hague", "sport and outdoor", "cycling routes", "walking routes",
+  "top 10 must-sees", "royal the hague", "the hague's districts", "the hague & sustainability",
 ]);
-const MAX_PAGES_PER_SOURCE = 9;
-const MAX_DETAIL_PAGES = 8;
-const MAX_EVENTS_PER_SOURCE = 40;
+const MAX_PAGES_PER_SOURCE = 52;
+const MAX_INDEX_PAGES = 14;
+const MAX_DETAIL_PAGES = 36;
+const MAX_SITEMAP_PAGES = 6;
+const MAX_EVENTS_PER_SOURCE = 160;
+const MAX_LINKS_PER_PAGE = 400;
+const MAX_SITEMAP_URLS = 180;
 const MAX_RESPONSE_CHARS = 700_000;
 const FETCH_TIMEOUT_MS = 9_000;
 const MAX_REDIRECTS = 3;
 const MAX_ACTIVE_SCAN_REQUESTS = 2;
+const CRAWLER_USER_AGENT = "marqtplaza.com/1.0";
 const DEN_HAAG_CENTER = { lat: 52.0705, lng: 4.3007 };
 const DEN_HAAG_BOUNDS = { south: 52.05, west: 4.26, north: 52.11, east: 4.36 };
 let activeScanRequests = 0;
@@ -99,6 +122,12 @@ function emptyMetrics(): ScanMetrics {
     eventsAdded: 0,
     eventsUpdated: 0,
     eventsSkipped: 0,
+    pagesSkipped: 0,
+    indexPagesRead: 0,
+    detailPagesRead: 0,
+    sitemapsRead: 0,
+    robotsPagesSkipped: 0,
+    crawlLimitReached: false,
   };
 }
 
@@ -142,12 +171,65 @@ function canonicalizeUrl(value: string, baseUrl: string): string | null {
 
 function isApprovedSourceUrl(url: string, source: SourceDefinition): boolean {
   try {
-    const candidateHost = new URL(url).hostname.replace(/^www\./, "");
-    const sourceHost = new URL(source.activityUrl).hostname.replace(/^www\./, "");
-    return candidateHost === sourceHost;
+    return new URL(url).origin === new URL(source.activityUrl).origin;
   } catch {
     return false;
   }
+}
+
+function parseRobotsRules(text: string): RobotsRule[] {
+  const groups: Array<{ agents: string[]; rules: RobotsRule[] }> = [];
+  let current = { agents: [] as string[], rules: [] as RobotsRule[] };
+
+  function finishGroup() {
+    if (current.agents.length > 0) groups.push(current);
+    current = { agents: [], rules: [] };
+  }
+
+  for (const rawLine of text.split(/\r?\n/)) {
+    const line = rawLine.replace(/#.*/, "").trim();
+    if (!line) continue;
+    const separator = line.indexOf(":");
+    if (separator < 1) continue;
+    const directive = line.slice(0, separator).trim().toLowerCase();
+    const value = line.slice(separator + 1).trim();
+    if (directive === "user-agent") {
+      if (current.rules.length > 0) finishGroup();
+      if (value) current.agents.push(value.toLowerCase());
+      continue;
+    }
+    if ((directive === "allow" || directive === "disallow") && current.agents.length > 0) {
+      current.rules.push({ path: value, allow: directive === "allow" });
+    }
+  }
+  finishGroup();
+
+  const crawler = CRAWLER_USER_AGENT.toLowerCase();
+  const exactGroups = groups.filter((group) => group.agents.some((agent) => agent !== "*" && crawler.startsWith(agent)));
+  const applicable = exactGroups.length > 0
+    ? exactGroups
+    : groups.filter((group) => group.agents.includes("*"));
+  return applicable.flatMap((group) => group.rules);
+}
+
+function robotsPathMatches(rulePath: string, targetPath: string): boolean {
+  if (!rulePath) return false;
+  const endAnchored = rulePath.endsWith("$");
+  const expression = rulePath
+    .replace(/\$$/, "")
+    .replace(/[.+?^${}()|[\]\\]/g, "\\$&")
+    .replace(/\*/g, ".*");
+  return new RegExp(`^${expression}${endAnchored ? "$" : ""}`).test(targetPath);
+}
+
+function isAllowedByRobots(url: string, rules: RobotsRule[]): boolean {
+  if (rules.length === 0) return true;
+  const parsed = new URL(url);
+  const targetPath = `${parsed.pathname}${parsed.search}`;
+  const matches = rules
+    .filter((rule) => robotsPathMatches(rule.path, targetPath))
+    .sort((left, right) => right.path.length - left.path.length || Number(right.allow) - Number(left.allow));
+  return matches[0]?.allow ?? true;
 }
 
 function classifyEvent(value: string): EventCategory {
@@ -185,6 +267,35 @@ function venueFromLocation(value: unknown): string | undefined {
   return shorten([name, addressText].filter(Boolean).join(" · "), 180);
 }
 
+const DUTCH_MONTHS: Record<string, string> = {
+  januari: "01", februari: "02", maart: "03", april: "04", mei: "05", juni: "06",
+  juli: "07", augustus: "08", september: "09", oktober: "10", november: "11", december: "12",
+};
+const ENGLISH_MONTHS: Record<string, string> = {
+  january: "01", february: "02", march: "03", april: "04", may: "05", june: "06",
+  july: "07", august: "08", september: "09", october: "10", november: "11", december: "12",
+};
+const MONTHS: Record<string, string> = { ...DUTCH_MONTHS, ...ENGLISH_MONTHS };
+
+function normalizeDateValue(value: string | undefined): string | undefined {
+  if (!value) return undefined;
+  const clean = stripMarkup(value).replace(/\s+/g, " ").trim();
+  const iso = clean.match(/\b\d{4}-\d{2}-\d{2}(?:[T\s]\d{2}:\d{2}(?::\d{2})?(?:[+\-]\d{2}:?\d{2}|Z)?)?\b/);
+  if (iso) return iso[0].replace(" ", "T");
+
+  const dayFirst = clean.match(/\b(\d{1,2})\s+([A-Za-zÀ-ÿ]+)\s+(\d{4})\b/);
+  const monthFirst = clean.match(/\b([A-Za-zÀ-ÿ]+)\s+(\d{1,2}),?\s+(\d{4})\b/);
+  const named = dayFirst ?? monthFirst;
+  if (!named) return undefined;
+  const day = dayFirst ? named[1] : named[2];
+  const monthName = dayFirst ? named[2] : named[1];
+  const year = named[3];
+  const month = MONTHS[monthName.toLowerCase()];
+  if (!month) return undefined;
+  const time = clean.match(/\b([01]?\d|2[0-3]):([0-5]\d)\b/);
+  return `${year}-${month}-${day.padStart(2, "0")}${time ? `T${time[1].padStart(2, "0")}:${time[2]}:00` : ""}`;
+}
+
 function eventFromStructuredNode(
   value: unknown,
   pageUrl: string,
@@ -194,18 +305,23 @@ function eventFromStructuredNode(
   const node = value as Record<string, unknown>;
   const rawTypes = node["@type"];
   const types = Array.isArray(rawTypes) ? rawTypes : [rawTypes];
-  if (!types.some((type) => String(type).toLowerCase() === "event")) return null;
+  const hasEventType = types.some((type) => String(type).toLowerCase() === "event");
+  const hasEventFields = typeof node.name === "string" && typeof node.url === "string" && typeof node.startDate === "string";
+  if (!hasEventType && !hasEventFields) return null;
 
   const title = shorten(typeof node.name === "string" ? node.name : "", 180);
-  const urlValue = typeof node.url === "string" ? node.url : pageUrl;
-  const url = canonicalizeUrl(urlValue, pageUrl);
-  if (!title || !url || !isApprovedSourceUrl(url, source)) return null;
+  const url = [
+    typeof node.url === "string" ? canonicalizeUrl(node.url, pageUrl) : null,
+    typeof node["@id"] === "string" ? canonicalizeUrl(node["@id"], pageUrl) : null,
+    canonicalizeUrl(pageUrl, pageUrl),
+  ].find((candidate): candidate is string => Boolean(candidate && isApprovedSourceUrl(candidate, source)));
+  if (!title || !url) return null;
 
   const location = node.location;
   const locationRecord = location && typeof location === "object" ? location as Record<string, unknown> : null;
   const coordinates = parseCoordinates(locationRecord?.geo ?? node.geo);
   const description = shorten(typeof node.description === "string" ? node.description : undefined);
-  const startsAt = typeof node.startDate === "string" ? node.startDate : undefined;
+  const startsAt = normalizeDateValue(typeof node.startDate === "string" ? node.startDate : undefined);
 
   return {
     title,
@@ -220,27 +336,35 @@ function eventFromStructuredNode(
 
 function structuredEventsFromPage(html: string, pageUrl: string, source: SourceDefinition): SourceScanEvent[] {
   const events: SourceScanEvent[] = [];
-  const scripts = html.matchAll(/<script\b[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi);
+  const scripts = html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi);
+  const visited = new Set<unknown>();
 
-  function visit(value: unknown) {
+  function visit(value: unknown, depth = 0) {
+    if (depth > 8 || visited.has(value)) return;
     if (Array.isArray(value)) {
-      value.forEach(visit);
+      visited.add(value);
+      value.forEach((item) => visit(item, depth + 1));
       return;
     }
     if (!value || typeof value !== "object") return;
+    visited.add(value);
     const record = value as Record<string, unknown>;
     const event = eventFromStructuredNode(record, pageUrl, source);
     if (event) events.push(event);
-    if (Array.isArray(record["@graph"])) record["@graph"].forEach(visit);
-    if (Array.isArray(record.itemListElement)) record.itemListElement.forEach(visit);
-    if (record.item && typeof record.item === "object") visit(record.item);
+    Object.values(record).forEach((child) => {
+      if (child && typeof child === "object") visit(child, depth + 1);
+    });
   }
 
   for (const script of scripts) {
+    const attributes = script[1];
+    const isJson = /type=["']application\/(?:ld\+json|json)["']/i.test(attributes)
+      || /\bid=["'](?:__NEXT_DATA__|__NUXT_DATA__)["']/i.test(attributes);
+    if (!isJson) continue;
     try {
-      visit(JSON.parse(script[1]));
+      visit(JSON.parse(script[2]));
     } catch {
-      // Invalid JSON-LD is common; HTML fallbacks below still run.
+      // Invalid embedded data is common; HTML fallbacks below still run.
     }
   }
   return events;
@@ -254,47 +378,143 @@ function pageDescription(html: string): string | undefined {
 
 function pageTitle(html: string): string | undefined {
   const h1 = html.match(/<h1\b[^>]*>([\s\S]*?)<\/h1>/i);
-  return shorten(h1?.[1], 180);
+  const meta = html.match(/<meta\b[^>]*(?:property|name)=["'](?:og:title|twitter:title)["'][^>]*content=["']([^"']+)["'][^>]*>/i)
+    ?? html.match(/<meta\b[^>]*content=["']([^"']+)["'][^>]*(?:property|name)=["'](?:og:title|twitter:title)["'][^>]*>/i);
+  return shorten(h1?.[1] ?? meta?.[1], 180);
 }
 
-function linkCandidatesFromPage(html: string, pageUrl: string, source: SourceDefinition): SourceScanEvent[] {
+function pageDate(html: string): string | undefined {
+  const datetime = html.match(/<time\b[^>]*datetime=["']([^"']+)["'][^>]*>/i)
+    ?? html.match(/(?:itemprop|data-start-date)=["'](?:startDate|start-date)?["'][^>]*value=["']([^"']+)["']/i);
+  if (datetime?.[1]) return normalizeDateValue(datetime[1]);
+  const timeText = html.match(/<time\b[^>]*>([\s\S]*?)<\/time>/i);
+  return normalizeDateValue(timeText?.[1]);
+}
+
+function pageVenue(html: string): string | undefined {
+  const address = html.match(/<address\b[^>]*>([\s\S]*?)<\/address>/i)
+    ?? html.match(/<(?:div|span|p)\b[^>]*(?:itemprop=["'](?:location|venue)["']|class=["'][^"']*(?:venue|location)[^"']*)[^>]*>([\s\S]*?)<\/(?:div|span|p)>/i);
+  return shorten(address?.[1] ?? address?.[2], 180);
+}
+
+function linkCandidatesFromPage(
+  html: string,
+  pageUrl: string,
+  source: SourceDefinition,
+): { candidates: SourceScanEvent[]; indexLinks: CrawlPage[]; sitemapLinks: CrawlPage[]; linksExamined: number } {
   const candidates: SourceScanEvent[] = [];
+  const indexLinks: CrawlPage[] = [];
+  const sitemapLinks: CrawlPage[] = [];
   const seen = new Set<string>();
+  let linksExamined = 0;
   const anchorPattern = /<a\b[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
 
   for (const match of html.matchAll(anchorPattern)) {
-    const title = shorten(match[2], 180);
+    if (linksExamined >= MAX_LINKS_PER_PAGE) break;
+    linksExamined += 1;
+    const isNextRel = /\brel=["'][^"']*\bnext\b[^"']*["']/i.test(match[0]);
+    const title = shorten(match[2], 180) ?? (isNextRel ? "Next page" : undefined);
     const url = canonicalizeUrl(match[1], pageUrl);
     if (!title || !url || !isApprovedSourceUrl(url, source)) continue;
     const searchable = `${title} ${url}`.toLowerCase();
-    if (
-      title.length < 4 ||
-      NAVIGATION_LINK_TITLES.has(title.toLowerCase()) ||
-      !EVENT_TERMS.some((term) => searchable.includes(term)) ||
-      seen.has(url)
-    ) {
+    const pagination = /\b(next|previous|older|newer|volgende|vorige|meer|page|pagina)\b/i.test(`${title} ${url}`)
+      || /(?:[?&](?:page|pagina)=\d+|\/(?:page|pagina)\/\d+)\b/i.test(url);
+    const sitemap = /sitemap(?:[-_]index)?\.xml/i.test(url);
+    if (sitemap && !seen.has(url)) {
+      seen.add(url);
+      sitemapLinks.push({ url, depth: 0, type: "sitemap" });
       continue;
     }
+    if (pagination && !NAVIGATION_LINK_TITLES.has(title.toLowerCase()) && !seen.has(url)) {
+      seen.add(url);
+      indexLinks.push({ url, depth: 0, type: "index" });
+      continue;
+    }
+    const likelyDetail = EVENT_TERMS.some((term) => searchable.includes(term))
+      || /\/(?:agenda|calendar|events?|activity|activiteiten|uitagenda|programma)(?:\/|$)/i.test(url)
+      || /\b20\d{2}(?:[-/]\d{1,2}){0,2}\b/.test(url)
+      || /\b(?:event|event-item|calendar-item|activity-card)\b/i.test(match[0]);
+    if (!likelyDetail || title.length < 4 || NAVIGATION_LINK_TITLES.has(title.toLowerCase()) || seen.has(url)) continue;
     seen.add(url);
     candidates.push({ title, url, category: classifyEvent(title) });
-    if (candidates.length >= MAX_EVENTS_PER_SOURCE * 2) break;
+    if (candidates.length >= MAX_EVENTS_PER_SOURCE) break;
   }
-  return candidates;
+  return { candidates, indexLinks, sitemapLinks, linksExamined };
 }
 
-async function fetchApprovedPage(url: string, source: SourceDefinition): Promise<{ html: string; url: string } | { error: string; blocked: boolean }> {
+function sitemapUrlsFromPage(html: string, pageUrl: string, source: SourceDefinition): string[] {
+  if (!/sitemap|<urlset|<sitemapindex/i.test(html) && !/robots\.txt$/i.test(pageUrl)) return [];
+  const urls: string[] = [];
+  for (const match of html.matchAll(/^sitemap:\s*(\S+)\s*$/gim)) {
+    const url = canonicalizeUrl(match[1], pageUrl);
+    if (url && isApprovedSourceUrl(url, source) && !urls.includes(url)) urls.push(url);
+  }
+  for (const match of html.matchAll(/<(?:loc|sitemap:\s*loc)\b[^>]*>([\s\S]*?)<\/(?:loc|sitemap:\s*loc)>/gi)) {
+    const url = canonicalizeUrl(stripMarkup(match[1]), pageUrl);
+    if (url && isApprovedSourceUrl(url, source) && !urls.includes(url)) {
+      urls.push(url);
+    }
+  }
+  return urls.slice(0, MAX_SITEMAP_URLS);
+}
+
+function isRelevantSitemapUrl(url: string): boolean {
+  return /sitemap(?:[-_]index)?\.xml(?:\?|$)/i.test(url)
+    || /\/(?:agenda|calendar|events?|event|activity|activiteiten|uitagenda|programma)(?:\/|$)/i.test(url)
+    || /\b20\d{2}(?:[-/]\d{1,2}){0,2}\b/.test(url);
+}
+
+function htmlEventFromPage(
+  html: string,
+  pageUrl: string,
+  source: SourceDefinition,
+  fallbackTitle?: string,
+): SourceScanEvent | null {
+  const title = pageTitle(html) ?? fallbackTitle;
+  if (!title) return null;
+  const description = pageDescription(html);
+  return {
+    title,
+    url: pageUrl,
+    description,
+    startsAt: pageDate(html),
+    venue: pageVenue(html),
+    category: classifyEvent(`${title} ${description ?? ""}`),
+  };
+}
+
+function sitemapPriority(url: string): number {
+  const value = url.toLowerCase();
+  let score = 0;
+  if (/\b(20\d{2}|agenda|calendar|event|events|activity|activiteiten|uitagenda|programma)\b/.test(value)) score += 3;
+  if (/sitemap/.test(value)) score -= 2;
+  return score;
+}
+
+async function fetchApprovedPage(
+  url: string,
+  source: SourceDefinition,
+  robotsRules: RobotsRule[] = [],
+  skipRobotsCheck = false,
+): Promise<{ html: string; url: string } | { error: string; blocked: boolean; robotsDisallowed?: boolean }> {
   const initialUrl = canonicalizeUrl(url, source.activityUrl);
   if (!initialUrl || !isApprovedSourceUrl(initialUrl, source)) {
     return { error: "The requested page is outside this source's approved domain.", blocked: true };
+  }
+  if (!skipRobotsCheck && !isAllowedByRobots(initialUrl, robotsRules)) {
+    return { error: "The source's robots.txt policy disallows this page.", blocked: false, robotsDisallowed: true };
   }
   let requestUrl: string = initialUrl;
 
   try {
     for (let redirects = 0; redirects <= MAX_REDIRECTS; redirects += 1) {
+      if (!skipRobotsCheck && !isAllowedByRobots(requestUrl, robotsRules)) {
+        return { error: "The source's robots.txt policy disallows this page.", blocked: false, robotsDisallowed: true };
+      }
       const response = await fetch(requestUrl, {
         headers: {
           Accept: "text/html,application/xhtml+xml",
-          "User-Agent": "marqtplaza.com/1.0 (approved Den Haag event source scanner)",
+          "User-Agent": `${CRAWLER_USER_AGENT} (approved Den Haag event source scanner)`,
         },
         redirect: "manual",
         signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
@@ -304,6 +524,9 @@ async function fetchApprovedPage(url: string, source: SourceDefinition): Promise
         const nextUrl: string | null = location ? canonicalizeUrl(location, requestUrl) : null;
         if (!nextUrl || !isApprovedSourceUrl(nextUrl, source)) {
           return { error: "The source redirected outside its approved domain.", blocked: true };
+        }
+        if (!skipRobotsCheck && !isAllowedByRobots(nextUrl, robotsRules)) {
+          return { error: "The source redirected to a robots.txt-protected page.", blocked: false, robotsDisallowed: true };
         }
         requestUrl = nextUrl;
         continue;
@@ -457,58 +680,142 @@ async function persistEvents(source: SourceDefinition, events: SourceScanEvent[]
 
 async function scanSource(source: SourceDefinition) {
   const metrics = emptyMetrics();
-  const queue: CrawlPage[] = [{ url: source.activityUrl, depth: 0 }];
+  const sourceOrigin = new URL(source.activityUrl).origin;
+  const queue: CrawlPage[] = [];
+  const queued = new Set<string>();
   const visited = new Set<string>();
   const captured = new Map<string, SourceScanEvent>();
+  let robotsRules: RobotsRule[] = [];
   let sourceDenied = false;
 
-  while (queue.length > 0 && visited.size < MAX_PAGES_PER_SOURCE && captured.size < MAX_EVENTS_PER_SOURCE) {
+  function enqueue(page: CrawlPage) {
+    const url = canonicalizeUrl(page.url, source.activityUrl);
+    if (!url || visited.has(url) || queued.has(url) || !isApprovedSourceUrl(url, source)) return;
+    if (page.type !== "robots" && !isAllowedByRobots(url, robotsRules)) {
+      metrics.robotsPagesSkipped += 1;
+      return;
+    }
+    queued.add(url);
+    queue.push({ ...page, url });
+  }
+
+  function enqueueSitemapUrls(urls: string[]) {
+    for (const url of urls.sort((left, right) => sitemapPriority(right) - sitemapPriority(left))) {
+      const isSitemap = /sitemap|\.xml(?:\?|$)/i.test(url);
+      if (!isRelevantSitemapUrl(url)) continue;
+      enqueue({ url, depth: 0, type: isSitemap ? "sitemap" : "detail" });
+    }
+  }
+
+  const robotsUrl = `${sourceOrigin}/robots.txt`;
+  const robotsPage = await fetchApprovedPage(robotsUrl, source, [], true);
+  let robotsSitemaps: string[] = [];
+  if ("error" in robotsPage) {
+    if (robotsPage.blocked) {
+      metrics.pagesFailed += 1;
+      sourceDenied = true;
+    }
+  } else {
+    metrics.pagesRead += 1;
+    robotsRules = parseRobotsRules(robotsPage.html);
+    robotsSitemaps = sitemapUrlsFromPage(robotsPage.html, robotsPage.url, source);
+  }
+
+  if (!sourceDenied) {
+    enqueue({ url: source.activityUrl, depth: 0, type: "index" });
+    enqueue({ url: `${sourceOrigin}/sitemap.xml`, depth: 0, type: "sitemap" });
+    enqueue({ url: `${sourceOrigin}/sitemap_index.xml`, depth: 0, type: "sitemap" });
+    enqueueSitemapUrls(robotsSitemaps);
+  }
+
+  while (queue.length > 0 && visited.size < MAX_PAGES_PER_SOURCE) {
     const next = queue.shift()!;
+    queued.delete(next.url);
     const canonicalUrl = canonicalizeUrl(next.url, source.activityUrl);
     if (!canonicalUrl || visited.has(canonicalUrl) || !isApprovedSourceUrl(canonicalUrl, source)) continue;
+    if (next.type === "index" && metrics.indexPagesRead >= MAX_INDEX_PAGES) {
+      metrics.pagesSkipped += 1;
+      metrics.crawlLimitReached = true;
+      continue;
+    }
+    if (next.type === "detail" && metrics.detailPagesRead >= MAX_DETAIL_PAGES) {
+      metrics.pagesSkipped += 1;
+      metrics.crawlLimitReached = true;
+      continue;
+    }
+    if (next.type === "sitemap" && metrics.sitemapsRead >= MAX_SITEMAP_PAGES) {
+      metrics.pagesSkipped += 1;
+      metrics.crawlLimitReached = true;
+      continue;
+    }
     visited.add(canonicalUrl);
 
-    const page = await fetchApprovedPage(canonicalUrl, source);
+    const page = await fetchApprovedPage(canonicalUrl, source, robotsRules);
     if ("error" in page) {
+      if (page.robotsDisallowed) {
+        metrics.robotsPagesSkipped += 1;
+        continue;
+      }
       metrics.pagesFailed += 1;
       sourceDenied ||= page.blocked;
       continue;
     }
     metrics.pagesRead += 1;
+    if (next.type === "index") metrics.indexPagesRead += 1;
+    if (next.type === "detail") metrics.detailPagesRead += 1;
+    if (next.type === "sitemap") metrics.sitemapsRead += 1;
 
     const structured = structuredEventsFromPage(page.html, page.url, source);
     const linked = linkCandidatesFromPage(page.html, page.url, source);
-    metrics.eventLinksRead += structured.length + linked.length;
+    metrics.eventLinksRead += linked.linksExamined;
 
     for (const event of structured) {
-      if (!captured.has(event.url)) captured.set(event.url, event);
+      const existing = captured.get(event.url);
+      captured.set(event.url, {
+        ...existing,
+        ...event,
+        startsAt: event.startsAt ?? existing?.startsAt,
+        venue: event.venue ?? existing?.venue,
+        description: event.description ?? existing?.description,
+      });
     }
 
-    if (next.depth > 0 && next.fallbackTitle) {
-      const url = canonicalizeUrl(page.url, source.activityUrl);
-      if (url && !captured.has(url)) {
-        captured.set(url, {
-          title: pageTitle(page.html) ?? next.fallbackTitle,
-          url,
-          description: pageDescription(page.html),
-          category: classifyEvent(`${next.fallbackTitle} ${pageDescription(page.html) ?? ""}`),
+    if (next.type === "detail") {
+      const extracted = htmlEventFromPage(page.html, page.url, source, next.fallbackTitle);
+      if (extracted) {
+        const existing = captured.get(extracted.url);
+        captured.set(extracted.url, {
+          ...extracted,
+          ...existing,
+          startsAt: existing?.startsAt ?? extracted.startsAt,
+          venue: existing?.venue ?? extracted.venue,
+          description: existing?.description ?? extracted.description,
         });
       }
     }
 
-    if (next.depth === 0) {
-      for (const event of linked) {
-        if (!captured.has(event.url) && queue.length < MAX_DETAIL_PAGES) {
-          queue.push({ url: event.url, depth: 1, fallbackTitle: event.title });
-        }
+    if (next.type === "sitemap") {
+      enqueueSitemapUrls(sitemapUrlsFromPage(page.html, page.url, source));
+    }
+    if (next.type === "index") {
+      for (const indexPage of linked.indexLinks) enqueue(indexPage);
+      for (const sitemapPage of linked.sitemapLinks) enqueue(sitemapPage);
+      for (const event of linked.candidates) {
+        if (!captured.has(event.url)) captured.set(event.url, event);
+        enqueue({ url: event.url, depth: next.depth + 1, type: "detail", fallbackTitle: event.title });
       }
     }
+  }
+
+  if (visited.size >= MAX_PAGES_PER_SOURCE && queue.length > 0) {
+    metrics.pagesSkipped += queue.length;
   }
 
   const events = [...captured.values()].slice(0, MAX_EVENTS_PER_SOURCE);
   metrics.eventsCaptured = events.length;
   const publishableEvents = events.filter(isPublishableEvent);
   metrics.eventsSkipped = Math.max(0, metrics.eventLinksRead - events.length) + (events.length - publishableEvents.length);
+  metrics.crawlLimitReached ||= queue.length > 0 || visited.size >= MAX_PAGES_PER_SOURCE || captured.size >= MAX_EVENTS_PER_SOURCE;
 
   if (publishableEvents.length > 0) {
     try {
@@ -526,7 +833,7 @@ async function scanSource(source: SourceDefinition) {
     }
   }
 
-  const reachedLimit = queue.length > 0 || captured.size >= MAX_EVENTS_PER_SOURCE;
+  const reachedLimit = metrics.crawlLimitReached;
   const status = events.length > 0
     ? (reachedLimit || metrics.pagesFailed > 0 ? "partial" : "found")
     : sourceDenied
@@ -541,7 +848,7 @@ async function scanSource(source: SourceDefinition) {
       ? "No source pages could be read."
       : status === "no_events"
         ? "The approved pages were read, but no event pages were detected."
-        : `${metrics.eventsCaptured} event${metrics.eventsCaptured === 1 ? "" : "s"} captured; ${metrics.eventsAdded} added and ${metrics.eventsUpdated} updated in the Den Haag activity list.${events.length > publishableEvents.length ? ` ${events.length - publishableEvents.length} captured event${events.length - publishableEvents.length === 1 ? "" : "s"} did not include a verified upcoming date and Den Haag location, so ${events.length - publishableEvents.length === 1 ? "it was" : "they were"} not published.` : ""}${status === "partial" ? " Some pages could not be read or the safe crawl limit was reached." : ""}`;
+        : `${metrics.eventsCaptured} event${metrics.eventsCaptured === 1 ? "" : "s"} captured from ${metrics.indexPagesRead} calendar/index page${metrics.indexPagesRead === 1 ? "" : "s"} and ${metrics.detailPagesRead} detail page${metrics.detailPagesRead === 1 ? "" : "s"}; ${metrics.eventsAdded} added and ${metrics.eventsUpdated} updated in the Den Haag activity list.${events.length > publishableEvents.length ? ` ${events.length - publishableEvents.length} captured event${events.length - publishableEvents.length === 1 ? "" : "s"} did not include a verified upcoming date and Den Haag location, so ${events.length - publishableEvents.length === 1 ? "it was" : "they were"} not published.` : ""}${status === "partial" ? " Some pages could not be read or a safe crawl limit was reached." : ""}`;
 
   return {
     sourceId: source.id,

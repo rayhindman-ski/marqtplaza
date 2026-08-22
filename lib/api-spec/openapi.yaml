@@ -92,7 +92,7 @@ paths:
     post:
       operationId: scanActivitySources
       tags: [source-scanning]
-      summary: Scan selected Den Haag sources for activity links
+      summary: Deeply scan selected Den Haag sources for activity events
       requestBody:
         required: true
         content:
@@ -303,7 +303,7 @@ components:
         eventLinksRead:
           type: number
           minimum: 0
-          description: Number of event-like links read from the source page before deduplication and filtering.
+          description: Number of same-source links examined across approved index and detail pages.
         eventsCaptured:
           type: number
           minimum: 0
@@ -316,6 +316,29 @@ components:
           type: number
           minimum: 0
           description: Number of approved source pages that could not be read.
+        pagesSkipped:
+          type: number
+          minimum: 0
+          description: Discovered pages skipped because a safe crawl budget was reached.
+        indexPagesRead:
+          type: number
+          minimum: 0
+          description: Calendar, archive, or pagination pages read during the crawl.
+        detailPagesRead:
+          type: number
+          minimum: 0
+          description: Candidate event detail pages read during the crawl.
+        sitemapsRead:
+          type: number
+          minimum: 0
+          description: Approved sitemap pages read during the crawl.
+        robotsPagesSkipped:
+          type: number
+          minimum: 0
+          description: Discovered same-origin pages skipped because the source's robots.txt policy disallows them for this crawler.
+        crawlLimitReached:
+          type: boolean
+          description: Whether one or more safe per-source crawl limits truncated further discovery.
         eventsAdded:
           type: number
           minimum: 0
@@ -330,7 +353,7 @@ components:
           description: Candidate events skipped because they were duplicates, incomplete, or beyond safe crawl limits.
         message:
           type: string
-      required: [sourceId, sourceName, scannedUrl, status, events, eventLinksRead, eventsCaptured, pagesRead, pagesFailed, eventsAdded, eventsUpdated, eventsSkipped]
+      required: [sourceId, sourceName, scannedUrl, status, events, eventLinksRead, eventsCaptured, pagesRead, pagesFailed, pagesSkipped, indexPagesRead, detailPagesRead, sitemapsRead, robotsPagesSkipped, crawlLimitReached, eventsAdded, eventsUpdated, eventsSkipped]
 
     SourceScanResponse:
       type: object

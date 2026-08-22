@@ -74,6 +74,12 @@ export default function SourceDirectoryView() {
     (summary, scan) => ({
       pagesRead: summary.pagesRead + scan.pagesRead,
       pagesFailed: summary.pagesFailed + scan.pagesFailed,
+      pagesSkipped: summary.pagesSkipped + scan.pagesSkipped,
+      indexPagesRead: summary.indexPagesRead + scan.indexPagesRead,
+      detailPagesRead: summary.detailPagesRead + scan.detailPagesRead,
+      sitemapsRead: summary.sitemapsRead + scan.sitemapsRead,
+      robotsPagesSkipped: summary.robotsPagesSkipped + scan.robotsPagesSkipped,
+      crawlLimitReached: summary.crawlLimitReached || scan.crawlLimitReached,
       eventLinksRead: summary.eventLinksRead + (scan.eventLinksRead ?? scan.events.length),
       eventsCaptured: summary.eventsCaptured + (scan.eventsCaptured ?? scan.events.length),
       eventsAdded: summary.eventsAdded + scan.eventsAdded,
@@ -83,6 +89,12 @@ export default function SourceDirectoryView() {
     {
       pagesRead: 0,
       pagesFailed: 0,
+      pagesSkipped: 0,
+      indexPagesRead: 0,
+      detailPagesRead: 0,
+      sitemapsRead: 0,
+      robotsPagesSkipped: 0,
+      crawlLimitReached: false,
       eventLinksRead: 0,
       eventsCaptured: 0,
       eventsAdded: 0,
@@ -422,8 +434,9 @@ export default function SourceDirectoryView() {
                 {scanSummary.eventsAdded} new event{scanSummary.eventsAdded === 1 ? '' : 's'} added to the Den Haag activity list.
                 {scanSummary.eventsUpdated > 0 ? ` ${scanSummary.eventsUpdated} existing event${scanSummary.eventsUpdated === 1 ? '' : 's'} refreshed.` : ''}
                 {scanSummary.pagesFailed > 0 ? ` ${scanSummary.pagesFailed} page${scanSummary.pagesFailed === 1 ? '' : 's'} could not be read.` : ''}
+                {scanSummary.crawlLimitReached ? ` The scan reached a safe coverage limit; ${scanSummary.pagesSkipped} queued page${scanSummary.pagesSkipped === 1 ? '' : 's'} were skipped.` : ''}
               </p>
-              <Link href="/">
+              <Link href="/activiteiten/den-haag">
                 <button type="button" className="rounded-xl bg-secondary px-3 py-2 text-xs font-extrabold text-secondary-foreground transition-colors hover:bg-secondary/90">
                   View Den Haag activities
                 </button>
@@ -463,9 +476,14 @@ export default function SourceDirectoryView() {
                       <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Updated</p>
                     </div>
                   </div>
+                  <p className="mb-3 rounded-lg border border-border bg-muted/25 px-3 py-2 text-xs font-semibold text-muted-foreground">
+                    Coverage: {scan.indexPagesRead} index page{scan.indexPagesRead === 1 ? '' : 's'} · {scan.detailPagesRead} detail page{scan.detailPagesRead === 1 ? '' : 's'} · {scan.sitemapsRead} sitemap{scan.sitemapsRead === 1 ? '' : 's'}
+                    {scan.pagesSkipped > 0 ? ` · ${scan.pagesSkipped} page${scan.pagesSkipped === 1 ? '' : 's'} skipped at the safe limit` : ''}
+                    {scan.robotsPagesSkipped > 0 ? ` · ${scan.robotsPagesSkipped} page${scan.robotsPagesSkipped === 1 ? '' : 's'} protected by robots.txt` : ''}
+                  </p>
                   {scan.events.length > 0 ? (
                     <ul className="space-y-2">
-                      {scan.events.map((event) => (
+                      {scan.events.slice(0, 12).map((event) => (
                         <li key={event.url}>
                           <a href={event.url} target="_blank" rel="noreferrer" className="inline-flex items-start gap-1.5 text-sm font-semibold text-primary hover:underline">
                             <span>
@@ -480,6 +498,11 @@ export default function SourceDirectoryView() {
                           </a>
                         </li>
                       ))}
+                      {scan.events.length > 12 && (
+                        <li className="text-xs font-semibold text-muted-foreground">
+                          + {scan.events.length - 12} more captured event{scan.events.length === 13 ? '' : 's'} — open the source to browse them all.
+                        </li>
+                      )}
                     </ul>
                   ) : (
                     <a href={scan.scannedUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-sm font-bold text-primary hover:underline">

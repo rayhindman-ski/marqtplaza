@@ -77,7 +77,7 @@ export const CapturePersistResponse = zod.object({
 
 
 /**
- * @summary Scan selected Den Haag sources for activity links
+ * @summary Deeply scan selected Den Haag sources for activity events
  */
 export const scanActivitySourcesBodySourceIdsMax = 24;
 
@@ -94,6 +94,16 @@ export const scanActivitySourcesResponseScansItemEventsCapturedMin = 0;
 export const scanActivitySourcesResponseScansItemPagesReadMin = 0;
 
 export const scanActivitySourcesResponseScansItemPagesFailedMin = 0;
+
+export const scanActivitySourcesResponseScansItemPagesSkippedMin = 0;
+
+export const scanActivitySourcesResponseScansItemIndexPagesReadMin = 0;
+
+export const scanActivitySourcesResponseScansItemDetailPagesReadMin = 0;
+
+export const scanActivitySourcesResponseScansItemSitemapsReadMin = 0;
+
+export const scanActivitySourcesResponseScansItemRobotsPagesSkippedMin = 0;
 
 export const scanActivitySourcesResponseScansItemEventsAddedMin = 0;
 
@@ -119,10 +129,16 @@ export const ScanActivitySourcesResponse = zod.object({
   "venue": zod.string().optional(),
   "category": zod.enum(['Museums', 'Tours', 'Family', 'Entertainment', 'Outdoors', 'Markets']).optional()
 })),
-  "eventLinksRead": zod.number().min(scanActivitySourcesResponseScansItemEventLinksReadMin).describe('Number of event-like links read from the source page before deduplication and filtering.'),
+  "eventLinksRead": zod.number().min(scanActivitySourcesResponseScansItemEventLinksReadMin).describe('Number of same-source links examined across approved index and detail pages.'),
   "eventsCaptured": zod.number().min(scanActivitySourcesResponseScansItemEventsCapturedMin).describe('Number of unique event links captured from the source page.'),
   "pagesRead": zod.number().min(scanActivitySourcesResponseScansItemPagesReadMin).describe('Number of approved source pages read during the bounded crawl.'),
   "pagesFailed": zod.number().min(scanActivitySourcesResponseScansItemPagesFailedMin).describe('Number of approved source pages that could not be read.'),
+  "pagesSkipped": zod.number().min(scanActivitySourcesResponseScansItemPagesSkippedMin).describe('Discovered pages skipped because a safe crawl budget was reached.'),
+  "indexPagesRead": zod.number().min(scanActivitySourcesResponseScansItemIndexPagesReadMin).describe('Calendar, archive, or pagination pages read during the crawl.'),
+  "detailPagesRead": zod.number().min(scanActivitySourcesResponseScansItemDetailPagesReadMin).describe('Candidate event detail pages read during the crawl.'),
+  "sitemapsRead": zod.number().min(scanActivitySourcesResponseScansItemSitemapsReadMin).describe('Approved sitemap pages read during the crawl.'),
+  "robotsPagesSkipped": zod.number().min(scanActivitySourcesResponseScansItemRobotsPagesSkippedMin).describe('Discovered same-origin pages skipped because the source\'s robots.txt policy disallows them for this crawler.'),
+  "crawlLimitReached": zod.boolean().describe('Whether one or more safe per-source crawl limits truncated further discovery.'),
   "eventsAdded": zod.number().min(scanActivitySourcesResponseScansItemEventsAddedMin).describe('Number of newly persisted events added to the Den Haag activity list.'),
   "eventsUpdated": zod.number().min(scanActivitySourcesResponseScansItemEventsUpdatedMin).describe('Number of previously discovered events refreshed by this scan.'),
   "eventsSkipped": zod.number().min(scanActivitySourcesResponseScansItemEventsSkippedMin).describe('Candidate events skipped because they were duplicates, incomplete, or beyond safe crawl limits.'),

@@ -1,23 +1,28 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { importLibrary, setOptions } from '@googlemaps/js-api-loader';
+import { Baby, Gamepad2, Landmark, MapPin as MapPinIcon, Route, ShoppingBag, Waves, type LucideIcon } from 'lucide-react';
 import { type Marker as MarkerData, LOCATIONS, type Category } from '../lib/data';
 
-const CATEGORY_COLORS: Record<Category, string> = {
+type MapCategory = Category | 'Businesses';
+
+const CATEGORY_COLORS: Record<MapCategory, string> = {
   Museums:       '#8b5cf6',
   Tours:         '#f36c21',
   Family:        '#ec4899',
   Entertainment: '#6366f1',
   Outdoors:      '#10b981',
   Markets:       '#f59e0b',
+  Businesses:    '#f36c21',
 };
 
-const CATEGORY_LETTERS: Record<Category, string> = {
-  Museums:       'M',
-  Tours:         'T',
-  Family:        'F',
-  Entertainment: 'E',
-  Outdoors:      'O',
-  Markets:       'Mk',
+const CATEGORY_ICONS: Record<MapCategory, LucideIcon> = {
+  Museums: Landmark,
+  Tours: Route,
+  Family: Baby,
+  Entertainment: Gamepad2,
+  Outdoors: Waves,
+  Markets: ShoppingBag,
+  Businesses: MapPinIcon,
 };
 
 const MAP_STYLES: google.maps.MapTypeStyle[] = [
@@ -57,7 +62,30 @@ interface TileViewport {
   zoom: number;
 }
 
-type MapPoint = Pick<MarkerData, 'id' | 'name' | 'category' | 'lat' | 'lng'>;
+type MapPoint = Omit<Pick<MarkerData, 'id' | 'name' | 'category' | 'lat' | 'lng'>, 'category'> & {
+  category: MapCategory;
+};
+
+function getCategoryIcon(category: MapCategory) {
+  return CATEGORY_ICONS[category] ?? MapPinIcon;
+}
+
+function getCategoryColor(category: MapCategory) {
+  return CATEGORY_COLORS[category] ?? CATEGORY_COLORS.Businesses;
+}
+
+function getCategoryIconMarkup(category: MapCategory) {
+  const markup: Record<MapCategory, string> = {
+    Museums: '<path d="M3 21h18M5 21V10m14 11V10M3 10h18L12 3 3 10Zm4 4h2m2 0h2m2 0h2M7 18h2m2 0h2m2 0h2" />',
+    Tours: '<circle cx="6" cy="19" r="3" /><circle cx="18" cy="5" r="3" /><path d="m8.5 17.5 7-11" />',
+    Family: '<circle cx="12" cy="8" r="4" /><path d="M5 21v-2a7 7 0 0 1 14 0v2M9 8h.01M15 8h.01" />',
+    Entertainment: '<path d="M6 8h12a4 4 0 0 1 3.9 4.9l-1 4A3 3 0 0 1 18 19h-.2a3 3 0 0 1-2.1-.9L14 16h-4l-1.7 2.1a3 3 0 0 1-2.1.9H6a3 3 0 0 1-2.9-2.1l-1-4A4 4 0 0 1 6 8Z" /><path d="M8 12v3m-1.5-1.5h3M16 13h.01M19 13h.01" />',
+    Outdoors: '<path d="M2 12c3.3-3 6.7-3 10 0s6.7 3 10 0M2 17c3.3-3 6.7-3 10 0s6.7 3 10 0" />',
+    Markets: '<path d="M3 9h18l-1 12H4L3 9Zm2-5h14l2 5H3l2-5Zm4 0v5m6-5v5" />',
+    Businesses: '<path d="M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1 1 16 0Z" /><circle cx="12" cy="10" r="2.5" />',
+  };
+  return markup[category] ?? markup.Businesses;
+}
 
 function getLocation(locationId: string) {
   return LOCATIONS.find((item) => item.id === locationId);
@@ -71,7 +99,7 @@ function getMapPoints(locationId: string, markers: MarkerData[]): MapPoint[] {
     ? [{
         id: 'city-centre',
         name: location.name,
-        category: 'Businesses' as Category,
+        category: 'Businesses',
         lat: location.lat,
         lng: location.lng,
       }]
@@ -157,7 +185,8 @@ function CoordinateMapFallback({
         const left = ((point.lng - minLng) / (maxLng - minLng)) * 100;
         const top = ((maxLat - point.lat) / (maxLat - minLat)) * 100;
         const isSelected = point.id === selectedMarkerId;
-        const color = CATEGORY_COLORS[point.category];
+        const color = getCategoryColor(point.category);
+        const Icon = getCategoryIcon(point.category);
 
         return (
           <button
@@ -168,13 +197,13 @@ function CoordinateMapFallback({
             style={{
               left: `${Math.max(5, Math.min(95, left))}%`,
               top: `${Math.max(10, Math.min(92, top))}%`,
-              width: isSelected ? 38 : 30,
-              height: isSelected ? 38 : 30,
+               width: isSelected ? 48 : 38,
+               height: isSelected ? 48 : 38,
               backgroundColor: color,
             }}
             aria-label={`Show ${point.name} at ${point.lat.toFixed(5)}, ${point.lng.toFixed(5)}`}
           >
-            <span className="text-[10px] font-black text-white">{CATEGORY_LETTERS[point.category]}</span>
+            <Icon className="h-5 w-5 text-white" strokeWidth={2.5} aria-hidden="true" />
           </button>
         );
       })}
@@ -404,7 +433,8 @@ function TileMapView({
         const left = world.x - mapLeft;
         const top = world.y - mapTop;
         const isSelected = point.id === selectedMarkerId;
-        const color = CATEGORY_COLORS[point.category];
+        const color = getCategoryColor(point.category);
+        const Icon = getCategoryIcon(point.category);
 
         return (
           <button
@@ -420,14 +450,14 @@ function TileMapView({
             style={{
               left,
               top,
-              width: isSelected ? 40 : 34,
-              height: isSelected ? 40 : 34,
+               width: isSelected ? 50 : 43,
+               height: isSelected ? 50 : 43,
               backgroundColor: color,
               boxShadow: isSelected ? `0 0 0 4px ${color}55, 0 2px 10px rgba(0,0,0,0.22)` : undefined,
             }}
             aria-label={`Show ${point.name} at ${point.lat.toFixed(5)}, ${point.lng.toFixed(5)}${savedIds.has(point.id) ? ', saved' : ''}`}
           >
-            <span className="text-[13px]">{CATEGORY_LETTERS[point.category]}</span>
+             <Icon className="h-5 w-5 text-white" strokeWidth={2.5} aria-hidden="true" />
             {savedIds.has(point.id) && (
               <span
                 className="absolute -right-1 -top-1 h-3 w-3 rounded-full border-2 border-white"
@@ -491,9 +521,9 @@ function GoogleMapCanvas({
 
   const buildMarkerEl = useCallback(
     (marker: MarkerData, isSelected: boolean, isSaved: boolean): HTMLElement => {
-      const color = CATEGORY_COLORS[marker.category];
+      const color = getCategoryColor(marker.category);
       const element = document.createElement('div');
-      const size = isSelected ? 40 : 34;
+      const size = isSelected ? 50 : 43;
       element.style.cssText = [
         'display:flex',
         'align-items:center',
@@ -504,13 +534,22 @@ function GoogleMapCanvas({
         `background:${isSelected ? color : '#ffffff'}`,
         `border:2.5px solid ${color}`,
         'box-shadow:0 2px 10px rgba(0,0,0,0.22)',
-        'font-size:13px',
-        'font-weight:800',
-        'font-family:system-ui,sans-serif',
         `color:${isSelected ? '#fff' : color}`,
         'cursor:pointer',
       ].join(';');
-      element.textContent = CATEGORY_LETTERS[marker.category];
+      const icon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      icon.setAttribute('viewBox', '0 0 24 24');
+      icon.setAttribute('width', '20');
+      icon.setAttribute('height', '20');
+      icon.setAttribute('aria-hidden', 'true');
+      icon.setAttribute('fill', 'none');
+      icon.setAttribute('stroke', 'currentColor');
+      icon.setAttribute('stroke-width', '2');
+      icon.setAttribute('stroke-linecap', 'round');
+      icon.setAttribute('stroke-linejoin', 'round');
+      icon.style.color = isSelected ? '#fff' : color;
+      icon.innerHTML = getCategoryIconMarkup(marker.category);
+      element.appendChild(icon);
 
       if (isSaved) {
         const badge = document.createElement('span');

@@ -398,10 +398,10 @@ function MapPin({
       aria-label={t.selectMarker(marker.name)}
     >
       <div className={cn(
-        "relative flex items-center justify-center w-11 h-11 rounded-full shadow-lg backdrop-blur-md border-2 transition-colors duration-300",
+        "relative flex items-center justify-center w-[3.4375rem] h-[3.4375rem] rounded-full shadow-lg backdrop-blur-md border-2 transition-colors duration-300",
         isSelected ? "bg-primary text-primary-foreground border-primary" : "bg-card/95 text-foreground border-border group-hover:border-primary/50 group-focus-visible:ring-4 group-focus-visible:ring-primary/30",
       )}>
-        <Icon className="w-5 h-5" />
+         <Icon className="w-6 h-6" />
         {isSaved && (
           <span className="absolute -top-1 -right-1 w-4 h-4 bg-primary rounded-full flex items-center justify-center border-2 border-background">
             <BookmarkCheck className="w-2.5 h-2.5 text-primary-foreground" />
@@ -929,8 +929,10 @@ type AppScreen =
   | { kind: 'search' }
   | { kind: 'discovery'; locationId: string; neighborhood?: string }
   | { kind: 'saved' };
-function MainApp() {
-  const [screen, setScreen] = useState<AppScreen>({ kind: 'search' });
+function MainApp({ initialLocationId }: { initialLocationId?: string } = {}) {
+  const [screen, setScreen] = useState<AppScreen>(() =>
+    initialLocationId ? { kind: 'discovery', locationId: initialLocationId } : { kind: 'search' },
+  );
   const [language, setLanguage] = useState<Language>(() => {
     if (typeof window === 'undefined') return 'en';
     return window.localStorage.getItem('buurtplaza-language') === 'nl' ? 'nl' : 'en';
@@ -992,7 +994,12 @@ export default function App() {
     <QueryClientProvider client={queryClient}>
       <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}>
         <Switch>
-          <Route path="/" component={MainApp} />
+          <Route path="/">
+            <MainApp />
+          </Route>
+          <Route path="/activiteiten/den-haag">
+            <MainApp initialLocationId="dhg" />
+          </Route>
           <Route path="/capture" component={CaptureRoute} />
           <Route path="/bronnen" component={SourceDirectoryView} />
           <Route>

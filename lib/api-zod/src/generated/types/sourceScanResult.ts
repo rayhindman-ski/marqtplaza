@@ -15,7 +15,7 @@ export interface SourceScanResult {
   status: SourceScanResultStatus;
   events: SourceScanEvent[];
   /**
-     * Number of event-like links read from the source page before deduplication and filtering.
+     * Number of same-source links examined across approved index and detail pages.
      * @minimum 0
      */
   eventLinksRead: number;
@@ -34,6 +34,33 @@ export interface SourceScanResult {
      * @minimum 0
      */
   pagesFailed: number;
+  /**
+     * Discovered pages skipped because a safe crawl budget was reached.
+     * @minimum 0
+     */
+  pagesSkipped: number;
+  /**
+     * Calendar, archive, or pagination pages read during the crawl.
+     * @minimum 0
+     */
+  indexPagesRead: number;
+  /**
+     * Candidate event detail pages read during the crawl.
+     * @minimum 0
+     */
+  detailPagesRead: number;
+  /**
+     * Approved sitemap pages read during the crawl.
+     * @minimum 0
+     */
+  sitemapsRead: number;
+  /**
+     * Discovered same-origin pages skipped because the source's robots.txt policy disallows them for this crawler.
+     * @minimum 0
+     */
+  robotsPagesSkipped: number;
+  /** Whether one or more safe per-source crawl limits truncated further discovery. */
+  crawlLimitReached: boolean;
   /**
      * Number of newly persisted events added to the Den Haag activity list.
      * @minimum 0

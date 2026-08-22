@@ -360,7 +360,7 @@ export const getScanActivitySourcesUrl = () => {
 }
 
 /**
- * @summary Scan selected Den Haag sources for activity links
+ * @summary Deeply scan selected Den Haag sources for activity events
  */
 export const scanActivitySources = async (sourceScanRequest: SourceScanRequest, options?: Parameters<typeof customFetch>[1]): Promise<SourceScanResponse> => {
 
@@ -409,7 +409,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type ScanActivitySourcesMutationError = ErrorType<SourceScanResponse>
 
     /**
- * @summary Scan selected Den Haag sources for activity links
+ * @summary Deeply scan selected Den Haag sources for activity events
  */
 export const useScanActivitySources = <TError = ErrorType<SourceScanResponse>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof scanActivitySources>>, TError,{data: BodyType<SourceScanRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
