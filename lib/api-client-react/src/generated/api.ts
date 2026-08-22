@@ -28,7 +28,9 @@ import type {
   HealthStatus,
   ListingsResponse,
   PersistOutcome,
-  ScanResultList
+  ScanResultList,
+  SourceScanRequest,
+  SourceScanResponse
 } from './api.schemas';
 
 import { customFetch } from '../custom-fetch';
@@ -347,6 +349,77 @@ export const useCapturePersist = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getCapturePersistMutationOptions(options));
+    }
+
+export const getScanActivitySourcesUrl = () => {
+
+
+
+
+  return `/api/sources/scan`
+}
+
+/**
+ * @summary Scan selected Den Haag sources for activity links
+ */
+export const scanActivitySources = async (sourceScanRequest: SourceScanRequest, options?: Parameters<typeof customFetch>[1]): Promise<SourceScanResponse> => {
+
+  return customFetch<SourceScanResponse>(getScanActivitySourcesUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(sourceScanRequest)
+  }
+);}
+
+
+
+
+
+export const getScanActivitySourcesMutationOptions = <TError = ErrorType<SourceScanResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof scanActivitySources>>, TError,{data: BodyType<SourceScanRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof scanActivitySources>>, TError,{data: BodyType<SourceScanRequest>}, TContext> => {
+
+const mutationKey = ['scanActivitySources'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof scanActivitySources>>, {data: BodyType<SourceScanRequest>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  scanActivitySources(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ScanActivitySourcesMutationResult = NonNullable<Awaited<ReturnType<typeof scanActivitySources>>>
+    export type ScanActivitySourcesMutationBody = BodyType<SourceScanRequest>
+    export type ScanActivitySourcesMutationError = ErrorType<SourceScanResponse>
+
+    /**
+ * @summary Scan selected Den Haag sources for activity links
+ */
+export const useScanActivitySources = <TError = ErrorType<SourceScanResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof scanActivitySources>>, TError,{data: BodyType<SourceScanRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof scanActivitySources>>,
+        TError,
+        {data: BodyType<SourceScanRequest>},
+        TContext
+      > => {
+      return useMutation(getScanActivitySourcesMutationOptions(options));
     }
 
 export const getGetListingsUrl = (params: GetListingsParams,) => {

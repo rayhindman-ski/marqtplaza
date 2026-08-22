@@ -22,3 +22,8 @@ export * from './listingsResponse';
 export * from './listingsResponseSource';
 export * from './persistOutcome';
 export * from './scanResultList';
+export * from './sourceScanEvent';
+export * from './sourceScanRequest';
+export * from './sourceScanResponse';
+export * from './sourceScanResult';
+export * from './sourceScanResultStatus';

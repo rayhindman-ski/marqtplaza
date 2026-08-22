@@ -77,6 +77,35 @@ export const CapturePersistResponse = zod.object({
 
 
 /**
+ * @summary Scan selected Den Haag sources for activity links
+ */
+export const scanActivitySourcesBodySourceIdsMax = 24;
+
+
+
+export const ScanActivitySourcesBody = zod.object({
+  "sourceIds": zod.array(zod.string()).min(1).max(scanActivitySourcesBodySourceIdsMax)
+})
+
+export const ScanActivitySourcesResponse = zod.object({
+  "scannedAt": zod.string(),
+  "scans": zod.array(zod.object({
+  "sourceId": zod.string(),
+  "sourceName": zod.string(),
+  "scannedUrl": zod.string(),
+  "status": zod.enum(['found', 'no_events', 'blocked', 'error']),
+  "events": zod.array(zod.object({
+  "title": zod.string(),
+  "url": zod.string(),
+  "context": zod.string().optional()
+})),
+  "message": zod.string().optional()
+})),
+  "error": zod.string().optional()
+})
+
+
+/**
  * Returns businesses, events, and specials for a given city. Falls back gracefully when the live data provider is unavailable.
  * @summary Get local listings for a city
  */

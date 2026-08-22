@@ -2,17 +2,20 @@ import { useMemo, useState } from 'react';
 import { Link } from 'wouter';
 import {
   ArrowLeft,
-  CheckCircle2,
-  Clock3,
   ExternalLink,
   Filter,
+  LoaderCircle,
   Search,
   ShieldCheck,
+  ScanSearch,
   Tags,
 } from 'lucide-react';
 import {
+  useScanActivitySources,
+  type SourceScanResult,
+} from '@workspace/api-client-react';
+import {
   DEN_HAAG_ACTIVITY_SOURCES,
-  type ActivitySource,
   type SourceCoverage,
 } from '../lib/denHaagSources';
 
@@ -28,72 +31,14 @@ const coverageLabels: Record<SourceCoverage, string> = {
   Beperkt: 'Limited',
 };
 
-function SourceCard({ source }: { source: ActivitySource }) {
-  return (
-    <article className="group flex h-full flex-col rounded-3xl border border-border bg-card p-5 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-lg">
-      <div className="mb-4 flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="mb-1 text-[11px] font-extrabold uppercase tracking-[0.16em] text-primary">
-            {source.model}
-          </p>
-          <h2 className="truncate text-xl font-extrabold tracking-tight text-foreground">{source.name}</h2>
-        </div>
-        <span className={`shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-bold ${coverageClasses[source.coverage]}`}>
-          {coverageLabels[source.coverage]} coverage
-        </span>
-      </div>
-
-      <p className="mb-4 text-sm leading-relaxed text-muted-foreground">{source.summary}</p>
-
-      <div className="mb-4 grid gap-2 rounded-2xl bg-muted/55 p-3 text-xs">
-        <div className="flex items-start gap-2 text-muted-foreground">
-          <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
-          <span><strong className="text-foreground">Area:</strong> {source.area}</span>
-        </div>
-        <div className="flex items-start gap-2 text-muted-foreground">
-          <Clock3 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
-          <span><strong className="text-foreground">Freshness:</strong> {source.freshness}</span>
-        </div>
-        <div className="flex items-start gap-2 text-muted-foreground">
-          <Tags className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
-          <span><strong className="text-foreground">Scope:</strong> {source.activityCount}</span>
-        </div>
-      </div>
-
-      <div className="mb-4 flex flex-wrap gap-1.5">
-        {source.categories.map((category) => (
-          <span key={category} className="rounded-full border border-border bg-background px-2.5 py-1 text-[11px] font-semibold text-muted-foreground">
-            {category}
-          </span>
-        ))}
-      </div>
-
-      <div className="mt-auto border-t border-border/70 pt-4">
-        <p className="mb-2 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Examples</p>
-        <p className="mb-3 text-xs leading-relaxed text-foreground">{source.examples.join(' · ')}</p>
-        {source.note && (
-          <p className="mb-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-800">
-            {source.note}
-          </p>
-        )}
-        <a
-          href={source.activityUrl}
-          target="_blank"
-          rel="noreferrer"
-          className="inline-flex items-center gap-1.5 text-sm font-bold text-primary transition-colors hover:text-primary/75"
-        >
-          View source
-          <ExternalLink className="h-3.5 w-3.5" />
-        </a>
-      </div>
-    </article>
-  );
-}
-
 export default function SourceDirectoryView() {
   const [query, setQuery] = useState('');
   const [coverage, setCoverage] = useState<SourceCoverage | 'All'>('All');
   const [model, setModel] = useState('All');
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [scanResults, setScanResults] = useState<SourceScanResult[]>([]);
+  const [scanError, setScanError] = useState('');
+  const scanMutation = useScanActivitySources();
 
   const models = useMemo(
     () => ['All', ...Array.from(new Set(DEN_HAAG_ACTIVITY_SOURCES.map((source) => source.model)))],
@@ -116,6 +61,37 @@ export default function SourceDirectoryView() {
       return matchesCoverage && matchesModel && (!normalizedQuery || searchable.includes(normalizedQuery));
     });
   }, [coverage, model, query]);
+
+  const allVisibleSelected = sources.length > 0 && sources.every((source) => selectedIds.includes(source.id));
+
+  function toggleSource(sourceId: string) {
+    setSelectedIds((current) =>
+      current.includes(sourceId)
+        ? current.filter((id) => id !== sourceId)
+        : [...current, sourceId],
+    );
+  }
+
+  function toggleVisibleSources() {
+    const visibleIds = sources.map((source) => source.id);
+    setSelectedIds((current) =>
+      allVisibleSelected
+        ? current.filter((id) => !visibleIds.includes(id))
+        : Array.from(new Set([...current, ...visibleIds])),
+    );
+  }
+
+  async function scanSources(sourceIds: string[]) {
+    if (sourceIds.length === 0) return;
+    setScanError('');
+
+    try {
+      const response = await scanMutation.mutateAsync({ data: { sourceIds } });
+      setScanResults(response.scans);
+    } catch {
+      setScanError('The scan could not be started. Please try again.');
+    }
+  }
 
   return (
     <main className="min-h-screen bg-background">
@@ -144,13 +120,12 @@ export default function SourceDirectoryView() {
       <section className="border-b border-border bg-[radial-gradient(ellipse_at_top_left,_hsl(var(--accent)),_transparent_62%)]">
         <div className="mx-auto max-w-7xl px-5 py-10 sm:px-7 sm:py-14">
           <div className="max-w-3xl">
-            <p className="mb-3 text-sm font-bold text-primary">Initial inventory · reviewed August 19, 2026</p>
+            <p className="mb-3 text-sm font-bold text-primary">Den Haag reference scanner</p>
             <h2 className="mb-4 text-3xl font-extrabold tracking-tight text-foreground sm:text-5xl">
-              Where can you find reliable activities in The Hague?
+              Choose sources, then scan them for events.
             </h2>
             <p className="text-base leading-relaxed text-muted-foreground sm:text-lg">
-              This inventory separates live calendars, bookable activities, and editorial inspiration.
-              That makes it clear which sources are useful for today&apos;s plans and which are better for timeless trip ideas.
+              Select one or more approved Den Haag sources. The scanner checks their public activity pages and returns event-like links it can find.
             </p>
           </div>
         </div>
@@ -194,14 +169,90 @@ export default function SourceDirectoryView() {
           </label>
         </div>
 
-        <div className="mb-5 flex items-baseline justify-between gap-3">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <p className="text-sm font-bold text-foreground">{sources.length} of {DEN_HAAG_ACTIVITY_SOURCES.length} sources shown</p>
-          <p className="hidden text-xs text-muted-foreground sm:block">Only activities with confirmed The Hague coverage are included.</p>
+          <div className="flex items-center gap-3">
+            <label className="inline-flex cursor-pointer items-center gap-2 text-sm font-bold text-foreground">
+              <input
+                type="checkbox"
+                checked={allVisibleSelected}
+                onChange={toggleVisibleSources}
+                className="h-4 w-4 rounded border-border accent-primary"
+              />
+              Select shown
+            </label>
+            <span className="text-xs font-semibold text-muted-foreground">{selectedIds.length} selected</span>
+          </div>
         </div>
 
         {sources.length > 0 ? (
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {sources.map((source) => <SourceCard key={source.id} source={source} />)}
+          <div className="overflow-hidden rounded-3xl border border-border bg-card shadow-sm">
+            <div className="max-h-[480px] divide-y divide-border overflow-y-auto">
+              {sources.map((source) => {
+                const isSelected = selectedIds.includes(source.id);
+                return (
+                  <article key={source.id} className="flex flex-col gap-3 px-4 py-4 transition-colors hover:bg-muted/35 sm:flex-row sm:items-center sm:gap-4 sm:px-5">
+                    <label className="flex min-w-0 flex-1 cursor-pointer items-start gap-3">
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => toggleSource(source.id)}
+                        aria-label={`Select ${source.name}`}
+                        className="mt-1 h-4 w-4 shrink-0 rounded border-border accent-primary"
+                      />
+                      <span className="min-w-0">
+                        <span className="block truncate text-base font-extrabold text-foreground">{source.name}</span>
+                        <span className="mt-0.5 block text-xs text-muted-foreground">{source.model} · {source.area}</span>
+                        <span className="mt-1 flex flex-wrap gap-1.5">
+                          {source.categories.slice(0, 3).map((category) => (
+                            <span key={category} className="rounded-full border border-border bg-background px-2 py-0.5 text-[10px] font-bold text-muted-foreground">
+                              {category}
+                            </span>
+                          ))}
+                          <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold ${coverageClasses[source.coverage]}`}>
+                            {coverageLabels[source.coverage]} coverage
+                          </span>
+                        </span>
+                      </span>
+                    </label>
+                    <div className="flex shrink-0 items-center gap-3 self-end sm:self-auto">
+                      <button
+                        type="button"
+                        onClick={() => scanSources([source.id])}
+                        disabled={scanMutation.isPending}
+                        className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-3 py-2 text-xs font-extrabold text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {scanMutation.isPending ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <ScanSearch className="h-3.5 w-3.5" />}
+                        Scan
+                      </button>
+                      <a
+                        href={source.activityUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        aria-label={`Open ${source.name}`}
+                        className="rounded-xl border border-border p-2 text-muted-foreground transition-colors hover:border-primary/50 hover:text-primary"
+                      >
+                        <ExternalLink className="h-4 w-4" />
+                      </a>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+            <div className="flex flex-col gap-3 border-t border-border bg-muted/25 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+              <p className="text-xs leading-relaxed text-muted-foreground">
+                The scanner only visits the approved public activity page for each selected source.
+              </p>
+              <button
+                type="button"
+                onClick={() => scanSources(selectedIds)}
+                disabled={selectedIds.length === 0 || scanMutation.isPending}
+                className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-extrabold text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {scanMutation.isPending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <ScanSearch className="h-4 w-4" />}
+                {scanMutation.isPending ? 'Scanning…' : `Scan selected (${selectedIds.length})`}
+              </button>
+            </div>
           </div>
         ) : (
           <div className="rounded-3xl border border-dashed border-border bg-card px-6 py-20 text-center">
@@ -210,10 +261,58 @@ export default function SourceDirectoryView() {
           </div>
         )}
 
+        {scanError && (
+          <p role="alert" className="mt-5 rounded-2xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm font-semibold text-destructive">
+            {scanError}
+          </p>
+        )}
+
+        {scanResults.length > 0 && (
+          <section className="mt-8">
+            <div className="mb-4 flex items-baseline justify-between gap-3">
+              <div>
+                <p className="text-sm font-bold text-primary">Latest scan</p>
+                <h2 className="text-2xl font-extrabold tracking-tight text-foreground">Source scan results</h2>
+              </div>
+              <span className="text-xs font-semibold text-muted-foreground">{scanResults.length} source{scanResults.length === 1 ? '' : 's'} scanned</span>
+            </div>
+            <div className="grid gap-4 lg:grid-cols-2">
+              {scanResults.map((scan) => (
+                <article key={scan.sourceId} className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+                  <div className="mb-3 flex items-start justify-between gap-3">
+                    <div>
+                      <h3 className="font-extrabold text-foreground">{scan.sourceName}</h3>
+                      <p className="mt-0.5 text-xs text-muted-foreground">{scan.message}</p>
+                    </div>
+                    <span className={scan.status === 'found' ? 'rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-bold text-emerald-700' : 'rounded-full bg-muted px-2.5 py-1 text-[11px] font-bold text-muted-foreground'}>
+                      {scan.status === 'found' ? `${scan.events.length} found` : scan.status.replace('_', ' ')}
+                    </span>
+                  </div>
+                  {scan.events.length > 0 ? (
+                    <ul className="space-y-2">
+                      {scan.events.map((event) => (
+                        <li key={event.url}>
+                          <a href={event.url} target="_blank" rel="noreferrer" className="inline-flex items-start gap-1.5 text-sm font-semibold text-primary hover:underline">
+                            <span>{event.title}</span>
+                            <ExternalLink className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                          </a>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <a href={scan.scannedUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-sm font-bold text-primary hover:underline">
+                      Open source manually
+                      <ExternalLink className="h-3.5 w-3.5" />
+                    </a>
+                  )}
+                </article>
+              ))}
+            </div>
+          </section>
+        )}
+
         <aside className="mt-8 rounded-3xl border border-secondary/20 bg-secondary/5 p-5 text-sm leading-relaxed text-secondary">
-          <strong>Scan transparency.</strong> This initial inventory uses public The Hague index and category pages.
-          Listing a source is not permission to republish automatically: check each site&apos;s robots.txt, terms,
-          licenses, and available APIs before importing activities at scale.
+          <strong>Scan transparency.</strong> Some websites may block automated access or require a dedicated API. A blocked source is reported clearly; it is never silently treated as having no events.
         </aside>
       </section>
     </main>

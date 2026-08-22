@@ -71,6 +71,45 @@ export interface PersistOutcome {
   saved: number;
 }
 
+export interface SourceScanRequest {
+  /**
+     * @minItems 1
+     * @maxItems 24
+     */
+  sourceIds: string[];
+}
+
+export interface SourceScanEvent {
+  title: string;
+  url: string;
+  context?: string;
+}
+
+export type SourceScanResultStatus = typeof SourceScanResultStatus[keyof typeof SourceScanResultStatus];
+
+
+export const SourceScanResultStatus = {
+  found: 'found',
+  no_events: 'no_events',
+  blocked: 'blocked',
+  error: 'error',
+} as const;
+
+export interface SourceScanResult {
+  sourceId: string;
+  sourceName: string;
+  scannedUrl: string;
+  status: SourceScanResultStatus;
+  events: SourceScanEvent[];
+  message?: string;
+}
+
+export interface SourceScanResponse {
+  scannedAt: string;
+  scans: SourceScanResult[];
+  error?: string;
+}
+
 export type ListingCategory = typeof ListingCategory[keyof typeof ListingCategory];
 
 
