@@ -91,6 +91,16 @@ export const scanActivitySourcesResponseScansItemEventLinksReadMin = 0;
 
 export const scanActivitySourcesResponseScansItemEventsCapturedMin = 0;
 
+export const scanActivitySourcesResponseScansItemPagesReadMin = 0;
+
+export const scanActivitySourcesResponseScansItemPagesFailedMin = 0;
+
+export const scanActivitySourcesResponseScansItemEventsAddedMin = 0;
+
+export const scanActivitySourcesResponseScansItemEventsUpdatedMin = 0;
+
+export const scanActivitySourcesResponseScansItemEventsSkippedMin = 0;
+
 
 
 export const ScanActivitySourcesResponse = zod.object({
@@ -99,14 +109,23 @@ export const ScanActivitySourcesResponse = zod.object({
   "sourceId": zod.string(),
   "sourceName": zod.string(),
   "scannedUrl": zod.string(),
-  "status": zod.enum(['found', 'no_events', 'blocked', 'error']),
+  "status": zod.enum(['found', 'partial', 'no_events', 'blocked', 'error']),
   "events": zod.array(zod.object({
   "title": zod.string(),
   "url": zod.string(),
-  "context": zod.string().optional()
+  "context": zod.string().optional(),
+  "description": zod.string().optional(),
+  "startsAt": zod.string().optional(),
+  "venue": zod.string().optional(),
+  "category": zod.enum(['Museums', 'Tours', 'Family', 'Entertainment', 'Outdoors', 'Markets']).optional()
 })),
   "eventLinksRead": zod.number().min(scanActivitySourcesResponseScansItemEventLinksReadMin).describe('Number of event-like links read from the source page before deduplication and filtering.'),
   "eventsCaptured": zod.number().min(scanActivitySourcesResponseScansItemEventsCapturedMin).describe('Number of unique event links captured from the source page.'),
+  "pagesRead": zod.number().min(scanActivitySourcesResponseScansItemPagesReadMin).describe('Number of approved source pages read during the bounded crawl.'),
+  "pagesFailed": zod.number().min(scanActivitySourcesResponseScansItemPagesFailedMin).describe('Number of approved source pages that could not be read.'),
+  "eventsAdded": zod.number().min(scanActivitySourcesResponseScansItemEventsAddedMin).describe('Number of newly persisted events added to the Den Haag activity list.'),
+  "eventsUpdated": zod.number().min(scanActivitySourcesResponseScansItemEventsUpdatedMin).describe('Number of previously discovered events refreshed by this scan.'),
+  "eventsSkipped": zod.number().min(scanActivitySourcesResponseScansItemEventsSkippedMin).describe('Candidate events skipped because they were duplicates, incomplete, or beyond safe crawl limits.'),
   "message": zod.string().optional()
 })),
   "error": zod.string().optional()
@@ -133,7 +152,8 @@ export const GetListingsResponse = zod.object({
   "details": zod.string(),
   "lat": zod.number().describe('WGS 84 latitude for displaying the activity on the map.'),
   "lng": zod.number().describe('WGS 84 longitude for displaying the activity on the map.'),
-  "sourceUrl": zod.string().optional().describe('Link to the website where this activity was listed.')
+  "sourceUrl": zod.string().optional().describe('Link to the website where this activity was listed.'),
+  "isApproximateLocation": zod.boolean().optional().describe('Whether the map pin uses the Den Haag city centre because no exact venue coordinates were supplied.')
 })),
   "source": zod.enum(['live', 'fallback', 'curated']),
   "message": zod.string().optional()

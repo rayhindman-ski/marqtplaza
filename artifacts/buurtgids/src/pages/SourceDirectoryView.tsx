@@ -8,13 +8,14 @@ import {
   Filter,
   ListPlus,
   LoaderCircle,
+  RefreshCw,
   Search,
   ShieldCheck,
   ScanSearch,
   Tags,
 } from 'lucide-react';
 import {
-  useScanActivitySources,
+  scanActivitySources,
   type SourceScanResult,
 } from '@workspace/api-client-react';
 import {
@@ -34,6 +35,8 @@ const coverageLabels: Record<SourceCoverage, string> = {
   Beperkt: 'Limited',
 };
 
+type SourceProgress = 'queued' | 'scanning' | 'complete' | 'blocked' | 'error';
+
 export default function SourceDirectoryView() {
   const [query, setQuery] = useState('');
   const [coverage, setCoverage] = useState<SourceCoverage | 'All'>('All');
@@ -41,8 +44,8 @@ export default function SourceDirectoryView() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [scanResults, setScanResults] = useState<SourceScanResult[]>([]);
   const [scanError, setScanError] = useState('');
-  const [scanningIds, setScanningIds] = useState<string[]>([]);
-  const scanMutation = useScanActivitySources();
+  const [sourceProgress, setSourceProgress] = useState<Record<string, SourceProgress>>({});
+  const [isScanning, setIsScanning] = useState(false);
 
   const models = useMemo(
     () => ['All', ...Array.from(new Set(DEN_HAAG_ACTIVITY_SOURCES.map((source) => source.model)))],
@@ -69,12 +72,28 @@ export default function SourceDirectoryView() {
   const allVisibleSelected = sources.length > 0 && sources.every((source) => selectedIds.includes(source.id));
   const scanSummary = useMemo(() => scanResults.reduce(
     (summary, scan) => ({
+      pagesRead: summary.pagesRead + scan.pagesRead,
+      pagesFailed: summary.pagesFailed + scan.pagesFailed,
       eventLinksRead: summary.eventLinksRead + (scan.eventLinksRead ?? scan.events.length),
       eventsCaptured: summary.eventsCaptured + (scan.eventsCaptured ?? scan.events.length),
-      eventsAdded: summary.eventsAdded + scan.events.length,
+      eventsAdded: summary.eventsAdded + scan.eventsAdded,
+      eventsUpdated: summary.eventsUpdated + scan.eventsUpdated,
+      eventsSkipped: summary.eventsSkipped + scan.eventsSkipped,
     }),
-    { eventLinksRead: 0, eventsCaptured: 0, eventsAdded: 0 },
+    {
+      pagesRead: 0,
+      pagesFailed: 0,
+      eventLinksRead: 0,
+      eventsCaptured: 0,
+      eventsAdded: 0,
+      eventsUpdated: 0,
+      eventsSkipped: 0,
+    },
   ), [scanResults]);
+  const completedSourceCount = Object.values(sourceProgress).filter((status) => status !== 'queued' && status !== 'scanning').length;
+  const activeSourceNames = DEN_HAAG_ACTIVITY_SOURCES
+    .filter((source) => sourceProgress[source.id] === 'scanning')
+    .map((source) => source.name);
 
   function toggleSource(sourceId: string) {
     setSelectedIds((current) =>
@@ -94,18 +113,48 @@ export default function SourceDirectoryView() {
   }
 
   async function scanSources(sourceIds: string[]) {
-    if (sourceIds.length === 0) return;
+    if (sourceIds.length === 0 || isScanning) return;
     setScanError('');
     setScanResults([]);
-    setScanningIds(sourceIds);
+    setIsScanning(true);
+    setSourceProgress(Object.fromEntries(sourceIds.map((sourceId) => [sourceId, 'queued'])));
+
+    let nextSourceIndex = 0;
+    let failedSourceCount = 0;
+    const workerCount = Math.min(2, sourceIds.length);
+    const scanWorker = async () => {
+      while (nextSourceIndex < sourceIds.length) {
+        const sourceId = sourceIds[nextSourceIndex];
+        nextSourceIndex += 1;
+        setSourceProgress((current) => ({ ...current, [sourceId]: 'scanning' }));
+
+        try {
+          const response = await scanActivitySources({ sourceIds: [sourceId] });
+          const scan = response.scans[0];
+          if (!scan) throw new Error('No source result was returned.');
+          setScanResults((current) => [...current, scan]);
+          setSourceProgress((current) => ({
+            ...current,
+            [sourceId]: scan.status === 'blocked'
+              ? 'blocked'
+              : scan.status === 'error'
+                ? 'error'
+                : 'complete',
+          }));
+        } catch {
+          failedSourceCount += 1;
+          setSourceProgress((current) => ({ ...current, [sourceId]: 'error' }));
+        }
+      }
+    };
 
     try {
-      const response = await scanMutation.mutateAsync({ data: { sourceIds } });
-      setScanResults(response.scans);
-    } catch {
-      setScanError('The scan could not be started. Please try again.');
+      await Promise.all(Array.from({ length: workerCount }, scanWorker));
+      if (failedSourceCount > 0) {
+        setScanError(`${failedSourceCount} source${failedSourceCount === 1 ? '' : 's'} could not be scanned. Successful sources are still shown below.`);
+      }
     } finally {
-      setScanningIds([]);
+      setIsScanning(false);
     }
   }
 
@@ -141,7 +190,7 @@ export default function SourceDirectoryView() {
               Choose sources, then scan them for events.
             </h2>
             <p className="text-base leading-relaxed text-muted-foreground sm:text-lg">
-              Select one or more approved Den Haag sources. The scanner checks their public activity pages and returns event-like links it can find.
+              Select approved Den Haag sources. Each scan follows relevant same-source event pages, captures event details, and adds new activities to the Den Haag list.
             </p>
           </div>
         </div>
@@ -206,6 +255,7 @@ export default function SourceDirectoryView() {
             <div className="max-h-[480px] divide-y divide-border overflow-y-auto">
               {sources.map((source) => {
                 const isSelected = selectedIds.includes(source.id);
+                const progress = sourceProgress[source.id];
                 return (
                   <article key={source.id} className="flex flex-col gap-3 px-4 py-4 transition-colors hover:bg-muted/35 sm:flex-row sm:items-center sm:gap-4 sm:px-5">
                     <label className="flex min-w-0 flex-1 cursor-pointer items-start gap-3">
@@ -235,12 +285,23 @@ export default function SourceDirectoryView() {
                       <button
                         type="button"
                         onClick={() => scanSources([source.id])}
-                        disabled={scanMutation.isPending}
+                        disabled={isScanning}
                         className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-3 py-2 text-xs font-extrabold text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
                       >
-                        {scanningIds.includes(source.id) ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <ScanSearch className="h-3.5 w-3.5" />}
-                        {scanningIds.includes(source.id) ? 'Scanning…' : 'Scan'}
+                        {progress === 'scanning' ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <ScanSearch className="h-3.5 w-3.5" />}
+                        {progress === 'scanning' ? 'Scanning…' : progress === 'queued' ? 'Queued' : 'Scan'}
                       </button>
+                      {progress && (
+                        <span className={`rounded-full px-2 py-1 text-[10px] font-extrabold ${
+                          progress === 'complete'
+                            ? 'bg-emerald-50 text-emerald-700'
+                            : progress === 'blocked' || progress === 'error'
+                              ? 'bg-amber-50 text-amber-700'
+                              : 'bg-primary/10 text-primary'
+                        }`}>
+                          {progress === 'complete' ? 'Complete' : progress}
+                        </span>
+                      )}
                       <a
                         href={source.activityUrl}
                         target="_blank"
@@ -257,16 +318,16 @@ export default function SourceDirectoryView() {
             </div>
             <div className="flex flex-col gap-3 border-t border-border bg-muted/25 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
               <p className="text-xs leading-relaxed text-muted-foreground">
-                The scanner only visits the approved public activity page for each selected source.
+                The scanner only reads approved public source pages and relevant same-source activity links. It never follows links to other domains.
               </p>
               <button
                 type="button"
                 onClick={() => scanSources(selectedIds)}
-                disabled={selectedIds.length === 0 || scanMutation.isPending}
+                disabled={selectedIds.length === 0 || isScanning}
                 className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-extrabold text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {scanMutation.isPending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <ScanSearch className="h-4 w-4" />}
-                {scanMutation.isPending ? 'Scanning…' : `Scan selected (${selectedIds.length})`}
+                {isScanning ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <ScanSearch className="h-4 w-4" />}
+                {isScanning ? `Scanning ${completedSourceCount} of ${Object.keys(sourceProgress).length}…` : `Scan selected (${selectedIds.length})`}
               </button>
             </div>
           </div>
@@ -277,15 +338,17 @@ export default function SourceDirectoryView() {
           </div>
         )}
 
-        {scanMutation.isPending && (
+        {isScanning && (
           <div role="status" aria-live="polite" className="mt-5 flex items-center gap-3 rounded-2xl border border-primary/20 bg-primary/5 px-4 py-4 text-primary">
             <LoaderCircle className="h-5 w-5 shrink-0 animate-spin" />
             <div className="min-w-0">
               <p className="font-extrabold">
-                Scanning {scanningIds.length} source{scanningIds.length === 1 ? '' : 's'}…
+                Deep-scanning {completedSourceCount} of {Object.keys(sourceProgress).length} selected source{Object.keys(sourceProgress).length === 1 ? '' : 's'}…
               </p>
               <p className="mt-0.5 text-sm font-medium text-muted-foreground">
-                Reading public activity pages and capturing event links. This may take a moment.
+                {activeSourceNames.length > 0
+                  ? `Reading event and detail pages from ${activeSourceNames.join(', ')}.`
+                  : 'Preparing the next approved source.'} Captured events are added to the Den Haag activity list as each source completes.
               </p>
             </div>
           </div>
@@ -306,17 +369,24 @@ export default function SourceDirectoryView() {
               </div>
               <span className="text-right text-xs font-semibold text-muted-foreground">
                 <span className="block text-sm font-extrabold text-foreground">
-                  {scanSummary.eventsAdded} event{scanSummary.eventsAdded === 1 ? '' : 's'} added
+                  {scanSummary.eventsCaptured} event{scanSummary.eventsCaptured === 1 ? '' : 's'} captured
                 </span>
-                {scanResults.length} source{scanResults.length === 1 ? '' : 's'} scanned
+                {scanSummary.eventsAdded} new · {scanSummary.eventsUpdated} updated · {scanResults.length} source{scanResults.length === 1 ? '' : 's'} scanned
               </span>
             </div>
-            <div className="mb-4 grid gap-2 sm:grid-cols-3">
+            <div className="mb-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
               <div className="flex items-center gap-3 rounded-2xl border border-border bg-card px-4 py-3 shadow-sm">
                 <BookOpenCheck className="h-5 w-5 shrink-0 text-primary" />
                 <div>
+                  <p className="text-2xl font-extrabold leading-none text-foreground">{scanSummary.pagesRead}</p>
+                  <p className="mt-1 text-xs font-bold text-muted-foreground">Pages read</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3 rounded-2xl border border-border bg-card px-4 py-3 shadow-sm">
+                <ScanSearch className="h-5 w-5 shrink-0 text-primary" />
+                <div>
                   <p className="text-2xl font-extrabold leading-none text-foreground">{scanSummary.eventLinksRead}</p>
-                  <p className="mt-1 text-xs font-bold text-muted-foreground">Event links read</p>
+                  <p className="mt-1 text-xs font-bold text-muted-foreground">Links examined</p>
                 </div>
               </div>
               <div className="flex items-center gap-3 rounded-2xl border border-border bg-card px-4 py-3 shadow-sm">
@@ -333,6 +403,25 @@ export default function SourceDirectoryView() {
                   <p className="mt-1 text-xs font-bold text-muted-foreground">Added to list</p>
                 </div>
               </div>
+              <div className="flex items-center gap-3 rounded-2xl border border-border bg-card px-4 py-3 shadow-sm">
+                <RefreshCw className="h-5 w-5 shrink-0 text-sky-600" />
+                <div>
+                  <p className="text-2xl font-extrabold leading-none text-foreground">{scanSummary.eventsUpdated}</p>
+                  <p className="mt-1 text-xs font-bold text-muted-foreground">Updated</p>
+                </div>
+              </div>
+            </div>
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-secondary/20 bg-secondary/5 px-4 py-3">
+              <p className="text-sm font-semibold text-secondary">
+                {scanSummary.eventsAdded} new event{scanSummary.eventsAdded === 1 ? '' : 's'} added to the Den Haag activity list.
+                {scanSummary.eventsUpdated > 0 ? ` ${scanSummary.eventsUpdated} existing event${scanSummary.eventsUpdated === 1 ? '' : 's'} refreshed.` : ''}
+                {scanSummary.pagesFailed > 0 ? ` ${scanSummary.pagesFailed} page${scanSummary.pagesFailed === 1 ? '' : 's'} could not be read.` : ''}
+              </p>
+              <Link href="/">
+                <button type="button" className="rounded-xl bg-secondary px-3 py-2 text-xs font-extrabold text-secondary-foreground transition-colors hover:bg-secondary/90">
+                  View Den Haag activities
+                </button>
+              </Link>
             </div>
             <div className="grid gap-4 lg:grid-cols-2">
               {scanResults.map((scan) => (
@@ -346,18 +435,26 @@ export default function SourceDirectoryView() {
                       {scan.status === 'found' ? `${scan.events.length} found` : scan.status.replace('_', ' ')}
                     </span>
                   </div>
-                  <div className="mb-3 grid grid-cols-3 gap-2 rounded-xl bg-muted/45 px-3 py-2 text-center">
+                  <div className="mb-3 grid grid-cols-3 gap-2 rounded-xl bg-muted/45 px-3 py-2 text-center sm:grid-cols-5">
                     <div>
-                      <p className="text-sm font-extrabold text-foreground">{scan.eventLinksRead ?? scan.events.length}</p>
-                      <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Read</p>
+                      <p className="text-sm font-extrabold text-foreground">{scan.pagesRead}</p>
+                      <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Pages</p>
                     </div>
                     <div>
-                      <p className="text-sm font-extrabold text-foreground">{scan.eventsCaptured ?? scan.events.length}</p>
+                      <p className="text-sm font-extrabold text-foreground">{scan.eventLinksRead}</p>
+                      <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Links</p>
+                    </div>
+                    <div>
+                      <p className="text-sm font-extrabold text-foreground">{scan.eventsCaptured}</p>
                       <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Captured</p>
                     </div>
                     <div>
-                      <p className="text-sm font-extrabold text-foreground">{scan.events.length}</p>
+                      <p className="text-sm font-extrabold text-foreground">{scan.eventsAdded}</p>
                       <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Added</p>
+                    </div>
+                    <div>
+                      <p className="text-sm font-extrabold text-foreground">{scan.eventsUpdated}</p>
+                      <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Updated</p>
                     </div>
                   </div>
                   {scan.events.length > 0 ? (
@@ -365,7 +462,14 @@ export default function SourceDirectoryView() {
                       {scan.events.map((event) => (
                         <li key={event.url}>
                           <a href={event.url} target="_blank" rel="noreferrer" className="inline-flex items-start gap-1.5 text-sm font-semibold text-primary hover:underline">
-                            <span>{event.title}</span>
+                            <span>
+                              <span className="block">{event.title}</span>
+                              {(event.startsAt || event.venue) && (
+                                <span className="mt-0.5 block text-xs font-medium text-muted-foreground">
+                                  {[event.startsAt?.replace('T', ' ').slice(0, 16), event.venue].filter(Boolean).join(' · ')}
+                                </span>
+                              )}
+                            </span>
                             <ExternalLink className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                           </a>
                         </li>

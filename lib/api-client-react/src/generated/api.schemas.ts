@@ -79,10 +79,26 @@ export interface SourceScanRequest {
   sourceIds: string[];
 }
 
+export type SourceScanEventCategory = typeof SourceScanEventCategory[keyof typeof SourceScanEventCategory];
+
+
+export const SourceScanEventCategory = {
+  Museums: 'Museums',
+  Tours: 'Tours',
+  Family: 'Family',
+  Entertainment: 'Entertainment',
+  Outdoors: 'Outdoors',
+  Markets: 'Markets',
+} as const;
+
 export interface SourceScanEvent {
   title: string;
   url: string;
   context?: string;
+  description?: string;
+  startsAt?: string;
+  venue?: string;
+  category?: SourceScanEventCategory;
 }
 
 export type SourceScanResultStatus = typeof SourceScanResultStatus[keyof typeof SourceScanResultStatus];
@@ -90,6 +106,7 @@ export type SourceScanResultStatus = typeof SourceScanResultStatus[keyof typeof 
 
 export const SourceScanResultStatus = {
   found: 'found',
+  partial: 'partial',
   no_events: 'no_events',
   blocked: 'blocked',
   error: 'error',
@@ -111,6 +128,31 @@ export interface SourceScanResult {
      * @minimum 0
      */
   eventsCaptured: number;
+  /**
+     * Number of approved source pages read during the bounded crawl.
+     * @minimum 0
+     */
+  pagesRead: number;
+  /**
+     * Number of approved source pages that could not be read.
+     * @minimum 0
+     */
+  pagesFailed: number;
+  /**
+     * Number of newly persisted events added to the Den Haag activity list.
+     * @minimum 0
+     */
+  eventsAdded: number;
+  /**
+     * Number of previously discovered events refreshed by this scan.
+     * @minimum 0
+     */
+  eventsUpdated: number;
+  /**
+     * Candidate events skipped because they were duplicates, incomplete, or beyond safe crawl limits.
+     * @minimum 0
+     */
+  eventsSkipped: number;
   message?: string;
 }
 
@@ -147,6 +189,8 @@ export interface Listing {
   lng: number;
   /** Link to the website where this activity was listed. */
   sourceUrl?: string;
+  /** Whether the map pin uses the Den Haag city centre because no exact venue coordinates were supplied. */
+  isApproximateLocation?: boolean;
 }
 
 export type ListingsResponseSource = typeof ListingsResponseSource[keyof typeof ListingsResponseSource];

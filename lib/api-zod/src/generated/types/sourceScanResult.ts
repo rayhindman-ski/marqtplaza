@@ -24,5 +24,30 @@ export interface SourceScanResult {
      * @minimum 0
      */
   eventsCaptured: number;
+  /**
+     * Number of approved source pages read during the bounded crawl.
+     * @minimum 0
+     */
+  pagesRead: number;
+  /**
+     * Number of approved source pages that could not be read.
+     * @minimum 0
+     */
+  pagesFailed: number;
+  /**
+     * Number of newly persisted events added to the Den Haag activity list.
+     * @minimum 0
+     */
+  eventsAdded: number;
+  /**
+     * Number of previously discovered events refreshed by this scan.
+     * @minimum 0
+     */
+  eventsUpdated: number;
+  /**
+     * Candidate events skipped because they were duplicates, incomplete, or beyond safe crawl limits.
+     * @minimum 0
+     */
+  eventsSkipped: number;
   message?: string;
 }

@@ -1,4 +1,7 @@
 import { Router, type IRouter } from "express";
+import { and, desc, eq, gte } from "drizzle-orm";
+import { db } from "@workspace/db";
+import { discoveredEventsTable } from "@workspace/db/schema";
 import { MARKERS } from "../lib/static-listings.js";
 
 const router: IRouter = Router();
@@ -144,6 +147,23 @@ function cap(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
+function canonicalExternalUrl(value: string | undefined): string | null {
+  if (!value) return null;
+  try {
+    const url = new URL(value);
+    url.hash = "";
+    url.search = "";
+    url.pathname = url.pathname.replace(/\/+$/, "") || "/";
+    return url.href;
+  } catch {
+    return null;
+  }
+}
+
+function normalizedTitle(value: string): string {
+  return value.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+}
+
 interface OsmElement {
   id: number;
   lat: number;
@@ -199,12 +219,67 @@ router.get("/listings", async (req, res) => {
     return;
   }
 
-  // All cities now have hand-curated datasets with real activities across all 6 categories.
-  // Serve curated data directly — live OSM data lacks the Family category and cannot match
-  // the quality of the curated selection. This also avoids Overpass latency (10+ seconds).
+  // All cities have hand-curated datasets. For Den Haag, source-scanned events are
+  // persisted separately and merged in so a completed scan changes the public list.
   const curated = MARKERS.filter((m) => m.locationId === cityId);
   if (curated.length > 0) {
-    res.json({ listings: curated, source: "curated" });
+    if (cityId !== "dhg") {
+      res.json({ listings: curated, source: "curated" });
+      return;
+    }
+
+    try {
+      const today = new Date().toISOString().slice(0, 10);
+      const discovered = await db
+        .select()
+        .from(discoveredEventsTable)
+        .where(and(
+          eq(discoveredEventsTable.locationId, "dhg"),
+          gte(discoveredEventsTable.startsAt, today),
+        ))
+        .orderBy(desc(discoveredEventsTable.lastSeenAt));
+      const curatedUrls = new Set(
+        curated.map((listing) => canonicalExternalUrl(listing.sourceUrl)).filter((url): url is string => Boolean(url)),
+      );
+      const curatedTitles = new Set(curated.map((listing) => normalizedTitle(listing.name)));
+      const discoveredListings = discovered
+        .filter((event) =>
+          !curatedUrls.has(canonicalExternalUrl(event.canonicalUrl) ?? event.canonicalUrl) &&
+          !curatedTitles.has(normalizedTitle(event.title)),
+        )
+        .map((event) => ({
+        id: `source-${event.id}`,
+        locationId: event.locationId,
+        category: event.category,
+        name: event.title,
+        description: event.description,
+        x: event.x,
+        y: event.y,
+        details: [
+          event.startsAt ? event.startsAt.replace("T", " ").slice(0, 16) : "Date not provided",
+          event.venue ?? "Venue not provided",
+          event.isApproximateLocation ? "Map pin: Den Haag city centre (exact coordinates unavailable)" : "",
+          `Source: ${event.sourceName}`,
+        ].filter(Boolean).join(" · "),
+        lat: event.lat,
+        lng: event.lng,
+        sourceUrl: event.canonicalUrl,
+        isApproximateLocation: event.isApproximateLocation,
+      }));
+      res.json({
+        listings: [...curated, ...discoveredListings],
+        source: "curated",
+        message: discoveredListings.length > 0
+          ? `${discoveredListings.length} source-scanned event${discoveredListings.length === 1 ? "" : "s"} added to the curated Den Haag activities.`
+          : undefined,
+      });
+    } catch {
+      res.json({
+        listings: curated,
+        source: "curated",
+        message: "Curated activities are available; source-scanned events are temporarily unavailable.",
+      });
+    }
     return;
   }
 

@@ -11,6 +11,7 @@ export type SourceScanResultStatus = typeof SourceScanResultStatus[keyof typeof 
 
 export const SourceScanResultStatus = {
   found: 'found',
+  partial: 'partial',
   no_events: 'no_events',
   blocked: 'blocked',
   error: 'error',

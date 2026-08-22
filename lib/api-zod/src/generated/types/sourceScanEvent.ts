@@ -5,9 +5,14 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { SourceScanEventCategory } from './sourceScanEventCategory';
 
 export interface SourceScanEvent {
   title: string;
   url: string;
   context?: string;
+  description?: string;
+  startsAt?: string;
+  venue?: string;
+  category?: SourceScanEventCategory;
 }

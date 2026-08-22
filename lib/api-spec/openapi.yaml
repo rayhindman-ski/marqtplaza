@@ -273,6 +273,15 @@ components:
           type: string
         context:
           type: string
+        description:
+          type: string
+        startsAt:
+          type: string
+        venue:
+          type: string
+        category:
+          type: string
+          enum: [Museums, Tours, Family, Entertainment, Outdoors, Markets]
       required: [title, url]
 
     SourceScanResult:
@@ -286,7 +295,7 @@ components:
           type: string
         status:
           type: string
-          enum: [found, no_events, blocked, error]
+          enum: [found, partial, no_events, blocked, error]
         events:
           type: array
           items:
@@ -299,9 +308,29 @@ components:
           type: number
           minimum: 0
           description: Number of unique event links captured from the source page.
+        pagesRead:
+          type: number
+          minimum: 0
+          description: Number of approved source pages read during the bounded crawl.
+        pagesFailed:
+          type: number
+          minimum: 0
+          description: Number of approved source pages that could not be read.
+        eventsAdded:
+          type: number
+          minimum: 0
+          description: Number of newly persisted events added to the Den Haag activity list.
+        eventsUpdated:
+          type: number
+          minimum: 0
+          description: Number of previously discovered events refreshed by this scan.
+        eventsSkipped:
+          type: number
+          minimum: 0
+          description: Candidate events skipped because they were duplicates, incomplete, or beyond safe crawl limits.
         message:
           type: string
-      required: [sourceId, sourceName, scannedUrl, status, events, eventLinksRead, eventsCaptured]
+      required: [sourceId, sourceName, scannedUrl, status, events, eventLinksRead, eventsCaptured, pagesRead, pagesFailed, eventsAdded, eventsUpdated, eventsSkipped]
 
     SourceScanResponse:
       type: object
@@ -345,6 +374,9 @@ components:
         sourceUrl:
           type: string
           description: Link to the website where this activity was listed.
+        isApproximateLocation:
+          type: boolean
+          description: Whether the map pin uses the Den Haag city centre because no exact venue coordinates were supplied.
       required:
         - id
         - locationId

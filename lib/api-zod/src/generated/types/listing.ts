@@ -22,4 +22,6 @@ export interface Listing {
   lng: number;
   /** Link to the website where this activity was listed. */
   sourceUrl?: string;
+  /** Whether the map pin uses the Den Haag city centre because no exact venue coordinates were supplied. */
+  isApproximateLocation?: boolean;
 }

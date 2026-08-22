@@ -23,6 +23,7 @@ export * from './listingsResponseSource';
 export * from './persistOutcome';
 export * from './scanResultList';
 export * from './sourceScanEvent';
+export * from './sourceScanEventCategory';
 export * from './sourceScanRequest';
 export * from './sourceScanResponse';
 export * from './sourceScanResult';
