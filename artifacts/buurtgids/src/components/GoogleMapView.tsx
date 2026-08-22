@@ -203,6 +203,7 @@ function CoordinateMapFallback({
           <button
             key={point.id}
             type="button"
+            data-event-id={point.id}
             onClick={() => onMarkerClick(point.id)}
             className={className}
             style={style}
@@ -468,6 +469,7 @@ function TileMapView({
             key={point.id}
             type="button"
             data-map-pin
+            data-event-id={point.id}
             onPointerDown={(event) => event.stopPropagation()}
             onClick={(event) => {
               event.stopPropagation();

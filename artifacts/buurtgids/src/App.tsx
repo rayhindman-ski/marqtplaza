@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Route, Switch, Router as WouterRouter, Link } from 'wouter';
+import { Route, Switch, Router as WouterRouter, Link, useLocation, useRoute } from 'wouter';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { 
   Search, MapPinOff, ArrowLeft,
@@ -630,6 +630,7 @@ function DiscoveryState({
 }) {
   const location = LOCATIONS.find(l => l.id === locationId);
   const t = translations[language];
+  const [, navigate] = useLocation();
   const [categories, setCategories] = useState<Record<Category, boolean>>({
     Museums: true,
     Tours: true,
@@ -655,8 +656,7 @@ function DiscoveryState({
   };
 
   const handleMarkerClick = (id: string) => {
-    setSelectedMarker(id);
-    setView('list');
+    navigate(`/activiteiten/den-haag/${encodeURIComponent(id)}`);
   };
 
   useEffect(() => {
@@ -956,6 +956,124 @@ function DiscoveryState({
   );
 }
 
+function EventDetailView({ eventId }: { eventId: string }) {
+  const [, navigate] = useLocation();
+  const { data, isLoading, isError } = useGetListings({ cityId: 'dhg' });
+  const listing = data?.listings.find((item) => item.id === decodeURIComponent(eventId));
+  const language: Language = typeof window !== 'undefined' && window.localStorage.getItem('buurtplaza-language') === 'nl'
+    ? 'nl'
+    : 'en';
+
+  if (isLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background p-6">
+        <div className="w-full max-w-2xl animate-pulse space-y-4">
+          <div className="h-5 w-32 rounded bg-muted" />
+          <div className="h-14 w-3/4 rounded bg-muted" />
+          <div className="h-28 rounded-2xl bg-muted" />
+        </div>
+      </div>
+    );
+  }
+
+  if (isError || !listing) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background p-6">
+        <div className="w-full max-w-md rounded-3xl border border-border bg-card p-8 text-center shadow-xl">
+          <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-full bg-muted">
+            <MapPinOff className="h-7 w-7 text-muted-foreground" />
+          </div>
+          <h1 className="text-2xl font-extrabold text-foreground">
+            {language === 'nl' ? 'Activiteit niet gevonden' : 'Event not found'}
+          </h1>
+          <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+            {language === 'nl' ? 'Deze activiteit is niet meer beschikbaar.' : 'This activity is no longer available.'}
+          </p>
+          <button
+            type="button"
+            onClick={() => navigate('/activiteiten/den-haag')}
+            className="mt-6 inline-flex items-center gap-2 rounded-full bg-foreground px-5 py-3 text-sm font-bold text-background"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            {language === 'nl' ? 'Terug naar ontdekken' : 'Back to discoveries'}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const category = listing.category as Category;
+  const Icon = CATEGORY_ICONS[category] ?? MapPinOff;
+  const sourceUrl = (listing as typeof listing & { sourceUrl?: string }).sourceUrl;
+
+  return (
+    <div className="min-h-screen bg-background text-foreground">
+      <header className="border-b border-border/70 bg-card/90 px-5 py-4 shadow-sm backdrop-blur-md sm:px-8">
+        <div className="mx-auto flex max-w-5xl items-center justify-between gap-4">
+          <button
+            type="button"
+            onClick={() => navigate('/activiteiten/den-haag')}
+            className="inline-flex items-center gap-2 rounded-full px-2 py-2 text-sm font-bold text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          >
+            <ArrowLeft className="h-5 w-5" />
+            {language === 'nl' ? 'Terug naar ontdekken' : 'Back to discoveries'}
+          </button>
+          <span className="text-xs font-extrabold uppercase tracking-[0.18em] text-primary">marqtplaza.com</span>
+        </div>
+      </header>
+
+      <main className="mx-auto max-w-5xl px-5 py-8 sm:px-8 sm:py-12">
+        <article className="rounded-3xl border border-border bg-card p-6 shadow-xl sm:p-10">
+          <div className="mb-7 flex items-center gap-3">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+              <Icon className="h-6 w-6" aria-hidden="true" />
+            </div>
+            <span className="rounded-full bg-primary/10 px-3 py-1.5 text-xs font-extrabold uppercase tracking-wider text-primary">
+              {translations[language].categories[category]}
+            </span>
+          </div>
+          <h1 className="max-w-3xl text-3xl font-extrabold tracking-tight text-foreground sm:text-5xl">{listing.name}</h1>
+          <p className="mt-5 max-w-2xl text-base leading-8 text-muted-foreground">{listing.description}</p>
+
+          <div className="mt-8 grid gap-3 sm:grid-cols-2">
+            <div className="rounded-2xl border border-border bg-muted/40 p-4">
+              <p className="text-xs font-extrabold uppercase tracking-wider text-muted-foreground">
+                {language === 'nl' ? 'Wanneer' : 'When'}
+              </p>
+              <p className="mt-2 text-sm font-bold text-foreground">{listing.details}</p>
+            </div>
+            <div className="rounded-2xl border border-border bg-muted/40 p-4">
+              <p className="text-xs font-extrabold uppercase tracking-wider text-muted-foreground">
+                {language === 'nl' ? 'Locatie' : 'Location'}
+              </p>
+              <p className="mt-2 text-sm font-bold text-foreground">
+                Lat {listing.lat.toFixed(5)} · Lng {listing.lng.toFixed(5)}
+              </p>
+            </div>
+          </div>
+
+          {sourceUrl && (
+            <a
+              href={sourceUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-8 inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/5 px-4 py-2.5 text-sm font-bold text-primary transition-colors hover:bg-primary/10"
+            >
+              {language === 'nl' ? 'Bekijk de bronwebsite' : 'View source website'}
+              <ExternalLink className="h-4 w-4" />
+            </a>
+          )}
+        </article>
+      </main>
+    </div>
+  );
+}
+
+function EventDetailRoute() {
+  const [, params] = useRoute('/activiteiten/den-haag/:eventId');
+  return <EventDetailView eventId={params?.eventId ?? ''} />;
+}
+
 type AppScreen =
   | { kind: 'search' }
   | { kind: 'discovery'; locationId: string; neighborhood?: string }
@@ -1028,6 +1146,7 @@ export default function App() {
           <Route path="/">
             <MainApp initialLocationId="dhg" />
           </Route>
+          <Route path="/activiteiten/den-haag/:eventId" component={EventDetailRoute} />
           <Route path="/activiteiten/den-haag">
             <MainApp initialLocationId="dhg" />
           </Route>
