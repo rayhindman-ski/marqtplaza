@@ -32,6 +32,7 @@ type Listing = {
   locationId: string;
   category: ListingCategory;
   name: string;
+  address?: string;
   description: string;
   x: number;
   y: number;
@@ -42,7 +43,6 @@ type Listing = {
   businessCategory?: BusinessCategory;
   source?: ListingSource;
   sourceName?: string;
-  address?: string;
   neighborhood?: string;
   socialCategory?: SocialMapCategory;
   officialUrl?: string;
@@ -64,7 +64,9 @@ const CITY_BOUNDS: Record<string, { s: number; w: number; n: number; e: number }
   ams: { s: 52.34, w: 4.85, n: 52.40, e: 5.00 },
   rot: { s: 51.88, w: 4.43, n: 51.96, e: 4.55 },
   utr: { s: 52.07, w: 5.09, n: 52.12, e: 5.17 },
-  dhg: { s: 52.05, w: 4.26, n: 52.11, e: 4.36 },
+  // Include the Hague's outer neighbourhoods. Provider locality evidence
+  // below rejects nearby municipalities inside this safe discovery rectangle.
+  dhg: { s: 52.025, w: 4.235, n: 52.125, e: 4.42 },
   ein: { s: 51.41, w: 5.43, n: 51.47, e: 5.52 },
 };
 
@@ -213,8 +215,12 @@ function canonicalExternalUrl(value: string | undefined): string | null {
   }
 }
 
-function normalizedTitle(value: string): string {
-  return value.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+function normalizedTitle(value: string | undefined): string {
+  return (value ?? "").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+}
+
+function normalizedAddress(value: string | undefined): string {
+  return normalizedTitle(value ?? "");
 }
 
 function parseListingSection(value: unknown): ListingSection {
@@ -225,14 +231,14 @@ function parseListingSection(value: unknown): ListingSection {
 
 function isInHagueBounds(lat: number, lng: number): boolean {
   const bounds = CITY_BOUNDS.dhg;
-  return lat >= bounds.s - 0.025 && lat <= bounds.n + 0.025
-    && lng >= bounds.w - 0.025 && lng <= bounds.e + 0.025;
+  return lat >= bounds.s && lat <= bounds.n
+    && lng >= bounds.w && lng <= bounds.e;
 }
 
 function hasHagueEvidence(address: string): boolean {
   const value = address.toLowerCase();
-  if (/\b(delft|oegstgeest|wassenaar|rijswijk|zoetermeer|leidschendam)\b/.test(value)) return false;
-  return /\bden haag\b|\bthe hague\b|\bscheveningen\b|\b25\d{2}\s?[a-z]{2}\b/i.test(address);
+  if (/\b(delft|oegstgeest|wassenaar|rijswijk|zoetermeer|leidschendam|voorburg|westland)\b/.test(value)) return false;
+  return /\bden haag\b|\bthe hague\b|\bscheveningen\b|\bs?-?gravenhage\b|\b25\d{2}\s?[a-z]{2}\b/i.test(address);
 }
 
 type GooglePlace = {
@@ -321,12 +327,40 @@ const GOOGLE_TYPE_TO_BUSINESS_CATEGORY: Record<string, BusinessCategory> = {
   stadium: "Fitness & Sports",
 };
 
+const GOOGLE_FOOD_PLACE_TYPES = new Set([
+  "bakery",
+  "bar",
+  "cafe",
+  "cafeteria",
+  "coffee_shop",
+  "dessert_shop",
+  "fast_food_restaurant",
+  "food",
+  "ice_cream_shop",
+  "meal_delivery",
+  "meal_takeaway",
+  "pizza_restaurant",
+  "pub",
+  "restaurant",
+  "tea_house",
+  "wine_bar",
+]);
+
+function isFoodGooglePlace(place: GooglePlace): boolean {
+  const primaryType = place.primaryType?.toLowerCase();
+  return Boolean(
+    primaryType
+    && (GOOGLE_FOOD_PLACE_TYPES.has(primaryType) || primaryType.endsWith("_restaurant")),
+  );
+}
+
 function businessCategoryForGooglePlace(
   place: GooglePlace,
   section: Exclude<ListingSection, "events" | "social-map">,
 ): BusinessCategory {
   if (section === "food-drink") return "Food & Drink";
   const primaryType = place.primaryType?.toLowerCase();
+  if (isFoodGooglePlace(place)) return "Food & Drink";
   if (primaryType) {
     const mappedCategory = GOOGLE_TYPE_TO_BUSINESS_CATEGORY[primaryType];
     if (mappedCategory) return mappedCategory;
@@ -337,7 +371,7 @@ function businessCategoryForGooglePlace(
 const GOOGLE_PLACES_URL = "https://places.googleapis.com/v1/places:searchText";
 const GOOGLE_PLACES_TIMEOUT_MS = 12_000;
 const GOOGLE_PLACES_MAX_RESULTS = 1000;
-const GOOGLE_PLACES_MAX_PAGES_PER_SEARCH = 2;
+const GOOGLE_PLACES_MAX_PAGES_PER_SEARCH = 3;
 const GOOGLE_PLACES_CONCURRENCY = 6;
 const GOOGLE_PLACES_CACHE_TTL_MS = 15 * 60 * 1000;
 const OPEN_STREET_MAP_RESULT_RESERVE = 0.25;
@@ -356,27 +390,41 @@ type GoogleSearchSpec = { textQuery: string; bounds: GeographicBounds };
 // Hague a chance to rank for each relevant business group while the final
 // bounds/evidence checks remain the source of truth.
 const HAGUE_DISCOVERY_AREAS: GeographicBounds[] = [
-  { s: 52.05, w: 4.26, n: 52.082, e: 4.315 },
-  { s: 52.05, w: 4.305, n: 52.082, e: 4.36 },
-  { s: 52.078, w: 4.26, n: 52.11, e: 4.315 },
-  { s: 52.078, w: 4.305, n: 52.11, e: 4.36 },
+  // Two rows by three columns. Adjacent cells overlap so ranked results near
+  // a cell edge get another opportunity without making the search unbounded.
+  { s: 52.025, w: 4.235, n: 52.077, e: 4.31 },
+  { s: 52.025, w: 4.295, n: 52.077, e: 4.375 },
+  { s: 52.025, w: 4.36, n: 52.077, e: 4.42 },
+  { s: 52.073, w: 4.235, n: 52.125, e: 4.31 },
+  { s: 52.073, w: 4.295, n: 52.125, e: 4.375 },
+  { s: 52.073, w: 4.36, n: 52.125, e: 4.42 },
 ];
 
 const GOOGLE_SEARCH_TERMS: Record<Exclude<ListingSection, "events" | "social-map">, string[]> = {
   businesses: [
-    "shops and retail businesses in The Hague Netherlands",
-    "healthcare and beauty businesses in The Hague Netherlands",
-    "professional services and offices in The Hague Netherlands",
-    "lawyers accountants banks and real estate agencies in The Hague Netherlands",
-    "home repair and automotive services in The Hague Netherlands",
-    "schools childcare hotels and travel services in The Hague Netherlands",
-    "gyms sports clubs arts and culture businesses in The Hague Netherlands",
+    "winkels en retail in Den Haag Nederland",
+    "kleding schoenen juweliers en boekhandels in Den Haag",
+    "elektronica meubels en woonwinkels in Den Haag",
+    "supermarkten en speciaalzaken in Den Haag",
+    "zorg huisartsen tandartsen en apotheken in Den Haag",
+    "kappers schoonheidssalons en spa's in Den Haag",
+    "professionele diensten kantoren en consultants in Den Haag",
+    "advocaten accountants banken verzekeringen en makelaars in Den Haag",
+    "klusbedrijven loodgieters elektriciens en reparatie in Den Haag",
+    "autogarages fietsenwinkels en mobiliteit in Den Haag",
+    "scholen kinderopvang en onderwijs in Den Haag",
+    "hotels hostels reisbureaus en toerisme in Den Haag",
+    "kunst cultuur theaters bioscopen en musea in Den Haag",
+    "sportscholen fitness en sportclubs in Den Haag",
   ],
   "food-drink": [
-    "restaurants and cafes in The Hague Netherlands",
-    "bars pubs and nightlife in The Hague Netherlands",
-    "bakeries and food shops in The Hague Netherlands",
-    "takeaway and fast food in The Hague Netherlands",
+    "restaurants en eetcafes in Den Haag Nederland",
+    "koffiebars lunchrooms en brunch in Den Haag",
+    "bars pubs en nachtleven in Den Haag",
+    "bakkerijen patisserieen en chocolatiers in Den Haag",
+    "afhaalrestaurants bezorging en fastfood in Den Haag",
+    "ijssalons en dessertzaken in Den Haag",
+    "vegan vegetarische en internationale horeca in Den Haag",
   ],
 };
 
@@ -521,17 +569,23 @@ async function collectGooglePlaces(
           const lng = place.location?.longitude;
           if (!name || !address || typeof lat !== "number" || typeof lng !== "number") continue;
           if (!isInHagueBounds(lat, lng) || !hasHagueEvidence(address)) continue;
+           if (section === "food-drink" && place.primaryType && !isFoodGooglePlace(place)) continue;
+           const businessCategory = businessCategoryForGooglePlace(place, section);
+           if (section === "businesses" && businessCategory === "Food & Drink") continue;
 
-          const key = place.id ?? `${normalizedTitle(name)}|${normalizedTitle(address)}`;
-          if (seen.has(key)) continue;
-          seen.add(key);
+           const providerKey = place.id ? `id:${place.id}` : undefined;
+           const nameAddressKey = `place:${normalizedTitle(name)}|${normalizedAddress(address)}`;
+           if ((providerKey && seen.has(providerKey)) || seen.has(nameAddressKey)) continue;
+           if (providerKey) seen.add(providerKey);
+           seen.add(nameAddressKey);
           const { x, y } = toXY(lat, lng, bounds);
           searchResults.push({
-            id: `google-${place.id ?? normalizedTitle(name).replace(/\s+/g, "-")}`,
+             id: `google-${section}-${place.id ?? normalizedTitle(name).replace(/\s+/g, "-")}`,
             locationId: "dhg",
             category: section === "food-drink" ? "Food & Drink" : "Businesses",
-            businessCategory: businessCategoryForGooglePlace(place, section),
+             businessCategory,
             name,
+             address,
             description: googlePlaceDescription(place, section),
             x,
             y,
@@ -574,9 +628,12 @@ async function collectGooglePlaces(
   return results;
 }
 
-function listingDedupeKey(listing: Pick<Listing, "name" | "lat" | "lng">): string {
-  // A ~100m coordinate bucket keeps separate branches with the same name while
-  // removing the same place when Google and OSM use slightly different pins.
+function listingDedupeKey(listing: Pick<Listing, "name" | "address" | "lat" | "lng">): string {
+  if (listing.address) {
+    return `${normalizedTitle(listing.name)}|${normalizedAddress(listing.address)}`;
+  }
+  // A ~100m coordinate bucket is the fallback for OSM nodes without address
+  // tags; it keeps separate branches while removing an alternate provider pin.
   return `${normalizedTitle(listing.name)}|${Math.round(listing.lat * 1000)}|${Math.round(listing.lng * 1000)}`;
 }
 
@@ -617,7 +674,7 @@ function mergeBusinessListings(
 
 function businessCategoryForOsmTags(
   tags: Record<string, string>,
-  section: Exclude<ListingSection, "events">,
+  section: Exclude<ListingSection, "events" | "social-map">,
 ): BusinessCategory {
   const amenity = tags.amenity;
   const shop = tags.shop;
@@ -627,7 +684,7 @@ function businessCategoryForOsmTags(
   const tourism = tags.tourism;
 
   if (section === "food-drink"
-    || ["cafe", "restaurant", "bar", "pub", "bakery", "fast_food", "ice_cream", "food_court"].includes(amenity ?? "")) {
+    || ["cafe", "restaurant", "bar", "pub", "bakery", "fast_food", "ice_cream", "food_court", "confectionery"].includes(amenity ?? "")) {
     return "Food & Drink";
   }
   if (["pharmacy", "doctors", "dentist", "clinic", "hospital", "optician", "hearing_aids"].includes(amenity ?? "")) {
@@ -668,40 +725,92 @@ function businessCategoryForOsmTags(
   return "Professional Services";
 }
 
+function osmAddressFromTags(tags: Record<string, string>): string | undefined {
+  const street = tags["addr:street"];
+  const houseNumber = tags["addr:housenumber"];
+  const postcode = tags["addr:postcode"];
+  const city = tags["addr:city"] ?? tags["addr:place"];
+  const line = [street, houseNumber].filter(Boolean).join(" ");
+  const locality = [postcode, city].filter(Boolean).join(" ");
+  return [line, locality].filter(Boolean).join(", ") || undefined;
+}
+
+function hasForeignOsmLocality(tags: Record<string, string>): boolean {
+  const city = normalizedTitle(tags["addr:city"] ?? tags["addr:place"]);
+  if (city && !["den haag", "the hague", "s gravenhage", "scheveningen"].includes(city)) return true;
+  const postcode = tags["addr:postcode"];
+  return Boolean(postcode && !/^25\d{2}/.test(postcode.replace(/\s/g, "")));
+}
+
+function hasHagueOsmEvidence(tags: Record<string, string>): boolean {
+  return hasHagueEvidence([
+    tags["addr:postcode"],
+    tags["addr:city"] ?? tags["addr:place"],
+  ].filter(Boolean).join(" "));
+}
+
+const OSM_FOOD_AMENITIES = new Set([
+  "bakery",
+  "bar",
+  "cafe",
+  "cafe;bar",
+  "fast_food",
+  "food_court",
+  "ice_cream",
+  "pub",
+  "restaurant",
+]);
+
+const OSM_FOOD_SHOPS = new Set([
+  "bakery",
+  "confectionery",
+  "deli",
+  "ice_cream",
+  "pastry",
+]);
+
+function isFoodOsmTags(tags: Record<string, string>): boolean {
+  return OSM_FOOD_AMENITIES.has(tags.amenity) || OSM_FOOD_SHOPS.has(tags.shop);
+}
+
 function fetchOpenStreetMapBusinesses(elements: OsmElement[], section: Exclude<ListingSection, "events" | "social-map">, bounds: { s: number; w: number; n: number; e: number }): Listing[] {
+  const listings: Listing[] = [];
   const seen = new Set<string>();
-  return elements
-    .filter((element) => {
-      const tags = element.tags ?? {};
-      const isFood = ["cafe", "restaurant", "bar", "pub", "bakery", "fast_food", "ice_cream", "food_court"].includes(tags.amenity);
-      return tags.name && (section === "food-drink" ? isFood : !isFood && Boolean(tags.shop || tags.amenity));
-    })
-    .filter((element) => {
-      const key = normalizedTitle(element.tags.name);
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    })
-    .slice(0, GOOGLE_PLACES_MAX_RESULTS)
-    .map((element) => {
-      const tags = element.tags;
-      const { x, y } = toXY(element.lat, element.lon, bounds);
-      return {
-        id: `osm-${element.id}`,
-        locationId: "dhg",
-        category: section === "food-drink" ? "Food & Drink" : "Businesses",
-        businessCategory: businessCategoryForOsmTags(tags, section),
-        name: tags.name,
-        description: descriptionFromTags(tags),
-        x,
-        y,
-        details: detailsFromTags(tags, "Markets"),
-        lat: element.lat,
-        lng: element.lon,
-        source: "openstreetmap",
-        sourceName: "OpenStreetMap",
-      };
-    });
+
+  for (const element of elements) {
+    if (!isInHagueBounds(element.lat, element.lon)) continue;
+    const tags = element.tags ?? {};
+    if (hasForeignOsmLocality(tags) || !hasHagueOsmEvidence(tags)) continue;
+
+    const isFood = isFoodOsmTags(tags);
+    if (!tags.name || (section === "food-drink" ? !isFood : isFood || !Boolean(tags.shop || tags.amenity))) continue;
+
+    const address = osmAddressFromTags(tags);
+    const { x, y } = toXY(element.lat, element.lon, bounds);
+    const listing: Listing = {
+      id: `osm-${element.id}`,
+      locationId: "dhg",
+      category: section === "food-drink" ? "Food & Drink" : "Businesses",
+      businessCategory: businessCategoryForOsmTags(tags, section),
+      name: tags.name,
+      ...(address ? { address } : {}),
+      description: descriptionFromTags(tags),
+      x,
+      y,
+      details: [address, detailsFromTags(tags, "Markets")].filter(Boolean).join(" · "),
+      lat: element.lat,
+      lng: element.lon,
+      source: "openstreetmap",
+      sourceName: "OpenStreetMap",
+    };
+    const key = listingDedupeKey(listing);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    listings.push(listing);
+    if (listings.length >= GOOGLE_PLACES_MAX_RESULTS) break;
+  }
+
+  return listings;
 }
 
 interface OsmElement {
@@ -750,7 +859,7 @@ async function fetchCityListingsFromOverpass(
   node[leisure][name](${bbox});
   node[tourism][name](${bbox});
 );
-  out 500;`;
+   out 2000;`;
 
   const url =
     "https://overpass-api.de/api/interpreter?data=" + encodeURIComponent(query);

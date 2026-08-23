@@ -15,8 +15,6 @@ import * as zod from 'zod';
 export const HealthCheckResponse = zod.object({
   "status": zod.string()
 })
-
-
 /**
  * @summary Search for businesses
  */
@@ -163,7 +161,6 @@ export const ScanActivitySourcesResponse = zod.object({
   "error": zod.string().optional()
 })
 
-
 /**
  * @summary Get excluded source-scanned event candidates for editorial review
  */
@@ -254,6 +251,7 @@ export const GetListingsResponse = zod.object({
   "locationId": zod.string(),
   "category": zod.enum(['Museums', 'Tours', 'Family', 'Entertainment', 'Outdoors', 'Markets', 'Businesses', 'Food & Drink', 'Social map']),
   "name": zod.string(),
+  "address": zod.string().optional().describe('Provider-supplied or curated visitor address when one is available.'),
   "description": zod.string(),
   "x": zod.number(),
   "y": zod.number(),
@@ -265,7 +263,6 @@ export const GetListingsResponse = zod.object({
   "source": zod.enum(['google_maps', 'openstreetmap', 'curated', 'source_scan']).optional().describe('Provider or editorial source for an individual listing.'),
   "sourceName": zod.string().optional().describe('Human-readable publisher or provider that listed this item, distinct from its destination URL.'),
   "isApproximateLocation": zod.boolean().optional().describe('Whether the map pin uses the Den Haag city centre because no exact venue coordinates were supplied.'),
-  "address": zod.string().optional().describe('Public visitor address for a curated social-map location.'),
   "neighborhood": zod.string().optional().describe('Den Haag neighborhood context for a curated social-map location.'),
   "socialCategory": zod.enum(['Geldzaken', 'Gezin en opvoeden', 'Gezondheid', 'Hobby\'s en interesses', 'Ondersteuning', 'Ontmoeten en samenleven', 'Sporten en bewegen', 'Taal en computer', 'Vervoer', 'Werk en opleiding', 'Wonen en huishouden', 'Zorg voor een naaste']).optional().describe('Curated support theme for the Den Haag social map.'),
   "officialUrl": zod.string().optional().describe('Verified organization or service website for a social-map location.'),

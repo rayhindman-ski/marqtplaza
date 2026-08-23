@@ -15,6 +15,8 @@ export interface Listing {
   locationId: string;
   category: ListingCategory;
   name: string;
+  /** Provider-supplied or curated visitor address when one is available. */
+  address?: string;
   description: string;
   x: number;
   y: number;
@@ -31,8 +33,6 @@ export interface Listing {
   sourceName?: string;
   /** Whether the map pin uses the Den Haag city centre because no exact venue coordinates were supplied. */
   isApproximateLocation?: boolean;
-  /** Public visitor address for a curated social-map location. */
-  address?: string;
   /** Den Haag neighborhood context for a curated social-map location. */
   neighborhood?: string;
   socialCategory?: SocialMapCategory;

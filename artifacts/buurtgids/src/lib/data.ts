@@ -80,6 +80,8 @@ export interface Marker {
   locationId: string;
   category: Category;
   name: string;
+  /** Provider-supplied street address when one is available. */
+  address?: string;
   description: string;
   x: number;
   y: number;
@@ -94,7 +96,6 @@ export interface Marker {
   source?: ListingSource;
   /** Human-readable publisher or provider that listed this item. */
   sourceName?: string;
-  address?: string;
   neighborhood?: string;
   socialCategory?: SocialMapCategory;
   officialUrl?: string;

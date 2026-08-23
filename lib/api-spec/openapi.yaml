@@ -627,6 +627,9 @@ components:
           enum: [Museums, Tours, Family, Entertainment, Outdoors, Markets, Businesses, Food & Drink, Social map]
         name:
           type: string
+        address:
+          type: string
+          description: Provider-supplied or curated visitor address when one is available.
         description:
           type: string
         x:
@@ -654,9 +657,6 @@ components:
         isApproximateLocation:
           type: boolean
           description: Whether the map pin uses the Den Haag city centre because no exact venue coordinates were supplied.
-        address:
-          type: string
-          description: Public visitor address for a curated social-map location.
         neighborhood:
           type: string
           description: Den Haag neighborhood context for a curated social-map location.

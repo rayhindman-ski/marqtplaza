@@ -14,7 +14,7 @@ import {
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { Toaster } from '@/components/ui/sonner';
-import { setAuthTokenGetter, useGetListings } from '@workspace/api-client-react';
+import { getGetListingsQueryKey, setAuthTokenGetter, useGetListings } from '@workspace/api-client-react';
 import {
   LOCATIONS,
   MARKERS,
@@ -777,11 +777,23 @@ function DiscoveryState({
   const [selectedMarker, setSelectedMarker] = useState<string | null>(null);
   const [view, setView] = useState<'map' | 'list'>('map');
 
-  // Fetch each top-level section so the checkbox filters can be combined.
-  const eventsQuery = useGetListings({ cityId: locationId, section: 'events' });
-  const businessesQuery = useGetListings({ cityId: locationId, section: 'businesses' });
-  const foodDrinkQuery = useGetListings({ cityId: locationId, section: 'food-drink' });
-  const socialMapQuery = useGetListings({ cityId: locationId, section: 'social-map' });
+  // Fetch selected top-level sections only; each query keeps its generated cache key.
+  const eventsQuery = useGetListings(
+    { cityId: locationId, section: 'events' },
+    { query: { enabled: topLevelCategories.events, queryKey: getGetListingsQueryKey({ cityId: locationId, section: 'events' }) } },
+  );
+  const businessesQuery = useGetListings(
+    { cityId: locationId, section: 'businesses' },
+    { query: { enabled: topLevelCategories.businesses, queryKey: getGetListingsQueryKey({ cityId: locationId, section: 'businesses' }) } },
+  );
+  const foodDrinkQuery = useGetListings(
+    { cityId: locationId, section: 'food-drink' },
+    { query: { enabled: topLevelCategories['food-drink'], queryKey: getGetListingsQueryKey({ cityId: locationId, section: 'food-drink' }) } },
+  );
+  const socialMapQuery = useGetListings(
+    { cityId: locationId, section: 'social-map' },
+    { query: { enabled: topLevelCategories['social-map'], queryKey: getGetListingsQueryKey({ cityId: locationId, section: 'social-map' }) } },
+  );
   const listingQueries = {
     events: eventsQuery,
     businesses: businessesQuery,
@@ -1169,7 +1181,7 @@ function DiscoveryState({
 
         {/* Data source badge */}
         {!isLoading && (
-          <div className="px-6 pb-2 flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2 px-6 pb-2">
             {isLive ? (
               <span className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-full">
                 <Radio className="w-3 h-3" />
@@ -1195,9 +1207,9 @@ function DiscoveryState({
               <span className="text-xs text-muted-foreground">{fallbackMessage}</span>
             )}
             {(isGooglePlaces || selectedTopLevelSections.includes('social-map')) && (
-              <span className="w-full text-xs text-muted-foreground">
+              <p className="w-full text-xs leading-relaxed text-muted-foreground">
                 {selectedTopLevelSections.includes('social-map') ? t.socialMapCoverageNote : t.listingsCoverageNote}
-              </span>
+              </p>
             )}
             {selectedTopLevelSections.includes('social-map') && selectedListings[0]?.snapshotDate && (
               <span className="w-full text-xs text-muted-foreground">
