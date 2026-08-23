@@ -16,6 +16,7 @@ type EventCategory = "Museums" | "Tours" | "Family" | "Entertainment" | "Outdoor
 type SourceScanEvent = {
   title: string;
   url: string;
+  sourceEventId?: string;
   context?: string;
   description?: string;
   startsAt?: string;
@@ -109,9 +110,9 @@ const MAX_SITEMAP_PAGES = 8;
 const MAX_EVENTS_PER_SOURCE = 240;
 const MAX_LINKS_PER_PAGE = 600;
 const MAX_SITEMAP_URLS = 300;
-const MAX_LOCALITY_RESCUES_PER_SOURCE = 12;
+const MAX_LOCALITY_RESCUES_PER_SOURCE = 48;
 const LOCALITY_RESCUE_CONCURRENCY = 3;
-const MAX_RESPONSE_CHARS = 700_000;
+const MAX_RESPONSE_CHARS = 760_000;
 const FETCH_TIMEOUT_MS = 9_000;
 const MAX_REDIRECTS = 3;
 const MAX_ACTIVE_SCAN_REQUESTS = 2;
@@ -508,10 +509,38 @@ function pageDate(html: string): string | undefined {
   return candidates.map(normalizeDateValue).find((date): date is string => Boolean(date));
 }
 
+function pageCalendarField(html: string, field: "UID" | "LOCATION"): string | undefined {
+  for (const match of html.matchAll(/data:text\/calendar[^,]*,([A-Za-z0-9+/=]+)/gi)) {
+    try {
+      const calendar = Buffer.from(match[1], "base64").toString("utf8");
+      const value = calendar.match(new RegExp(`^${field}:(.+)$`, "m"))?.[1]?.trim();
+      if (value) return value.slice(0, 240);
+    } catch {
+      // A malformed calendar link should not make the page unusable.
+    }
+  }
+  return undefined;
+}
+
 function pageVenue(html: string): string | undefined {
+  const eventLocation = html.match(/<(?:div|span|p)\b[^>]*class=["'][^"']*playlist-item__location__link[^"']*["'][^>]*>([\s\S]*?)<\/(?:div|span|p)>/i);
   const address = html.match(/<address\b[^>]*>([\s\S]*?)<\/address>/i)
     ?? html.match(/<(?:div|span|p)\b[^>]*(?:itemprop=["'](?:location|venue)["']|class=["'][^"']*(?:venue|location)[^"']*)[^>]*>([\s\S]*?)<\/(?:div|span|p)>/i);
-  return shorten(address?.[1] ?? address?.[2], 180);
+  const detectedVenue = shorten(eventLocation?.[1] ?? address?.[1] ?? address?.[2], 180);
+  return detectedVenue && !/^(walking|spazieren)$/i.test(detectedVenue)
+    ? detectedVenue
+    : pageCalendarField(html, "LOCATION") ?? detectedVenue;
+}
+
+function preferredVenue(...values: Array<string | undefined>): string | undefined {
+  const present = values.filter((value): value is string => typeof value === "string" && value.length > 0);
+  const usable = present.filter((value) => !/^(walking|spazieren)$/i.test(value));
+  if (usable.length === 0) return present[0];
+  const score = (value: string) => {
+    const hasHaagEvidence = /\b(den haag|the hague|scheveningen|kijkduin|loosduinen|leyweg|strandslag\s*8|kneuterdijk|elandstraat\s*47|25\d{2}[a-z]{2})\b/i.test(value);
+    return (hasHaagEvidence ? 1_000 : 0) + Math.min(value.length, 240);
+  };
+  return usable.reduce((best, candidate) => score(candidate) > score(best) ? candidate : best);
 }
 
 function pageOpeningTimes(html: string): string | undefined {
@@ -620,12 +649,32 @@ function htmlEventFromPage(
   return {
     title,
     url: pageUrl,
+    sourceEventId: pageCalendarField(html, "UID"),
     description,
     startsAt: pageDate(html),
     openingTimes: pageOpeningTimes(html),
     venue: pageVenue(html),
     category: classifyEvent(`${title} ${description ?? ""}`),
   };
+}
+
+function deduplicateSourceEvents(events: SourceScanEvent[]): SourceScanEvent[] {
+  const winners = new Map<string, SourceScanEvent>();
+  const withoutCalendarId: SourceScanEvent[] = [];
+  const preference = (event: SourceScanEvent) => {
+    const language = /\/en\//.test(event.url) ? 2 : /\/nl\//.test(event.url) ? 1 : 0;
+    return language * 10 + Number(Boolean(event.venue)) + Number(Boolean(event.startsAt));
+  };
+
+  for (const event of events) {
+    if (!event.sourceEventId) {
+      withoutCalendarId.push(event);
+      continue;
+    }
+    const existing = winners.get(event.sourceEventId);
+    if (!existing || preference(event) > preference(existing)) winners.set(event.sourceEventId, event);
+  }
+  return [...withoutCalendarId, ...winners.values()];
 }
 
 function sitemapPriority(url: string): number {
@@ -768,7 +817,7 @@ function publicationStatus(event: SourceScanEvent): PublicationStatus {
   ) {
     return "eligible";
   }
-  return /\b(den haag|the hague|scheveningen|kijkduin|loosduinen|leyweg|haagse markt|the hague market)\b/i.test(
+  return /\b(den haag|the hague|scheveningen|kijkduin|loosduinen|leyweg|haagse markt|the hague market|strandslag\s*8|kneuterdijk|ultramarijn|elandstraat\s*47)\b/i.test(
     `${event.title} ${event.venue ?? ""} ${event.description ?? ""}`,
   ) ? "eligible" : "missing_locality";
 }
@@ -941,7 +990,7 @@ async function scanSource(source: SourceDefinition) {
           ...existing,
           startsAt: extracted.startsAt ?? existing?.startsAt,
           openingTimes: extracted.openingTimes ?? existing?.openingTimes,
-          venue: existing?.venue ?? extracted.venue,
+          venue: preferredVenue(extracted.venue, existing?.venue),
           description: existing?.description ?? extracted.description,
         });
       }
@@ -964,7 +1013,7 @@ async function scanSource(source: SourceDefinition) {
     metrics.pagesSkipped += queue.length;
   }
 
-  const events = [...captured.values()].slice(0, MAX_EVENTS_PER_SOURCE);
+  let events = [...captured.values()].slice(0, MAX_EVENTS_PER_SOURCE);
   const rescueIndexes = events
     .map((event, index) => ({ event, index }))
     .map(({ event, index }) => ({ event, index, status: publicationStatus(event) }))
@@ -992,15 +1041,17 @@ async function scanSource(source: SourceDefinition) {
         ...enriched,
         title: event.title || enriched.title,
         url: event.url,
+        sourceEventId: extracted?.sourceEventId ?? structured?.sourceEventId ?? event.sourceEventId,
         startsAt: extracted?.startsAt ?? structured?.startsAt ?? event.startsAt,
         openingTimes: extracted?.openingTimes ?? structured?.openingTimes ?? event.openingTimes,
-        venue: enriched.venue ?? event.venue,
+        venue: preferredVenue(extracted?.venue, structured?.venue, event.venue),
         description: enriched.description ?? event.description,
         lat: enriched.lat ?? event.lat,
         lng: enriched.lng ?? event.lng,
       };
     }));
   }
+  events = deduplicateSourceEvents(events);
   metrics.eventsCaptured = events.length;
   const publishableEvents: SourceScanEvent[] = [];
   for (const event of events) {
