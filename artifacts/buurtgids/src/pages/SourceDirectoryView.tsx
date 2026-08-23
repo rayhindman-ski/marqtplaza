@@ -1,13 +1,16 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'wouter';
 import {
+  AlertCircle,
   ArrowLeft,
   BookOpenCheck,
   CheckCircle2,
+  CircleDashed,
   ExternalLink,
   Filter,
   ListPlus,
   LoaderCircle,
+  Newspaper,
   RefreshCw,
   Search,
   ShieldCheck,
@@ -15,7 +18,10 @@ import {
   Tags,
 } from 'lucide-react';
 import {
+  getGetNewsSourceStatusesQueryKey,
   scanActivitySources,
+  useGetNewsSourceStatuses,
+  type NewsSourceStatusStatus,
   type SourceScanResult,
 } from '@workspace/api-client-react';
 import {
@@ -37,6 +43,34 @@ const coverageLabels: Record<SourceCoverage, string> = {
 
 type SourceProgress = 'queued' | 'scanning' | 'complete' | 'blocked' | 'error';
 
+const newsStatusLabels: Record<NewsSourceStatusStatus, string> = {
+  pending: 'Not checked yet',
+  found: 'Access working',
+  partial: 'Partly read',
+  no_articles: 'No articles found',
+  blocked: 'Access blocked',
+  error: 'Temporary error',
+};
+
+const newsStatusClasses: Record<NewsSourceStatusStatus, string> = {
+  pending: 'border-slate-200 bg-slate-50 text-slate-600',
+  found: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+  partial: 'border-sky-200 bg-sky-50 text-sky-700',
+  no_articles: 'border-slate-200 bg-slate-50 text-slate-600',
+  blocked: 'border-amber-200 bg-amber-50 text-amber-700',
+  error: 'border-red-200 bg-red-50 text-red-700',
+};
+
+function formatScanTime(value: string | null) {
+  if (!value) return 'Not checked yet';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Unknown';
+  return new Intl.DateTimeFormat('en-GB', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(date);
+}
+
 export default function SourceDirectoryView() {
   const [query, setQuery] = useState('');
   const [coverage, setCoverage] = useState<SourceCoverage | 'All'>('All');
@@ -46,6 +80,16 @@ export default function SourceDirectoryView() {
   const [scanError, setScanError] = useState('');
   const [sourceProgress, setSourceProgress] = useState<Record<string, SourceProgress>>({});
   const [isScanning, setIsScanning] = useState(false);
+  const {
+    data: newsStatusData,
+    isLoading: isLoadingNewsStatuses,
+    isError: isNewsStatusError,
+  } = useGetNewsSourceStatuses({
+    query: {
+      queryKey: getGetNewsSourceStatusesQueryKey(),
+      refetchInterval: 5 * 60 * 1000,
+    },
+  });
 
   const models = useMemo(
     () => ['All', ...Array.from(new Set(DEN_HAAG_ACTIVITY_SOURCES.map((source) => source.model)))],
@@ -272,6 +316,73 @@ export default function SourceDirectoryView() {
             <span className="text-xs font-semibold text-muted-foreground">{selectedIds.length} selected</span>
           </div>
         </div>
+
+        <section aria-labelledby="news-source-health" className="mb-8 rounded-3xl border border-[#072C1E]/10 bg-[#072C1E] p-5 text-[#F2F0EA] shadow-sm sm:p-6">
+          <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <p className="mb-1 flex items-center gap-2 text-xs font-extrabold uppercase tracking-[0.16em] text-[#F36C21]">
+                <Newspaper className="h-3.5 w-3.5" />
+                News feed monitoring
+              </p>
+              <h2 id="news-source-health" className="text-2xl font-extrabold tracking-tight">News source health</h2>
+              <p className="mt-1 max-w-2xl text-sm leading-relaxed text-[#F2F0EA]/70">
+                Blocked and failed sources are retried automatically at a controlled interval. Existing articles stay in the feed while a source is unavailable.
+              </p>
+            </div>
+            {newsStatusData && (
+              <div className="shrink-0 rounded-2xl border border-[#F2F0EA]/15 bg-[#F2F0EA]/10 px-3 py-2 text-right text-xs font-bold text-[#F2F0EA]/75">
+                <span className="block text-lg font-extrabold text-[#F2F0EA]">{newsStatusData.sources.filter((source) => source.status === 'blocked' || source.status === 'error').length}</span>
+                sources need attention
+              </div>
+            )}
+          </div>
+
+          {isLoadingNewsStatuses && (
+            <div role="status" className="flex items-center gap-2 rounded-2xl border border-[#F2F0EA]/15 bg-[#F2F0EA]/10 px-4 py-3 text-sm font-semibold text-[#F2F0EA]/75">
+              <LoaderCircle className="h-4 w-4 animate-spin" />
+              Loading latest news source statuses…
+            </div>
+          )}
+          {isNewsStatusError && (
+            <p role="alert" className="rounded-2xl border border-red-300/30 bg-red-400/15 px-4 py-3 text-sm font-semibold text-red-100">
+              News source statuses could not be loaded. Automatic retries continue on the server.
+            </p>
+          )}
+          {newsStatusData && (
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {newsStatusData.sources.map((source) => {
+                const needsAttention = source.status === 'blocked' || source.status === 'error';
+                const StatusIcon = source.status === 'found' || source.status === 'partial'
+                  ? CheckCircle2
+                  : needsAttention
+                    ? AlertCircle
+                    : CircleDashed;
+                return (
+                  <article key={source.sourceId} className="rounded-2xl border border-[#F2F0EA]/10 bg-[#F2F0EA]/[0.07] p-3.5">
+                    <div className="flex items-start justify-between gap-2">
+                      <h3 className="min-w-0 truncate text-sm font-extrabold">{source.sourceName}</h3>
+                      <span className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-1 text-[10px] font-extrabold ${newsStatusClasses[source.status]}`}>
+                        <StatusIcon className="h-3 w-3" />
+                        {newsStatusLabels[source.status]}
+                      </span>
+                    </div>
+                    <p className="mt-2 text-[11px] font-semibold text-[#F2F0EA]/55">
+                      Last checked: <span className="text-[#F2F0EA]/80">{formatScanTime(source.lastScannedAt)}</span>
+                    </p>
+                    {needsAttention && source.nextScanAt && (
+                      <p className="mt-1 text-[11px] font-semibold text-[#F2F0EA]/55">
+                        Next retry: <span className="text-[#F2F0EA]/80">{formatScanTime(source.nextScanAt)}</span>
+                      </p>
+                    )}
+                    {source.message && (
+                      <p className="mt-2 line-clamp-2 text-[11px] leading-relaxed text-[#F2F0EA]/55">{source.message}</p>
+                    )}
+                  </article>
+                );
+              })}
+            </div>
+          )}
+        </section>
 
         {sources.length > 0 ? (
           <div className="overflow-hidden rounded-3xl border border-border bg-card shadow-sm">

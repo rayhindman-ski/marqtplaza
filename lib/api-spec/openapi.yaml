@@ -190,6 +190,19 @@ paths:
         "404":
           description: Article not found
 
+  /news/sources/status:
+    get:
+      operationId: getNewsSourceStatuses
+      tags: [news]
+      summary: Get the latest scan status for approved news sources
+      responses:
+        "200":
+          description: Latest scan status and retry time per approved source
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NewsSourceStatusResponse"
+
   /news/scan:
     post:
       operationId: scanNewsSources
@@ -583,6 +596,43 @@ components:
           items:
             $ref: "#/components/schemas/NewsSubcategory"
       required: [articles, availableSubcategories]
+
+    NewsSourceStatus:
+      type: object
+      properties:
+        sourceId:
+          type: string
+        sourceName:
+          type: string
+        sourceUrl:
+          type: string
+        status:
+          type: string
+          enum: [pending, found, partial, no_articles, blocked, error]
+        lastScannedAt:
+          type: ["string", "null"]
+        nextScanAt:
+          type: ["string", "null"]
+        message:
+          type: ["string", "null"]
+        articlesCaptured:
+          type: number
+        articlesPublished:
+          type: number
+        articlesUpdated:
+          type: number
+        pagesFailed:
+          type: number
+      required: [sourceId, sourceName, sourceUrl, status, lastScannedAt, nextScanAt, message, articlesCaptured, articlesPublished, articlesUpdated, pagesFailed]
+
+    NewsSourceStatusResponse:
+      type: object
+      properties:
+        sources:
+          type: array
+          items:
+            $ref: "#/components/schemas/NewsSourceStatus"
+      required: [sources]
 
     NewsScanRequest:
       type: object

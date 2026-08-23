@@ -32,6 +32,7 @@ import type {
   NewsFeed,
   NewsScanRequest,
   NewsScanResponse,
+  NewsSourceStatusResponse,
   PersistOutcome,
   ScanResultList,
   SourceScanRequest,
@@ -661,6 +662,83 @@ export function useGetNewsArticle<TData = Awaited<ReturnType<typeof getNewsArtic
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetNewsArticleQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetNewsSourceStatusesUrl = () => {
+
+
+
+
+  return `/api/news/sources/status`
+}
+
+/**
+ * @summary Get the latest scan status for approved news sources
+ */
+export const getNewsSourceStatuses = async ( options?: Parameters<typeof customFetch>[1]): Promise<NewsSourceStatusResponse> => {
+
+  return customFetch<NewsSourceStatusResponse>(getGetNewsSourceStatusesUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetNewsSourceStatusesQueryKey = () => {
+    return [
+    `/api/news/sources/status`
+    ] as const;
+    }
+
+
+export const getGetNewsSourceStatusesQueryOptions = <TData = Awaited<ReturnType<typeof getNewsSourceStatuses>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getNewsSourceStatuses>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetNewsSourceStatusesQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getNewsSourceStatuses>>> = ({ signal }) => getNewsSourceStatuses({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getNewsSourceStatuses>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetNewsSourceStatusesQueryResult = NonNullable<Awaited<ReturnType<typeof getNewsSourceStatuses>>>
+export type GetNewsSourceStatusesQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get the latest scan status for approved news sources
+ */
+
+export function useGetNewsSourceStatuses<TData = Awaited<ReturnType<typeof getNewsSourceStatuses>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getNewsSourceStatuses>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetNewsSourceStatusesQueryOptions(options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

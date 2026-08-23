@@ -325,6 +325,39 @@ export interface NewsFeed {
   availableSubcategories: NewsSubcategory[];
 }
 
+export type NewsSourceStatusStatus = typeof NewsSourceStatusStatus[keyof typeof NewsSourceStatusStatus];
+
+
+export const NewsSourceStatusStatus = {
+  pending: 'pending',
+  found: 'found',
+  partial: 'partial',
+  no_articles: 'no_articles',
+  blocked: 'blocked',
+  error: 'error',
+} as const;
+
+export interface NewsSourceStatus {
+  sourceId: string;
+  sourceName: string;
+  sourceUrl: string;
+  status: NewsSourceStatusStatus;
+  /** @nullable */
+  lastScannedAt: string | null;
+  /** @nullable */
+  nextScanAt: string | null;
+  /** @nullable */
+  message: string | null;
+  articlesCaptured: number;
+  articlesPublished: number;
+  articlesUpdated: number;
+  pagesFailed: number;
+}
+
+export interface NewsSourceStatusResponse {
+  sources: NewsSourceStatus[];
+}
+
 export interface NewsScanRequest {
   /**
      * @minItems 1

@@ -186,6 +186,20 @@ describe("news crawler regressions", () => {
     assert.equal(result.pagesFailed, 1);
   });
 
+  it("uses a controlled retry window for blocked and failed sources", () => {
+    const scannedAt = new Date("2026-08-23T10:00:00.000Z");
+
+    assert.equal(
+      newsTesting.nextRetryAt("error", scannedAt)?.toISOString(),
+      "2026-08-23T12:00:00.000Z",
+    );
+    assert.equal(
+      newsTesting.nextRetryAt("blocked", scannedAt)?.toISOString(),
+      "2026-08-23T16:00:00.000Z",
+    );
+    assert.equal(newsTesting.nextRetryAt("found", scannedAt), null);
+  });
+
   it("reports no_articles when the readable index contains no eligible article links", async () => {
     const store = fakeStore();
     installFetch((url) => new URL(url).pathname === "/robots.txt"

@@ -1,11 +1,12 @@
 import { Router, type IRouter } from "express";
-import { desc, eq, inArray } from "drizzle-orm";
-import { db, newsArticlesTable } from "@workspace/db";
+import { desc, eq, inArray, sql } from "drizzle-orm";
+import { db, newsArticlesTable, newsSourceStatusesTable } from "@workspace/db";
 import {
   GetNewsArticleParams,
   GetNewsArticleResponse,
   GetNewsQueryParams,
   GetNewsResponse,
+  GetNewsSourceStatusesResponse,
   ScanNewsSourcesBody,
   ScanNewsSourcesResponse,
 } from "@workspace/api-zod";
@@ -54,7 +55,15 @@ const MAX_RESPONSE_CHARS = 500_000;
 const FETCH_TIMEOUT_MS = 7_000;
 const MAX_REDIRECTS = 3;
 const HAGUE_TERMS = /\b(den haag|haag(se|s)?|scheveningen|lo[oe]sd(u|e)inen|voorburg|leidschendam|yppenburg)\b/i;
+const RETRY_INTERVALS_MS: Record<"blocked" | "error", number> = {
+  blocked: 6 * 60 * 60 * 1000,
+  error: 2 * 60 * 60 * 1000,
+};
+const NEWS_SCHEDULER_INTERVAL_MS = 15 * 60 * 1000;
+const MAX_SCHEDULED_SOURCES_PER_RUN = 3;
+const NEWS_RETRY_LEASE_MS = 15 * 60 * 1000;
 let activeScans = 0;
+let schedulerTimer: NodeJS.Timeout | undefined;
 
 function cleanText(value: string): string {
   return value.replace(/<[^>]*>/g, " ").replace(/&(?:amp|nbsp);/g, " ").replace(/&quot;/g, "\"").replace(/&#39;|&apos;/g, "'").replace(/\s+/g, " ").trim();
@@ -233,6 +242,136 @@ export async function scanSource(source: NewsSource, database: typeof db = db): 
   return { ...metrics, sourceId: source.id, sourceName: source.name, scannedUrl: source.newsUrl, status, message: `${metrics.articlesCaptured} article${metrics.articlesCaptured === 1 ? "" : "s"} captured; ${metrics.articlesPublished} published, ${metrics.articlesUpdated} updated and ${metrics.articlesRejected} rejected.` };
 }
 
+function nextRetryAt(status: CrawlResult["status"], scannedAt: Date): Date | null {
+  if (status !== "blocked" && status !== "error") return null;
+  return new Date(scannedAt.getTime() + RETRY_INTERVALS_MS[status]);
+}
+
+async function recordSourceScan(
+  source: NewsSource,
+  result: CrawlResult,
+  database: typeof db = db,
+  scannedAt = new Date(),
+): Promise<void> {
+  await database.insert(newsSourceStatusesTable).values({
+    sourceId: source.id,
+    sourceName: source.name,
+    sourceUrl: source.newsUrl,
+    status: result.status,
+    lastScannedAt: scannedAt,
+    nextScanAt: nextRetryAt(result.status, scannedAt),
+    retryLeaseUntil: null,
+    message: result.message,
+    articlesCaptured: result.articlesCaptured,
+    articlesPublished: result.articlesPublished,
+    articlesUpdated: result.articlesUpdated,
+    pagesFailed: result.pagesFailed,
+  }).onConflictDoUpdate({
+    target: newsSourceStatusesTable.sourceId,
+    set: {
+      sourceName: source.name,
+      sourceUrl: source.newsUrl,
+      status: result.status,
+      lastScannedAt: scannedAt,
+      nextScanAt: nextRetryAt(result.status, scannedAt),
+      retryLeaseUntil: null,
+      message: result.message,
+      articlesCaptured: result.articlesCaptured,
+      articlesPublished: result.articlesPublished,
+      articlesUpdated: result.articlesUpdated,
+      pagesFailed: result.pagesFailed,
+    },
+  });
+}
+
+async function scanAndRecordSource(
+  source: NewsSource,
+  database: typeof db = db,
+  scannedAt = new Date(),
+): Promise<CrawlResult> {
+  const result = await scanSource(source, database);
+  await recordSourceScan(source, result, database, scannedAt);
+  return result;
+}
+
+export async function ensureNewsSourceStatusStorage(database: typeof db = db): Promise<void> {
+  await database.execute(sql`
+    CREATE TABLE IF NOT EXISTS news_source_statuses (
+      source_id text PRIMARY KEY,
+      source_name text NOT NULL,
+      source_url text NOT NULL,
+      status text NOT NULL DEFAULT 'pending',
+      last_scanned_at timestamptz,
+      next_scan_at timestamptz,
+      retry_lease_until timestamptz,
+      message text,
+      articles_captured integer NOT NULL DEFAULT 0,
+      articles_published integer NOT NULL DEFAULT 0,
+      articles_updated integer NOT NULL DEFAULT 0,
+      pages_failed integer NOT NULL DEFAULT 0
+    )
+  `);
+  await database.execute(sql`
+    ALTER TABLE news_source_statuses
+    ADD COLUMN IF NOT EXISTS retry_lease_until timestamptz
+  `);
+}
+
+async function claimDueNewsSourceIds(
+  database: typeof db = db,
+  now = new Date(),
+): Promise<string[]> {
+  const retryLeaseUntil = new Date(now.getTime() + NEWS_RETRY_LEASE_MS);
+  const result = await database.execute<{ sourceId: string }>(sql`
+    WITH due AS (
+      SELECT source_id
+      FROM news_source_statuses
+      WHERE status IN ('blocked', 'error')
+        AND next_scan_at <= ${now}
+        AND (retry_lease_until IS NULL OR retry_lease_until < ${now})
+      ORDER BY next_scan_at ASC
+      LIMIT ${MAX_SCHEDULED_SOURCES_PER_RUN}
+      FOR UPDATE SKIP LOCKED
+    )
+    UPDATE news_source_statuses
+    SET retry_lease_until = ${retryLeaseUntil}
+    FROM due
+    WHERE news_source_statuses.source_id = due.source_id
+    RETURNING news_source_statuses.source_id AS "sourceId"
+  `);
+  return result.rows.map((row) => row.sourceId);
+}
+
+export async function runScheduledNewsScans(
+  database: typeof db = db,
+  now = new Date(),
+): Promise<CrawlResult[]> {
+  if (activeScans >= 1) return [];
+  const dueSourceIds = await claimDueNewsSourceIds(database, now);
+  const sources = dueSourceIds
+    .map((sourceId) => SOURCE_BY_ID.get(sourceId))
+    .filter((source): source is NewsSource => Boolean(source));
+  if (sources.length === 0) return [];
+
+  activeScans += 1;
+  try {
+    return await Promise.all(sources.map((source) => scanAndRecordSource(source, database, now)));
+  } finally {
+    activeScans -= 1;
+  }
+}
+
+export function startNewsSourceScheduler(database: typeof db = db): void {
+  if (schedulerTimer) return;
+  const run = () => {
+    void runScheduledNewsScans(database).catch((error: unknown) => {
+      console.error("Scheduled news-source retry failed.", error);
+    });
+  };
+  run();
+  schedulerTimer = setInterval(run, NEWS_SCHEDULER_INTERVAL_MS);
+}
+
 router.get("/news", async (req, res): Promise<void> => {
   const parsed = GetNewsQueryParams.safeParse(req.query);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
@@ -241,6 +380,29 @@ router.get("/news", async (req, res): Promise<void> => {
     .orderBy(desc(newsArticlesTable.publishedAt), desc(newsArticlesTable.lastSeenAt))
     .limit(100);
   res.json(GetNewsResponse.parse({ articles: articles.map((article) => ({ id: article.id, title: article.title, summary: article.summary, sourceName: article.sourceName, sourceUrl: article.canonicalUrl, subcategory: article.subcategory, publishedAt: article.publishedAt })), availableSubcategories: SUBCATEGORIES }));
+});
+
+router.get("/news/sources/status", async (_req, res): Promise<void> => {
+  const storedStatuses = await db.select().from(newsSourceStatusesTable);
+  const bySourceId = new Map(storedStatuses.map((status) => [status.sourceId, status]));
+  res.json(GetNewsSourceStatusesResponse.parse({
+    sources: NEWS_SOURCES.map((source) => {
+      const status = bySourceId.get(source.id);
+      return {
+        sourceId: source.id,
+        sourceName: source.name,
+        sourceUrl: source.newsUrl,
+        status: status?.status ?? "pending",
+        lastScannedAt: status?.lastScannedAt?.toISOString() ?? null,
+        nextScanAt: status?.nextScanAt?.toISOString() ?? null,
+        message: status?.message ?? null,
+        articlesCaptured: status?.articlesCaptured ?? 0,
+        articlesPublished: status?.articlesPublished ?? 0,
+        articlesUpdated: status?.articlesUpdated ?? 0,
+        pagesFailed: status?.pagesFailed ?? 0,
+      };
+    }),
+  }));
 });
 
 router.get("/news/:id", async (req, res): Promise<void> => {
@@ -260,7 +422,7 @@ router.post("/news/scan", async (req, res): Promise<void> => {
   activeScans += 1;
   try {
     const scans: CrawlResult[] = [];
-    for (let index = 0; index < sources.length; index += 3) scans.push(...await Promise.all(sources.slice(index, index + 3).map((source) => scanSource(source!))));
+    for (let index = 0; index < sources.length; index += 3) scans.push(...await Promise.all(sources.slice(index, index + 3).map((source) => scanAndRecordSource(source!))));
     res.json(ScanNewsSourcesResponse.parse({ scannedAt: new Date().toISOString(), scans }));
   } finally { activeScans -= 1; }
 });
@@ -269,6 +431,8 @@ export default router;
 
 export const newsTesting = {
   canonicalizeUrl,
+  claimDueNewsSourceIds,
   isPublishedNewsArticle,
+  nextRetryAt,
   sources: NEWS_SOURCES,
 };

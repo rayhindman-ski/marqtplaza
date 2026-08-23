@@ -234,6 +234,26 @@ export const GetNewsArticleResponse = zod.object({
 
 
 /**
+ * @summary Get the latest scan status for approved news sources
+ */
+export const GetNewsSourceStatusesResponse = zod.object({
+  "sources": zod.array(zod.object({
+  "sourceId": zod.string(),
+  "sourceName": zod.string(),
+  "sourceUrl": zod.string(),
+  "status": zod.enum(['pending', 'found', 'partial', 'no_articles', 'blocked', 'error']),
+  "lastScannedAt": zod.string().nullable(),
+  "nextScanAt": zod.string().nullable(),
+  "message": zod.string().nullable(),
+  "articlesCaptured": zod.number(),
+  "articlesPublished": zod.number(),
+  "articlesUpdated": zod.number(),
+  "pagesFailed": zod.number()
+}))
+})
+
+
+/**
  * @summary Crawl selected approved Den Haag news sources
  */
 export const scanNewsSourcesBodySourceIdsMax = 23;
