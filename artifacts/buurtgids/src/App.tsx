@@ -63,7 +63,7 @@ function getDistanceKm(latA: number, lngA: number, latB: number, lngB: number) {
 const STORAGE_KEY = 'buurtgids_saved_places';
 type ListingSection = 'events' | 'businesses' | 'food-drink';
 type FilterSubcategory = Exclude<Category, 'Businesses'> | BusinessCategory;
-const TOP_LEVEL_SECTIONS: ListingSection[] = ['events', 'businesses', 'food-drink'];
+const TOP_LEVEL_SECTIONS: ListingSection[] = ['events', 'food-drink', 'businesses'];
 
 function topLevelStateFor(section: ListingSection): Record<ListingSection, boolean> {
   return Object.fromEntries(
@@ -1023,18 +1023,18 @@ function DiscoveryState({
             )}
           </div>
           <div className="mt-5 border-t border-border/70 pt-4">
-            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+            <div className="mb-2">
               <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
                 {t.neighborhoods}
               </p>
-              <div className="flex flex-wrap items-center gap-1.5">
+              <div className="mt-2 grid grid-cols-2 gap-2">
                 <button
                   type="button"
                   onClick={() => {
                     setSelectedNeighborhoods(location.neighborhoods);
                     setSelectedMarker(null);
                   }}
-                  className="rounded-lg border border-primary/35 bg-primary/5 px-2 py-1 text-[10px] font-bold text-primary transition-colors hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  className="min-h-9 rounded-xl border border-primary/40 bg-primary/10 px-2.5 py-2 text-[11px] font-extrabold text-primary transition-colors hover:bg-primary/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                 >
                   {t.selectAllNeighborhoods}
                 </button>
@@ -1044,7 +1044,7 @@ function DiscoveryState({
                     setSelectedNeighborhoods([]);
                     setSelectedMarker(null);
                   }}
-                  className="rounded-lg border border-border/70 bg-card/70 px-2 py-1 text-[10px] font-bold text-muted-foreground transition-colors hover:border-primary/40 hover:bg-primary/5 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  className="min-h-9 rounded-xl border border-border/70 bg-card/70 px-2.5 py-2 text-[11px] font-extrabold text-muted-foreground transition-colors hover:border-primary/40 hover:bg-primary/5 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                 >
                   {t.clearNeighborhoodSelection}
                 </button>
