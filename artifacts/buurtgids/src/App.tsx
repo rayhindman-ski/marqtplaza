@@ -660,10 +660,9 @@ function DiscoveryState({
 }) {
   const location = LOCATIONS.find(l => l.id === locationId);
   const t = translations[language];
-  const [, navigate] = useLocation();
   const [categories, setCategories] = useState<Record<Category, boolean>>(() => categoryStateFor(listingSection));
-  const [selectedNeighborhood, setSelectedNeighborhood] = useState<string | null>(
-    initialNeighborhood ?? null,
+  const [selectedNeighborhoods, setSelectedNeighborhoods] = useState<string[]>(
+    initialNeighborhood ? [initialNeighborhood] : [],
   );
   const [selectedMarker, setSelectedMarker] = useState<string | null>(null);
   const [view, setView] = useState<'map' | 'list'>('map');
@@ -679,7 +678,20 @@ function DiscoveryState({
   };
 
   const handleMarkerClick = (id: string) => {
-    navigate(`/activiteiten/den-haag/${encodeURIComponent(id)}?section=${listingSection}`);
+    const detailUrl = `/activiteiten/den-haag/${encodeURIComponent(id)}?section=${listingSection}`;
+    const detailWindow = window.open(detailUrl, '_blank', 'noopener,noreferrer');
+    if (detailWindow) {
+      detailWindow.opener = null;
+    }
+  };
+
+  const toggleNeighborhood = (neighborhood: string) => {
+    setSelectedNeighborhoods((current) =>
+      current.includes(neighborhood)
+        ? current.filter((item) => item !== neighborhood)
+        : [...current, neighborhood],
+    );
+    setSelectedMarker(null);
   };
 
   useEffect(() => {
@@ -727,13 +739,13 @@ function DiscoveryState({
     };
   });
 
-  const selectedArea = selectedNeighborhood
-    ? location.neighborhoodCoords[selectedNeighborhood]
-    : null;
+  const selectedAreas = selectedNeighborhoods
+    .map((neighborhood) => location.neighborhoodCoords[neighborhood])
+    .filter((area): area is { lat: number; lng: number; zoom: number } => Boolean(area));
   const filteredMarkers = allMarkers.filter((marker) => {
     if (!categories[marker.category]) return false;
-    if (!selectedArea) return true;
-    return getDistanceKm(marker.lat, marker.lng, selectedArea.lat, selectedArea.lng) <= 2.5;
+    if (selectedAreas.length === 0) return true;
+    return selectedAreas.some((area) => getDistanceKm(marker.lat, marker.lng, area.lat, area.lng) <= 2.5);
   });
   const isLive = data?.source === 'live';
   const isGooglePlaces = data?.source === 'google_places';
@@ -832,48 +844,78 @@ function DiscoveryState({
             })}
           </div>
           <div className="mt-5 border-t border-border/70 pt-4">
-            <p className="mb-2 text-xs font-bold uppercase tracking-widest text-muted-foreground">
-              {t.neighborhoods}
-            </p>
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => setSelectedNeighborhood(null)}
-                aria-pressed={selectedNeighborhood === null}
-                className={cn(
-                  "rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
-                  selectedNeighborhood === null
-                    ? "border-foreground bg-foreground text-background"
-                    : "border-border bg-card text-muted-foreground hover:border-primary/50 hover:text-primary",
-                )}
-              >
-                {t.allNeighborhoods}
-              </button>
-              {location.neighborhoods.map((neighborhood) => (
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
+                {t.neighborhoods}
+              </p>
+              {selectedNeighborhoods.length > 0 && (
                 <button
                   type="button"
-                  key={neighborhood}
                   onClick={() => {
-                    setSelectedNeighborhood(neighborhood);
+                    setSelectedNeighborhoods([]);
                     setSelectedMarker(null);
                   }}
-                  aria-pressed={selectedNeighborhood === neighborhood}
+                  className="text-[11px] font-bold text-primary underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                >
+                  {t.clearNeighborhoods}
+                </button>
+              )}
+            </div>
+            <div
+              role="group"
+              aria-label={t.neighborhoods}
+              data-neighborhood-list
+              className="max-h-48 overflow-y-auto rounded-xl border border-border/70 bg-muted/20 p-2 pr-1"
+            >
+              <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
+                <label
                   className={cn(
-                    "rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
-                    selectedNeighborhood === neighborhood
-                      ? "border-primary bg-primary text-primary-foreground"
+                    "flex cursor-pointer items-center gap-2 rounded-lg border px-2.5 py-2 text-xs font-bold transition-colors",
+                    selectedNeighborhoods.length === 0
+                      ? "border-foreground bg-foreground text-background"
                       : "border-border bg-card text-muted-foreground hover:border-primary/50 hover:text-primary",
                   )}
                 >
-                  {neighborhood}
-                </button>
-              ))}
+                  <input
+                    type="checkbox"
+                    checked={selectedNeighborhoods.length === 0}
+                    onChange={() => {
+                      setSelectedNeighborhoods([]);
+                      setSelectedMarker(null);
+                    }}
+                    className="h-4 w-4 shrink-0 accent-primary"
+                  />
+                  <span>{t.allNeighborhoods}</span>
+                </label>
+                {location.neighborhoods.map((neighborhood) => {
+                  const isChecked = selectedNeighborhoods.includes(neighborhood);
+                  return (
+                    <label
+                      key={neighborhood}
+                      className={cn(
+                        "flex cursor-pointer items-center gap-2 rounded-lg border px-2.5 py-2 text-xs font-semibold transition-colors",
+                        isChecked
+                          ? "border-primary bg-primary text-primary-foreground"
+                          : "border-border bg-card text-muted-foreground hover:border-primary/50 hover:text-primary",
+                      )}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isChecked}
+                        onChange={() => toggleNeighborhood(neighborhood)}
+                        className="h-4 w-4 shrink-0 accent-primary"
+                      />
+                      <span>{neighborhood}</span>
+                    </label>
+                  );
+                })}
+              </div>
             </div>
-            {selectedNeighborhood && (
-              <p className="mt-2 text-xs font-medium text-muted-foreground">
-                {t.neighborhoodLabel}: <span className="font-bold text-foreground">{selectedNeighborhood}</span>
-              </p>
-            )}
+            <p className="mt-2 text-xs font-medium text-muted-foreground">
+              {selectedNeighborhoods.length > 0
+                ? t.neighborhoodsSelected(selectedNeighborhoods.length)
+                : t.allNeighborhoods}
+            </p>
           </div>
         </div>
 
@@ -994,8 +1036,9 @@ function DiscoveryState({
       {/* Map Area */}
       <div className="flex-1 relative h-full w-full overflow-hidden bg-background">
         <GoogleMapView
+          language={language}
           locationId={location.id}
-          selectedNeighborhood={selectedNeighborhood}
+          selectedNeighborhoods={selectedNeighborhoods}
           markers={filteredMarkers}
           selectedMarkerId={selectedMarker}
           savedIds={savedIds}

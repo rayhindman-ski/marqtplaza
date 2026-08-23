@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { importLibrary, setOptions } from '@googlemaps/js-api-loader';
 import { Baby, Coffee, Gamepad2, Landmark, MapPin as MapPinIcon, Route, ShoppingBag, Waves, type LucideIcon } from 'lucide-react';
 import { type Marker as MarkerData, LOCATIONS, type Category } from '../lib/data';
+import { getMarkerCopy, translations, type Language } from '../lib/i18n';
 
 type MapCategory = Category;
 
@@ -46,8 +47,9 @@ const googleMapsBrowserKeyPattern = /^AIza[0-9A-Za-z_-]{35}$/;
 const hasGoogleMapsApiKey = googleMapsBrowserKeyPattern.test(googleMapsApiKey ?? '');
 
 interface GoogleMapViewProps {
+  language: Language;
   locationId: string;
-  selectedNeighborhood: string | null;
+  selectedNeighborhoods: string[];
   markers: MarkerData[];
   selectedMarkerId: string | null;
   savedIds: Set<string>;
@@ -64,7 +66,7 @@ interface TileViewport {
   zoom: number;
 }
 
-type MapPoint = Omit<Pick<MarkerData, 'id' | 'name' | 'category' | 'lat' | 'lng'>, 'category'> & {
+type MapPoint = Pick<MarkerData, 'id' | 'name' | 'category' | 'description' | 'details' | 'lat' | 'lng'> & {
   category: MapCategory;
 };
 
@@ -74,6 +76,32 @@ function getCategoryIcon(category: MapCategory) {
 
 function getCategoryColor(category: MapCategory) {
   return CATEGORY_COLORS[category] ?? CATEGORY_COLORS.Businesses;
+}
+
+function MarkerPreview({
+  marker,
+  language,
+}: {
+  marker: Pick<MarkerData, 'id' | 'name' | 'category' | 'description' | 'details'>;
+  language: Language;
+}) {
+  const copy = getMarkerCopy(marker, language);
+  const t = translations[language];
+
+  return (
+    <div
+      data-marker-preview
+      role="tooltip"
+      className="pointer-events-none absolute left-1/2 top-full z-30 mt-2 w-56 -translate-x-1/2 rounded-xl border border-border/80 bg-card/95 p-3 text-left shadow-xl backdrop-blur-md"
+    >
+      <p className="truncate text-sm font-extrabold text-foreground">{marker.name}</p>
+      <p className="mt-0.5 text-[11px] font-bold uppercase tracking-wide text-primary">
+        {t.categories[marker.category]}
+      </p>
+      <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-muted-foreground">{copy.description}</p>
+      <p className="mt-2 text-[11px] font-bold text-secondary">{copy.details}</p>
+    </div>
+  );
 }
 
 function getCategoryIconMarkup(category: MapCategory) {
@@ -103,6 +131,8 @@ function getMapPoints(locationId: string, markers: MarkerData[]): MapPoint[] {
         id: 'city-centre',
         name: location.name,
         category: 'Businesses',
+        description: `Central map view for ${location.name}`,
+        details: 'Explore nearby places',
         lat: location.lat,
         lng: location.lng,
       }]
@@ -139,16 +169,56 @@ function getInitialViewport(locationId: string): TileViewport {
   };
 }
 
+function getNeighborhoodViewport(
+  locationId: string,
+  neighborhoodNames: string[],
+  mapSize: { width: number; height: number },
+): TileViewport {
+  const location = getLocation(locationId) ?? LOCATIONS[0];
+  const neighborhoods = neighborhoodNames
+    .map((name) => location.neighborhoodCoords[name])
+    .filter((area): area is { lat: number; lng: number; zoom: number } => Boolean(area));
+
+  if (neighborhoods.length === 0) {
+    return getInitialViewport(locationId);
+  }
+  if (neighborhoods.length === 1) {
+    return {
+      center: { lat: neighborhoods[0].lat, lng: neighborhoods[0].lng },
+      zoom: Math.max(MIN_TILE_ZOOM, Math.min(MAX_TILE_ZOOM, neighborhoods[0].zoom)),
+    };
+  }
+
+  const latitudes = neighborhoods.map((area) => area.lat);
+  const longitudes = neighborhoods.map((area) => area.lng);
+  const latitudeSpan = Math.max(...latitudes) - Math.min(...latitudes);
+  const longitudeSpan = Math.max(...longitudes) - Math.min(...longitudes);
+  const availableWidth = Math.max(240, mapSize.width - 96);
+  const availableHeight = Math.max(220, mapSize.height - 128);
+  const widthZoom = Math.log2((availableWidth * 360) / (TILE_SIZE * Math.max(longitudeSpan, 0.002)));
+  const heightZoom = Math.log2((availableHeight * 170) / (TILE_SIZE * Math.max(latitudeSpan, 0.002)));
+
+  return {
+    center: {
+      lat: (Math.min(...latitudes) + Math.max(...latitudes)) / 2,
+      lng: (Math.min(...longitudes) + Math.max(...longitudes)) / 2,
+    },
+    zoom: Math.max(MIN_TILE_ZOOM, Math.min(MAX_TILE_ZOOM, Math.floor(Math.min(widthZoom, heightZoom)))),
+  };
+}
+
 function CoordinateMapFallback({
+  language,
   locationId,
   markers,
   selectedMarkerId,
   onMarkerClick,
 }: Pick<
   GoogleMapViewProps,
-  'locationId' | 'markers' | 'selectedMarkerId' | 'onMarkerClick'
+  'language' | 'locationId' | 'markers' | 'selectedMarkerId' | 'onMarkerClick'
 >) {
   const points = getMapPoints(locationId, markers);
+  const [hoveredMarkerId, setHoveredMarkerId] = useState<string | null>(null);
 
   if (points.length === 0) {
     return (
@@ -191,10 +261,8 @@ function CoordinateMapFallback({
         const color = getCategoryColor(point.category);
         const Icon = getCategoryIcon(point.category);
 
-        const className = "absolute z-10 flex items-center justify-center -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow-lg transition-transform hover:scale-110 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/35";
+        const className = "flex items-center justify-center rounded-full border-2 border-white shadow-lg transition-transform hover:scale-110 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/35";
         const style = {
-          left: `${Math.max(5, Math.min(95, left))}%`,
-          top: `${Math.max(10, Math.min(92, top))}%`,
           width: isSelected ? 48 : 38,
           height: isSelected ? 48 : 38,
           backgroundColor: color,
@@ -202,18 +270,37 @@ function CoordinateMapFallback({
         const ariaLabel = `Show ${point.name} at ${point.lat.toFixed(5)}, ${point.lng.toFixed(5)}`;
         const icon = <Icon className="h-5 w-5 text-white" strokeWidth={2.5} aria-hidden="true" />;
 
+        const previewId = `marker-preview-${point.id}`;
         return (
-          <button
+          <div
             key={point.id}
-            type="button"
-            data-event-id={point.id}
-            onClick={() => onMarkerClick(point.id)}
-            className={className}
-            style={style}
-            aria-label={`Show ${point.name} at ${point.lat.toFixed(5)}, ${point.lng.toFixed(5)}`}
+            className="absolute z-10 -translate-x-1/2 -translate-y-1/2"
+            style={{
+              left: `${Math.max(5, Math.min(95, left))}%`,
+              top: `${Math.max(10, Math.min(92, top))}%`,
+            }}
           >
-            {icon}
-          </button>
+            <button
+              type="button"
+              data-event-id={point.id}
+              onClick={() => onMarkerClick(point.id)}
+              onMouseEnter={() => setHoveredMarkerId(point.id)}
+              onMouseLeave={() => setHoveredMarkerId(null)}
+              onFocus={() => setHoveredMarkerId(point.id)}
+              onBlur={() => setHoveredMarkerId(null)}
+              className={className.replace(' -translate-x-1/2 -translate-y-1/2', '')}
+              style={style}
+              aria-describedby={hoveredMarkerId === point.id ? previewId : undefined}
+              aria-label={translations[language].openMarker(point.name)}
+            >
+              {icon}
+            </button>
+            {hoveredMarkerId === point.id && (
+              <div id={previewId}>
+                <MarkerPreview marker={point} language={language} />
+              </div>
+            )}
+          </div>
         );
       })}
     </div>
@@ -221,8 +308,9 @@ function CoordinateMapFallback({
 }
 
 function TileMapView({
+  language,
   locationId,
-  selectedNeighborhood,
+  selectedNeighborhoods,
   markers,
   selectedMarkerId,
   savedIds,
@@ -275,16 +363,9 @@ function TileMapView({
 
   useEffect(() => {
     const location = getLocation(locationId);
-    if (!location || !selectedNeighborhood) return;
-
-    const neighborhood = location.neighborhoodCoords[selectedNeighborhood];
-    if (neighborhood) {
-      setViewport({
-        center: { lat: neighborhood.lat, lng: neighborhood.lng },
-        zoom: Math.max(MIN_TILE_ZOOM, Math.min(MAX_TILE_ZOOM, neighborhood.zoom)),
-      });
-    }
-  }, [locationId, selectedNeighborhood]);
+    if (!location) return;
+    setViewport(getNeighborhoodViewport(locationId, selectedNeighborhoods, size));
+  }, [locationId, selectedNeighborhoods, size.height, size.width]);
 
   useEffect(() => {
     const marker = markers.find((item) => item.id === selectedMarkerId);
@@ -368,6 +449,7 @@ function TileMapView({
   }, [reportUnavailable, tileSetKey]);
 
   const points = getMapPoints(locationId, markers);
+  const [hoveredMarkerId, setHoveredMarkerId] = useState<string | null>(null);
   const center = latLngToWorld(viewport.center, viewport.zoom);
   const mapLeft = center.x - size.width / 2;
   const mapTop = center.y - size.height / 2;
@@ -445,10 +527,8 @@ function TileMapView({
         const color = getCategoryColor(point.category);
         const Icon = getCategoryIcon(point.category);
 
-        const className = "absolute z-10 flex items-center justify-center -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white font-black text-white shadow-lg transition-transform hover:scale-110 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/35";
+        const className = "flex items-center justify-center rounded-full border-2 border-white font-black text-white shadow-lg transition-transform hover:scale-110 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/35";
         const style = {
-          left,
-          top,
           width: isSelected ? 50 : 43,
           height: isSelected ? 50 : 43,
           backgroundColor: color,
@@ -467,23 +547,39 @@ function TileMapView({
           </>
         );
 
+        const previewId = `marker-preview-${point.id}`;
         return (
-          <button
+          <div
             key={point.id}
-            type="button"
-            data-map-pin
-            data-event-id={point.id}
-            onPointerDown={(event) => event.stopPropagation()}
-            onClick={(event) => {
-              event.stopPropagation();
-              onMarkerClick(point.id);
-            }}
-            className={className}
-            style={style}
-            aria-label={`Show ${point.name} at ${point.lat.toFixed(5)}, ${point.lng.toFixed(5)}${savedIds.has(point.id) ? ', saved' : ''}`}
+            className="absolute z-10 -translate-x-1/2 -translate-y-1/2"
+            style={{ left, top }}
           >
-            {icon}
-          </button>
+            <button
+              type="button"
+              data-map-pin
+              data-event-id={point.id}
+              onPointerDown={(event) => event.stopPropagation()}
+              onClick={(event) => {
+                event.stopPropagation();
+                onMarkerClick(point.id);
+              }}
+              onMouseEnter={() => setHoveredMarkerId(point.id)}
+              onMouseLeave={() => setHoveredMarkerId(null)}
+              onFocus={() => setHoveredMarkerId(point.id)}
+              onBlur={() => setHoveredMarkerId(null)}
+              className={className.replace(' -translate-x-1/2 -translate-y-1/2', '')}
+              style={style}
+              aria-describedby={hoveredMarkerId === point.id ? previewId : undefined}
+              aria-label={translations[language].openMarker(point.name)}
+            >
+              {icon}
+            </button>
+            {hoveredMarkerId === point.id && (
+              <div id={previewId}>
+                <MarkerPreview marker={point} language={language} />
+              </div>
+            )}
+          </div>
         );
       })}
 
@@ -523,8 +619,9 @@ function TileMapView({
 let apiOptionsSet = false;
 
 function GoogleMapCanvas({
+  language,
   locationId,
-  selectedNeighborhood,
+  selectedNeighborhoods,
   markers,
   selectedMarkerId,
   savedIds,
@@ -541,9 +638,22 @@ function GoogleMapCanvas({
   const buildMarkerEl = useCallback(
     (marker: MarkerData, isSelected: boolean, isSaved: boolean): HTMLElement => {
       const color = getCategoryColor(marker.category);
-       const element = document.createElement('button');
+      const copy = getMarkerCopy(marker, language);
+      const t = translations[language];
+      const wrapper = document.createElement('div');
+      wrapper.style.cssText = [
+        'position:relative',
+        'display:flex',
+        'align-items:center',
+        'justify-content:center',
+        'width:1px',
+        'height:1px',
+      ].join(';');
+      const element = document.createElement('button');
       const size = isSelected ? 50 : 43;
       element.style.cssText = [
+        'position:relative',
+        'z-index:1',
         'display:flex',
         'align-items:center',
         'justify-content:center',
@@ -559,6 +669,7 @@ function GoogleMapCanvas({
         'padding:0',
       ].join(';');
       element.setAttribute('type', 'button');
+      element.setAttribute('aria-label', t.openMarker(marker.name));
       const icon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
       icon.setAttribute('viewBox', '0 0 24 24');
       icon.setAttribute('width', '20');
@@ -587,9 +698,64 @@ function GoogleMapCanvas({
         ].join(';');
         element.appendChild(badge);
       }
-      return element;
+
+      const previewId = `marker-preview-${marker.id.replace(/[^a-zA-Z0-9_-]/g, '-')}`;
+      const preview = document.createElement('div');
+      preview.id = previewId;
+      preview.setAttribute('data-marker-preview', '');
+      preview.setAttribute('role', 'tooltip');
+      preview.style.cssText = [
+        'position:absolute',
+        'top:calc(100% + 10px)',
+        'left:50%',
+        'z-index:3',
+        'width:224px',
+        'transform:translateX(-50%)',
+        'border:1px solid hsl(var(--border) / 0.8)',
+        'border-radius:12px',
+        'background:hsl(var(--card) / 0.96)',
+        'padding:12px',
+        'text-align:left',
+        'box-shadow:0 12px 28px rgba(0,0,0,0.18)',
+        'font-family:inherit',
+        'pointer-events:none',
+        'opacity:0',
+        'visibility:hidden',
+        'transition:opacity 160ms ease, visibility 160ms ease',
+      ].join(';');
+      const title = document.createElement('p');
+      title.textContent = marker.name;
+      title.style.cssText = 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px;font-weight:800;color:hsl(var(--foreground));';
+      const category = document.createElement('p');
+      category.textContent = t.categories[marker.category];
+      category.style.cssText = 'margin-top:2px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:hsl(var(--primary));';
+      const description = document.createElement('p');
+      description.textContent = copy.description;
+      description.style.cssText = 'display:-webkit-box;overflow:hidden;margin-top:4px;font-size:12px;line-height:1.45;color:hsl(var(--muted-foreground));-webkit-box-orient:vertical;-webkit-line-clamp:2;';
+      const details = document.createElement('p');
+      details.textContent = copy.details;
+      details.style.cssText = 'margin-top:8px;font-size:11px;font-weight:700;color:hsl(var(--secondary));';
+      preview.append(title, category, description, details);
+      wrapper.append(element, preview);
+
+      const showPreview = () => {
+        preview.style.opacity = '1';
+        preview.style.visibility = 'visible';
+        element.setAttribute('aria-describedby', previewId);
+      };
+      const hidePreview = () => {
+        preview.style.opacity = '0';
+        preview.style.visibility = 'hidden';
+        element.removeAttribute('aria-describedby');
+      };
+      element.addEventListener('mouseenter', showPreview);
+      element.addEventListener('mouseleave', hidePreview);
+      element.addEventListener('focus', showPreview);
+      element.addEventListener('blur', hidePreview);
+
+      return wrapper;
     },
-    [],
+    [language],
   );
 
   useEffect(() => {
@@ -637,12 +803,21 @@ function GoogleMapCanvas({
 
   useEffect(() => {
     if (!mapReady || !mapRef.current || !location) return;
-    const neighborhood = selectedNeighborhood
-      ? location.neighborhoodCoords[selectedNeighborhood]
-      : undefined;
-    mapRef.current.panTo(neighborhood ?? { lat: location.lat, lng: location.lng });
-    mapRef.current.setZoom(neighborhood?.zoom ?? location.zoom);
-  }, [location, mapReady, selectedNeighborhood]);
+    const neighborhoods = selectedNeighborhoods
+      .map((name) => location.neighborhoodCoords[name])
+      .filter((area): area is { lat: number; lng: number; zoom: number } => Boolean(area));
+    if (neighborhoods.length === 0) {
+      mapRef.current.panTo({ lat: location.lat, lng: location.lng });
+      mapRef.current.setZoom(location.zoom);
+    } else if (neighborhoods.length === 1) {
+      mapRef.current.panTo(neighborhoods[0]);
+      mapRef.current.setZoom(neighborhoods[0].zoom);
+    } else {
+      const bounds = new google.maps.LatLngBounds();
+      neighborhoods.forEach((area) => bounds.extend(area));
+      mapRef.current.fitBounds(bounds, 64);
+    }
+  }, [location, mapReady, selectedNeighborhoods]);
 
   useEffect(() => {
     if (!mapReady || !mapRef.current || !markerLibraryRef.current) return;

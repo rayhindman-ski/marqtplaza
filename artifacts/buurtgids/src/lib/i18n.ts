@@ -17,6 +17,8 @@ export const translations = {
     neighborhoods: 'Buurten',
     neighborhoodLabel: 'Buurt',
     allNeighborhoods: 'Alle buurten',
+    neighborhoodsSelected: (count: number) => `${count} ${count === 1 ? 'buurt' : 'buurten'} geselecteerd`,
+    clearNeighborhoods: 'Wis buurtfilters',
     chooseNeighborhood: (city: string) => `Kies een buurt in ${city}`,
     exploreCity: (city: string) => `Ontdek ${city}`,
     emptySearch: 'Vul een stad of postcode in.',
@@ -36,6 +38,7 @@ export const translations = {
     discoveriesNearby: (count: number) =>
       `${count} ${count === 1 ? 'ontdekking' : 'ontdekkingen'} in de buurt`,
     selectMarker: (name: string) => `Selecteer ${name}`,
+    openMarker: (name: string) => `Open ${name} in een nieuw tabblad`,
     noDiscoveries: 'Geen ontdekkingen gevonden',
     noDiscoveriesDescription:
       'Zet meer categorieën aan om te zien wat er hier in de buurt gebeurt.',
@@ -107,6 +110,8 @@ export const translations = {
     neighborhoods: 'Neighborhoods',
     neighborhoodLabel: 'Neighborhood',
     allNeighborhoods: 'All neighborhoods',
+    neighborhoodsSelected: (count: number) => `${count} ${count === 1 ? 'neighborhood' : 'neighborhoods'} selected`,
+    clearNeighborhoods: 'Clear neighborhood filters',
     chooseNeighborhood: (city: string) => `Choose a neighborhood in ${city}`,
     exploreCity: (city: string) => `Explore ${city}`,
     emptySearch: 'Please enter a city or postcode.',
@@ -126,6 +131,7 @@ export const translations = {
     discoveriesNearby: (count: number) =>
       `${count} ${count === 1 ? 'discovery' : 'discoveries'} nearby`,
     selectMarker: (name: string) => `Select ${name}`,
+    openMarker: (name: string) => `Open ${name} in a new tab`,
     noDiscoveries: 'No discoveries found',
     noDiscoveriesDescription:
       "Try enabling more categories to see what's happening around here.",
@@ -383,7 +389,10 @@ export function getLocationName(location: Location, language: Language) {
     : location.name;
 }
 
-export function getMarkerCopy(marker: Marker, language: Language) {
+export function getMarkerCopy(
+  marker: Pick<Marker, 'id' | 'description' | 'details'>,
+  language: Language,
+) {
   return language === 'nl'
     ? dutchMarkerCopy[marker.id] ?? marker
     : marker;
