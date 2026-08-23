@@ -15,6 +15,7 @@ export * from './captureScanResultType';
 export * from './captureSearchBusiness';
 export * from './captureSearchRequest';
 export * from './getListingsParams';
+export * from './getListingsSection';
 export * from './getNewsParams';
 export * from './healthStatus';
 export * from './listing';

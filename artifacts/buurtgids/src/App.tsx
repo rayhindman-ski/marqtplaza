@@ -6,12 +6,12 @@ import {
   Map as MapIcon, List, Clock, Newspaper,
   Globe2, Bookmark, BookmarkCheck, X, ChevronDown, ChevronUp,
   ScanSearch, RefreshCw, WifiOff, Radio, MapPinned,
-  Landmark, Route as RouteIcon, Baby, Gamepad2, Waves, ShoppingBag, ExternalLink
+  Landmark, Route as RouteIcon, Baby, Building2, Coffee, Gamepad2, Waves, ShoppingBag, ExternalLink
 } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { useGetListings } from '@workspace/api-client-react';
-import { LOCATIONS, MARKERS, ALL_CATEGORIES, type Category, type Marker } from './lib/data';
+import { LOCATIONS, MARKERS, ALL_CATEGORIES, EVENT_CATEGORIES, type Category, type Marker } from './lib/data';
 import { GoogleMapView } from './components/GoogleMapView';
 import CaptureView from './pages/CaptureView';
 import SourceDirectoryView from './pages/SourceDirectoryView';
@@ -43,6 +43,16 @@ function getDistanceKm(latA: number, lngA: number, latB: number, lngB: number) {
 }
 
 const STORAGE_KEY = 'buurtgids_saved_places';
+type ListingSection = 'events' | 'businesses' | 'food-drink';
+
+function categoryStateFor(section: ListingSection): Record<Category, boolean> {
+  const active = section === 'events'
+    ? EVENT_CATEGORIES
+    : section === 'businesses'
+      ? ['Businesses']
+      : ['Food & Drink'];
+  return Object.fromEntries(ALL_CATEGORIES.map((category) => [category, active.includes(category)])) as Record<Category, boolean>;
+}
 function LanguageSelector({
   language,
   onLanguageChange,
@@ -75,9 +85,11 @@ function LanguageSelector({
 function ReferenceCategoryNav({
   language,
   onThingsToDo,
+  onSectionSelect,
 }: {
   language: Language;
   onThingsToDo: () => void;
+  onSectionSelect: (section: ListingSection) => void;
 }) {
   const t = translations[language];
 
@@ -103,7 +115,11 @@ function ReferenceCategoryNav({
             <button
               type="button"
               key={category.id}
-              onClick={category.id === 'things-to-do' ? onThingsToDo : undefined}
+              onClick={() => {
+                if (category.id === 'things-to-do') onThingsToDo();
+                if (category.id === 'locals' || category.id === 'shopping') onSectionSelect('businesses');
+                if (category.id === 'food-drink') onSectionSelect('food-drink');
+              }}
               aria-haspopup={category.id === 'things-to-do' ? 'dialog' : undefined}
               className="text-sm font-extrabold text-foreground transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
             >
@@ -159,7 +175,7 @@ function SearchState({
 }: {
   language: Language;
   onLanguageChange: (language: Language) => void;
-  onSearch: (locId: string, neighborhood?: string) => void;
+  onSearch: (locId: string, neighborhood?: string, section?: ListingSection) => void;
   savedCount: number;
   onViewSaved: () => void;
 }) {
@@ -192,6 +208,7 @@ function SearchState({
     <div className="flex-1 flex flex-col items-center justify-center min-h-screen p-6 relative overflow-hidden bg-background">
       <ReferenceCategoryNav
         language={language}
+        onSectionSelect={(section) => onSearch('dhg', undefined, section)}
         onThingsToDo={() => {
           setActivityChooserOpen(true);
           setSelectedCityId(null);
@@ -355,6 +372,8 @@ const CATEGORY_ICONS: Record<Category, React.ElementType> = {
   Entertainment: Gamepad2,
   Outdoors: Waves,
   Markets: ShoppingBag,
+  Businesses: Building2,
+  'Food & Drink': Coffee,
 };
 const DETAIL_ICONS: Record<Category, React.ElementType> = {
   Museums: Clock,
@@ -363,6 +382,8 @@ const DETAIL_ICONS: Record<Category, React.ElementType> = {
   Entertainment: Clock,
   Outdoors: MapPinned,
   Markets: Clock,
+  Businesses: MapPinned,
+  'Food & Drink': Clock,
 };
 
 function MapPin({
@@ -617,33 +638,30 @@ function SavedCategorySection({
 function DiscoveryState({
   language,
   locationId,
+  listingSection,
   initialNeighborhood,
   onBack,
   onLanguageChange,
   savedIds,
   onToggle,
   onViewSaved,
+  onSectionSelect,
 }: {
   language: Language;
   locationId: string;
+  listingSection: ListingSection;
   initialNeighborhood?: string;
   onBack: () => void;
   onLanguageChange: (language: Language) => void;
   savedIds: Set<string>;
   onToggle: (marker: Marker) => void;
   onViewSaved: () => void;
+  onSectionSelect: (section: ListingSection) => void;
 }) {
   const location = LOCATIONS.find(l => l.id === locationId);
   const t = translations[language];
   const [, navigate] = useLocation();
-  const [categories, setCategories] = useState<Record<Category, boolean>>({
-    Museums: true,
-    Tours: true,
-    Family: true,
-    Entertainment: true,
-    Outdoors: true,
-    Markets: true,
-  });
+  const [categories, setCategories] = useState<Record<Category, boolean>>(() => categoryStateFor(listingSection));
   const [selectedNeighborhood, setSelectedNeighborhood] = useState<string | null>(
     initialNeighborhood ?? null,
   );
@@ -651,7 +669,7 @@ function DiscoveryState({
   const [view, setView] = useState<'map' | 'list'>('map');
 
   // Fetch live listings from the API
-  const { data, isLoading, isError, refetch } = useGetListings({ cityId: locationId });
+  const { data, isLoading, isError, refetch } = useGetListings({ cityId: locationId, section: listingSection });
 
   if (!location) return null;
 
@@ -661,8 +679,13 @@ function DiscoveryState({
   };
 
   const handleMarkerClick = (id: string) => {
-    navigate(`/activiteiten/den-haag/${encodeURIComponent(id)}`);
+    navigate(`/activiteiten/den-haag/${encodeURIComponent(id)}?section=${listingSection}`);
   };
+
+  useEffect(() => {
+    setCategories(categoryStateFor(listingSection));
+    setSelectedMarker(null);
+  }, [listingSection]);
 
   useEffect(() => {
     if (!selectedMarker) return;
@@ -713,8 +736,14 @@ function DiscoveryState({
     return getDistanceKm(marker.lat, marker.lng, selectedArea.lat, selectedArea.lng) <= 2.5;
   });
   const isLive = data?.source === 'live';
+  const isGooglePlaces = data?.source === 'google_places';
   const isFallback = data?.source === 'fallback';
   const isCurated = data?.source === 'curated';
+  const visibleCategories = listingSection === 'events'
+    ? EVENT_CATEGORIES
+    : listingSection === 'businesses'
+      ? ['Businesses'] as Category[]
+      : ['Food & Drink'] as Category[];
 
   const savedCount = savedIds.size;
 
@@ -758,9 +787,31 @@ function DiscoveryState({
               )}
             </button>
           </div>
+          <div className="mb-5 flex flex-wrap gap-2">
+            {([
+              ['events', language === 'nl' ? 'Events' : 'Events'],
+              ['businesses', t.categories.Businesses],
+              ['food-drink', t.categories['Food & Drink']],
+            ] as Array<[ListingSection, string]>).map(([section, label]) => (
+              <button
+                key={section}
+                type="button"
+                aria-pressed={listingSection === section}
+                onClick={() => onSectionSelect(section)}
+                className={cn(
+                  "rounded-full border px-3 py-1.5 text-xs font-extrabold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+                  listingSection === section
+                    ? "border-primary bg-primary text-primary-foreground"
+                    : "border-border bg-card text-muted-foreground hover:border-primary/50 hover:text-primary",
+                )}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
           
           <div className="flex flex-wrap gap-2">
-            {ALL_CATEGORIES.map(cat => {
+            {visibleCategories.map(cat => {
               const Icon = CATEGORY_ICONS[cat];
               return (
                 <button
@@ -833,6 +884,11 @@ function DiscoveryState({
               <span className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-full">
                 <Radio className="w-3 h-3" />
                 {t.liveDataBadge}
+              </span>
+            ) : isGooglePlaces ? (
+              <span className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-full">
+                <MapPinned className="w-3 h-3" />
+                Google Places
               </span>
             ) : isCurated ? (
               <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary bg-primary/5 border border-primary/20 px-2.5 py-1 rounded-full">
@@ -961,9 +1017,9 @@ function DiscoveryState({
   );
 }
 
-function EventDetailView({ eventId }: { eventId: string }) {
+function EventDetailView({ eventId, listingSection = 'events' }: { eventId: string; listingSection?: ListingSection }) {
   const [, navigate] = useLocation();
-  const { data, isLoading, isError } = useGetListings({ cityId: 'dhg' });
+  const { data, isLoading, isError } = useGetListings({ cityId: 'dhg', section: listingSection });
   const listing = data?.listings.find((item) => item.id === decodeURIComponent(eventId));
   const language: Language = typeof window !== 'undefined' && window.localStorage.getItem('buurtplaza-language') === 'nl'
     ? 'nl'
@@ -1043,7 +1099,9 @@ function EventDetailView({ eventId }: { eventId: string }) {
           <div className="mt-8 grid gap-3 sm:grid-cols-2">
             <div className="rounded-2xl border border-border bg-muted/40 p-4">
               <p className="text-xs font-extrabold uppercase tracking-wider text-muted-foreground">
-                {language === 'nl' ? 'Wanneer' : 'When'}
+                {listingSection === 'events'
+                  ? (language === 'nl' ? 'Wanneer' : 'When')
+                  : (language === 'nl' ? 'Adres & informatie' : 'Address & information')}
               </p>
               <p className="mt-2 text-sm font-bold text-foreground">{listing.details}</p>
             </div>
@@ -1076,16 +1134,20 @@ function EventDetailView({ eventId }: { eventId: string }) {
 
 function EventDetailRoute() {
   const [, params] = useRoute('/activiteiten/den-haag/:eventId');
-  return <EventDetailView eventId={params?.eventId ?? ''} />;
+  const requestedSection = new URLSearchParams(window.location.search).get('section');
+  const listingSection: ListingSection = requestedSection === 'businesses' || requestedSection === 'food-drink'
+    ? requestedSection
+    : 'events';
+  return <EventDetailView eventId={params?.eventId ?? ''} listingSection={listingSection} />;
 }
 
 type AppScreen =
   | { kind: 'search' }
-  | { kind: 'discovery'; locationId: string; neighborhood?: string }
+  | { kind: 'discovery'; locationId: string; neighborhood?: string; listingSection: ListingSection }
   | { kind: 'saved' };
 function MainApp({ initialLocationId }: { initialLocationId?: string } = {}) {
   const [screen, setScreen] = useState<AppScreen>(() =>
-    initialLocationId ? { kind: 'discovery', locationId: initialLocationId } : { kind: 'search' },
+    initialLocationId ? { kind: 'discovery', locationId: initialLocationId, listingSection: 'events' } : { kind: 'search' },
   );
   const [language, setLanguage] = useState<Language>(() => {
     if (typeof window === 'undefined') return 'en';
@@ -1114,12 +1176,18 @@ function MainApp({ initialLocationId }: { initialLocationId?: string } = {}) {
       <DiscoveryState
         language={language}
         locationId={screen.locationId}
+        listingSection={screen.listingSection}
         initialNeighborhood={screen.neighborhood}
         onBack={() => setScreen({ kind: 'search' })}
         onLanguageChange={setLanguage}
         savedIds={savedIds}
         onToggle={toggle}
         onViewSaved={() => setScreen({ kind: 'saved' })}
+        onSectionSelect={(listingSection) => setScreen({
+          kind: 'discovery',
+          locationId: screen.locationId,
+          listingSection,
+        })}
       />
     );
   }
@@ -1128,7 +1196,12 @@ function MainApp({ initialLocationId }: { initialLocationId?: string } = {}) {
     <SearchState
       language={language}
       onLanguageChange={setLanguage}
-      onSearch={(locId, neighborhood) => setScreen({ kind: 'discovery', locationId: locId, neighborhood })}
+      onSearch={(locId, neighborhood, listingSection = 'events') => setScreen({
+        kind: 'discovery',
+        locationId: locId,
+        neighborhood,
+        listingSection,
+      })}
       savedCount={savedCount}
       onViewSaved={() => setScreen({ kind: 'saved' })}
     />
@@ -1240,6 +1313,8 @@ function SavedView({
     Entertainment: savedList.filter(m => m.category === 'Entertainment'),
     Outdoors:      savedList.filter(m => m.category === 'Outdoors'),
     Markets:       savedList.filter(m => m.category === 'Markets'),
+    Businesses:    savedList.filter(m => m.category === 'Businesses'),
+    'Food & Drink': savedList.filter(m => m.category === 'Food & Drink'),
   };
 
   return (

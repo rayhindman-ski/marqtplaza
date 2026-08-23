@@ -29,6 +29,8 @@ export const translations = {
       Entertainment: 'Entertainment',
       Outdoors: 'Buiten & Sport',
       Markets: 'Markten & Food',
+      Businesses: 'Bedrijven',
+      'Food & Drink': 'Horeca',
     },
     backToSearch: 'Terug naar zoeken',
     discoveriesNearby: (count: number) =>
@@ -44,8 +46,8 @@ export const translations = {
     navCategories: [
       { id: 'news', label: 'Nieuws' },
       { id: 'things-to-do', label: 'Doen' },
-      { id: 'locals', label: 'Buurtgenoten' },
-      { id: 'food-drink', label: 'Eten en drinken' },
+      { id: 'locals', label: 'Bedrijven' },
+      { id: 'food-drink', label: 'Horeca' },
       { id: 'shopping', label: 'Winkelen' },
     ],
     // Saved places
@@ -117,6 +119,8 @@ export const translations = {
       Entertainment: 'Entertainment',
       Outdoors: 'Outdoors',
       Markets: 'Food & Markets',
+      Businesses: 'Businesses',
+      'Food & Drink': 'Food & drink',
     },
     backToSearch: 'Back to search',
     discoveriesNearby: (count: number) =>
@@ -132,7 +136,7 @@ export const translations = {
     navCategories: [
       { id: 'news', label: 'News' },
       { id: 'things-to-do', label: 'Things to do' },
-      { id: 'locals', label: 'Locals' },
+      { id: 'locals', label: 'Businesses' },
       { id: 'food-drink', label: 'Food & drink' },
       { id: 'shopping', label: 'Shopping' },
     ],

@@ -16,4 +16,6 @@ export const ListingCategory = {
   Entertainment: 'Entertainment',
   Outdoors: 'Outdoors',
   Markets: 'Markets',
+  Businesses: 'Businesses',
+  'Food_&_Drink': 'Food & Drink',
 } as const;

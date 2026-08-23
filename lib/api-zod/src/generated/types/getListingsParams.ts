@@ -5,10 +5,15 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { GetListingsSection } from './getListingsSection';
 
 export type GetListingsParams = {
 /**
  * The city identifier (ams, rot, utr, dhg, ein)
  */
 cityId: string;
+/**
+ * Which Den Haag discovery stream to return.
+ */
+section?: GetListingsSection;
 };

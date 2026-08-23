@@ -11,6 +11,7 @@ export type ListingsResponseSource = typeof ListingsResponseSource[keyof typeof 
 
 export const ListingsResponseSource = {
   live: 'live',
+  google_places: 'google_places',
   fallback: 'fallback',
   curated: 'curated',
 } as const;

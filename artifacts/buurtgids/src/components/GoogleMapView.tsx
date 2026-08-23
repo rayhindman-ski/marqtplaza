@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { importLibrary, setOptions } from '@googlemaps/js-api-loader';
-import { Baby, Gamepad2, Landmark, MapPin as MapPinIcon, Route, ShoppingBag, Waves, type LucideIcon } from 'lucide-react';
+import { Baby, Coffee, Gamepad2, Landmark, MapPin as MapPinIcon, Route, ShoppingBag, Waves, type LucideIcon } from 'lucide-react';
 import { type Marker as MarkerData, LOCATIONS, type Category } from '../lib/data';
 
-type MapCategory = Category | 'Businesses';
+type MapCategory = Category;
 
 const CATEGORY_COLORS: Record<MapCategory, string> = {
   Museums:       '#8b5cf6',
@@ -13,6 +13,7 @@ const CATEGORY_COLORS: Record<MapCategory, string> = {
   Outdoors:      '#10b981',
   Markets:       '#f59e0b',
   Businesses:    '#f36c21',
+  'Food & Drink': '#b45309',
 };
 
 const CATEGORY_ICONS: Record<MapCategory, LucideIcon> = {
@@ -23,6 +24,7 @@ const CATEGORY_ICONS: Record<MapCategory, LucideIcon> = {
   Outdoors: Waves,
   Markets: ShoppingBag,
   Businesses: MapPinIcon,
+  'Food & Drink': Coffee,
 };
 
 const MAP_STYLES: google.maps.MapTypeStyle[] = [
@@ -83,6 +85,7 @@ function getCategoryIconMarkup(category: MapCategory) {
     Outdoors: '<path d="M2 12c3.3-3 6.7-3 10 0s6.7 3 10 0M2 17c3.3-3 6.7-3 10 0s6.7 3 10 0" />',
     Markets: '<path d="M3 9h18l-1 12H4L3 9Zm2-5h14l2 5H3l2-5Zm4 0v5m6-5v5" />',
     Businesses: '<path d="M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1 1 16 0Z" /><circle cx="12" cy="10" r="2.5" />',
+    'Food & Drink': '<path d="M17 8h1a4 4 0 0 1 0 8h-1M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V8Z" /><path d="M6 2v3m3-3v3m3-3v3" />',
   };
   return markup[category] ?? markup.Businesses;
 }

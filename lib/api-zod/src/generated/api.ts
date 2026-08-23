@@ -164,15 +164,18 @@ export const ScanActivitySourcesResponse = zod.object({
  * Returns businesses, events, and specials for a given city. Falls back gracefully when the live data provider is unavailable.
  * @summary Get local listings for a city
  */
+export const getListingsQuerySectionDefault = `events`;
+
 export const GetListingsQueryParams = zod.object({
-  "cityId": zod.coerce.string().describe('The city identifier (ams, rot, utr, dhg, ein)')
+  "cityId": zod.coerce.string().describe('The city identifier (ams, rot, utr, dhg, ein)'),
+  "section": zod.enum(['events', 'businesses', 'food-drink']).default(getListingsQuerySectionDefault).describe('Which Den Haag discovery stream to return.')
 })
 
 export const GetListingsResponse = zod.object({
   "listings": zod.array(zod.object({
   "id": zod.string(),
   "locationId": zod.string(),
-  "category": zod.enum(['Museums', 'Tours', 'Family', 'Entertainment', 'Outdoors', 'Markets']),
+  "category": zod.enum(['Museums', 'Tours', 'Family', 'Entertainment', 'Outdoors', 'Markets', 'Businesses', 'Food & Drink']),
   "name": zod.string(),
   "description": zod.string(),
   "x": zod.number(),
@@ -183,7 +186,7 @@ export const GetListingsResponse = zod.object({
   "sourceUrl": zod.string().optional().describe('Link to the website where this activity was listed.'),
   "isApproximateLocation": zod.boolean().optional().describe('Whether the map pin uses the Den Haag city centre because no exact venue coordinates were supplied.')
 })),
-  "source": zod.enum(['live', 'fallback', 'curated']),
+  "source": zod.enum(['live', 'google_places', 'fallback', 'curated']),
   "message": zod.string().optional()
 })
 

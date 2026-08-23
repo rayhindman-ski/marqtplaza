@@ -128,6 +128,14 @@ paths:
           schema:
             type: string
           description: The city identifier (ams, rot, utr, dhg, ein)
+        - name: section
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [events, businesses, food-drink]
+            default: events
+          description: Which Den Haag discovery stream to return.
       responses:
         "200":
           description: Listings result (live or fallback)
@@ -460,7 +468,7 @@ components:
           type: string
         category:
           type: string
-          enum: [Museums, Tours, Family, Entertainment, Outdoors, Markets]
+          enum: [Museums, Tours, Family, Entertainment, Outdoors, Markets, Businesses, Food & Drink]
         name:
           type: string
         description:
@@ -504,7 +512,7 @@ components:
             $ref: "#/components/schemas/Listing"
         source:
           type: string
-          enum: [live, fallback, curated]
+          enum: [live, google_places, fallback, curated]
         message:
           type: string
       required:

@@ -219,6 +219,8 @@ export const ListingCategory = {
   Entertainment: 'Entertainment',
   Outdoors: 'Outdoors',
   Markets: 'Markets',
+  Businesses: 'Businesses',
+  'Food_&_Drink': 'Food & Drink',
 } as const;
 
 export interface Listing {
@@ -245,6 +247,7 @@ export type ListingsResponseSource = typeof ListingsResponseSource[keyof typeof 
 
 export const ListingsResponseSource = {
   live: 'live',
+  google_places: 'google_places',
   fallback: 'fallback',
   curated: 'curated',
 } as const;
@@ -329,7 +332,20 @@ export type GetListingsParams = {
  * The city identifier (ams, rot, utr, dhg, ein)
  */
 cityId: string;
+/**
+ * Which Den Haag discovery stream to return.
+ */
+section?: GetListingsSection;
 };
+
+export type GetListingsSection = typeof GetListingsSection[keyof typeof GetListingsSection];
+
+
+export const GetListingsSection = {
+  events: 'events',
+  businesses: 'businesses',
+  'food-drink': 'food-drink',
+} as const;
 
 export type GetNewsParams = {
 subcategory?: NewsSubcategory;

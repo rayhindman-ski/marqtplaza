@@ -1,5 +1,6 @@
-export type Category = 'Museums' | 'Tours' | 'Family' | 'Entertainment' | 'Outdoors' | 'Markets';
-export const ALL_CATEGORIES: Category[] = ['Museums', 'Tours', 'Family', 'Entertainment', 'Outdoors', 'Markets'];
+export type Category = 'Museums' | 'Tours' | 'Family' | 'Entertainment' | 'Outdoors' | 'Markets' | 'Businesses' | 'Food & Drink';
+export const EVENT_CATEGORIES: Category[] = ['Museums', 'Tours', 'Family', 'Entertainment', 'Outdoors', 'Markets'];
+export const ALL_CATEGORIES: Category[] = [...EVENT_CATEGORIES, 'Businesses', 'Food & Drink'];
 
 export interface Location {
   id: string;
