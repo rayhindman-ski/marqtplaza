@@ -1023,22 +1023,32 @@ function DiscoveryState({
             )}
           </div>
           <div className="mt-5 border-t border-border/70 pt-4">
-            <div className="mb-2 flex items-center justify-between gap-3">
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
               <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
                 {t.neighborhoods}
               </p>
-              {selectedNeighborhoods.length > 0 && (
+              <div className="flex flex-wrap items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedNeighborhoods(location.neighborhoods);
+                    setSelectedMarker(null);
+                  }}
+                  className="rounded-lg border border-primary/35 bg-primary/5 px-2 py-1 text-[10px] font-bold text-primary transition-colors hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                >
+                  {t.selectAllNeighborhoods}
+                </button>
                 <button
                   type="button"
                   onClick={() => {
                     setSelectedNeighborhoods([]);
                     setSelectedMarker(null);
                   }}
-                  className="text-[11px] font-bold text-primary underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  className="rounded-lg border border-border/70 bg-card/70 px-2 py-1 text-[10px] font-bold text-muted-foreground transition-colors hover:border-primary/40 hover:bg-primary/5 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                 >
-                  {t.clearNeighborhoods}
+                  {t.clearNeighborhoodSelection}
                 </button>
-              )}
+              </div>
             </div>
             <div
               role="group"
