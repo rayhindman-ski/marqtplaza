@@ -85,6 +85,7 @@ function createHtmlMarkerOverlay(
 
     draw() {
       const projection = this.getProjection();
+      if (!projection) return;
       const point = projection.fromLatLngToDivPixel(position);
       if (!point) return;
       this.content.style.left = `${point.x}px`;
