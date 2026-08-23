@@ -604,7 +604,7 @@ export const getGetListingsUrl = (params: GetListingsParams,) => {
 }
 
 /**
- * Returns businesses, events, and specials for a given city. Falls back gracefully when the live data provider is unavailable.
+ * Returns businesses, events, food-and-drink venues, or the curated Den Haag social map for a given city.
  * @summary Get local listings for a city
  */
 export const getListings = async (params: GetListingsParams, options?: Parameters<typeof customFetch>[1]): Promise<ListingsResponse> => {

@@ -13,4 +13,5 @@ export const GetListingsSection = {
   events: 'events',
   businesses: 'businesses',
   'food-drink': 'food-drink',
+  'social-map': 'social-map',
 } as const;

@@ -18,4 +18,5 @@ export const ListingCategory = {
   Markets: 'Markets',
   Businesses: 'Businesses',
   'Food_&_Drink': 'Food & Drink',
+  Social_map: 'Social map',
 } as const;

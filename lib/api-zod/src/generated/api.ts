@@ -238,21 +238,21 @@ export const DecideEventReviewCandidateResponse = zod.object({
 
 
 /**
- * Returns businesses, events, and specials for a given city. Falls back gracefully when the live data provider is unavailable.
+ * Returns businesses, events, food-and-drink venues, or the curated Den Haag social map for a given city.
  * @summary Get local listings for a city
  */
 export const getListingsQuerySectionDefault = `events`;
 
 export const GetListingsQueryParams = zod.object({
   "cityId": zod.coerce.string().describe('The city identifier (ams, rot, utr, dhg, ein)'),
-  "section": zod.enum(['events', 'businesses', 'food-drink']).default(getListingsQuerySectionDefault).describe('Which Den Haag discovery stream to return.')
+  "section": zod.enum(['events', 'businesses', 'food-drink', 'social-map']).default(getListingsQuerySectionDefault).describe('Which Den Haag discovery stream to return.')
 })
 
 export const GetListingsResponse = zod.object({
   "listings": zod.array(zod.object({
   "id": zod.string(),
   "locationId": zod.string(),
-  "category": zod.enum(['Museums', 'Tours', 'Family', 'Entertainment', 'Outdoors', 'Markets', 'Businesses', 'Food & Drink']),
+  "category": zod.enum(['Museums', 'Tours', 'Family', 'Entertainment', 'Outdoors', 'Markets', 'Businesses', 'Food & Drink', 'Social map']),
   "name": zod.string(),
   "description": zod.string(),
   "x": zod.number(),
@@ -264,7 +264,13 @@ export const GetListingsResponse = zod.object({
   "businessCategory": zod.enum(['Retail & Shopping', 'Food & Drink', 'Health & Wellness', 'Beauty & Personal Care', 'Professional Services', 'Finance & Legal', 'Home & Repair', 'Automotive & Mobility', 'Education & Childcare', 'Hospitality & Travel', 'Arts, Culture & Entertainment', 'Fitness & Sports']).optional().describe('Normalized category for business and food-and-drink listings.'),
   "source": zod.enum(['google_maps', 'openstreetmap', 'curated', 'source_scan']).optional().describe('Provider or editorial source for an individual listing.'),
   "sourceName": zod.string().optional().describe('Human-readable publisher or provider that listed this item, distinct from its destination URL.'),
-  "isApproximateLocation": zod.boolean().optional().describe('Whether the map pin uses the Den Haag city centre because no exact venue coordinates were supplied.')
+  "isApproximateLocation": zod.boolean().optional().describe('Whether the map pin uses the Den Haag city centre because no exact venue coordinates were supplied.'),
+  "address": zod.string().optional().describe('Public visitor address for a curated social-map location.'),
+  "neighborhood": zod.string().optional().describe('Den Haag neighborhood context for a curated social-map location.'),
+  "socialCategory": zod.enum(['Geldzaken', 'Gezin en opvoeden', 'Gezondheid', 'Hobby\'s en interesses', 'Ondersteuning', 'Ontmoeten en samenleven', 'Sporten en bewegen', 'Taal en computer', 'Vervoer', 'Werk en opleiding', 'Wonen en huishouden', 'Zorg voor een naaste']).optional().describe('Curated support theme for the Den Haag social map.'),
+  "officialUrl": zod.string().optional().describe('Verified organization or service website for a social-map location.'),
+  "sourcePageUrl": zod.string().optional().describe('Public source page used to verify a social-map location.'),
+  "snapshotDate": zod.string().optional().describe('Date the curated social-map selection was last checked.')
 })),
   "source": zod.enum(['live', 'google_places', 'fallback', 'curated']),
   "message": zod.string().optional()

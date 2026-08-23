@@ -1,6 +1,35 @@
-export type Category = 'Museums' | 'Tours' | 'Family' | 'Entertainment' | 'Outdoors' | 'Markets' | 'Businesses' | 'Food & Drink';
+export type Category = 'Museums' | 'Tours' | 'Family' | 'Entertainment' | 'Outdoors' | 'Markets' | 'Businesses' | 'Food & Drink' | 'Social map';
 export const EVENT_CATEGORIES: Category[] = ['Museums', 'Tours', 'Family', 'Entertainment', 'Outdoors', 'Markets'];
-export const ALL_CATEGORIES: Category[] = [...EVENT_CATEGORIES, 'Food & Drink', 'Businesses'];
+export const ALL_CATEGORIES: Category[] = [...EVENT_CATEGORIES, 'Food & Drink', 'Social map', 'Businesses'];
+
+export type SocialMapCategory =
+  | 'Geldzaken'
+  | 'Gezin en opvoeden'
+  | 'Gezondheid'
+  | "Hobby's en interesses"
+  | 'Ondersteuning'
+  | 'Ontmoeten en samenleven'
+  | 'Sporten en bewegen'
+  | 'Taal en computer'
+  | 'Vervoer'
+  | 'Werk en opleiding'
+  | 'Wonen en huishouden'
+  | 'Zorg voor een naaste';
+
+export const SOCIAL_MAP_CATEGORIES: SocialMapCategory[] = [
+  'Geldzaken',
+  'Gezin en opvoeden',
+  'Gezondheid',
+  "Hobby's en interesses",
+  'Ondersteuning',
+  'Ontmoeten en samenleven',
+  'Sporten en bewegen',
+  'Taal en computer',
+  'Vervoer',
+  'Werk en opleiding',
+  'Wonen en huishouden',
+  'Zorg voor een naaste',
+];
 
 export type BusinessCategory =
   | 'Retail & Shopping'
@@ -65,6 +94,12 @@ export interface Marker {
   source?: ListingSource;
   /** Human-readable publisher or provider that listed this item. */
   sourceName?: string;
+  address?: string;
+  neighborhood?: string;
+  socialCategory?: SocialMapCategory;
+  officialUrl?: string;
+  sourcePageUrl?: string;
+  snapshotDate?: string;
 }
 
 // Active cities — add more Location entries here when expanding beyond Den Haag.

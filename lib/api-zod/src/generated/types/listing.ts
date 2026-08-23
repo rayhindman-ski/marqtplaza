@@ -8,6 +8,7 @@
 import type { BusinessCategory } from './businessCategory';
 import type { ListingCategory } from './listingCategory';
 import type { ListingSource } from './listingSource';
+import type { SocialMapCategory } from './socialMapCategory';
 
 export interface Listing {
   id: string;
@@ -30,4 +31,15 @@ export interface Listing {
   sourceName?: string;
   /** Whether the map pin uses the Den Haag city centre because no exact venue coordinates were supplied. */
   isApproximateLocation?: boolean;
+  /** Public visitor address for a curated social-map location. */
+  address?: string;
+  /** Den Haag neighborhood context for a curated social-map location. */
+  neighborhood?: string;
+  socialCategory?: SocialMapCategory;
+  /** Verified organization or service website for a social-map location. */
+  officialUrl?: string;
+  /** Public source page used to verify a social-map location. */
+  sourcePageUrl?: string;
+  /** Date the curated social-map selection was last checked. */
+  snapshotDate?: string;
 }

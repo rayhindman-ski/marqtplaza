@@ -1,4 +1,4 @@
-import type { BusinessCategory, Category, ListingSource, Location, Marker } from './data';
+import type { BusinessCategory, Category, ListingSource, Location, Marker, SocialMapCategory } from './data';
 
 export type Language = 'nl' | 'en';
 
@@ -17,6 +17,8 @@ export const translations = {
     popularNeighborhoods: 'Populaire buurten',
     neighborhoods: 'Buurten',
     neighborhoodLabel: 'Buurt',
+    postcodeFilterLabel: 'Postcode',
+    postcodeFilterPlaceholder: 'Filter op postcode, bijv. 2511',
     allNeighborhoods: 'Alle buurten',
     selectAllNeighborhoods: 'Selecteer alles',
     clearNeighborhoodSelection: 'Deselecteer alles',
@@ -34,6 +36,7 @@ export const translations = {
       Markets: 'Markten & Food',
       Businesses: 'Bedrijven',
       'Food & Drink': 'Horeca',
+      'Social map': 'Sociale kaart',
     },
     topLevelCategories: 'Hoofdcategorieën',
     subcategories: 'Subcategorieën',
@@ -50,6 +53,20 @@ export const translations = {
       'Hospitality & Travel': 'Gastvrijheid & reizen',
       'Arts, Culture & Entertainment': 'Kunst, cultuur & entertainment',
       'Fitness & Sports': 'Fitness & sport',
+    },
+    socialMapCategories: {
+      Geldzaken: 'Geldzaken',
+      'Gezin en opvoeden': 'Gezin en opvoeden',
+      Gezondheid: 'Gezondheid',
+      "Hobby's en interesses": "Hobby's en interesses",
+      Ondersteuning: 'Ondersteuning',
+      'Ontmoeten en samenleven': 'Ontmoeten en samenleven',
+      'Sporten en bewegen': 'Sporten en bewegen',
+      'Taal en computer': 'Taal en computer',
+      Vervoer: 'Vervoer',
+      'Werk en opleiding': 'Werk en opleiding',
+      'Wonen en huishouden': 'Wonen en huishouden',
+      'Zorg voor een naaste': 'Zorg voor een naaste',
     },
     listingSources: {
       google_maps: 'Google Maps',
@@ -74,6 +91,7 @@ export const translations = {
       { id: 'things-to-do', label: 'Doen' },
       { id: 'locals', label: 'Bedrijven' },
       { id: 'food-drink', label: 'Horeca' },
+      { id: 'social-map', label: 'Sociale kaart' },
       { id: 'shopping', label: 'Winkelen' },
     ],
     // Saved places
@@ -94,6 +112,10 @@ export const translations = {
     curatedDataBadge: 'Samengesteld',
     dataUnavailable: 'Live data tijdelijk niet beschikbaar – gecureerde vermeldingen worden weergegeven',
     listingsCoverageNote: 'Brede selectie uit Google Places en OpenStreetMap; geen volledige bedrijvengids.',
+    socialMapCoverageNote: 'Gecureerde Haagse selectie uit Sociale Kaart Den Haag, Haags Steunsysteem en officiële organisatiepagina’s; geen volledige sociale kaart.',
+    socialMapSnapshot: (date: string) => `Bronnen en locaties gecontroleerd op ${date}.`,
+    officialWebsite: 'Officiële website',
+    sourcePage: 'Bronpagina',
     // Capture page
     capture: 'Vastleggen',
     captureTitle: 'Bedrijven vastleggen',
@@ -134,6 +156,8 @@ export const translations = {
     popularNeighborhoods: 'Popular neighborhoods',
     neighborhoods: 'Neighborhoods',
     neighborhoodLabel: 'Neighborhood',
+    postcodeFilterLabel: 'Postcode',
+    postcodeFilterPlaceholder: 'Filter by postcode, e.g. 2511',
     allNeighborhoods: 'All neighborhoods',
     selectAllNeighborhoods: 'Select all',
     clearNeighborhoodSelection: 'Deselect all',
@@ -151,6 +175,7 @@ export const translations = {
       Markets: 'Food & Markets',
       Businesses: 'Businesses',
       'Food & Drink': 'Food & drink',
+      'Social map': 'Social map',
     },
     topLevelCategories: 'Top-level categories',
     subcategories: 'Subcategories',
@@ -167,6 +192,20 @@ export const translations = {
       'Hospitality & Travel': 'Hospitality & travel',
       'Arts, Culture & Entertainment': 'Arts, culture & entertainment',
       'Fitness & Sports': 'Fitness & sports',
+    },
+    socialMapCategories: {
+      Geldzaken: 'Money matters',
+      'Gezin en opvoeden': 'Family & parenting',
+      Gezondheid: 'Health',
+      "Hobby's en interesses": 'Hobbies & interests',
+      Ondersteuning: 'Support',
+      'Ontmoeten en samenleven': 'Meeting & community',
+      'Sporten en bewegen': 'Sports & exercise',
+      'Taal en computer': 'Language & digital skills',
+      Vervoer: 'Transport',
+      'Werk en opleiding': 'Work & education',
+      'Wonen en huishouden': 'Housing & household',
+      'Zorg voor een naaste': 'Caring for someone close',
     },
     listingSources: {
       google_maps: 'Google Maps',
@@ -191,6 +230,7 @@ export const translations = {
       { id: 'things-to-do', label: 'Things to do' },
       { id: 'locals', label: 'Businesses' },
       { id: 'food-drink', label: 'Food & drink' },
+      { id: 'social-map', label: 'Social map' },
       { id: 'shopping', label: 'Shopping' },
     ],
     // Saved places
@@ -211,6 +251,10 @@ export const translations = {
     curatedDataBadge: 'Curated',
     dataUnavailable: 'Live data temporarily unavailable – showing curated listings',
     listingsCoverageNote: 'Broad selection from Google Places and OpenStreetMap; not a complete business directory.',
+    socialMapCoverageNote: 'Curated Hague selection from Sociale Kaart Den Haag, Haags Steunsysteem and official organization pages; not a complete social map.',
+    socialMapSnapshot: (date: string) => `Sources and locations checked on ${date}.`,
+    officialWebsite: 'Official website',
+    sourcePage: 'Source page',
     // Capture page
     capture: 'Capture',
     captureTitle: 'Capture Businesses',
@@ -246,6 +290,10 @@ export const translations = {
 
 export function getBusinessCategoryName(category: BusinessCategory, language: Language): string {
   return translations[language].businessCategories[category];
+}
+
+export function getSocialMapCategoryName(category: SocialMapCategory, language: Language): string {
+  return translations[language].socialMapCategories[category];
 }
 
 export function getListingSourceName(source: ListingSource, language: Language): string {

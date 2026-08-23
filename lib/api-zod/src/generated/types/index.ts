@@ -46,6 +46,7 @@ export * from './newsSourceStatusStatus';
 export * from './newsSubcategory';
 export * from './persistOutcome';
 export * from './scanResultList';
+export * from './socialMapCategory';
 export * from './sourceScanEvent';
 export * from './sourceScanEventCategory';
 export * from './sourceScanEventReviewReason';

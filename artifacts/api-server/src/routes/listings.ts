@@ -3,10 +3,16 @@ import { and, asc, desc, eq, gte } from "drizzle-orm";
 import { db } from "@workspace/db";
 import { discoveredEventsTable } from "@workspace/db/schema";
 import { MARKERS } from "../lib/static-listings.js";
+import {
+  SOCIAL_MAP_LISTINGS,
+  SOCIAL_MAP_SNAPSHOT_DATE,
+  SOCIAL_MAP_SOURCE_NOTE,
+  type SocialMapCategory,
+} from "../lib/social-map-listings.js";
 
 const router: IRouter = Router();
-type ListingSection = "events" | "businesses" | "food-drink";
-type ListingCategory = "Museums" | "Tours" | "Family" | "Entertainment" | "Outdoors" | "Markets" | "Businesses" | "Food & Drink";
+type ListingSection = "events" | "businesses" | "food-drink" | "social-map";
+type ListingCategory = "Museums" | "Tours" | "Family" | "Entertainment" | "Outdoors" | "Markets" | "Businesses" | "Food & Drink" | "Social map";
 type BusinessCategory =
   | "Retail & Shopping"
   | "Food & Drink"
@@ -36,6 +42,12 @@ type Listing = {
   businessCategory?: BusinessCategory;
   source?: ListingSource;
   sourceName?: string;
+  address?: string;
+  neighborhood?: string;
+  socialCategory?: SocialMapCategory;
+  officialUrl?: string;
+  sourcePageUrl?: string;
+  snapshotDate?: string;
 };
 
 function sourceNameFromUrl(sourceUrl?: string): string | undefined {
@@ -207,7 +219,7 @@ function normalizedTitle(value: string): string {
 
 function parseListingSection(value: unknown): ListingSection {
   const section = String(value ?? "events").trim();
-  if (section === "businesses" || section === "food-drink") return section;
+  if (section === "businesses" || section === "food-drink" || section === "social-map") return section;
   return "events";
 }
 
@@ -311,7 +323,7 @@ const GOOGLE_TYPE_TO_BUSINESS_CATEGORY: Record<string, BusinessCategory> = {
 
 function businessCategoryForGooglePlace(
   place: GooglePlace,
-  section: Exclude<ListingSection, "events">,
+  section: Exclude<ListingSection, "events" | "social-map">,
 ): BusinessCategory {
   if (section === "food-drink") return "Food & Drink";
   const primaryType = place.primaryType?.toLowerCase();
@@ -350,7 +362,7 @@ const HAGUE_DISCOVERY_AREAS: GeographicBounds[] = [
   { s: 52.078, w: 4.305, n: 52.11, e: 4.36 },
 ];
 
-const GOOGLE_SEARCH_TERMS: Record<Exclude<ListingSection, "events">, string[]> = {
+const GOOGLE_SEARCH_TERMS: Record<Exclude<ListingSection, "events" | "social-map">, string[]> = {
   businesses: [
     "shops and retail businesses in The Hague Netherlands",
     "healthcare and beauty businesses in The Hague Netherlands",
@@ -368,7 +380,7 @@ const GOOGLE_SEARCH_TERMS: Record<Exclude<ListingSection, "events">, string[]> =
   ],
 };
 
-function googleSearchSpecs(section: Exclude<ListingSection, "events">): GoogleSearchSpec[] {
+function googleSearchSpecs(section: Exclude<ListingSection, "events" | "social-map">): GoogleSearchSpec[] {
   return HAGUE_DISCOVERY_AREAS.flatMap((area) =>
     GOOGLE_SEARCH_TERMS[section].map((term) => ({
       textQuery: term,
@@ -377,7 +389,7 @@ function googleSearchSpecs(section: Exclude<ListingSection, "events">): GoogleSe
   );
 }
 
-function googlePlaceDescription(place: GooglePlace, section: Exclude<ListingSection, "events">): string {
+function googlePlaceDescription(place: GooglePlace, section: Exclude<ListingSection, "events" | "social-map">): string {
   const type = place.primaryTypeDisplayName?.text
     ?? place.primaryType?.replace(/_/g, " ")
     ?? (section === "food-drink" ? "Food & drink" : "Local business");
@@ -424,7 +436,7 @@ async function withGoogleRequestSlot<T>(operation: () => Promise<T>): Promise<T>
 
 async function fetchGooglePlaces(
   bounds: { s: number; w: number; n: number; e: number },
-  section: Exclude<ListingSection, "events">,
+  section: Exclude<ListingSection, "events" | "social-map">,
 ): Promise<Listing[]> {
   const cacheKey = section;
   const cached = googlePlacesCache.get(cacheKey);
@@ -445,7 +457,7 @@ async function fetchGooglePlaces(
 
 async function collectGooglePlaces(
   bounds: { s: number; w: number; n: number; e: number },
-  section: Exclude<ListingSection, "events">,
+  section: Exclude<ListingSection, "events" | "social-map">,
 ): Promise<Listing[]> {
   const apiKey = process.env.GOOGLE_MAPS_API_KEY;
   if (!apiKey) return [];
@@ -656,7 +668,7 @@ function businessCategoryForOsmTags(
   return "Professional Services";
 }
 
-function fetchOpenStreetMapBusinesses(elements: OsmElement[], section: Exclude<ListingSection, "events">, bounds: { s: number; w: number; n: number; e: number }): Listing[] {
+function fetchOpenStreetMapBusinesses(elements: OsmElement[], section: Exclude<ListingSection, "events" | "social-map">, bounds: { s: number; w: number; n: number; e: number }): Listing[] {
   const seen = new Set<string>();
   return elements
     .filter((element) => {
@@ -768,6 +780,47 @@ router.get("/listings", async (req, res) => {
   const bounds = CITY_BOUNDS[cityId];
   if (!bounds) {
     res.status(400).json({ listings: [], source: "fallback", message: `Unknown city: ${cityId}` });
+    return;
+  }
+
+  if (listingSection === "social-map") {
+    if (cityId !== "dhg") {
+      res.json({
+        listings: [],
+        source: "curated",
+        message: "De Sociale kaart is momenteel alleen beschikbaar voor Den Haag.",
+      });
+      return;
+    }
+    const listings: Listing[] = SOCIAL_MAP_LISTINGS.map((listing) => {
+      const { x, y } = toXY(listing.lat, listing.lng, bounds);
+      return {
+        id: listing.id,
+        locationId: "dhg",
+        category: "Social map",
+        name: listing.name,
+        description: listing.description,
+        x,
+        y,
+        details: listing.address,
+        lat: listing.lat,
+        lng: listing.lng,
+        sourceUrl: listing.officialUrl,
+        officialUrl: listing.officialUrl,
+        sourcePageUrl: listing.sourcePageUrl,
+        source: "curated",
+        sourceName: listing.sourceName,
+        address: listing.address,
+        neighborhood: listing.neighborhood,
+        socialCategory: listing.socialCategory,
+        snapshotDate: SOCIAL_MAP_SNAPSHOT_DATE,
+      };
+    });
+    res.json({
+      listings,
+      source: "curated",
+      message: `${SOCIAL_MAP_SOURCE_NOTE} Snapshot: ${SOCIAL_MAP_SNAPSHOT_DATE}.`,
+    });
     return;
   }
 

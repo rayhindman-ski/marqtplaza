@@ -9,7 +9,7 @@ import {
   Map as MapIcon, List, Clock, Newspaper,
   Globe2, Bookmark, BookmarkCheck, X, ChevronDown, ChevronUp,
   ScanSearch, RefreshCw, WifiOff, Radio, MapPinned,
-  Landmark, Route as RouteIcon, Baby, Building2, Coffee, Gamepad2, Waves, ShoppingBag, ExternalLink
+  Landmark, Route as RouteIcon, Baby, Building2, Coffee, Gamepad2, HandHeart, Waves, ShoppingBag, ExternalLink
 } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -21,10 +21,12 @@ import {
   ALL_CATEGORIES,
   BUSINESS_CATEGORIES,
   EVENT_CATEGORIES,
+  SOCIAL_MAP_CATEGORIES,
   type BusinessCategory,
   type Category,
   type ListingSource,
   type Marker,
+  type SocialMapCategory,
 } from './lib/data';
 import { GoogleMapView } from './components/GoogleMapView';
 import CaptureView from './pages/CaptureView';
@@ -38,6 +40,7 @@ import {
   getMarkerCopy,
   getBusinessCategoryName,
   getListingSourceName,
+  getSocialMapCategoryName,
   LANGUAGE_OPTIONS,
   translations,
   type Language,
@@ -61,9 +64,9 @@ function getDistanceKm(latA: number, lngA: number, latB: number, lngB: number) {
 }
 
 const STORAGE_KEY = 'buurtgids_saved_places';
-type ListingSection = 'events' | 'businesses' | 'food-drink';
-type FilterSubcategory = Exclude<Category, 'Businesses'> | BusinessCategory;
-const TOP_LEVEL_SECTIONS: ListingSection[] = ['events', 'food-drink', 'businesses'];
+type ListingSection = 'events' | 'businesses' | 'food-drink' | 'social-map';
+type FilterSubcategory = Exclude<Category, 'Businesses' | 'Social map'> | BusinessCategory | SocialMapCategory;
+const TOP_LEVEL_SECTIONS: ListingSection[] = ['events', 'food-drink', 'social-map', 'businesses'];
 
 function topLevelStateFor(section: ListingSection): Record<ListingSection, boolean> {
   return Object.fromEntries(
@@ -74,35 +77,43 @@ function topLevelStateFor(section: ListingSection): Record<ListingSection, boole
 function subcategoryStateFor(section: ListingSection): Record<FilterSubcategory, boolean> {
   const active = subcategoriesForTopLevel(section);
   const eventSubcategories = EVENT_CATEGORIES.filter(
-    (category): category is Exclude<Category, 'Businesses'> => category !== 'Businesses',
+    (category): category is Exclude<Category, 'Businesses' | 'Social map'> =>
+      category !== 'Businesses' && category !== 'Social map',
   );
   return Object.fromEntries(
-    [...eventSubcategories, ...BUSINESS_CATEGORIES].map((category) => [category, active.includes(category)]),
+    [...eventSubcategories, ...BUSINESS_CATEGORIES, ...SOCIAL_MAP_CATEGORIES].map((category) => [category, active.includes(category)]),
   ) as Record<FilterSubcategory, boolean>;
 }
 
 function subcategoriesForTopLevel(section: ListingSection): FilterSubcategory[] {
   if (section === 'events') {
     return EVENT_CATEGORIES.filter(
-      (category): category is Exclude<Category, 'Businesses'> => category !== 'Businesses',
+      (category): category is Exclude<Category, 'Businesses' | 'Social map'> =>
+        category !== 'Businesses' && category !== 'Social map',
     );
   }
   if (section === 'businesses') {
     return BUSINESS_CATEGORIES.filter((subcategory) => subcategory !== 'Food & Drink');
   }
+  if (section === 'social-map') return SOCIAL_MAP_CATEGORIES;
   return ['Food & Drink'];
 }
 
 function topLevelForMarker(marker: Marker): ListingSection {
   if (marker.category === 'Businesses') return 'businesses';
   if (marker.category === 'Food & Drink') return 'food-drink';
+  if (marker.category === 'Social map') return 'social-map';
   return 'events';
 }
 
 function subcategoryLabelFor(subcategory: FilterSubcategory, language: Language): string {
-  return EVENT_CATEGORIES.includes(subcategory as Category)
-    ? translations[language].categories[subcategory as Category]
-    : getBusinessCategoryName(subcategory as BusinessCategory, language);
+  if (EVENT_CATEGORIES.includes(subcategory as Category)) {
+    return translations[language].categories[subcategory as Category];
+  }
+  if (SOCIAL_MAP_CATEGORIES.includes(subcategory as SocialMapCategory)) {
+    return getSocialMapCategoryName(subcategory as SocialMapCategory, language);
+  }
+  return getBusinessCategoryName(subcategory as BusinessCategory, language);
 }
 function LanguageSelector({
   language,
@@ -170,6 +181,7 @@ function ReferenceCategoryNav({
                 if (category.id === 'things-to-do') onThingsToDo();
                 if (category.id === 'locals' || category.id === 'shopping') onSectionSelect('businesses');
                 if (category.id === 'food-drink') onSectionSelect('food-drink');
+                if (category.id === 'social-map') onSectionSelect('social-map');
               }}
               aria-haspopup={category.id === 'things-to-do' ? 'dialog' : undefined}
               className="text-sm font-extrabold text-foreground transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
@@ -444,6 +456,7 @@ const CATEGORY_ICONS: Record<Category, React.ElementType> = {
   Markets: ShoppingBag,
   Businesses: Building2,
   'Food & Drink': Coffee,
+  'Social map': HandHeart,
 };
 const DETAIL_ICONS: Record<Category, React.ElementType> = {
   Museums: Clock,
@@ -454,6 +467,7 @@ const DETAIL_ICONS: Record<Category, React.ElementType> = {
   Markets: Clock,
   Businesses: MapPinned,
   'Food & Drink': Clock,
+  'Social map': MapPinned,
 };
 
 function MapPin({
@@ -559,6 +573,7 @@ function MarkerCard({
   const Icon = CATEGORY_ICONS[marker.category];
   const DetailIcon = DETAIL_ICONS[marker.category];
   const copy = getMarkerCopy(marker, language);
+  const t = translations[language];
   const sourceLabel = marker.sourceName
     ?? (marker.source ? getListingSourceName(marker.source, language) : undefined);
 
@@ -598,13 +613,18 @@ function MarkerCard({
             )}>{marker.name}</h3>
             <SaveButton saved={isSaved} onToggle={onSave} />
           </div>
-           {(marker.businessCategory || sourceLabel) && (
+           {(marker.businessCategory || marker.socialCategory || sourceLabel) && (
              <div className="mb-3 flex flex-wrap items-center gap-1.5">
                {marker.businessCategory && (
                  <span className="rounded-md bg-primary/10 px-2 py-1 text-[11px] font-bold text-primary">
                    {getBusinessCategoryName(marker.businessCategory, language)}
                  </span>
                )}
+                {marker.socialCategory && (
+                  <span className="rounded-md bg-emerald-700/10 px-2 py-1 text-[11px] font-bold text-emerald-800">
+                    {getSocialMapCategoryName(marker.socialCategory, language)}
+                  </span>
+                )}
                {sourceLabel && (
                  <span className="rounded-md bg-muted px-2 py-1 text-[11px] font-semibold text-muted-foreground">
                    {sourceLabel}
@@ -620,7 +640,7 @@ function MarkerCard({
           <div className="mt-2 flex items-center justify-between gap-2">
             <div className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
               <MapPinned className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
-              <span>Lat {marker.lat.toFixed(5)} · Lng {marker.lng.toFixed(5)}</span>
+              <span>{marker.address ?? `Lat ${marker.lat.toFixed(5)} · Lng ${marker.lng.toFixed(5)}`}</span>
             </div>
             {marker.sourceUrl && (
               <a
@@ -630,7 +650,7 @@ function MarkerCard({
                 onClick={e => e.stopPropagation()}
                 className="flex items-center gap-0.5 text-[11px] font-semibold text-primary hover:underline shrink-0"
               >
-                Source <ExternalLink className="h-2.5 w-2.5" />
+                {marker.officialUrl ? t.officialWebsite : 'Source'} <ExternalLink className="h-2.5 w-2.5" />
               </a>
             )}
           </div>
@@ -753,6 +773,7 @@ function DiscoveryState({
   const [selectedNeighborhoods, setSelectedNeighborhoods] = useState<string[]>(
     initialNeighborhood ? [initialNeighborhood] : [],
   );
+  const [postcodeFilter, setPostcodeFilter] = useState('');
   const [selectedMarker, setSelectedMarker] = useState<string | null>(null);
   const [view, setView] = useState<'map' | 'list'>('map');
 
@@ -760,10 +781,12 @@ function DiscoveryState({
   const eventsQuery = useGetListings({ cityId: locationId, section: 'events' });
   const businessesQuery = useGetListings({ cityId: locationId, section: 'businesses' });
   const foodDrinkQuery = useGetListings({ cityId: locationId, section: 'food-drink' });
+  const socialMapQuery = useGetListings({ cityId: locationId, section: 'social-map' });
   const listingQueries = {
     events: eventsQuery,
     businesses: businessesQuery,
     'food-drink': foodDrinkQuery,
+    'social-map': socialMapQuery,
   };
 
   if (!location) return null;
@@ -793,7 +816,9 @@ function DiscoveryState({
   };
 
   const handleMarkerClick = (id: string) => {
-    const detailUrl = `/activiteiten/den-haag/${encodeURIComponent(id)}?section=${listingSection}`;
+    const marker = allMarkers.find((item) => item.id === id);
+    const section = marker ? topLevelForMarker(marker) : listingSection;
+    const detailUrl = `/activiteiten/den-haag/${encodeURIComponent(id)}?section=${section}`;
     const detailWindow = window.open(detailUrl, '_blank', 'noopener,noreferrer');
     if (detailWindow) {
       detailWindow.opener = null;
@@ -865,9 +890,15 @@ function DiscoveryState({
       lat: l.lat,
       lng: l.lng,
       sourceUrl: (l as { sourceUrl?: string }).sourceUrl,
-        businessCategory: (l as { businessCategory?: BusinessCategory }).businessCategory,
-        source: (l as { source?: ListingSource }).source,
-        sourceName: (l as { sourceName?: string }).sourceName,
+        businessCategory: l.businessCategory as BusinessCategory | undefined,
+        source: l.source as ListingSource | undefined,
+        sourceName: l.sourceName,
+        address: l.address,
+        neighborhood: l.neighborhood,
+        socialCategory: l.socialCategory as SocialMapCategory | undefined,
+        officialUrl: l.officialUrl,
+        sourcePageUrl: l.sourcePageUrl,
+        snapshotDate: l.snapshotDate,
     };
   });
 
@@ -877,7 +908,8 @@ function DiscoveryState({
   const filteredMarkers = allMarkers.filter((marker) => {
     const markerTopLevel = topLevelForMarker(marker);
     if (!topLevelCategories[markerTopLevel]) return false;
-    const markerSubcategory = marker.businessCategory
+    const markerSubcategory = marker.socialCategory
+      ?? marker.businessCategory
       ?? (marker.category === 'Businesses' ? undefined : marker.category as FilterSubcategory);
     if (
       markerTopLevel !== 'events'
@@ -889,7 +921,18 @@ function DiscoveryState({
     if (markerTopLevel === 'events' && markerSubcategory && !subcategories[markerSubcategory]) {
       return false;
     }
+    const normalizedPostcode = postcodeFilter.trim().toUpperCase().replace(/\s/g, '');
+    if (
+      normalizedPostcode
+      && marker.category === 'Social map'
+      && !marker.address?.toUpperCase().replace(/\s/g, '').includes(normalizedPostcode)
+    ) {
+      return false;
+    }
     if (selectedAreas.length === 0) return true;
+    if (marker.category === 'Social map') {
+      return Boolean(marker.neighborhood && selectedNeighborhoods.includes(marker.neighborhood));
+    }
     return selectedAreas.some((area) => getDistanceKm(marker.lat, marker.lng, area.lat, area.lng) <= 2.5);
   });
   const isLoading = selectedQueries.some((query) => query.isLoading);
@@ -963,7 +1006,9 @@ function DiscoveryState({
                     ? (language === 'nl' ? 'Evenementen' : 'Events')
                     : section === 'businesses'
                       ? t.categories.Businesses
-                      : t.categories['Food & Drink'];
+                      : section === 'social-map'
+                        ? t.categories['Social map']
+                        : t.categories['Food & Drink'];
                   return (
                     <label
                       key={section}
@@ -1105,6 +1150,20 @@ function DiscoveryState({
                 ? t.neighborhoodsSelected(selectedNeighborhoods.length)
                 : t.allNeighborhoods}
             </p>
+            {selectedTopLevelSections.includes('social-map') && (
+              <label className="mt-3 block">
+                <span className="mb-1 block text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
+                  {t.postcodeFilterLabel}
+                </span>
+                <input
+                  type="search"
+                  value={postcodeFilter}
+                  onChange={(event) => setPostcodeFilter(event.target.value)}
+                  placeholder={t.postcodeFilterPlaceholder}
+                  className="h-10 w-full rounded-xl border border-border/70 bg-card px-3 text-sm font-medium text-foreground outline-none placeholder:text-muted-foreground/70 focus:border-primary focus:ring-2 focus:ring-primary/20"
+                />
+              </label>
+            )}
           </div>
         </div>
 
@@ -1135,8 +1194,15 @@ function DiscoveryState({
             {isFallback && fallbackMessage && (
               <span className="text-xs text-muted-foreground">{fallbackMessage}</span>
             )}
-            {isGooglePlaces && (
-              <span className="w-full text-xs text-muted-foreground">{t.listingsCoverageNote}</span>
+            {(isGooglePlaces || selectedTopLevelSections.includes('social-map')) && (
+              <span className="w-full text-xs text-muted-foreground">
+                {selectedTopLevelSections.includes('social-map') ? t.socialMapCoverageNote : t.listingsCoverageNote}
+              </span>
+            )}
+            {selectedTopLevelSections.includes('social-map') && selectedListings[0]?.snapshotDate && (
+              <span className="w-full text-xs text-muted-foreground">
+                {t.socialMapSnapshot(selectedListings[0].snapshotDate)}
+              </span>
             )}
           </div>
         )}
@@ -1351,15 +1417,30 @@ function EventDetailView({ eventId, listingSection = 'events' }: { eventId: stri
           </div>
 
           {sourceUrl && (
+            <div className="mt-8 flex flex-wrap gap-3">
             <a
               href={sourceUrl}
               target="_blank"
               rel="noopener noreferrer"
               className="mt-8 inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/5 px-4 py-2.5 text-sm font-bold text-primary transition-colors hover:bg-primary/10"
             >
-              {language === 'nl' ? 'Bekijk de bronwebsite' : 'View source website'}
+              {(listing as typeof listing & { officialUrl?: string }).officialUrl
+                ? translations[language].officialWebsite
+                : (language === 'nl' ? 'Bekijk de bronwebsite' : 'View source website')}
               <ExternalLink className="h-4 w-4" />
             </a>
+            {(listing as typeof listing & { sourcePageUrl?: string }).sourcePageUrl && (
+              <a
+                href={(listing as typeof listing & { sourcePageUrl?: string }).sourcePageUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 rounded-full border border-border bg-muted/40 px-4 py-2.5 text-sm font-bold text-muted-foreground transition-colors hover:bg-muted"
+              >
+                {translations[language].sourcePage}
+                <ExternalLink className="h-4 w-4" />
+              </a>
+            )}
+            </div>
           )}
         </article>
       </main>
@@ -1370,7 +1451,9 @@ function EventDetailView({ eventId, listingSection = 'events' }: { eventId: stri
 function EventDetailRoute() {
   const [, params] = useRoute('/activiteiten/den-haag/:eventId');
   const requestedSection = new URLSearchParams(window.location.search).get('section');
-  const listingSection: ListingSection = requestedSection === 'businesses' || requestedSection === 'food-drink'
+  const listingSection: ListingSection = requestedSection === 'businesses'
+    || requestedSection === 'food-drink'
+    || requestedSection === 'social-map'
     ? requestedSection
     : 'events';
   return <EventDetailView eventId={params?.eventId ?? ''} listingSection={listingSection} />;
@@ -1551,6 +1634,7 @@ function SavedView({
     Markets:       savedList.filter(m => m.category === 'Markets'),
     Businesses:    savedList.filter(m => m.category === 'Businesses'),
     'Food & Drink': savedList.filter(m => m.category === 'Food & Drink'),
+    'Social map': savedList.filter(m => m.category === 'Social map'),
   };
 
   return (

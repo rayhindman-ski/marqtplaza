@@ -315,6 +315,7 @@ export const ListingCategory = {
   Markets: 'Markets',
   Businesses: 'Businesses',
   'Food_&_Drink': 'Food & Drink',
+  Social_map: 'Social map',
 } as const;
 
 /**
@@ -351,6 +352,27 @@ export const ListingSource = {
   source_scan: 'source_scan',
 } as const;
 
+/**
+ * Curated support theme for the Den Haag social map.
+ */
+export type SocialMapCategory = typeof SocialMapCategory[keyof typeof SocialMapCategory];
+
+
+export const SocialMapCategory = {
+  Geldzaken: 'Geldzaken',
+  Gezin_en_opvoeden: 'Gezin en opvoeden',
+  Gezondheid: 'Gezondheid',
+  'Hobby\'s_en_interesses': 'Hobby\'s en interesses',
+  Ondersteuning: 'Ondersteuning',
+  Ontmoeten_en_samenleven: 'Ontmoeten en samenleven',
+  Sporten_en_bewegen: 'Sporten en bewegen',
+  Taal_en_computer: 'Taal en computer',
+  Vervoer: 'Vervoer',
+  Werk_en_opleiding: 'Werk en opleiding',
+  Wonen_en_huishouden: 'Wonen en huishouden',
+  Zorg_voor_een_naaste: 'Zorg voor een naaste',
+} as const;
+
 export interface Listing {
   id: string;
   locationId: string;
@@ -372,6 +394,17 @@ export interface Listing {
   sourceName?: string;
   /** Whether the map pin uses the Den Haag city centre because no exact venue coordinates were supplied. */
   isApproximateLocation?: boolean;
+  /** Public visitor address for a curated social-map location. */
+  address?: string;
+  /** Den Haag neighborhood context for a curated social-map location. */
+  neighborhood?: string;
+  socialCategory?: SocialMapCategory;
+  /** Verified organization or service website for a social-map location. */
+  officialUrl?: string;
+  /** Public source page used to verify a social-map location. */
+  sourcePageUrl?: string;
+  /** Date the curated social-map selection was last checked. */
+  snapshotDate?: string;
 }
 
 export type ListingsResponseSource = typeof ListingsResponseSource[keyof typeof ListingsResponseSource];
@@ -526,6 +559,7 @@ export const GetListingsSection = {
   events: 'events',
   businesses: 'businesses',
   'food-drink': 'food-drink',
+  'social-map': 'social-map',
 } as const;
 
 export type GetNewsParams = {

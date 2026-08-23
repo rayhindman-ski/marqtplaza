@@ -175,7 +175,7 @@ paths:
       operationId: getListings
       tags: [listings]
       summary: Get local listings for a city
-      description: Returns businesses, events, and specials for a given city. Falls back gracefully when the live data provider is unavailable.
+      description: Returns businesses, events, food-and-drink venues, or the curated Den Haag social map for a given city.
       parameters:
         - name: cityId
           in: query
@@ -188,7 +188,7 @@ paths:
           required: false
           schema:
             type: string
-            enum: [events, businesses, food-drink]
+            enum: [events, businesses, food-drink, social-map]
             default: events
           description: Which Den Haag discovery stream to return.
       responses:
@@ -624,7 +624,7 @@ components:
           type: string
         category:
           type: string
-          enum: [Museums, Tours, Family, Entertainment, Outdoors, Markets, Businesses, Food & Drink]
+          enum: [Museums, Tours, Family, Entertainment, Outdoors, Markets, Businesses, Food & Drink, Social map]
         name:
           type: string
         description:
@@ -654,6 +654,23 @@ components:
         isApproximateLocation:
           type: boolean
           description: Whether the map pin uses the Den Haag city centre because no exact venue coordinates were supplied.
+        address:
+          type: string
+          description: Public visitor address for a curated social-map location.
+        neighborhood:
+          type: string
+          description: Den Haag neighborhood context for a curated social-map location.
+        socialCategory:
+          $ref: "#/components/schemas/SocialMapCategory"
+        officialUrl:
+          type: string
+          description: Verified organization or service website for a social-map location.
+        sourcePageUrl:
+          type: string
+          description: Public source page used to verify a social-map location.
+        snapshotDate:
+          type: string
+          description: Date the curated social-map selection was last checked.
       required:
         - id
         - locationId
@@ -687,6 +704,23 @@ components:
       type: string
       description: Provider or editorial source for an individual listing.
       enum: [google_maps, openstreetmap, curated, source_scan]
+
+    SocialMapCategory:
+      type: string
+      description: Curated support theme for the Den Haag social map.
+      enum:
+        - Geldzaken
+        - Gezin en opvoeden
+        - Gezondheid
+        - Hobby's en interesses
+        - Ondersteuning
+        - Ontmoeten en samenleven
+        - Sporten en bewegen
+        - Taal en computer
+        - Vervoer
+        - Werk en opleiding
+        - Wonen en huishouden
+        - Zorg voor een naaste
 
     ListingsResponse:
       type: object

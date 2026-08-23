@@ -8,7 +8,8 @@
     "build": "node ./build.mjs",
     "test": "DATABASE_URL=postgres://localhost/news_test tsx --test src/routes/news.test.ts",
     "start": "node --enable-source-maps ./dist/index.mjs",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "validate:social-map-links": "tsx ./scripts/validate-social-map-links.ts"
   },
   "dependencies": {
     "@clerk/express": "^2.1.61",
