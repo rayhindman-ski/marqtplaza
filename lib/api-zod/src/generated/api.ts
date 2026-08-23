@@ -99,6 +99,8 @@ export const scanActivitySourcesResponseScansItemEventsOutOfWindowMin = 0;
 
 export const scanActivitySourcesResponseScansItemEventsMissingLocalityMin = 0;
 
+export const scanActivitySourcesResponseScansItemEventsForeignLocationMin = 0;
+
 export const scanActivitySourcesResponseScansItemPagesReadMin = 0;
 
 export const scanActivitySourcesResponseScansItemPagesFailedMin = 0;
@@ -135,7 +137,8 @@ export const ScanActivitySourcesResponse = zod.object({
   "description": zod.string().optional(),
   "startsAt": zod.string().optional(),
   "venue": zod.string().optional(),
-  "category": zod.enum(['Museums', 'Tours', 'Family', 'Entertainment', 'Outdoors', 'Markets']).optional()
+  "category": zod.enum(['Museums', 'Tours', 'Family', 'Entertainment', 'Outdoors', 'Markets']).optional(),
+  "reviewReason": zod.enum(['missing_date', 'out_of_window', 'missing_locality', 'foreign_location']).optional()
 })),
   "eventLinksRead": zod.number().min(scanActivitySourcesResponseScansItemEventLinksReadMin).describe('Number of same-source links examined across approved index and detail pages.'),
   "eventsCaptured": zod.number().min(scanActivitySourcesResponseScansItemEventsCapturedMin).describe('Number of unique event links captured from the source page.'),
@@ -143,6 +146,7 @@ export const ScanActivitySourcesResponse = zod.object({
   "eventsMissingDate": zod.number().min(scanActivitySourcesResponseScansItemEventsMissingDateMin).describe('Captured events excluded because no explicit event date could be parsed.'),
   "eventsOutOfWindow": zod.number().min(scanActivitySourcesResponseScansItemEventsOutOfWindowMin).describe('Captured events excluded because their date is past or more than 18 months away.'),
   "eventsMissingLocality": zod.number().min(scanActivitySourcesResponseScansItemEventsMissingLocalityMin).describe('Captured events excluded because no Den Haag location evidence was found.'),
+  "eventsForeignLocation": zod.number().min(scanActivitySourcesResponseScansItemEventsForeignLocationMin).describe('Captured events excluded because available evidence establishes a location outside the Netherlands.'),
   "pagesRead": zod.number().min(scanActivitySourcesResponseScansItemPagesReadMin).describe('Number of approved source pages read during the bounded crawl.'),
   "pagesFailed": zod.number().min(scanActivitySourcesResponseScansItemPagesFailedMin).describe('Number of approved source pages that could not be read.'),
   "pagesSkipped": zod.number().min(scanActivitySourcesResponseScansItemPagesSkippedMin).describe('Discovered pages skipped because a safe crawl budget was reached.'),
@@ -157,6 +161,79 @@ export const ScanActivitySourcesResponse = zod.object({
   "message": zod.string().optional()
 })),
   "error": zod.string().optional()
+})
+
+
+/**
+ * @summary Get excluded source-scanned event candidates for editorial review
+ */
+export const getEventReviewCandidatesQueryStatusDefault = `all`;
+
+export const GetEventReviewCandidatesQueryParams = zod.object({
+  "status": zod.enum(['all', 'open', 'rejected']).default(getEventReviewCandidatesQueryStatusDefault).describe('Whether to return open candidates, definitively rejected candidates, or both.')
+})
+
+export const GetEventReviewCandidatesResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.number(),
+  "title": zod.string(),
+  "sourceName": zod.string(),
+  "sourceUrl": zod.string(),
+  "description": zod.string(),
+  "startsAt": zod.string().nullable(),
+  "venue": zod.string().nullable(),
+  "category": zod.string(),
+  "lat": zod.number(),
+  "lng": zod.number(),
+  "status": zod.enum(['approved', 'pending_review', 'rejected']),
+  "reason": zod.union([zod.literal('missing_date'),zod.literal('out_of_window'),zod.literal('missing_locality'),zod.literal('foreign_location'),zod.literal('manual_rejection'),zod.literal(null)]).nullable(),
+  "evidenceUrl": zod.string().nullable(),
+  "firstSeenAt": zod.string(),
+  "lastSeenAt": zod.string(),
+  "reviewedAt": zod.string().nullable()
+})),
+  "counts": zod.object({
+  "pending": zod.number(),
+  "rejected": zod.number()
+})
+})
+
+
+/**
+ * @summary Approve a candidate with verified Hague event details or reject it definitively
+ */
+export const DecideEventReviewCandidateParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const DecideEventReviewCandidateBody = zod.object({
+  "decision": zod.enum(['approve', 'reject']),
+  "startsAt": zod.string().optional(),
+  "venue": zod.string().optional(),
+  "lat": zod.number().optional(),
+  "lng": zod.number().optional(),
+  "evidenceUrl": zod.string().optional()
+})
+
+export const DecideEventReviewCandidateResponse = zod.object({
+  "item": zod.object({
+  "id": zod.number(),
+  "title": zod.string(),
+  "sourceName": zod.string(),
+  "sourceUrl": zod.string(),
+  "description": zod.string(),
+  "startsAt": zod.string().nullable(),
+  "venue": zod.string().nullable(),
+  "category": zod.string(),
+  "lat": zod.number(),
+  "lng": zod.number(),
+  "status": zod.enum(['approved', 'pending_review', 'rejected']),
+  "reason": zod.union([zod.literal('missing_date'),zod.literal('out_of_window'),zod.literal('missing_locality'),zod.literal('foreign_location'),zod.literal('manual_rejection'),zod.literal(null)]).nullable(),
+  "evidenceUrl": zod.string().nullable(),
+  "firstSeenAt": zod.string(),
+  "lastSeenAt": zod.string(),
+  "reviewedAt": zod.string().nullable()
+})
 })
 
 

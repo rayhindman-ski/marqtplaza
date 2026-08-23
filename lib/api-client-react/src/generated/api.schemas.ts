@@ -91,6 +91,16 @@ export const SourceScanEventCategory = {
   Markets: 'Markets',
 } as const;
 
+export type SourceScanEventReviewReason = typeof SourceScanEventReviewReason[keyof typeof SourceScanEventReviewReason];
+
+
+export const SourceScanEventReviewReason = {
+  missing_date: 'missing_date',
+  out_of_window: 'out_of_window',
+  missing_locality: 'missing_locality',
+  foreign_location: 'foreign_location',
+} as const;
+
 export interface SourceScanEvent {
   title: string;
   url: string;
@@ -99,6 +109,7 @@ export interface SourceScanEvent {
   startsAt?: string;
   venue?: string;
   category?: SourceScanEventCategory;
+  reviewReason?: SourceScanEventReviewReason;
 }
 
 export type SourceScanResultStatus = typeof SourceScanResultStatus[keyof typeof SourceScanResultStatus];
@@ -148,6 +159,11 @@ export interface SourceScanResult {
      * @minimum 0
      */
   eventsMissingLocality: number;
+  /**
+     * Captured events excluded because available evidence establishes a location outside the Netherlands.
+     * @minimum 0
+     */
+  eventsForeignLocation: number;
   /**
      * Number of approved source pages read during the bounded crawl.
      * @minimum 0
@@ -207,6 +223,84 @@ export interface SourceScanResponse {
   scannedAt: string;
   scans: SourceScanResult[];
   error?: string;
+}
+
+export type EventReviewCandidateStatus = typeof EventReviewCandidateStatus[keyof typeof EventReviewCandidateStatus];
+
+
+export const EventReviewCandidateStatus = {
+  approved: 'approved',
+  pending_review: 'pending_review',
+  rejected: 'rejected',
+} as const;
+
+/**
+ * @nullable
+ */
+export type EventReviewCandidateReason = typeof EventReviewCandidateReason[keyof typeof EventReviewCandidateReason] | null;
+
+
+export const EventReviewCandidateReason = {
+  missing_date: 'missing_date',
+  out_of_window: 'out_of_window',
+  missing_locality: 'missing_locality',
+  foreign_location: 'foreign_location',
+  manual_rejection: 'manual_rejection',
+} as const;
+
+export interface EventReviewCandidate {
+  id: number;
+  title: string;
+  sourceName: string;
+  sourceUrl: string;
+  description: string;
+  /** @nullable */
+  startsAt: string | null;
+  /** @nullable */
+  venue: string | null;
+  category: string;
+  lat: number;
+  lng: number;
+  status: EventReviewCandidateStatus;
+  /** @nullable */
+  reason: EventReviewCandidateReason;
+  /** @nullable */
+  evidenceUrl: string | null;
+  firstSeenAt: string;
+  lastSeenAt: string;
+  /** @nullable */
+  reviewedAt: string | null;
+}
+
+export type EventReviewListCounts = {
+  pending: number;
+  rejected: number;
+};
+
+export interface EventReviewList {
+  items: EventReviewCandidate[];
+  counts: EventReviewListCounts;
+}
+
+export type EventReviewDecisionDecision = typeof EventReviewDecisionDecision[keyof typeof EventReviewDecisionDecision];
+
+
+export const EventReviewDecisionDecision = {
+  approve: 'approve',
+  reject: 'reject',
+} as const;
+
+export interface EventReviewDecision {
+  decision: EventReviewDecisionDecision;
+  startsAt?: string;
+  venue?: string;
+  lat?: number;
+  lng?: number;
+  evidenceUrl?: string;
+}
+
+export interface EventReviewDecisionResult {
+  item: EventReviewCandidate;
 }
 
 export type ListingCategory = typeof ListingCategory[keyof typeof ListingCategory];
@@ -397,6 +491,22 @@ export interface NewsScanResponse {
   scans: NewsSourceScan[];
   error?: string;
 }
+
+export type GetEventReviewCandidatesParams = {
+/**
+ * Whether to return open candidates, definitively rejected candidates, or both.
+ */
+status?: GetEventReviewCandidatesStatus;
+};
+
+export type GetEventReviewCandidatesStatus = typeof GetEventReviewCandidatesStatus[keyof typeof GetEventReviewCandidatesStatus];
+
+
+export const GetEventReviewCandidatesStatus = {
+  all: 'all',
+  open: 'open',
+  rejected: 'rejected',
+} as const;
 
 export type GetListingsParams = {
 /**

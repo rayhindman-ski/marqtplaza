@@ -16,6 +16,8 @@ tags:
     description: Local business and event listings
   - name: source-scanning
     description: Den Haag activity source scanning
+  - name: event-review
+    description: Editorial review of source-scanned Den Haag event candidates
   - name: news
     description: Den Haag news aggregation
 paths:
@@ -114,6 +116,59 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/SourceScanResponse"
+
+  /sources/review:
+    get:
+      operationId: getEventReviewCandidates
+      tags: [event-review]
+      summary: Get excluded source-scanned event candidates for editorial review
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [all, open, rejected]
+            default: all
+          description: Whether to return open candidates, definitively rejected candidates, or both.
+      responses:
+        "200":
+          description: Candidates that are not currently published in the public event list.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EventReviewList"
+
+  /sources/review/{id}:
+    patch:
+      operationId: decideEventReviewCandidate
+      tags: [event-review]
+      summary: Approve a candidate with verified Hague event details or reject it definitively
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: number
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EventReviewDecision"
+      responses:
+        "200":
+          description: Updated editorial decision
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EventReviewDecisionResult"
+        "400":
+          description: Invalid editorial decision
+        "404":
+          description: Candidate not found
+        "409":
+          description: Candidate has already received an editorial decision
 
   /listings:
     get:
@@ -370,6 +425,9 @@ components:
         category:
           type: string
           enum: [Museums, Tours, Family, Entertainment, Outdoors, Markets]
+        reviewReason:
+          type: string
+          enum: [missing_date, out_of_window, missing_locality, foreign_location]
       required: [title, url]
 
     SourceScanResult:
@@ -412,6 +470,10 @@ components:
           type: number
           minimum: 0
           description: Captured events excluded because no Den Haag location evidence was found.
+        eventsForeignLocation:
+          type: number
+          minimum: 0
+          description: Captured events excluded because available evidence establishes a location outside the Netherlands.
         pagesRead:
           type: number
           minimum: 0
@@ -457,7 +519,7 @@ components:
           description: Captured events excluded from public listings because they did not meet publication checks.
         message:
           type: string
-      required: [sourceId, sourceName, scannedUrl, status, events, eventLinksRead, eventsCaptured, eventsEligible, eventsMissingDate, eventsOutOfWindow, eventsMissingLocality, pagesRead, pagesFailed, pagesSkipped, indexPagesRead, detailPagesRead, sitemapsRead, robotsPagesSkipped, crawlLimitReached, eventsAdded, eventsUpdated, eventsSkipped]
+      required: [sourceId, sourceName, scannedUrl, status, events, eventLinksRead, eventsCaptured, eventsEligible, eventsMissingDate, eventsOutOfWindow, eventsMissingLocality, eventsForeignLocation, pagesRead, pagesFailed, pagesSkipped, indexPagesRead, detailPagesRead, sitemapsRead, robotsPagesSkipped, crawlLimitReached, eventsAdded, eventsUpdated, eventsSkipped]
 
     SourceScanResponse:
       type: object
@@ -471,6 +533,87 @@ components:
         error:
           type: string
       required: [scannedAt, scans]
+
+    EventReviewCandidate:
+      type: object
+      properties:
+        id:
+          type: number
+        title:
+          type: string
+        sourceName:
+          type: string
+        sourceUrl:
+          type: string
+        description:
+          type: string
+        startsAt:
+          type: [string, "null"]
+        venue:
+          type: [string, "null"]
+        category:
+          type: string
+        lat:
+          type: number
+        lng:
+          type: number
+        status:
+          type: string
+          enum: [approved, pending_review, rejected]
+        reason:
+          type: [string, "null"]
+          enum: [missing_date, out_of_window, missing_locality, foreign_location, manual_rejection, null]
+        evidenceUrl:
+          type: [string, "null"]
+        firstSeenAt:
+          type: string
+        lastSeenAt:
+          type: string
+        reviewedAt:
+          type: [string, "null"]
+      required: [id, title, sourceName, sourceUrl, description, startsAt, venue, category, lat, lng, status, reason, evidenceUrl, firstSeenAt, lastSeenAt, reviewedAt]
+
+    EventReviewList:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/EventReviewCandidate"
+        counts:
+          type: object
+          properties:
+            pending:
+              type: number
+            rejected:
+              type: number
+          required: [pending, rejected]
+      required: [items, counts]
+
+    EventReviewDecision:
+      type: object
+      properties:
+        decision:
+          type: string
+          enum: [approve, reject]
+        startsAt:
+          type: string
+        venue:
+          type: string
+        lat:
+          type: number
+        lng:
+          type: number
+        evidenceUrl:
+          type: string
+      required: [decision]
+
+    EventReviewDecisionResult:
+      type: object
+      properties:
+        item:
+          $ref: "#/components/schemas/EventReviewCandidate"
+      required: [item]
 
     Listing:
       type: object

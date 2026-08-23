@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { SourceScanEventCategory } from './sourceScanEventCategory';
+import type { SourceScanEventReviewReason } from './sourceScanEventReviewReason';
 
 export interface SourceScanEvent {
   title: string;
@@ -15,4 +16,5 @@ export interface SourceScanEvent {
   startsAt?: string;
   venue?: string;
   category?: SourceScanEventCategory;
+  reviewReason?: SourceScanEventReviewReason;
 }

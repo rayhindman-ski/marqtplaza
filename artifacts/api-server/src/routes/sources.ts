@@ -1,7 +1,8 @@
 import { Router } from "express";
-import { inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@workspace/db";
 import { discoveredEventsTable } from "@workspace/db/schema";
+import { requireEditor } from "../middlewares/requireEditor";
 
 const router = Router();
 
@@ -12,6 +13,7 @@ type SourceDefinition = {
 };
 
 type EventCategory = "Museums" | "Tours" | "Family" | "Entertainment" | "Outdoors" | "Markets";
+type PublicationReason = "missing_date" | "out_of_window" | "missing_locality" | "foreign_location";
 
 type SourceScanEvent = {
   title: string;
@@ -25,6 +27,7 @@ type SourceScanEvent = {
   category?: EventCategory;
   lat?: number;
   lng?: number;
+  reviewReason?: PublicationReason;
 };
 
 type CrawlPageType = "index" | "detail" | "sitemap" | "robots";
@@ -48,6 +51,7 @@ type ScanMetrics = {
   eventsMissingDate: number;
   eventsOutOfWindow: number;
   eventsMissingLocality: number;
+  eventsForeignLocation: number;
   pagesRead: number;
   pagesFailed: number;
   eventsAdded: number;
@@ -129,6 +133,7 @@ function emptyMetrics(): ScanMetrics {
     eventsMissingDate: 0,
     eventsOutOfWindow: 0,
     eventsMissingLocality: 0,
+    eventsForeignLocation: 0,
     pagesRead: 0,
     pagesFailed: 0,
     eventsAdded: 0,
@@ -795,7 +800,16 @@ function mapCoordinates(event: SourceScanEvent): {
   };
 }
 
-type PublicationStatus = "eligible" | "missing_date" | "out_of_window" | "missing_locality";
+type PublicationStatus = "eligible" | PublicationReason;
+
+function isForeignLocation(event: SourceScanEvent): boolean {
+  const evidence = `${event.title} ${event.venue ?? ""} ${event.description ?? ""}`;
+  if (/\b(abroad|foreign|buitenland|belg(?:ium|ië)|germany|duitsland|france|frankrijk|spain|spanje|united kingdom|england|london|paris|brussels|brussel|antwerp|antwerpen|berlin|barcelona|rome|new york)\b/i.test(evidence)) {
+    return true;
+  }
+  if (!Number.isFinite(event.lat) || !Number.isFinite(event.lng)) return false;
+  return event.lat! < 50.7 || event.lat! > 53.6 || event.lng! < 3.2 || event.lng! > 7.3;
+}
 
 function publicationStatus(event: SourceScanEvent): PublicationStatus {
   const startsAt = event.startsAt ? Date.parse(event.startsAt) : Number.NaN;
@@ -817,9 +831,11 @@ function publicationStatus(event: SourceScanEvent): PublicationStatus {
   ) {
     return "eligible";
   }
-  return /\b(den haag|the hague|scheveningen|kijkduin|loosduinen|leyweg|haagse markt|the hague market|strandslag\s*8|kneuterdijk|ultramarijn|elandstraat\s*47)\b/i.test(
-    `${event.title} ${event.venue ?? ""} ${event.description ?? ""}`,
-  ) ? "eligible" : "missing_locality";
+  const evidence = `${event.title} ${event.venue ?? ""} ${event.description ?? ""}`;
+  if (/\b(den haag|the hague|scheveningen|kijkduin|loosduinen|leyweg|haagse markt|the hague market|strandslag\s*8|kneuterdijk|ultramarijn|elandstraat\s*47|25\d{2}\s?[a-z]{2})\b/i.test(evidence)) {
+    return "eligible";
+  }
+  return isForeignLocation(event) ? "foreign_location" : "missing_locality";
 }
 
 async function persistEvents(source: SourceDefinition, events: SourceScanEvent[]): Promise<Pick<ScanMetrics, "eventsAdded" | "eventsUpdated">> {
@@ -834,6 +850,8 @@ async function persistEvents(source: SourceDefinition, events: SourceScanEvent[]
 
   for (const event of events) {
     const coordinates = mapCoordinates(event);
+    const publicationStatusForEvent = publicationStatus(event);
+    const reviewStatus = publicationStatusForEvent === "eligible" ? "approved" : "pending_review";
     await db.insert(discoveredEventsTable).values({
       locationId: "dhg",
       sourceId: source.id,
@@ -846,6 +864,8 @@ async function persistEvents(source: SourceDefinition, events: SourceScanEvent[]
       venue: event.venue ?? null,
       category: event.category ?? "Entertainment",
       ...coordinates,
+      reviewStatus,
+      reviewReason: publicationStatusForEvent === "eligible" ? null : publicationStatusForEvent,
       lastSeenAt: now,
       updatedAt: now,
     }).onConflictDoUpdate({
@@ -855,17 +875,31 @@ async function persistEvents(source: SourceDefinition, events: SourceScanEvent[]
         sourceName: source.name,
         title: event.title,
         description: event.description ? sql`excluded.description` : sql`${discoveredEventsTable.description}`,
-        startsAt: event.startsAt ? sql`excluded.starts_at` : sql`${discoveredEventsTable.startsAt}`,
+        startsAt: event.startsAt
+          ? sql`CASE WHEN ${discoveredEventsTable.reviewedAt} IS NULL THEN excluded.starts_at ELSE ${discoveredEventsTable.startsAt} END`
+          : sql`${discoveredEventsTable.startsAt}`,
         openingTimes: event.openingTimes ? sql`excluded.opening_times` : sql`${discoveredEventsTable.openingTimes}`,
-        venue: event.venue ? sql`excluded.venue` : sql`${discoveredEventsTable.venue}`,
+        venue: event.venue
+          ? sql`CASE WHEN ${discoveredEventsTable.reviewedAt} IS NULL THEN excluded.venue ELSE ${discoveredEventsTable.venue} END`
+          : sql`${discoveredEventsTable.venue}`,
         category: event.category ?? "Entertainment",
-        lat: coordinates.isApproximateLocation ? sql`${discoveredEventsTable.lat}` : sql`excluded.lat`,
-        lng: coordinates.isApproximateLocation ? sql`${discoveredEventsTable.lng}` : sql`excluded.lng`,
-        x: coordinates.isApproximateLocation ? sql`${discoveredEventsTable.x}` : sql`excluded.x`,
-        y: coordinates.isApproximateLocation ? sql`${discoveredEventsTable.y}` : sql`excluded.y`,
+        lat: coordinates.isApproximateLocation
+          ? sql`${discoveredEventsTable.lat}`
+          : sql`CASE WHEN ${discoveredEventsTable.reviewedAt} IS NULL THEN excluded.lat ELSE ${discoveredEventsTable.lat} END`,
+        lng: coordinates.isApproximateLocation
+          ? sql`${discoveredEventsTable.lng}`
+          : sql`CASE WHEN ${discoveredEventsTable.reviewedAt} IS NULL THEN excluded.lng ELSE ${discoveredEventsTable.lng} END`,
+        x: coordinates.isApproximateLocation
+          ? sql`${discoveredEventsTable.x}`
+          : sql`CASE WHEN ${discoveredEventsTable.reviewedAt} IS NULL THEN excluded.x ELSE ${discoveredEventsTable.x} END`,
+        y: coordinates.isApproximateLocation
+          ? sql`${discoveredEventsTable.y}`
+          : sql`CASE WHEN ${discoveredEventsTable.reviewedAt} IS NULL THEN excluded.y ELSE ${discoveredEventsTable.y} END`,
         isApproximateLocation: coordinates.isApproximateLocation
           ? sql`${discoveredEventsTable.isApproximateLocation}`
-          : false,
+          : sql`CASE WHEN ${discoveredEventsTable.reviewedAt} IS NULL THEN false ELSE ${discoveredEventsTable.isApproximateLocation} END`,
+        reviewStatus: sql`CASE WHEN ${discoveredEventsTable.reviewedAt} IS NULL THEN ${reviewStatus} ELSE ${discoveredEventsTable.reviewStatus} END`,
+        reviewReason: sql`CASE WHEN ${discoveredEventsTable.reviewedAt} IS NULL THEN ${publicationStatusForEvent === "eligible" ? null : publicationStatusForEvent} ELSE ${discoveredEventsTable.reviewReason} END`,
         lastSeenAt: now,
         updatedAt: now,
       },
@@ -1063,16 +1097,18 @@ async function scanSource(source: SourceDefinition) {
       metrics.eventsMissingDate += 1;
     } else if (status === "out_of_window") {
       metrics.eventsOutOfWindow += 1;
-    } else {
+    } else if (status === "missing_locality") {
       metrics.eventsMissingLocality += 1;
+    } else {
+      metrics.eventsForeignLocation += 1;
     }
   }
   metrics.eventsSkipped = events.length - publishableEvents.length;
   metrics.crawlLimitReached ||= queue.length > 0 || visited.size >= MAX_PAGES_PER_SOURCE || captured.size >= MAX_EVENTS_PER_SOURCE;
 
-  if (publishableEvents.length > 0) {
+  if (events.length > 0) {
     try {
-      Object.assign(metrics, await persistEvents(source, publishableEvents));
+      Object.assign(metrics, await persistEvents(source, events));
     } catch {
       return {
         sourceId: source.id,
@@ -1101,14 +1137,17 @@ async function scanSource(source: SourceDefinition) {
       ? "No source pages could be read."
       : status === "no_events"
         ? "The approved pages were read, but no event pages were detected."
-        : `${metrics.eventsCaptured} event${metrics.eventsCaptured === 1 ? "" : "s"} captured from ${metrics.indexPagesRead} calendar/index page${metrics.indexPagesRead === 1 ? "" : "s"} and ${metrics.detailPagesRead} detail page${metrics.detailPagesRead === 1 ? "" : "s"}; ${metrics.eventsEligible} eligible, ${metrics.eventsAdded} added, and ${metrics.eventsUpdated} updated in the Den Haag activity list.${events.length > publishableEvents.length ? ` ${metrics.eventsMissingDate} lacked a date, ${metrics.eventsOutOfWindow} were outside the upcoming window, and ${metrics.eventsMissingLocality} lacked verified Den Haag evidence.` : ""}${status === "partial" ? " Some pages could not be read or a safe crawl limit was reached." : ""}`;
+        : `${metrics.eventsCaptured} event${metrics.eventsCaptured === 1 ? "" : "s"} captured from ${metrics.indexPagesRead} calendar/index page${metrics.indexPagesRead === 1 ? "" : "s"} and ${metrics.detailPagesRead} detail page${metrics.detailPagesRead === 1 ? "" : "s"}; ${metrics.eventsEligible} eligible, ${metrics.eventsAdded} added, and ${metrics.eventsUpdated} updated in the Den Haag activity list.${events.length > publishableEvents.length ? ` ${metrics.eventsMissingDate} lacked a date, ${metrics.eventsOutOfWindow} were outside the upcoming window, ${metrics.eventsMissingLocality} lacked verified Den Haag evidence, and ${metrics.eventsForeignLocation} had a foreign location.` : ""}${status === "partial" ? " Some pages could not be read or a safe crawl limit was reached." : ""}`;
 
   return {
     sourceId: source.id,
     sourceName: source.name,
     scannedUrl: source.activityUrl,
     status,
-    events,
+    events: events.map((event) => {
+      const reason = publicationStatus(event);
+      return { ...event, reviewReason: reason === "eligible" ? undefined : reason };
+    }),
     ...metrics,
     message,
   };
@@ -1167,6 +1206,175 @@ router.post("/scan", async (req, res) => {
   } finally {
     activeScanRequests -= 1;
   }
+});
+
+function parseReviewId(value: string | string[] | undefined): number | null {
+  if (typeof value !== "string") return null;
+  const id = Number(value);
+  return Number.isInteger(id) && id > 0 ? id : null;
+}
+
+function isFutureReviewDate(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,3})?)?(?:Z|[+-]\d{2}:?\d{2})?)?$/.test(value)) return false;
+  const timestamp = Date.parse(value.length === 10 ? `${value}T23:59:59` : value);
+  if (!Number.isFinite(timestamp)) return false;
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const latest = new Date(now);
+  latest.setMonth(latest.getMonth() + 18);
+  return timestamp >= today && timestamp <= latest.getTime();
+}
+
+function isValidHttpUrl(value: string): boolean {
+  try {
+    return ["http:", "https:"].includes(new URL(value).protocol);
+  } catch {
+    return false;
+  }
+}
+
+function reviewItem(event: typeof discoveredEventsTable.$inferSelect) {
+  return {
+    id: event.id,
+    title: event.title,
+    sourceName: event.sourceName,
+    sourceUrl: event.canonicalUrl,
+    description: event.description,
+    startsAt: event.startsAt,
+    venue: event.venue,
+    category: event.category,
+    lat: event.lat,
+    lng: event.lng,
+    status: event.reviewStatus,
+    reason: event.reviewReason,
+    evidenceUrl: event.reviewEvidenceUrl,
+    firstSeenAt: event.firstSeenAt.toISOString(),
+    lastSeenAt: event.lastSeenAt.toISOString(),
+    reviewedAt: event.reviewedAt?.toISOString() ?? null,
+  };
+}
+
+router.get("/review", requireEditor, async (req, res) => {
+  const requestedStatus = String(req.query.status ?? "all");
+  const statuses = requestedStatus === "open"
+    ? ["pending_review"]
+    : requestedStatus === "rejected"
+      ? ["rejected"]
+      : ["pending_review", "rejected"];
+  const events = await db
+    .select()
+    .from(discoveredEventsTable)
+    .where(and(
+      eq(discoveredEventsTable.locationId, "dhg"),
+      inArray(discoveredEventsTable.reviewStatus, statuses),
+    ))
+    .orderBy(
+      asc(discoveredEventsTable.reviewStatus),
+      desc(discoveredEventsTable.lastSeenAt),
+      asc(discoveredEventsTable.title),
+    );
+  res.json({
+    items: events.map(reviewItem),
+    counts: {
+      pending: events.filter((event) => event.reviewStatus === "pending_review").length,
+      rejected: events.filter((event) => event.reviewStatus === "rejected").length,
+    },
+  });
+});
+
+router.patch("/review/:id", requireEditor, async (req, res) => {
+  const id = parseReviewId(req.params.id);
+  const decision = req.body?.decision;
+  if (!id || (decision !== "approve" && decision !== "reject")) {
+    res.status(400).json({ error: "A valid event id and approve/reject decision are required." });
+    return;
+  }
+
+  const [existing] = await db
+    .select()
+    .from(discoveredEventsTable)
+    .where(and(eq(discoveredEventsTable.id, id), eq(discoveredEventsTable.locationId, "dhg")))
+    .limit(1);
+  if (!existing) {
+    res.status(404).json({ error: "Review candidate not found." });
+    return;
+  }
+  if (existing.reviewStatus !== "pending_review") {
+    res.status(409).json({ error: "Only candidates awaiting review can be decided." });
+    return;
+  }
+
+  const evidenceUrl = typeof req.body?.evidenceUrl === "string" ? req.body.evidenceUrl.trim() : "";
+  if (decision === "reject") {
+    const [updated] = await db.update(discoveredEventsTable)
+      .set({
+        reviewStatus: "rejected",
+        reviewReason: "manual_rejection",
+        reviewEvidenceUrl: evidenceUrl && isValidHttpUrl(evidenceUrl) ? evidenceUrl : existing.reviewEvidenceUrl,
+        reviewedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(and(
+        eq(discoveredEventsTable.id, id),
+        eq(discoveredEventsTable.locationId, "dhg"),
+        eq(discoveredEventsTable.reviewStatus, "pending_review"),
+      ))
+      .returning();
+    if (!updated) {
+      res.status(409).json({ error: "This candidate has already received an editorial decision." });
+      return;
+    }
+    res.json({ item: reviewItem(updated) });
+    return;
+  }
+
+  const startsAt = typeof req.body?.startsAt === "string" ? req.body.startsAt.trim() : "";
+  const venue = typeof req.body?.venue === "string" ? req.body.venue.trim() : "";
+  const lat = Number(req.body?.lat);
+  const lng = Number(req.body?.lng);
+  if (
+    !isFutureReviewDate(startsAt)
+    || !venue
+    || !Number.isFinite(lat)
+    || !Number.isFinite(lng)
+    || lat < DEN_HAAG_BOUNDS.south || lat > DEN_HAAG_BOUNDS.north
+    || lng < DEN_HAAG_BOUNDS.west || lng > DEN_HAAG_BOUNDS.east
+    || !isValidHttpUrl(evidenceUrl)
+  ) {
+    res.status(400).json({
+      error: "Approval requires a future date within 18 months, a Hague venue, Hague coordinates, and an HTTP(S) evidence link.",
+    });
+    return;
+  }
+
+  const x = ((lng - DEN_HAAG_BOUNDS.west) / (DEN_HAAG_BOUNDS.east - DEN_HAAG_BOUNDS.west)) * 100;
+  const y = ((DEN_HAAG_BOUNDS.north - lat) / (DEN_HAAG_BOUNDS.north - DEN_HAAG_BOUNDS.south)) * 100;
+  const [updated] = await db.update(discoveredEventsTable)
+    .set({
+      startsAt,
+      venue,
+      lat,
+      lng,
+      x: Math.max(5, Math.min(95, x)),
+      y: Math.max(5, Math.min(95, y)),
+      isApproximateLocation: false,
+      reviewStatus: "approved",
+      reviewReason: null,
+      reviewEvidenceUrl: evidenceUrl,
+      reviewedAt: new Date(),
+      updatedAt: new Date(),
+    })
+    .where(and(
+      eq(discoveredEventsTable.id, id),
+      eq(discoveredEventsTable.locationId, "dhg"),
+      eq(discoveredEventsTable.reviewStatus, "pending_review"),
+    ))
+    .returning();
+  if (!updated) {
+    res.status(409).json({ error: "This candidate has already received an editorial decision." });
+    return;
+  }
+  res.json({ item: reviewItem(updated) });
 });
 
 export default router;

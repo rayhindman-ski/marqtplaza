@@ -1,6 +1,9 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Route, Switch, Router as WouterRouter, Link, useLocation, useRoute } from 'wouter';
+import { Route, Switch, Router as WouterRouter, Link, Redirect, useLocation, useRoute } from 'wouter';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { ClerkProvider, SignIn, SignUp, useAuth } from '@clerk/react';
+import { publishableKeyFromHost } from '@clerk/react/internal';
+import { shadcn } from '@clerk/themes';
 import { 
   Search, MapPinOff, ArrowLeft,
   Map as MapIcon, List, Clock, Newspaper,
@@ -10,7 +13,8 @@ import {
 } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
-import { useGetListings } from '@workspace/api-client-react';
+import { Toaster } from '@/components/ui/sonner';
+import { setAuthTokenGetter, useGetListings } from '@workspace/api-client-react';
 import {
   LOCATIONS,
   MARKERS,
@@ -25,8 +29,10 @@ import {
 import { GoogleMapView } from './components/GoogleMapView';
 import CaptureView from './pages/CaptureView';
 import SourceDirectoryView from './pages/SourceDirectoryView';
+import EventReviewView from './pages/EventReviewView';
 import NewsFeedView from './pages/NewsFeedView';
 import NewsArticleView from './pages/NewsArticleView';
+import { useEditorAccess } from './lib/editorAccess';
 import {
   getLocationName,
   getMarkerCopy,
@@ -1413,8 +1419,9 @@ function CaptureRoute() {
 
 export default function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}>
+    <WouterRouter base={basePath}>
+      <ClerkProviderWithRouter>
+        <QueryClientProvider client={queryClient}>
         <Switch>
           <Route path="/">
             <MainApp initialLocationId="dhg" />
@@ -1425,6 +1432,9 @@ export default function App() {
           </Route>
           <Route path="/capture" component={CaptureRoute} />
           <Route path="/bronnen" component={SourceDirectoryView} />
+          <Route path="/beoordelen" component={EventReviewRoute} />
+          <Route path="/sign-in/*?" component={SignInPage} />
+          <Route path="/sign-up/*?" component={SignUpPage} />
           <Route path="/nieuws" component={NewsFeedView} />
           <Route path="/nieuws/:id" component={NewsArticleView} />
           <Route>
@@ -1436,8 +1446,10 @@ export default function App() {
             </div>
           </Route>
         </Switch>
-      </WouterRouter>
-    </QueryClientProvider>
+          <Toaster />
+        </QueryClientProvider>
+      </ClerkProviderWithRouter>
+    </WouterRouter>
   );
 }
 
@@ -1578,3 +1590,144 @@ const queryClient = new QueryClient({
     },
   },
 });
+
+const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
+
+function EventReviewRoute() {
+  const { isEditor, isLoaded, isSignedIn } = useEditorAccess();
+  if (!isLoaded) {
+    return <div className="min-h-screen bg-background" />;
+  }
+  if (!isSignedIn) {
+    return <Redirect to="/sign-in" />;
+  }
+  if (!isEditor) {
+    return (
+      <main data-testid="status-editor-access-denied" className="flex min-h-screen items-center justify-center bg-background px-5 text-center">
+        <div className="max-w-md rounded-3xl border border-border bg-card p-8 shadow-sm">
+          <p className="text-sm font-bold text-primary">Restricted workspace</p>
+          <h1 className="mt-2 text-2xl font-extrabold text-foreground">Editor access required</h1>
+          <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
+            This review queue is available only to accounts with an editor role.
+          </p>
+          <Link data-testid="link-return-from-editor-access-denied" href="/" className="mt-6 inline-flex text-sm font-bold text-primary hover:underline">
+            Return to Buurtplaza
+          </Link>
+        </div>
+      </main>
+    );
+  }
+  return (
+    <EventReviewView />
+  );
+}
+
+const clerkProxyUrl = import.meta.env.VITE_CLERK_PROXY_URL;
+
+function stripBase(path: string): string {
+  return basePath && path.startsWith(basePath) ? path.slice(basePath.length) || '/' : path;
+}
+
+const clerkAppearance = {
+  theme: shadcn,
+  cssLayerName: 'clerk',
+  options: {
+    logoPlacement: 'inside' as const,
+    logoLinkUrl: basePath || '/',
+    logoImageUrl: `${window.location.origin}${basePath}/logo.svg`,
+  },
+  variables: {
+    colorPrimary: '#f97316',
+    colorForeground: '#1e293b',
+    colorMutedForeground: '#64748b',
+    colorDanger: '#dc2626',
+    colorBackground: '#ffffff',
+    colorInput: '#ffffff',
+    colorInputForeground: '#1e293b',
+    colorNeutral: '#d7dee8',
+    fontFamily: 'Plus Jakarta Sans, sans-serif',
+    borderRadius: '0.9rem',
+  },
+  elements: {
+    rootBox: 'w-full flex justify-center',
+    cardBox: 'w-[440px] max-w-full overflow-hidden rounded-2xl bg-white',
+    card: '!border-0 !bg-transparent !shadow-none !rounded-none',
+    footer: '!border-0 !bg-transparent !shadow-none !rounded-none',
+    headerTitle: 'text-slate-800 font-bold',
+    headerSubtitle: 'text-slate-500',
+    socialButtonsBlockButtonText: 'text-slate-700',
+    formFieldLabel: 'text-slate-700',
+    footerActionLink: 'text-orange-600',
+    footerActionText: 'text-slate-500',
+    dividerText: 'text-slate-500',
+    identityPreviewEditButton: 'text-orange-600',
+    formFieldSuccessText: 'text-emerald-700',
+    alertText: 'text-red-700',
+    logoBox: 'mb-2',
+    logoImage: 'h-9 w-auto',
+    socialButtonsBlockButton: 'border-slate-200',
+    formButtonPrimary: 'bg-orange-500 hover:bg-orange-600',
+    formFieldInput: 'border-slate-200 text-slate-800',
+    footerAction: 'bg-slate-50',
+    dividerLine: 'bg-slate-200',
+    alert: 'border-red-200 bg-red-50',
+    otpCodeFieldInput: 'border-slate-200',
+    formFieldRow: 'gap-1',
+    main: 'gap-5',
+  },
+};
+
+function SignUpPage() {
+  return (
+    <div className="flex min-h-[100dvh] items-center justify-center bg-background px-4">
+      <SignUp routing="path" path={`${basePath}/sign-up`} signInUrl={`${basePath}/sign-in`} />
+    </div>
+  );
+}
+
+const clerkPubKey = publishableKeyFromHost(
+  window.location.hostname,
+  import.meta.env.VITE_CLERK_PUBLISHABLE_KEY,
+);
+
+function ApiAuthTokenBridge() {
+  const { getToken, isSignedIn } = useAuth();
+
+  useEffect(() => {
+    if (!isSignedIn) {
+      setAuthTokenGetter(null);
+      return;
+    }
+
+    setAuthTokenGetter(() => getToken());
+    return () => setAuthTokenGetter(null);
+  }, [getToken, isSignedIn]);
+
+  return null;
+}
+
+function ClerkProviderWithRouter({ children }: { children: React.ReactNode }) {
+  const [, setLocation] = useLocation();
+  return (
+    <ClerkProvider
+      publishableKey={clerkPubKey}
+      proxyUrl={clerkProxyUrl}
+      appearance={clerkAppearance}
+      signInUrl={`${basePath}/sign-in`}
+      signUpUrl={`${basePath}/sign-up`}
+      routerPush={(to) => setLocation(stripBase(to))}
+      routerReplace={(to) => setLocation(stripBase(to), { replace: true })}
+    >
+      <ApiAuthTokenBridge />
+      {children}
+    </ClerkProvider>
+  );
+}
+
+function SignInPage() {
+  return (
+    <div className="flex min-h-[100dvh] items-center justify-center bg-background px-4">
+      <SignIn routing="path" path={`${basePath}/sign-in`} signUpUrl={`${basePath}/sign-up`} />
+    </div>
+  );
+}

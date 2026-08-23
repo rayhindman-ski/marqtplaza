@@ -45,6 +45,11 @@ export interface SourceScanResult {
      */
   eventsMissingLocality: number;
   /**
+     * Captured events excluded because available evidence establishes a location outside the Netherlands.
+     * @minimum 0
+     */
+  eventsForeignLocation: number;
+  /**
      * Number of approved source pages read during the bounded crawl.
      * @minimum 0
      */

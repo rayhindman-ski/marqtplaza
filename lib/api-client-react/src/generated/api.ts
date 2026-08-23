@@ -24,6 +24,10 @@ import type {
   CapturePersistRequest,
   CaptureScanRequest,
   CaptureSearchRequest,
+  EventReviewDecision,
+  EventReviewDecisionResult,
+  EventReviewList,
+  GetEventReviewCandidatesParams,
   GetListingsParams,
   GetNewsParams,
   HealthStatus,
@@ -426,6 +430,162 @@ export const useScanActivitySources = <TError = ErrorType<SourceScanResponse>,
         TContext
       > => {
       return useMutation(getScanActivitySourcesMutationOptions(options));
+    }
+
+export const getGetEventReviewCandidatesUrl = (params?: GetEventReviewCandidatesParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/sources/review?${stringifiedParams}` : `/api/sources/review`
+}
+
+/**
+ * @summary Get excluded source-scanned event candidates for editorial review
+ */
+export const getEventReviewCandidates = async (params?: GetEventReviewCandidatesParams, options?: Parameters<typeof customFetch>[1]): Promise<EventReviewList> => {
+
+  return customFetch<EventReviewList>(getGetEventReviewCandidatesUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetEventReviewCandidatesQueryKey = (params?: GetEventReviewCandidatesParams,) => {
+    return [
+    `/api/sources/review`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetEventReviewCandidatesQueryOptions = <TData = Awaited<ReturnType<typeof getEventReviewCandidates>>, TError = ErrorType<unknown>>(params?: GetEventReviewCandidatesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getEventReviewCandidates>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetEventReviewCandidatesQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getEventReviewCandidates>>> = ({ signal }) => getEventReviewCandidates(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getEventReviewCandidates>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetEventReviewCandidatesQueryResult = NonNullable<Awaited<ReturnType<typeof getEventReviewCandidates>>>
+export type GetEventReviewCandidatesQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get excluded source-scanned event candidates for editorial review
+ */
+
+export function useGetEventReviewCandidates<TData = Awaited<ReturnType<typeof getEventReviewCandidates>>, TError = ErrorType<unknown>>(
+ params?: GetEventReviewCandidatesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getEventReviewCandidates>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetEventReviewCandidatesQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getDecideEventReviewCandidateUrl = (id: number,) => {
+
+
+
+
+  return `/api/sources/review/${id}`
+}
+
+/**
+ * @summary Approve a candidate with verified Hague event details or reject it definitively
+ */
+export const decideEventReviewCandidate = async (id: number,
+    eventReviewDecision: EventReviewDecision, options?: Parameters<typeof customFetch>[1]): Promise<EventReviewDecisionResult> => {
+
+  return customFetch<EventReviewDecisionResult>(getDecideEventReviewCandidateUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(eventReviewDecision)
+  }
+);}
+
+
+
+
+
+export const getDecideEventReviewCandidateMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof decideEventReviewCandidate>>, TError,{id: number;data: BodyType<EventReviewDecision>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof decideEventReviewCandidate>>, TError,{id: number;data: BodyType<EventReviewDecision>}, TContext> => {
+
+const mutationKey = ['decideEventReviewCandidate'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof decideEventReviewCandidate>>, {id: number;data: BodyType<EventReviewDecision>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  decideEventReviewCandidate(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DecideEventReviewCandidateMutationResult = NonNullable<Awaited<ReturnType<typeof decideEventReviewCandidate>>>
+    export type DecideEventReviewCandidateMutationBody = BodyType<EventReviewDecision>
+    export type DecideEventReviewCandidateMutationError = ErrorType<void>
+
+    /**
+ * @summary Approve a candidate with verified Hague event details or reject it definitively
+ */
+export const useDecideEventReviewCandidate = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof decideEventReviewCandidate>>, TError,{id: number;data: BodyType<EventReviewDecision>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof decideEventReviewCandidate>>,
+        TError,
+        {id: number;data: BodyType<EventReviewDecision>},
+        TContext
+      > => {
+      return useMutation(getDecideEventReviewCandidateMutationOptions(options));
     }
 
 export const getGetListingsUrl = (params: GetListingsParams,) => {

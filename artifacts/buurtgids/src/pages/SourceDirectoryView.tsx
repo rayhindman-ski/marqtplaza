@@ -28,6 +28,7 @@ import {
   DEN_HAAG_ACTIVITY_SOURCES,
   type SourceCoverage,
 } from '../lib/denHaagSources';
+import { useEditorAccess } from '../lib/editorAccess';
 
 const coverageClasses: Record<SourceCoverage, string> = {
   Hoog: 'border-emerald-200 bg-emerald-50 text-emerald-700',
@@ -72,6 +73,7 @@ function formatScanTime(value: string | null) {
 }
 
 export default function SourceDirectoryView() {
+  const { isEditor } = useEditorAccess();
   const [query, setQuery] = useState('');
   const [coverage, setCoverage] = useState<SourceCoverage | 'All'>('All');
   const [model, setModel] = useState('All');
@@ -229,13 +231,22 @@ export default function SourceDirectoryView() {
           <Link href="/" aria-label="Back to the home page" className="rounded-full p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
             <ArrowLeft className="h-6 w-6" aria-hidden="true" />
           </Link>
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <p className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-primary">The Hague scanner</p>
             <h1 className="truncate text-lg font-extrabold tracking-tight text-foreground sm:text-xl">Activity sources</h1>
           </div>
-          <div className="ml-auto hidden items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700 sm:flex">
-            <ShieldCheck className="h-3.5 w-3.5" />
-            24 sources reviewed
+          <div className="ml-auto flex items-center gap-2 sm:gap-4">
+            {isEditor && (
+              <Link data-testid="link-event-review" href="/beoordelen" className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1.5 text-xs font-bold text-primary transition-colors hover:bg-primary/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
+                <ListPlus className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Review Candidates</span>
+                <span className="sm:hidden">Review</span>
+              </Link>
+            )}
+            <div className="hidden items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700 sm:flex">
+              <ShieldCheck className="h-3.5 w-3.5" />
+              24 sources reviewed
+            </div>
           </div>
         </div>
       </header>

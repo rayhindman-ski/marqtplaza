@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 56" role="img" aria-label="Buurtplaza">
+  <rect width="56" height="56" rx="16" fill="#f97316"/>
+  <path d="M16 39V24l12-9 12 9v15h-8V29H24v10z" fill="white"/>
+  <text x="68" y="37" font-family="Arial, sans-serif" font-size="26" font-weight="700" fill="#1e293b">Buurtplaza</text>
+</svg>

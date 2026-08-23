@@ -792,7 +792,7 @@ router.get("/listings", async (req, res) => {
           let mergedListings = googleListings;
           let osmAdded = 0;
           try {
-            const elements = await fetchCityListings(bounds);
+    const elements = await fetchCityListings(bounds);
             const supplementalListings = fetchOpenStreetMapBusinesses(elements, listingSection, bounds);
             const merged = mergeBusinessListings(googleListings, supplementalListings);
             mergedListings = merged.listings;
@@ -812,7 +812,7 @@ router.get("/listings", async (req, res) => {
       }
 
       try {
-        const elements = await fetchCityListings(bounds);
+    const elements = await fetchCityListings(bounds);
         const fallbackListings = fetchOpenStreetMapBusinesses(elements, listingSection, bounds);
         res.json({
           listings: fallbackListings,
@@ -838,6 +838,7 @@ router.get("/listings", async (req, res) => {
         .from(discoveredEventsTable)
         .where(and(
           eq(discoveredEventsTable.locationId, "dhg"),
+          eq(discoveredEventsTable.reviewStatus, "approved"),
           gte(discoveredEventsTable.startsAt, today),
         ))
         .orderBy(asc(discoveredEventsTable.startsAt), desc(discoveredEventsTable.lastSeenAt));
@@ -939,13 +940,13 @@ router.get("/listings", async (req, res) => {
 
     // If Overpass returned nothing meaningful, fall back to static data
     if (listings.length === 0) {
-      const fallback = MARKERS
-        .filter((m) => m.locationId === cityId)
-        .map((listing) => ({
-          ...listing,
-          source: "curated" as const,
-          sourceName: sourceNameFromUrl(listing.sourceUrl),
-        }));
+    const fallback = MARKERS
+      .filter((m) => m.locationId === cityId)
+      .map((listing) => ({
+        ...listing,
+        source: "curated" as const,
+        sourceName: sourceNameFromUrl(listing.sourceUrl),
+      }));
       res.json({
         listings: fallback,
         source: "fallback",
