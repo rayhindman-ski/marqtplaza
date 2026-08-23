@@ -92,7 +92,7 @@ function MarkerPreview({
     <div
       data-marker-preview
       role="tooltip"
-      className="pointer-events-none absolute left-1/2 top-full z-30 mt-2 w-56 -translate-x-1/2 rounded-xl border border-border/80 bg-card/95 p-3 text-left shadow-xl backdrop-blur-md"
+      className="pointer-events-none absolute left-1/2 top-full z-50 mt-2 w-56 -translate-x-1/2 rounded-xl border-2 border-border bg-card p-3 text-left shadow-2xl ring-2 ring-background/80"
     >
       <p className="truncate text-sm font-extrabold text-foreground">{marker.name}</p>
       <p className="mt-0.5 text-[11px] font-bold uppercase tracking-wide text-primary">
@@ -274,7 +274,9 @@ function CoordinateMapFallback({
         return (
           <div
             key={point.id}
-            className="absolute z-10 -translate-x-1/2 -translate-y-1/2"
+            className={`absolute -translate-x-1/2 -translate-y-1/2 ${
+              hoveredMarkerId === point.id ? 'z-50' : isSelected ? 'z-20' : 'z-10'
+            }`}
             style={{
               left: `${Math.max(5, Math.min(95, left))}%`,
               top: `${Math.max(10, Math.min(92, top))}%`,
@@ -551,7 +553,9 @@ function TileMapView({
         return (
           <div
             key={point.id}
-            className="absolute z-10 -translate-x-1/2 -translate-y-1/2"
+            className={`absolute -translate-x-1/2 -translate-y-1/2 ${
+              hoveredMarkerId === point.id ? 'z-50' : isSelected ? 'z-20' : 'z-10'
+            }`}
             style={{ left, top }}
           >
             <button
@@ -648,6 +652,7 @@ function GoogleMapCanvas({
         'justify-content:center',
         'width:1px',
         'height:1px',
+        `z-index:${isSelected ? 100 : 1}`,
       ].join(';');
       const element = document.createElement('button');
       const size = isSelected ? 50 : 43;
@@ -713,7 +718,7 @@ function GoogleMapCanvas({
         'transform:translateX(-50%)',
         'border:1px solid hsl(var(--border) / 0.8)',
         'border-radius:12px',
-        'background:hsl(var(--card) / 0.96)',
+        'background:hsl(var(--card))',
         'padding:12px',
         'text-align:left',
         'box-shadow:0 12px 28px rgba(0,0,0,0.18)',
@@ -742,11 +747,15 @@ function GoogleMapCanvas({
         preview.style.opacity = '1';
         preview.style.visibility = 'visible';
         element.setAttribute('aria-describedby', previewId);
+        wrapper.style.zIndex = '1000';
+        wrapper.dispatchEvent(new CustomEvent('marker-preview-visibility', { detail: { visible: true } }));
       };
       const hidePreview = () => {
         preview.style.opacity = '0';
         preview.style.visibility = 'hidden';
         element.removeAttribute('aria-describedby');
+        wrapper.style.zIndex = isSelected ? '100' : '1';
+        wrapper.dispatchEvent(new CustomEvent('marker-preview-visibility', { detail: { visible: false } }));
       };
       element.addEventListener('mouseenter', showPreview);
       element.addEventListener('mouseleave', hidePreview);
@@ -822,6 +831,18 @@ function GoogleMapCanvas({
   useEffect(() => {
     if (!mapReady || !mapRef.current || !markerLibraryRef.current) return;
 
+    const attachPreviewPriority = (
+      mapMarker: google.maps.marker.AdvancedMarkerElement,
+      content: HTMLElement,
+      isSelected: boolean,
+    ) => {
+      const handlePreviewVisibility = (event: Event) => {
+        const visible = (event as CustomEvent<{ visible: boolean }>).detail?.visible;
+        mapMarker.zIndex = visible ? 1000 : isSelected ? 100 : 1;
+      };
+      content.addEventListener('marker-preview-visibility', handlePreviewVisibility);
+    };
+
     const newIds = new Set(markers.map((marker) => marker.id));
     for (const [id, mapMarker] of markersRef.current) {
       if (!newIds.has(id)) {
@@ -835,19 +856,23 @@ function GoogleMapCanvas({
       const isSelected = selectedMarkerId === marker.id;
       const existing = markersRef.current.get(marker.id);
       if (existing) {
-        existing.content = buildMarkerEl(marker, isSelected, savedIds.has(marker.id));
+        const content = buildMarkerEl(marker, isSelected, savedIds.has(marker.id));
+        attachPreviewPriority(existing, content, isSelected);
+        existing.content = content;
         existing.zIndex = isSelected ? 100 : 1;
         continue;
       }
 
+      const content = buildMarkerEl(marker, isSelected, savedIds.has(marker.id));
       const mapMarker = new markerLibraryRef.current.AdvancedMarkerElement({
         map: mapRef.current,
         position: { lat: marker.lat, lng: marker.lng },
-        content: buildMarkerEl(marker, isSelected, savedIds.has(marker.id)),
+        content,
         title: marker.name,
         zIndex: isSelected ? 100 : 1,
       });
-       mapMarker.addListener('click', () => onMarkerClick(marker.id));
+      attachPreviewPriority(mapMarker, content, isSelected);
+      mapMarker.addListener('click', () => onMarkerClick(marker.id));
       markersRef.current.set(marker.id, mapMarker);
     }
   }, [buildMarkerEl, mapReady, markers, onMarkerClick, savedIds, selectedMarkerId]);
