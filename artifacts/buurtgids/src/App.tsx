@@ -744,10 +744,18 @@ function DiscoveryState({
   if (!location) return null;
 
   const toggleTopLevelCategory = (section: ListingSection) => {
+    const isEnabling = !topLevelCategories[section];
     setTopLevelCategories((previous) => ({
       ...previous,
       [section]: !previous[section],
     }));
+    if (isEnabling) {
+      const childCategories = subcategoriesForTopLevel(section);
+      setSubcategories((previous) => ({
+        ...previous,
+        ...Object.fromEntries(childCategories.map((category) => [category, true])),
+      }));
+    }
     setSelectedMarker(null);
   };
 
