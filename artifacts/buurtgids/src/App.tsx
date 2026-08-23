@@ -230,6 +230,18 @@ function SearchState({
   savedCount: number;
   onViewSaved: () => void;
 }) {
+  const popularNeighborhoods: Record<string, string[]> = {
+    dhg: [
+      'Centrum',
+      'Scheveningen',
+      'Zeeheldenkwartier',
+      'Duinoord',
+      'Statenkwartier',
+      'Benoordenhout',
+      'Bezuidenhout',
+      'Regentessekwartier',
+    ],
+  };
   const [query, setQuery] = useState('');
   const [error, setError] = useState('');
   const [selectedCityId, setSelectedCityId] = useState<string | null>(null);
@@ -368,12 +380,17 @@ function SearchState({
           )}
           <p className="text-xs text-muted-foreground mb-4 uppercase tracking-widest font-bold">{t.popularDestinations}</p>
           <div className="flex flex-wrap justify-center gap-2.5">
-            {LOCATIONS.map(loc => (
+            {LOCATIONS.map(loc => {
+              const neighborhoodOptions = selectedCityId === loc.id
+                ? loc.neighborhoods
+                : (popularNeighborhoods[loc.id] ?? loc.neighborhoods.slice(0, 8));
+
+              return (
               <div
                 key={loc.id}
                 className={cn(
-                  "flex flex-col items-center gap-2 rounded-2xl p-1.5 transition-colors",
-                  selectedCityId === loc.id && "w-full bg-primary/5 p-3 ring-1 ring-primary/20",
+                  "flex w-full max-w-5xl flex-col items-center gap-2 rounded-2xl p-1.5 transition-colors",
+                  selectedCityId === loc.id && "bg-primary/5 p-3 ring-1 ring-primary/20",
                 )}
               >
                 <button
@@ -389,9 +406,14 @@ function SearchState({
                 >
                   {getLocationName(loc, language)}
                 </button>
-                {selectedCityId === loc.id && (
-                  <div className="grid w-full max-w-5xl grid-cols-2 gap-2 text-left animate-in fade-in slide-in-from-top-1 duration-300 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
-                    {loc.neighborhoods.map((neighborhood) => (
+                <div className="w-full text-left">
+                  <p className="mb-2 text-center text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
+                    {selectedCityId === loc.id
+                      ? t.chooseNeighborhood(getLocationName(loc, language))
+                      : t.popularNeighborhoods}
+                  </p>
+                  <div className="grid w-full grid-cols-2 gap-2 animate-in fade-in slide-in-from-top-1 duration-300 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+                    {neighborhoodOptions.map((neighborhood) => (
                       <button
                         key={neighborhood}
                         type="button"
@@ -409,9 +431,10 @@ function SearchState({
                       {t.exploreCity(getLocationName(loc, language))}
                     </button>
                   </div>
-                )}
+                </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       </div>
