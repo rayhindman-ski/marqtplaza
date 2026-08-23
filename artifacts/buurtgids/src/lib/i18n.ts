@@ -10,8 +10,8 @@ export const LANGUAGE_OPTIONS: Array<{ value: Language; label: string }> = [
 export const translations = {
   nl: {
     languageLabel: 'Taal',
-    searchDescription: 'Ontdek de verborgen plekken in jouw buurt, zonder ruis.',
-    placeholder: 'Voer stad of postcode in (bijv. Amsterdam, 1011)',
+    searchDescription: 'Zoek lokaal in Den Haag en ontdek verborgen plekken in jouw buurt.',
+    placeholder: 'Zoek lokaal in Den Haag (bijv. 2511 AB)',
     explore: 'Ontdek',
     popularDestinations: 'Populaire bestemmingen',
     neighborhoods: 'Buurten',
@@ -21,9 +21,9 @@ export const translations = {
     clearNeighborhoods: 'Wis buurtfilters',
     chooseNeighborhood: (city: string) => `Kies een buurt in ${city}`,
     exploreCity: (city: string) => `Ontdek ${city}`,
-    emptySearch: 'Vul een stad of postcode in.',
+    emptySearch: 'Vul een stad of Haagse postcode in.',
     locationNotFound:
-      'Locatie niet gevonden. Probeer Amsterdam, Rotterdam, Utrecht, Den Haag of Eindhoven.',
+      'Locatie niet gevonden. Probeer Den Haag of een Haagse postcode, zoals 2511 AB.',
     categories: {
       Museums: 'Musea',
       Tours: 'Rondleidingen',
@@ -126,8 +126,8 @@ export const translations = {
   },
   en: {
     languageLabel: 'Language',
-    searchDescription: 'Discover the unseen corners of your neighbourhood without the noise.',
-    placeholder: 'Enter city or postcode (e.g. Amsterdam, 1011)',
+    searchDescription: 'Search locally in The Hague and discover hidden places in your neighbourhood.',
+    placeholder: 'Search locally in The Hague (e.g. 2511 AB)',
     explore: 'Explore',
     popularDestinations: 'Popular destinations',
     neighborhoods: 'Neighborhoods',
@@ -137,9 +137,9 @@ export const translations = {
     clearNeighborhoods: 'Clear neighborhood filters',
     chooseNeighborhood: (city: string) => `Choose a neighborhood in ${city}`,
     exploreCity: (city: string) => `Explore ${city}`,
-    emptySearch: 'Please enter a city or postcode.',
+    emptySearch: 'Please enter a city or Hague postcode.',
     locationNotFound:
-      'Location not found. Try Amsterdam, Rotterdam, Utrecht, The Hague, or Eindhoven.',
+      'Location not found. Try The Hague or a Hague postcode, such as 2511 AB.',
     categories: {
       Museums: 'Museums',
       Tours: 'Tours',

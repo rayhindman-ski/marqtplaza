@@ -242,9 +242,12 @@ function SearchState({
       setError(t.emptySearch);
       return;
     }
+    const normalizedQuery = query.trim().toLocaleLowerCase('nl-NL').replace(/\s+/g, ' ');
+    const normalizedPostcode = normalizedQuery.replace(/\s/g, '');
     const matched = LOCATIONS.find(l =>
-      l.name.toLowerCase() === query.toLowerCase().trim() ||
-      l.postcodes.includes(query.trim())
+      l.name.toLocaleLowerCase('nl-NL') === normalizedQuery ||
+      l.nameNl.toLocaleLowerCase('nl-NL') === normalizedQuery ||
+      l.postcodes.some((postcode) => normalizedPostcode.startsWith(postcode))
     );
 
     if (matched) {
@@ -307,7 +310,7 @@ function SearchState({
         </Link>
       </div>
 
-      <div className="z-10 max-w-xl w-full text-center space-y-10 animate-in fade-in slide-in-from-bottom-8 duration-700 ease-out">
+      <div className="z-10 w-full max-w-6xl text-center space-y-10 animate-in fade-in slide-in-from-bottom-8 duration-700 ease-out">
         <div className="space-y-5">
           <img
             src="/marqtplaza-logo.png"
@@ -350,7 +353,7 @@ function SearchState({
           )}
         </form>
 
-        <div id="activity-area-picker" className="pt-6" tabIndex={-1}>
+        <div id="activity-area-picker" className="w-full pt-6" tabIndex={-1}>
           {activityChooserOpen && (
             <div
               role="dialog"
@@ -370,7 +373,7 @@ function SearchState({
                 key={loc.id}
                 className={cn(
                   "flex flex-col items-center gap-2 rounded-2xl p-1.5 transition-colors",
-                  selectedCityId === loc.id && "bg-primary/5 ring-1 ring-primary/20",
+                  selectedCityId === loc.id && "w-full bg-primary/5 p-3 ring-1 ring-primary/20",
                 )}
               >
                 <button
@@ -387,13 +390,13 @@ function SearchState({
                   {getLocationName(loc, language)}
                 </button>
                 {selectedCityId === loc.id && (
-                  <div className="flex max-w-[230px] flex-wrap justify-center gap-1.5 animate-in fade-in slide-in-from-top-1 duration-300">
+                  <div className="grid w-full max-w-5xl grid-cols-2 gap-2 text-left animate-in fade-in slide-in-from-top-1 duration-300 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
                     {loc.neighborhoods.map((neighborhood) => (
                       <button
                         key={neighborhood}
                         type="button"
                         onClick={() => onSearch(loc.id, neighborhood)}
-                        className="rounded-full border border-border/50 bg-card/80 px-2.5 py-1 text-[11px] font-semibold text-muted-foreground transition-all hover:border-primary/50 hover:bg-primary/5 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                        className="min-h-10 rounded-xl border border-border/50 bg-card/80 px-3 py-2 text-left text-xs font-semibold text-muted-foreground transition-all hover:border-primary/50 hover:bg-primary/5 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                       >
                         {neighborhood}
                       </button>
@@ -401,7 +404,7 @@ function SearchState({
                     <button
                       type="button"
                       onClick={() => onSearch(loc.id)}
-                      className="rounded-full border border-primary/40 bg-primary/10 px-2.5 py-1 text-[11px] font-bold text-primary transition-all hover:bg-primary hover:text-primary-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                      className="min-h-10 rounded-xl border border-primary/40 bg-primary/10 px-3 py-2 text-left text-xs font-bold text-primary transition-all hover:bg-primary hover:text-primary-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                     >
                       {t.exploreCity(getLocationName(loc, language))}
                     </button>

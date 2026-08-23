@@ -7,3 +7,4 @@
 - [Map marker anchoring](map-marker-anchoring.md) — custom pin wrappers own coordinates once; multi-neighborhood tile viewports must use live canvas dimensions.
 - [Business filter hierarchy](business-filter-hierarchy.md) — Businesses owns non-food subcategories; Food & Drink owns its matching one, and children only show when their parent is selected.
 - [Google Places discovery](google-places-discovery.md) — follow bounded next-page results; a first-page-only search makes the business inventory look incomplete.
+- [OpenAPI client regeneration](openapi-client-regeneration.md) — regenerate the shared client after merged endpoint changes before judging downstream typecheck failures.
