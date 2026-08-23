@@ -423,13 +423,6 @@ function SearchState({
                         {neighborhood}
                       </button>
                     ))}
-                    <button
-                      type="button"
-                      onClick={() => onSearch(loc.id)}
-                      className="min-h-10 rounded-xl border border-primary/40 bg-primary/10 px-3 py-2 text-left text-xs font-bold text-primary transition-all hover:bg-primary hover:text-primary-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                    >
-                      {t.exploreCity(getLocationName(loc, language))}
-                    </button>
                   </div>
                 </div>
               </div>

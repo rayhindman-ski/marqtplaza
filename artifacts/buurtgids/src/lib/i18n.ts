@@ -21,7 +21,6 @@ export const translations = {
     neighborhoodsSelected: (count: number) => `${count} ${count === 1 ? 'buurt' : 'buurten'} geselecteerd`,
     clearNeighborhoods: 'Wis buurtfilters',
     chooseNeighborhood: (city: string) => `Kies een buurt in ${city}`,
-    exploreCity: (city: string) => `Ontdek ${city}`,
     emptySearch: 'Vul een stad of Haagse postcode in.',
     locationNotFound:
       'Locatie niet gevonden. Probeer Den Haag of een Haagse postcode, zoals 2511 AB.',
@@ -138,7 +137,6 @@ export const translations = {
     neighborhoodsSelected: (count: number) => `${count} ${count === 1 ? 'neighborhood' : 'neighborhoods'} selected`,
     clearNeighborhoods: 'Clear neighborhood filters',
     chooseNeighborhood: (city: string) => `Choose a neighborhood in ${city}`,
-    exploreCity: (city: string) => `Explore ${city}`,
     emptySearch: 'Please enter a city or Hague postcode.',
     locationNotFound:
       'Location not found. Try The Hague or a Hague postcode, such as 2511 AB.',
