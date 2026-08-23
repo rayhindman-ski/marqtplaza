@@ -56,35 +56,47 @@ function getDistanceKm(latA: number, lngA: number, latB: number, lngB: number) {
 
 const STORAGE_KEY = 'buurtgids_saved_places';
 type ListingSection = 'events' | 'businesses' | 'food-drink';
+type FilterSubcategory = Exclude<Category, 'Businesses'> | BusinessCategory;
+const TOP_LEVEL_SECTIONS: ListingSection[] = ['events', 'businesses', 'food-drink'];
 
-function categoryStateFor(section: ListingSection): Record<Category, boolean> {
-  const active = section === 'events'
-    ? EVENT_CATEGORIES
-    : section === 'businesses'
-      ? ['Businesses']
-      : ['Food & Drink'];
-  return Object.fromEntries(ALL_CATEGORIES.map((category) => [category, active.includes(category)])) as Record<Category, boolean>;
-}
-
-function businessSubcategoryStateFor(section: ListingSection): Record<BusinessCategory, boolean> {
-  const active: BusinessCategory[] = section === 'businesses'
-    ? BUSINESS_CATEGORIES.filter((category) => category !== 'Food & Drink')
-    : section === 'food-drink'
-      ? ['Food & Drink']
-      : [];
+function topLevelStateFor(section: ListingSection): Record<ListingSection, boolean> {
   return Object.fromEntries(
-    BUSINESS_CATEGORIES.map((category) => [category, active.includes(category)]),
-  ) as Record<BusinessCategory, boolean>;
+    TOP_LEVEL_SECTIONS.map((candidate) => [candidate, candidate === section]),
+  ) as Record<ListingSection, boolean>;
 }
 
-function subcategoriesForTopLevel(category: Category): BusinessCategory[] {
-  if (category === 'Businesses') {
+function subcategoryStateFor(section: ListingSection): Record<FilterSubcategory, boolean> {
+  const active = subcategoriesForTopLevel(section);
+  const eventSubcategories = EVENT_CATEGORIES.filter(
+    (category): category is Exclude<Category, 'Businesses'> => category !== 'Businesses',
+  );
+  return Object.fromEntries(
+    [...eventSubcategories, ...BUSINESS_CATEGORIES].map((category) => [category, active.includes(category)]),
+  ) as Record<FilterSubcategory, boolean>;
+}
+
+function subcategoriesForTopLevel(section: ListingSection): FilterSubcategory[] {
+  if (section === 'events') {
+    return EVENT_CATEGORIES.filter(
+      (category): category is Exclude<Category, 'Businesses'> => category !== 'Businesses',
+    );
+  }
+  if (section === 'businesses') {
     return BUSINESS_CATEGORIES.filter((subcategory) => subcategory !== 'Food & Drink');
   }
-  if (category === 'Food & Drink') {
-    return ['Food & Drink'];
-  }
-  return [];
+  return ['Food & Drink'];
+}
+
+function topLevelForMarker(marker: Marker): ListingSection {
+  if (marker.category === 'Businesses') return 'businesses';
+  if (marker.category === 'Food & Drink') return 'food-drink';
+  return 'events';
+}
+
+function subcategoryLabelFor(subcategory: FilterSubcategory, language: Language): string {
+  return EVENT_CATEGORIES.includes(subcategory as Category)
+    ? translations[language].categories[subcategory as Category]
+    : getBusinessCategoryName(subcategory as BusinessCategory, language);
 }
 function LanguageSelector({
   language,
@@ -692,7 +704,6 @@ function DiscoveryState({
   savedIds,
   onToggle,
   onViewSaved,
-  onSectionSelect,
 }: {
   language: Language;
   locationId: string;
@@ -703,13 +714,14 @@ function DiscoveryState({
   savedIds: Set<string>;
   onToggle: (marker: Marker) => void;
   onViewSaved: () => void;
-  onSectionSelect: (section: ListingSection) => void;
 }) {
   const location = LOCATIONS.find(l => l.id === locationId);
   const t = translations[language];
-  const [categories, setCategories] = useState<Record<Category, boolean>>(() => categoryStateFor(listingSection));
-  const [businessSubcategories, setBusinessSubcategories] = useState<Record<BusinessCategory, boolean>>(
-    () => businessSubcategoryStateFor(listingSection),
+  const [topLevelCategories, setTopLevelCategories] = useState<Record<ListingSection, boolean>>(
+    () => topLevelStateFor(listingSection),
+  );
+  const [subcategories, setSubcategories] = useState<Record<FilterSubcategory, boolean>>(
+    () => subcategoryStateFor(listingSection),
   );
   const [selectedNeighborhoods, setSelectedNeighborhoods] = useState<string[]>(
     initialNeighborhood ? [initialNeighborhood] : [],
@@ -717,18 +729,28 @@ function DiscoveryState({
   const [selectedMarker, setSelectedMarker] = useState<string | null>(null);
   const [view, setView] = useState<'map' | 'list'>('map');
 
-  // Fetch live listings from the API
-  const { data, isLoading, isError, refetch } = useGetListings({ cityId: locationId, section: listingSection });
+  // Fetch each top-level section so the checkbox filters can be combined.
+  const eventsQuery = useGetListings({ cityId: locationId, section: 'events' });
+  const businessesQuery = useGetListings({ cityId: locationId, section: 'businesses' });
+  const foodDrinkQuery = useGetListings({ cityId: locationId, section: 'food-drink' });
+  const listingQueries = {
+    events: eventsQuery,
+    businesses: businessesQuery,
+    'food-drink': foodDrinkQuery,
+  };
 
   if (!location) return null;
 
-  const toggleCategory = (cat: Category) => {
-    setCategories(prev => ({ ...prev, [cat]: !prev[cat] }));
+  const toggleTopLevelCategory = (section: ListingSection) => {
+    setTopLevelCategories((previous) => ({
+      ...previous,
+      [section]: !previous[section],
+    }));
     setSelectedMarker(null);
   };
 
-  const toggleBusinessSubcategory = (subcategory: BusinessCategory) => {
-    setBusinessSubcategories((previous) => ({
+  const toggleSubcategory = (subcategory: FilterSubcategory) => {
+    setSubcategories((previous) => ({
       ...previous,
       [subcategory]: !previous[subcategory],
     }));
@@ -753,8 +775,8 @@ function DiscoveryState({
   };
 
   useEffect(() => {
-    setCategories(categoryStateFor(listingSection));
-    setBusinessSubcategories(businessSubcategoryStateFor(listingSection));
+    setTopLevelCategories(topLevelStateFor(listingSection));
+    setSubcategories(subcategoryStateFor(listingSection));
     setSelectedMarker(null);
   }, [listingSection]);
 
@@ -781,8 +803,21 @@ function DiscoveryState({
     };
   }, [selectedMarker, view]);
 
-  // Use API data when available, fall back to coordinate-complete static activities otherwise.
-  const allMarkers: Marker[] = (data?.listings ?? MARKERS.filter(m => m.locationId === location.id)).map(l => {
+  const selectedTopLevelSections = TOP_LEVEL_SECTIONS.filter((section) => topLevelCategories[section]);
+  const selectedQueries = selectedTopLevelSections.map((section) => listingQueries[section]);
+  const selectedData = selectedQueries
+    .map((query) => query.data)
+    .filter((result): result is NonNullable<typeof result> => Boolean(result));
+  const selectedListings = selectedData.flatMap((result) => result.listings);
+  const visibleSubcategories = Array.from(new Set(
+    selectedTopLevelSections.flatMap(subcategoriesForTopLevel),
+  ));
+
+  // Use API data when available, falling back to coordinate-complete static activities for events.
+  const fallbackMarkers = selectedTopLevelSections.includes('events')
+    ? MARKERS.filter((marker) => marker.locationId === location.id)
+    : [];
+  const allMarkers: Marker[] = (selectedListings.length > 0 ? selectedListings : fallbackMarkers).map(l => {
     return {
       id: l.id,
       locationId: l.locationId,
@@ -803,32 +838,35 @@ function DiscoveryState({
   const selectedAreas = selectedNeighborhoods
     .map((neighborhood) => location.neighborhoodCoords[neighborhood])
     .filter((area): area is { lat: number; lng: number; zoom: number } => Boolean(area));
-  const visibleCategories = listingSection === 'events'
-    ? EVENT_CATEGORIES
-    : listingSection === 'businesses'
-      ? ['Businesses'] as Category[]
-      : ['Food & Drink'] as Category[];
-  const visibleSubcategories = Array.from(new Set(
-    visibleCategories
-      .filter((category) => categories[category])
-      .flatMap(subcategoriesForTopLevel),
-  ));
   const filteredMarkers = allMarkers.filter((marker) => {
-    if (!categories[marker.category]) return false;
+    const markerTopLevel = topLevelForMarker(marker);
+    if (!topLevelCategories[markerTopLevel]) return false;
+    const markerSubcategory = marker.businessCategory
+      ?? (marker.category === 'Businesses' ? undefined : marker.category as FilterSubcategory);
     if (
-      listingSection !== 'events'
+      markerTopLevel !== 'events'
       && visibleSubcategories.length > 0
-      && (!marker.businessCategory || !businessSubcategories[marker.businessCategory])
+      && (!markerSubcategory || !subcategories[markerSubcategory])
     ) {
+      return false;
+    }
+    if (markerTopLevel === 'events' && markerSubcategory && !subcategories[markerSubcategory]) {
       return false;
     }
     if (selectedAreas.length === 0) return true;
     return selectedAreas.some((area) => getDistanceKm(marker.lat, marker.lng, area.lat, area.lng) <= 2.5);
   });
-  const isLive = data?.source === 'live';
-  const isGooglePlaces = data?.source === 'google_places';
-  const isFallback = data?.source === 'fallback';
-  const isCurated = data?.source === 'curated';
+  const isLoading = selectedQueries.some((query) => query.isLoading);
+  const isError = selectedQueries.some((query) => query.isError) && selectedListings.length === 0;
+  const refetch = () => Promise.all(selectedQueries.map((query) => query.refetch()));
+  const isLive = selectedData.some((result) => result.source === 'live');
+  const isGooglePlaces = selectedData.some((result) => result.source === 'google_places');
+  const isFallback = selectedData.some((result) => result.source === 'fallback');
+  const isCurated = selectedData.some((result) => result.source === 'curated');
+  const fallbackMessage = selectedData
+    .filter((result) => result.source === 'fallback' && result.message)
+    .map((result) => result.message)
+    .join(' ');
 
   const savedCount = savedIds.size;
 
@@ -872,30 +910,7 @@ function DiscoveryState({
               )}
             </button>
           </div>
-          <div className="mb-5 flex flex-wrap gap-2">
-            {([
-              ['events', language === 'nl' ? 'Events' : 'Events'],
-              ['businesses', t.categories.Businesses],
-              ['food-drink', t.categories['Food & Drink']],
-            ] as Array<[ListingSection, string]>).map(([section, label]) => (
-              <button
-                key={section}
-                type="button"
-                aria-pressed={listingSection === section}
-                onClick={() => onSectionSelect(section)}
-                className={cn(
-                  "rounded-full border px-3 py-1.5 text-xs font-extrabold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
-                  listingSection === section
-                    ? "border-primary bg-primary text-primary-foreground"
-                    : "border-border bg-card text-muted-foreground hover:border-primary/50 hover:text-primary",
-                )}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-          
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="grid grid-cols-2 gap-4">
             <div>
               <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
                 {t.topLevelCategories}
@@ -905,12 +920,16 @@ function DiscoveryState({
                 aria-label={t.topLevelCategories}
                 className="space-y-1"
               >
-                {visibleCategories.map((cat) => {
-                  const Icon = CATEGORY_ICONS[cat];
-                  const isChecked = categories[cat];
+                {TOP_LEVEL_SECTIONS.map((section) => {
+                  const isChecked = topLevelCategories[section];
+                  const label = section === 'events'
+                    ? (language === 'nl' ? 'Evenementen' : 'Events')
+                    : section === 'businesses'
+                      ? t.categories.Businesses
+                      : t.categories['Food & Drink'];
                   return (
                     <label
-                      key={cat}
+                      key={section}
                       className={cn(
                         "flex cursor-pointer items-center gap-2 rounded-lg border px-2 py-1.5 text-[11px] font-semibold transition-colors",
                         isChecked
@@ -921,11 +940,10 @@ function DiscoveryState({
                       <input
                         type="checkbox"
                         checked={isChecked}
-                        onChange={() => toggleCategory(cat)}
+                        onChange={() => toggleTopLevelCategory(section)}
                         className="h-3.5 w-3.5 shrink-0 accent-primary"
                       />
-                      <Icon className="h-3 w-3 shrink-0" aria-hidden="true" />
-                      <span>{t.categories[cat]}</span>
+                      <span>{label}</span>
                     </label>
                   );
                 })}
@@ -942,7 +960,7 @@ function DiscoveryState({
                   className="max-h-48 space-y-1 overflow-y-auto pr-1"
                 >
                   {visibleSubcategories.map((subcategory) => {
-                    const isChecked = businessSubcategories[subcategory];
+                    const isChecked = subcategories[subcategory];
                     return (
                       <label
                         key={subcategory}
@@ -956,10 +974,10 @@ function DiscoveryState({
                         <input
                           type="checkbox"
                           checked={isChecked}
-                          onChange={() => toggleBusinessSubcategory(subcategory)}
+                          onChange={() => toggleSubcategory(subcategory)}
                           className="h-3.5 w-3.5 shrink-0 accent-primary"
                         />
-                        <span>{getBusinessCategoryName(subcategory, language)}</span>
+                        <span>{subcategoryLabelFor(subcategory, language)}</span>
                       </label>
                     );
                   })}
@@ -989,12 +1007,12 @@ function DiscoveryState({
               role="group"
               aria-label={t.neighborhoods}
               data-neighborhood-list
-              className="max-h-48 overflow-y-auto rounded-xl border border-border/50 bg-muted/20 p-2 pr-1"
+              className="max-h-48 overflow-x-hidden overflow-y-auto rounded-xl border border-border/50 bg-muted/20 p-2 pr-1"
             >
-              <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
+              <div className="grid min-w-0 grid-cols-2 gap-1.5 sm:grid-cols-3">
                 <label
                   className={cn(
-                      "flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-1.5 text-[11px] font-bold transition-colors",
+                      "flex min-w-0 cursor-pointer items-center gap-2 rounded-lg px-2.5 py-1.5 text-[11px] font-bold transition-colors",
                     selectedNeighborhoods.length === 0
                        ? "bg-foreground text-background"
                        : "bg-card/60 text-muted-foreground hover:bg-primary/10 hover:text-primary",
@@ -1009,7 +1027,7 @@ function DiscoveryState({
                     }}
                     className="h-4 w-4 shrink-0 accent-primary"
                   />
-                  <span>{t.allNeighborhoods}</span>
+                  <span className="min-w-0 break-words">{t.allNeighborhoods}</span>
                 </label>
                 {location.neighborhoods.map((neighborhood) => {
                   const isChecked = selectedNeighborhoods.includes(neighborhood);
@@ -1017,7 +1035,7 @@ function DiscoveryState({
                     <label
                       key={neighborhood}
                       className={cn(
-                        "flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-1.5 text-[11px] font-semibold transition-colors",
+                        "flex min-w-0 cursor-pointer items-center gap-2 rounded-lg px-2.5 py-1.5 text-[11px] font-semibold transition-colors",
                         isChecked
                           ? "bg-primary text-primary-foreground"
                           : "bg-card/60 text-muted-foreground hover:bg-primary/10 hover:text-primary",
@@ -1029,7 +1047,7 @@ function DiscoveryState({
                         onChange={() => toggleNeighborhood(neighborhood)}
                         className="h-4 w-4 shrink-0 accent-primary"
                       />
-                      <span>{neighborhood}</span>
+                      <span className="min-w-0 break-words">{neighborhood}</span>
                     </label>
                   );
                 })}
@@ -1067,8 +1085,8 @@ function DiscoveryState({
                 {t.curatedDataBadge}
               </span>
             ) : null}
-            {isFallback && data?.message && (
-              <span className="text-xs text-muted-foreground">{data.message}</span>
+            {isFallback && fallbackMessage && (
+              <span className="text-xs text-muted-foreground">{fallbackMessage}</span>
             )}
           </div>
         )}
@@ -1350,11 +1368,6 @@ function MainApp({ initialLocationId }: { initialLocationId?: string } = {}) {
         savedIds={savedIds}
         onToggle={toggle}
         onViewSaved={() => setScreen({ kind: 'saved' })}
-        onSectionSelect={(listingSection) => setScreen({
-          kind: 'discovery',
-          locationId: screen.locationId,
-          listingSection,
-        })}
       />
     );
   }
