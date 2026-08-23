@@ -12,7 +12,7 @@ import {
 
 const router: IRouter = Router();
 
-type NewsSource = { id: string; name: string; newsUrl: string; requiresHaagEvidence?: boolean; requiresPublishedDate?: boolean };
+export type NewsSource = { id: string; name: string; newsUrl: string; requiresHaagEvidence?: boolean; requiresPublishedDate?: boolean };
 type NewsSubcategory = "city" | "politics" | "safety" | "culture" | "sport" | "business" | "community";
 type Candidate = { title: string; canonicalUrl: string; summary: string; subcategory: NewsSubcategory; publishedAt: string | null };
 type CrawlResult = {
@@ -192,7 +192,7 @@ function articleLinks(html: string, pageUrl: string, source: NewsSource): string
   return [...seen];
 }
 
-async function scanSource(source: NewsSource): Promise<CrawlResult> {
+export async function scanSource(source: NewsSource, database: typeof db = db): Promise<CrawlResult> {
   const metrics = { articlesCaptured: 0, articlesPublished: 0, articlesUpdated: 0, articlesRejected: 0, pagesRead: 0, pagesFailed: 0, crawlLimitReached: false };
   const origin = new URL(source.newsUrl).origin;
   let robots = "";
@@ -221,10 +221,10 @@ async function scanSource(source: NewsSource): Promise<CrawlResult> {
   metrics.articlesCaptured = candidates.length;
   if (candidates.length > 0) {
     const urls = candidates.map((article) => article.canonicalUrl);
-    const existing = new Set((await db.select({ canonicalUrl: newsArticlesTable.canonicalUrl }).from(newsArticlesTable).where(inArray(newsArticlesTable.canonicalUrl, urls))).map((row) => row.canonicalUrl));
+    const existing = new Set((await database.select({ canonicalUrl: newsArticlesTable.canonicalUrl }).from(newsArticlesTable).where(inArray(newsArticlesTable.canonicalUrl, urls))).map((row) => row.canonicalUrl));
     const now = new Date();
     for (const article of candidates) {
-      await db.insert(newsArticlesTable).values({ sourceId: source.id, sourceName: source.name, canonicalUrl: article.canonicalUrl, title: article.title, summary: article.summary, category: "news", subcategory: article.subcategory, publishedAt: article.publishedAt, lastSeenAt: now, updatedAt: now })
+      await database.insert(newsArticlesTable).values({ sourceId: source.id, sourceName: source.name, canonicalUrl: article.canonicalUrl, title: article.title, summary: article.summary, category: "news", subcategory: article.subcategory, publishedAt: article.publishedAt, lastSeenAt: now, updatedAt: now })
         .onConflictDoUpdate({ target: newsArticlesTable.canonicalUrl, set: { title: article.title, summary: article.summary, subcategory: article.subcategory, publishedAt: article.publishedAt, lastSeenAt: now, updatedAt: now } });
       if (existing.has(article.canonicalUrl)) metrics.articlesUpdated += 1; else metrics.articlesPublished += 1;
     }
@@ -266,3 +266,9 @@ router.post("/news/scan", async (req, res): Promise<void> => {
 });
 
 export default router;
+
+export const newsTesting = {
+  canonicalizeUrl,
+  isPublishedNewsArticle,
+  sources: NEWS_SOURCES,
+};
