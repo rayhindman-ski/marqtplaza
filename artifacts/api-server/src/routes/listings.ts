@@ -237,7 +237,7 @@ type GooglePlace = {
   regularOpeningHours?: { weekdayDescriptions?: string[] };
 };
 
-type GooglePlacesResponse = { places?: GooglePlace[] };
+type GooglePlacesResponse = { places?: GooglePlace[]; nextPageToken?: string };
 
 const GOOGLE_TYPE_TO_BUSINESS_CATEGORY: Record<string, BusinessCategory> = {
   restaurant: "Food & Drink",
@@ -323,7 +323,8 @@ function businessCategoryForGooglePlace(
 
 const GOOGLE_PLACES_URL = "https://places.googleapis.com/v1/places:searchText";
 const GOOGLE_PLACES_TIMEOUT_MS = 12_000;
-const GOOGLE_PLACES_MAX_RESULTS = 60;
+const GOOGLE_PLACES_MAX_RESULTS = 180;
+const GOOGLE_PLACES_MAX_PAGES_PER_SEARCH = 3;
 const GOOGLE_PLACES_CACHE_TTL_MS = 15 * 60 * 1000;
 const googlePlacesCache = new Map<string, { expiresAt: number; listings: Listing[] }>();
 
@@ -380,73 +381,80 @@ async function fetchGooglePlaces(
   const seen = new Set<string>();
   const searches = GOOGLE_SEARCHES[section];
   for (const textQuery of searches) {
-    const response = await fetch(GOOGLE_PLACES_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Goog-Api-Key": apiKey,
-        "X-Goog-FieldMask": [
-          "places.id",
-          "places.displayName",
-          "places.formattedAddress",
-          "places.location",
-          "places.primaryType",
-          "places.primaryTypeDisplayName",
-          "places.googleMapsUri",
-          "places.websiteUri",
-          "places.rating",
-          "places.userRatingCount",
-          "places.regularOpeningHours.weekdayDescriptions",
-        ].join(","),
-      },
-      body: JSON.stringify({
-        textQuery,
-        languageCode: "nl",
-        regionCode: "NL",
-        pageSize: 20,
-        locationBias: {
-          rectangle: {
-            low: { latitude: bounds.s - 0.01, longitude: bounds.w - 0.01 },
-            high: { latitude: bounds.n + 0.01, longitude: bounds.e + 0.01 },
-          },
+    let pageToken: string | undefined;
+    for (let page = 0; page < GOOGLE_PLACES_MAX_PAGES_PER_SEARCH; page += 1) {
+      const response = await fetch(GOOGLE_PLACES_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Goog-Api-Key": apiKey,
+          "X-Goog-FieldMask": [
+            "places.id",
+            "places.displayName",
+            "places.formattedAddress",
+            "places.location",
+            "places.primaryType",
+            "places.primaryTypeDisplayName",
+            "places.googleMapsUri",
+            "places.websiteUri",
+            "places.rating",
+            "places.userRatingCount",
+            "places.regularOpeningHours.weekdayDescriptions",
+            "nextPageToken",
+          ].join(","),
         },
-      }),
-      signal: AbortSignal.timeout(GOOGLE_PLACES_TIMEOUT_MS),
-    });
-    if (!response.ok) {
-      throw new Error(`Google Places HTTP ${response.status}`);
-    }
-
-    const data = (await response.json()) as GooglePlacesResponse;
-    for (const place of data.places ?? []) {
-      const name = place.displayName?.text?.trim();
-      const address = place.formattedAddress?.trim();
-      const lat = place.location?.latitude;
-      const lng = place.location?.longitude;
-      if (!name || !address || typeof lat !== "number" || typeof lng !== "number") continue;
-      if (!isInHagueBounds(lat, lng) || !hasHagueEvidence(address)) continue;
-
-      const key = place.id ?? `${normalizedTitle(name)}|${normalizedTitle(address)}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      const { x, y } = toXY(lat, lng, bounds);
-      results.push({
-        id: `google-${place.id ?? normalizedTitle(name).replace(/\s+/g, "-")}`,
-        locationId: "dhg",
-        category: section === "food-drink" ? "Food & Drink" : "Businesses",
-        businessCategory: businessCategoryForGooglePlace(place, section),
-        name,
-        description: googlePlaceDescription(place, section),
-        x,
-        y,
-        details: googlePlaceDetails(place),
-        lat,
-        lng,
-        sourceUrl: googlePlaceUrl(place),
-        source: "google_maps",
-        sourceName: "Google Maps",
+        body: JSON.stringify({
+          textQuery,
+          languageCode: "nl",
+          regionCode: "NL",
+          pageSize: 20,
+          ...(pageToken ? { pageToken } : {}),
+          locationBias: {
+            rectangle: {
+              low: { latitude: bounds.s - 0.01, longitude: bounds.w - 0.01 },
+              high: { latitude: bounds.n + 0.01, longitude: bounds.e + 0.01 },
+            },
+          },
+        }),
+        signal: AbortSignal.timeout(GOOGLE_PLACES_TIMEOUT_MS),
       });
-      if (results.length >= GOOGLE_PLACES_MAX_RESULTS) break;
+      if (!response.ok) {
+        throw new Error(`Google Places HTTP ${response.status}`);
+      }
+
+      const data = (await response.json()) as GooglePlacesResponse;
+      for (const place of data.places ?? []) {
+        const name = place.displayName?.text?.trim();
+        const address = place.formattedAddress?.trim();
+        const lat = place.location?.latitude;
+        const lng = place.location?.longitude;
+        if (!name || !address || typeof lat !== "number" || typeof lng !== "number") continue;
+        if (!isInHagueBounds(lat, lng) || !hasHagueEvidence(address)) continue;
+
+        const key = place.id ?? `${normalizedTitle(name)}|${normalizedTitle(address)}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        const { x, y } = toXY(lat, lng, bounds);
+        results.push({
+          id: `google-${place.id ?? normalizedTitle(name).replace(/\s+/g, "-")}`,
+          locationId: "dhg",
+          category: section === "food-drink" ? "Food & Drink" : "Businesses",
+          businessCategory: businessCategoryForGooglePlace(place, section),
+          name,
+          description: googlePlaceDescription(place, section),
+          x,
+          y,
+          details: googlePlaceDetails(place),
+          lat,
+          lng,
+          sourceUrl: googlePlaceUrl(place),
+          source: "google_maps",
+          sourceName: "Google Maps",
+        });
+        if (results.length >= GOOGLE_PLACES_MAX_RESULTS) break;
+      }
+      if (results.length >= GOOGLE_PLACES_MAX_RESULTS || !data.nextPageToken) break;
+      pageToken = data.nextPageToken;
     }
     if (results.length >= GOOGLE_PLACES_MAX_RESULTS) break;
   }
