@@ -223,6 +223,40 @@ export const ListingCategory = {
   'Food_&_Drink': 'Food & Drink',
 } as const;
 
+/**
+ * Normalized category for business and food-and-drink listings.
+ */
+export type BusinessCategory = typeof BusinessCategory[keyof typeof BusinessCategory];
+
+
+export const BusinessCategory = {
+  'Retail_&_Shopping': 'Retail & Shopping',
+  'Food_&_Drink': 'Food & Drink',
+  'Health_&_Wellness': 'Health & Wellness',
+  'Beauty_&_Personal_Care': 'Beauty & Personal Care',
+  Professional_Services: 'Professional Services',
+  'Finance_&_Legal': 'Finance & Legal',
+  'Home_&_Repair': 'Home & Repair',
+  'Automotive_&_Mobility': 'Automotive & Mobility',
+  'Education_&_Childcare': 'Education & Childcare',
+  'Hospitality_&_Travel': 'Hospitality & Travel',
+  'Arts,_Culture_&_Entertainment': 'Arts, Culture & Entertainment',
+  'Fitness_&_Sports': 'Fitness & Sports',
+} as const;
+
+/**
+ * Provider or editorial source for an individual listing.
+ */
+export type ListingSource = typeof ListingSource[keyof typeof ListingSource];
+
+
+export const ListingSource = {
+  google_maps: 'google_maps',
+  openstreetmap: 'openstreetmap',
+  curated: 'curated',
+  source_scan: 'source_scan',
+} as const;
+
 export interface Listing {
   id: string;
   locationId: string;
@@ -238,6 +272,8 @@ export interface Listing {
   lng: number;
   /** Link to the website where this activity was listed. */
   sourceUrl?: string;
+  businessCategory?: BusinessCategory;
+  source?: ListingSource;
   /** Whether the map pin uses the Den Haag city centre because no exact venue coordinates were supplied. */
   isApproximateLocation?: boolean;
 }

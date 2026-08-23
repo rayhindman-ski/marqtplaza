@@ -1,4 +1,4 @@
-import type { Location, Marker, Category } from './data';
+import type { BusinessCategory, Category, ListingSource, Location, Marker } from './data';
 
 export type Language = 'nl' | 'en';
 
@@ -33,6 +33,28 @@ export const translations = {
       Markets: 'Markten & Food',
       Businesses: 'Bedrijven',
       'Food & Drink': 'Horeca',
+    },
+    topLevelCategories: 'Hoofdcategorieën',
+    subcategories: 'Subcategorieën',
+    businessCategories: {
+      'Retail & Shopping': 'Winkelen & retail',
+      'Food & Drink': 'Horeca',
+      'Health & Wellness': 'Gezondheid & welzijn',
+      'Beauty & Personal Care': 'Beauty & persoonlijke verzorging',
+      'Professional Services': 'Professionele diensten',
+      'Finance & Legal': 'Financiën & juridisch',
+      'Home & Repair': 'Wonen & reparatie',
+      'Automotive & Mobility': 'Auto & mobiliteit',
+      'Education & Childcare': 'Onderwijs & kinderopvang',
+      'Hospitality & Travel': 'Gastvrijheid & reizen',
+      'Arts, Culture & Entertainment': 'Kunst, cultuur & entertainment',
+      'Fitness & Sports': 'Fitness & sport',
+    },
+    listingSources: {
+      google_maps: 'Google Maps',
+      openstreetmap: 'OpenStreetMap',
+      curated: 'Samengesteld',
+      source_scan: 'Bronscan',
     },
     backToSearch: 'Terug naar zoeken',
     discoveriesNearby: (count: number) =>
@@ -127,6 +149,28 @@ export const translations = {
       Businesses: 'Businesses',
       'Food & Drink': 'Food & drink',
     },
+    topLevelCategories: 'Top-level categories',
+    subcategories: 'Subcategories',
+    businessCategories: {
+      'Retail & Shopping': 'Retail & shopping',
+      'Food & Drink': 'Food & drink',
+      'Health & Wellness': 'Health & wellness',
+      'Beauty & Personal Care': 'Beauty & personal care',
+      'Professional Services': 'Professional services',
+      'Finance & Legal': 'Finance & legal',
+      'Home & Repair': 'Home & repair',
+      'Automotive & Mobility': 'Automotive & mobility',
+      'Education & Childcare': 'Education & childcare',
+      'Hospitality & Travel': 'Hospitality & travel',
+      'Arts, Culture & Entertainment': 'Arts, culture & entertainment',
+      'Fitness & Sports': 'Fitness & sports',
+    },
+    listingSources: {
+      google_maps: 'Google Maps',
+      openstreetmap: 'OpenStreetMap',
+      curated: 'Curated',
+      source_scan: 'Source scan',
+    },
     backToSearch: 'Back to search',
     discoveriesNearby: (count: number) =>
       `${count} ${count === 1 ? 'discovery' : 'discoveries'} nearby`,
@@ -195,6 +239,14 @@ export const translations = {
     captureTypeBadge: { news: 'News', event: 'Event', ad: 'Ad' } as Record<string, string>,
   },
 } as const;
+
+export function getBusinessCategoryName(category: BusinessCategory, language: Language): string {
+  return translations[language].businessCategories[category];
+}
+
+export function getListingSourceName(source: ListingSource, language: Language): string {
+  return translations[language].listingSources[source];
+}
 
 const dutchLocationNames: Record<string, string> = {
   dhg: 'Den Haag',

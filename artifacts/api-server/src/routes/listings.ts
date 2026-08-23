@@ -7,6 +7,20 @@ import { MARKERS } from "../lib/static-listings.js";
 const router: IRouter = Router();
 type ListingSection = "events" | "businesses" | "food-drink";
 type ListingCategory = "Museums" | "Tours" | "Family" | "Entertainment" | "Outdoors" | "Markets" | "Businesses" | "Food & Drink";
+type BusinessCategory =
+  | "Retail & Shopping"
+  | "Food & Drink"
+  | "Health & Wellness"
+  | "Beauty & Personal Care"
+  | "Professional Services"
+  | "Finance & Legal"
+  | "Home & Repair"
+  | "Automotive & Mobility"
+  | "Education & Childcare"
+  | "Hospitality & Travel"
+  | "Arts, Culture & Entertainment"
+  | "Fitness & Sports";
+type ListingSource = "google_maps" | "openstreetmap" | "curated" | "source_scan";
 type Listing = {
   id: string;
   locationId: string;
@@ -19,6 +33,8 @@ type Listing = {
   lat: number;
   lng: number;
   sourceUrl?: string;
+  businessCategory?: BusinessCategory;
+  source?: ListingSource;
 };
 
 // Bounding boxes for each supported city (south, west, north, east)
@@ -213,6 +229,88 @@ type GooglePlace = {
 
 type GooglePlacesResponse = { places?: GooglePlace[] };
 
+const GOOGLE_TYPE_TO_BUSINESS_CATEGORY: Record<string, BusinessCategory> = {
+  restaurant: "Food & Drink",
+  cafe: "Food & Drink",
+  bar: "Food & Drink",
+  bakery: "Food & Drink",
+  meal_takeaway: "Food & Drink",
+  meal_delivery: "Food & Drink",
+  food: "Food & Drink",
+  store: "Retail & Shopping",
+  shopping_mall: "Retail & Shopping",
+  clothing_store: "Retail & Shopping",
+  convenience_store: "Retail & Shopping",
+  department_store: "Retail & Shopping",
+  electronics_store: "Retail & Shopping",
+  furniture_store: "Retail & Shopping",
+  hardware_store: "Retail & Shopping",
+  home_goods_store: "Retail & Shopping",
+  jewelry_store: "Retail & Shopping",
+  book_store: "Retail & Shopping",
+  pet_store: "Retail & Shopping",
+  pharmacy: "Health & Wellness",
+  doctor: "Health & Wellness",
+  dentist: "Health & Wellness",
+  hospital: "Health & Wellness",
+  physiotherapist: "Health & Wellness",
+  beauty_salon: "Beauty & Personal Care",
+  barber_shop: "Beauty & Personal Care",
+  hair_care: "Beauty & Personal Care",
+  spa: "Beauty & Personal Care",
+  lawyer: "Finance & Legal",
+  accounting: "Finance & Legal",
+  bank: "Finance & Legal",
+  insurance_agency: "Finance & Legal",
+  real_estate_agency: "Finance & Legal",
+  electrician: "Home & Repair",
+  plumber: "Home & Repair",
+  locksmith: "Home & Repair",
+  roofing_contractor: "Home & Repair",
+  general_contractor: "Home & Repair",
+  painter: "Home & Repair",
+  car_dealer: "Automotive & Mobility",
+  car_repair: "Automotive & Mobility",
+  car_wash: "Automotive & Mobility",
+  car_rental: "Automotive & Mobility",
+  gas_station: "Automotive & Mobility",
+  parking: "Automotive & Mobility",
+  school: "Education & Childcare",
+  primary_school: "Education & Childcare",
+  secondary_school: "Education & Childcare",
+  university: "Education & Childcare",
+  preschool: "Education & Childcare",
+  child_care_agency: "Education & Childcare",
+  hotel: "Hospitality & Travel",
+  lodging: "Hospitality & Travel",
+  hostel: "Hospitality & Travel",
+  travel_agency: "Hospitality & Travel",
+  museum: "Arts, Culture & Entertainment",
+  art_gallery: "Arts, Culture & Entertainment",
+  movie_theater: "Arts, Culture & Entertainment",
+  performing_arts_theater: "Arts, Culture & Entertainment",
+  theater: "Arts, Culture & Entertainment",
+  night_club: "Arts, Culture & Entertainment",
+  tourist_attraction: "Arts, Culture & Entertainment",
+  gym: "Fitness & Sports",
+  fitness_center: "Fitness & Sports",
+  sports_club: "Fitness & Sports",
+  sports_activity_location: "Fitness & Sports",
+  stadium: "Fitness & Sports",
+};
+
+function businessCategoryForGooglePlace(
+  place: GooglePlace,
+  section: Exclude<ListingSection, "events">,
+): BusinessCategory {
+  const primaryType = place.primaryType?.toLowerCase();
+  if (primaryType) {
+    const mappedCategory = GOOGLE_TYPE_TO_BUSINESS_CATEGORY[primaryType];
+    if (mappedCategory) return mappedCategory;
+  }
+  return section === "food-drink" ? "Food & Drink" : "Professional Services";
+}
+
 const GOOGLE_PLACES_URL = "https://places.googleapis.com/v1/places:searchText";
 const GOOGLE_PLACES_TIMEOUT_MS = 12_000;
 const GOOGLE_PLACES_MAX_RESULTS = 60;
@@ -326,6 +424,7 @@ async function fetchGooglePlaces(
         id: `google-${place.id ?? normalizedTitle(name).replace(/\s+/g, "-")}`,
         locationId: "dhg",
         category: section === "food-drink" ? "Food & Drink" : "Businesses",
+        businessCategory: businessCategoryForGooglePlace(place, section),
         name,
         description: googlePlaceDescription(place, section),
         x,
@@ -334,6 +433,7 @@ async function fetchGooglePlaces(
         lat,
         lng,
         sourceUrl: googlePlaceUrl(place),
+        source: "google_maps",
       });
       if (results.length >= GOOGLE_PLACES_MAX_RESULTS) break;
     }
@@ -342,6 +442,59 @@ async function fetchGooglePlaces(
 
   googlePlacesCache.set(cacheKey, { expiresAt: Date.now() + GOOGLE_PLACES_CACHE_TTL_MS, listings: results });
   return results;
+}
+
+function businessCategoryForOsmTags(
+  tags: Record<string, string>,
+  section: Exclude<ListingSection, "events">,
+): BusinessCategory {
+  const amenity = tags.amenity;
+  const shop = tags.shop;
+  const office = tags.office;
+  const craft = tags.craft;
+  const leisure = tags.leisure;
+  const tourism = tags.tourism;
+
+  if (section === "food-drink"
+    || ["cafe", "restaurant", "bar", "pub", "bakery", "fast_food", "ice_cream", "food_court"].includes(amenity ?? "")) {
+    return "Food & Drink";
+  }
+  if (["pharmacy", "doctors", "dentist", "clinic", "hospital", "optician", "hearing_aids"].includes(amenity ?? "")) {
+    return "Health & Wellness";
+  }
+  if (["hairdresser", "beauty", "beauty_salon", "spa"].includes(amenity ?? "") || ["hairdresser", "beauty"].includes(shop ?? "")) {
+    return "Beauty & Personal Care";
+  }
+  if (["bank", "bureau_de_change", "insurance", "lawyer", "notary"].includes(amenity ?? "")
+    || ["financial", "insurance", "lawyer"].includes(office ?? "")) {
+    return "Finance & Legal";
+  }
+  if (["school", "college", "university", "kindergarten", "language_school"].includes(amenity ?? "")) {
+    return "Education & Childcare";
+  }
+  if (["car_repair", "car", "car_parts", "tyres", "fuel", "bicycle", "motorcycle"].includes(shop ?? "")
+    || ["car_repair", "fuel", "parking"].includes(amenity ?? "")) {
+    return "Automotive & Mobility";
+  }
+  if (["gym", "sports_centre", "fitness_centre", "stadium", "pitch"].includes(leisure ?? "")) {
+    return "Fitness & Sports";
+  }
+  if (["museum", "gallery"].includes(tourism ?? "")
+    || ["theatre", "cinema", "arts_centre", "music_venue"].includes(amenity ?? "")) {
+    return "Arts, Culture & Entertainment";
+  }
+  if (["hotel", "hostel", "guest_house", "motel"].includes(tourism ?? "")
+    || ["hotel", "hostel"].includes(amenity ?? "")) {
+    return "Hospitality & Travel";
+  }
+  if (["electrician", "plumber", "carpenter", "painter", "roofing", "gardener", "handyman"].includes(craft ?? "")
+    || ["hardware", "trade"].includes(shop ?? "")) {
+    return "Home & Repair";
+  }
+  if (shop || tags.amenity || craft || office) {
+    return shop ? "Retail & Shopping" : "Professional Services";
+  }
+  return "Professional Services";
 }
 
 function fetchOpenStreetMapBusinesses(elements: OsmElement[], section: Exclude<ListingSection, "events">, bounds: { s: number; w: number; n: number; e: number }): Listing[] {
@@ -366,6 +519,7 @@ function fetchOpenStreetMapBusinesses(elements: OsmElement[], section: Exclude<L
         id: `osm-${element.id}`,
         locationId: "dhg",
         category: section === "food-drink" ? "Food & Drink" : "Businesses",
+        businessCategory: businessCategoryForOsmTags(tags, section),
         name: tags.name,
         description: descriptionFromTags(tags),
         x,
@@ -373,6 +527,7 @@ function fetchOpenStreetMapBusinesses(elements: OsmElement[], section: Exclude<L
         details: detailsFromTags(tags, "Markets"),
         lat: element.lat,
         lng: element.lon,
+        source: "openstreetmap",
       };
     });
 }

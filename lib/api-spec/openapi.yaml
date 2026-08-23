@@ -488,6 +488,10 @@ components:
         sourceUrl:
           type: string
           description: Link to the website where this activity was listed.
+        businessCategory:
+          $ref: "#/components/schemas/BusinessCategory"
+        source:
+          $ref: "#/components/schemas/ListingSource"
         isApproximateLocation:
           type: boolean
           description: Whether the map pin uses the Den Haag city centre because no exact venue coordinates were supplied.
@@ -502,6 +506,28 @@ components:
         - details
         - lat
         - lng
+
+    BusinessCategory:
+      type: string
+      description: Normalized category for business and food-and-drink listings.
+      enum:
+        - Retail & Shopping
+        - Food & Drink
+        - Health & Wellness
+        - Beauty & Personal Care
+        - Professional Services
+        - Finance & Legal
+        - Home & Repair
+        - Automotive & Mobility
+        - Education & Childcare
+        - Hospitality & Travel
+        - Arts, Culture & Entertainment
+        - Fitness & Sports
+
+    ListingSource:
+      type: string
+      description: Provider or editorial source for an individual listing.
+      enum: [google_maps, openstreetmap, curated, source_scan]
 
     ListingsResponse:
       type: object

@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from './businessCategory';
 export * from './businessListResult';
 export * from './capturePersistRequest';
 export * from './capturePersistResult';
@@ -20,6 +21,7 @@ export * from './getNewsParams';
 export * from './healthStatus';
 export * from './listing';
 export * from './listingCategory';
+export * from './listingSource';
 export * from './listingsResponse';
 export * from './listingsResponseSource';
 export * from './newsArticle';

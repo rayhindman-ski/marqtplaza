@@ -5,3 +5,4 @@
 - [DenHaag calendar markup](denhaag-calendar-markup.md) — generic UI “walking” can masquerade as venue; prefer event-specific location data and richer local evidence.
 - [OpenAPI numeric counts](openapi-numeric-counts.md) — use `number`, not `integer`, for generated count schemas in this workspace’s Orval/Zod toolchain.
 - [Map marker anchoring](map-marker-anchoring.md) — custom pin wrappers own coordinates once; multi-neighborhood tile viewports must use live canvas dimensions.
+- [Business filter hierarchy](business-filter-hierarchy.md) — Businesses owns non-food subcategories; Food & Drink owns its matching one, and children only show when their parent is selected.

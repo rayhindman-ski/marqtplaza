@@ -184,6 +184,8 @@ export const GetListingsResponse = zod.object({
   "lat": zod.number().describe('WGS 84 latitude for displaying the activity on the map.'),
   "lng": zod.number().describe('WGS 84 longitude for displaying the activity on the map.'),
   "sourceUrl": zod.string().optional().describe('Link to the website where this activity was listed.'),
+  "businessCategory": zod.enum(['Retail & Shopping', 'Food & Drink', 'Health & Wellness', 'Beauty & Personal Care', 'Professional Services', 'Finance & Legal', 'Home & Repair', 'Automotive & Mobility', 'Education & Childcare', 'Hospitality & Travel', 'Arts, Culture & Entertainment', 'Fitness & Sports']).optional().describe('Normalized category for business and food-and-drink listings.'),
+  "source": zod.enum(['google_maps', 'openstreetmap', 'curated', 'source_scan']).optional().describe('Provider or editorial source for an individual listing.'),
   "isApproximateLocation": zod.boolean().optional().describe('Whether the map pin uses the Den Haag city centre because no exact venue coordinates were supplied.')
 })),
   "source": zod.enum(['live', 'google_places', 'fallback', 'curated']),

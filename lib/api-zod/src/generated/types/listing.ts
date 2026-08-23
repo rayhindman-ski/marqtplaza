@@ -5,7 +5,9 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { BusinessCategory } from './businessCategory';
 import type { ListingCategory } from './listingCategory';
+import type { ListingSource } from './listingSource';
 
 export interface Listing {
   id: string;
@@ -22,6 +24,8 @@ export interface Listing {
   lng: number;
   /** Link to the website where this activity was listed. */
   sourceUrl?: string;
+  businessCategory?: BusinessCategory;
+  source?: ListingSource;
   /** Whether the map pin uses the Den Haag city centre because no exact venue coordinates were supplied. */
   isApproximateLocation?: boolean;
 }

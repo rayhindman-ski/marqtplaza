@@ -2,6 +2,37 @@ export type Category = 'Museums' | 'Tours' | 'Family' | 'Entertainment' | 'Outdo
 export const EVENT_CATEGORIES: Category[] = ['Museums', 'Tours', 'Family', 'Entertainment', 'Outdoors', 'Markets'];
 export const ALL_CATEGORIES: Category[] = [...EVENT_CATEGORIES, 'Businesses', 'Food & Drink'];
 
+export type BusinessCategory =
+  | 'Retail & Shopping'
+  | 'Food & Drink'
+  | 'Health & Wellness'
+  | 'Beauty & Personal Care'
+  | 'Professional Services'
+  | 'Finance & Legal'
+  | 'Home & Repair'
+  | 'Automotive & Mobility'
+  | 'Education & Childcare'
+  | 'Hospitality & Travel'
+  | 'Arts, Culture & Entertainment'
+  | 'Fitness & Sports';
+
+export const BUSINESS_CATEGORIES: BusinessCategory[] = [
+  'Retail & Shopping',
+  'Food & Drink',
+  'Health & Wellness',
+  'Beauty & Personal Care',
+  'Professional Services',
+  'Finance & Legal',
+  'Home & Repair',
+  'Automotive & Mobility',
+  'Education & Childcare',
+  'Hospitality & Travel',
+  'Arts, Culture & Entertainment',
+  'Fitness & Sports',
+];
+
+export type ListingSource = 'google_maps' | 'openstreetmap' | 'curated' | 'source_scan';
+
 export interface Location {
   id: string;
   name: string;
@@ -28,6 +59,10 @@ export interface Marker {
   lng: number;
   /** Link back to the website where this activity was listed. */
   sourceUrl?: string;
+  /** Normalized business taxonomy label, present for business listings. */
+  businessCategory?: BusinessCategory;
+  /** Provider or editorial source for this listing. */
+  source?: ListingSource;
 }
 
 // Active cities — add more Location entries here when expanding beyond Den Haag.

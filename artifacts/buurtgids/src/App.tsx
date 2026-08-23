@@ -11,7 +11,17 @@ import {
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { useGetListings } from '@workspace/api-client-react';
-import { LOCATIONS, MARKERS, ALL_CATEGORIES, EVENT_CATEGORIES, type Category, type Marker } from './lib/data';
+import {
+  LOCATIONS,
+  MARKERS,
+  ALL_CATEGORIES,
+  BUSINESS_CATEGORIES,
+  EVENT_CATEGORIES,
+  type BusinessCategory,
+  type Category,
+  type ListingSource,
+  type Marker,
+} from './lib/data';
 import { GoogleMapView } from './components/GoogleMapView';
 import CaptureView from './pages/CaptureView';
 import SourceDirectoryView from './pages/SourceDirectoryView';
@@ -20,6 +30,8 @@ import NewsArticleView from './pages/NewsArticleView';
 import {
   getLocationName,
   getMarkerCopy,
+  getBusinessCategoryName,
+  getListingSourceName,
   LANGUAGE_OPTIONS,
   translations,
   type Language,
@@ -52,6 +64,27 @@ function categoryStateFor(section: ListingSection): Record<Category, boolean> {
       ? ['Businesses']
       : ['Food & Drink'];
   return Object.fromEntries(ALL_CATEGORIES.map((category) => [category, active.includes(category)])) as Record<Category, boolean>;
+}
+
+function businessSubcategoryStateFor(section: ListingSection): Record<BusinessCategory, boolean> {
+  const active: BusinessCategory[] = section === 'businesses'
+    ? BUSINESS_CATEGORIES.filter((category) => category !== 'Food & Drink')
+    : section === 'food-drink'
+      ? ['Food & Drink']
+      : [];
+  return Object.fromEntries(
+    BUSINESS_CATEGORIES.map((category) => [category, active.includes(category)]),
+  ) as Record<BusinessCategory, boolean>;
+}
+
+function subcategoriesForTopLevel(category: Category): BusinessCategory[] {
+  if (category === 'Businesses') {
+    return BUSINESS_CATEGORIES.filter((subcategory) => subcategory !== 'Food & Drink');
+  }
+  if (category === 'Food & Drink') {
+    return ['Food & Drink'];
+  }
+  return [];
 }
 function LanguageSelector({
   language,
@@ -526,6 +559,20 @@ function MarkerCard({
             )}>{marker.name}</h3>
             <SaveButton saved={isSaved} onToggle={onSave} />
           </div>
+           {(marker.businessCategory || marker.source) && (
+             <div className="mb-3 flex flex-wrap items-center gap-1.5">
+               {marker.businessCategory && (
+                 <span className="rounded-md bg-primary/10 px-2 py-1 text-[11px] font-bold text-primary">
+                   {getBusinessCategoryName(marker.businessCategory, language)}
+                 </span>
+               )}
+               {marker.source && (
+                 <span className="rounded-md bg-muted px-2 py-1 text-[11px] font-semibold text-muted-foreground">
+                   {getListingSourceName(marker.source, language)}
+                 </span>
+               )}
+             </div>
+           )}
           <p className="text-muted-foreground text-sm mb-3 line-clamp-2 leading-relaxed">{copy.description}</p>
           <div className="flex items-center gap-1.5 text-xs font-semibold text-secondary bg-secondary/5 w-fit px-2.5 py-1 rounded-md">
             <DetailIcon className="w-3.5 h-3.5 opacity-70" />
@@ -661,6 +708,9 @@ function DiscoveryState({
   const location = LOCATIONS.find(l => l.id === locationId);
   const t = translations[language];
   const [categories, setCategories] = useState<Record<Category, boolean>>(() => categoryStateFor(listingSection));
+  const [businessSubcategories, setBusinessSubcategories] = useState<Record<BusinessCategory, boolean>>(
+    () => businessSubcategoryStateFor(listingSection),
+  );
   const [selectedNeighborhoods, setSelectedNeighborhoods] = useState<string[]>(
     initialNeighborhood ? [initialNeighborhood] : [],
   );
@@ -674,6 +724,14 @@ function DiscoveryState({
 
   const toggleCategory = (cat: Category) => {
     setCategories(prev => ({ ...prev, [cat]: !prev[cat] }));
+    setSelectedMarker(null);
+  };
+
+  const toggleBusinessSubcategory = (subcategory: BusinessCategory) => {
+    setBusinessSubcategories((previous) => ({
+      ...previous,
+      [subcategory]: !previous[subcategory],
+    }));
     setSelectedMarker(null);
   };
 
@@ -696,6 +754,7 @@ function DiscoveryState({
 
   useEffect(() => {
     setCategories(categoryStateFor(listingSection));
+    setBusinessSubcategories(businessSubcategoryStateFor(listingSection));
     setSelectedMarker(null);
   }, [listingSection]);
 
@@ -736,14 +795,33 @@ function DiscoveryState({
       lat: l.lat,
       lng: l.lng,
       sourceUrl: (l as { sourceUrl?: string }).sourceUrl,
+        businessCategory: (l as { businessCategory?: BusinessCategory }).businessCategory,
+        source: (l as { source?: ListingSource }).source,
     };
   });
 
   const selectedAreas = selectedNeighborhoods
     .map((neighborhood) => location.neighborhoodCoords[neighborhood])
     .filter((area): area is { lat: number; lng: number; zoom: number } => Boolean(area));
+  const visibleCategories = listingSection === 'events'
+    ? EVENT_CATEGORIES
+    : listingSection === 'businesses'
+      ? ['Businesses'] as Category[]
+      : ['Food & Drink'] as Category[];
+  const visibleSubcategories = Array.from(new Set(
+    visibleCategories
+      .filter((category) => categories[category])
+      .flatMap(subcategoriesForTopLevel),
+  ));
   const filteredMarkers = allMarkers.filter((marker) => {
     if (!categories[marker.category]) return false;
+    if (
+      listingSection !== 'events'
+      && visibleSubcategories.length > 0
+      && (!marker.businessCategory || !businessSubcategories[marker.businessCategory])
+    ) {
+      return false;
+    }
     if (selectedAreas.length === 0) return true;
     return selectedAreas.some((area) => getDistanceKm(marker.lat, marker.lng, area.lat, area.lng) <= 2.5);
   });
@@ -751,11 +829,6 @@ function DiscoveryState({
   const isGooglePlaces = data?.source === 'google_places';
   const isFallback = data?.source === 'fallback';
   const isCurated = data?.source === 'curated';
-  const visibleCategories = listingSection === 'events'
-    ? EVENT_CATEGORIES
-    : listingSection === 'businesses'
-      ? ['Businesses'] as Category[]
-      : ['Food & Drink'] as Category[];
 
   const savedCount = savedIds.size;
 
@@ -822,26 +895,77 @@ function DiscoveryState({
             ))}
           </div>
           
-          <div className="flex flex-wrap gap-2">
-            {visibleCategories.map(cat => {
-              const Icon = CATEGORY_ICONS[cat];
-              return (
-                <button
-                  key={cat}
-                  onClick={() => toggleCategory(cat)}
-                  aria-pressed={categories[cat]}
-                  className={cn(
-                    "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all duration-200 border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-card",
-                    categories[cat]
-                      ? "bg-foreground text-background border-foreground shadow-sm"
-                      : "bg-muted text-muted-foreground border-transparent hover:bg-muted/80 hover:text-foreground"
-                  )}
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div>
+              <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
+                {t.topLevelCategories}
+              </p>
+              <div
+                role="group"
+                aria-label={t.topLevelCategories}
+                className="space-y-1"
+              >
+                {visibleCategories.map((cat) => {
+                  const Icon = CATEGORY_ICONS[cat];
+                  const isChecked = categories[cat];
+                  return (
+                    <label
+                      key={cat}
+                      className={cn(
+                        "flex cursor-pointer items-center gap-2 rounded-lg border px-2 py-1.5 text-[11px] font-semibold transition-colors",
+                        isChecked
+                          ? "border-foreground bg-foreground text-background"
+                          : "border-border bg-muted/40 text-muted-foreground hover:border-primary/50 hover:text-primary",
+                      )}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isChecked}
+                        onChange={() => toggleCategory(cat)}
+                        className="h-3.5 w-3.5 shrink-0 accent-primary"
+                      />
+                      <Icon className="h-3 w-3 shrink-0" aria-hidden="true" />
+                      <span>{t.categories[cat]}</span>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+            {visibleSubcategories.length > 0 && (
+              <div>
+                <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
+                  {t.subcategories}
+                </p>
+                <div
+                  role="group"
+                  aria-label={t.subcategories}
+                  className="max-h-48 space-y-1 overflow-y-auto pr-1"
                 >
-                  <Icon className="w-3 h-3" />
-                  {t.categories[cat]}
-                </button>
-              );
-            })}
+                  {visibleSubcategories.map((subcategory) => {
+                    const isChecked = businessSubcategories[subcategory];
+                    return (
+                      <label
+                        key={subcategory}
+                        className={cn(
+                          "flex cursor-pointer items-center gap-2 rounded-lg border px-2 py-1.5 text-[11px] font-semibold transition-colors",
+                          isChecked
+                            ? "border-primary bg-primary/10 text-primary"
+                            : "border-border bg-muted/40 text-muted-foreground hover:border-primary/50 hover:text-primary",
+                        )}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={() => toggleBusinessSubcategory(subcategory)}
+                          className="h-3.5 w-3.5 shrink-0 accent-primary"
+                        />
+                        <span>{getBusinessCategoryName(subcategory, language)}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
           <div className="mt-5 border-t border-border/70 pt-4">
             <div className="mb-2 flex items-center justify-between gap-3">
@@ -865,15 +989,15 @@ function DiscoveryState({
               role="group"
               aria-label={t.neighborhoods}
               data-neighborhood-list
-              className="max-h-48 overflow-y-auto rounded-xl border border-border/70 bg-muted/20 p-2 pr-1"
+              className="max-h-48 overflow-y-auto rounded-xl border border-border/50 bg-muted/20 p-2 pr-1"
             >
               <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
                 <label
                   className={cn(
-                    "flex cursor-pointer items-center gap-2 rounded-lg border px-2.5 py-2 text-xs font-bold transition-colors",
+                      "flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-1.5 text-[11px] font-bold transition-colors",
                     selectedNeighborhoods.length === 0
-                      ? "border-foreground bg-foreground text-background"
-                      : "border-border bg-card text-muted-foreground hover:border-primary/50 hover:text-primary",
+                       ? "bg-foreground text-background"
+                       : "bg-card/60 text-muted-foreground hover:bg-primary/10 hover:text-primary",
                   )}
                 >
                   <input
@@ -893,10 +1017,10 @@ function DiscoveryState({
                     <label
                       key={neighborhood}
                       className={cn(
-                        "flex cursor-pointer items-center gap-2 rounded-lg border px-2.5 py-2 text-xs font-semibold transition-colors",
+                        "flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-1.5 text-[11px] font-semibold transition-colors",
                         isChecked
-                          ? "border-primary bg-primary text-primary-foreground"
-                          : "border-border bg-card text-muted-foreground hover:border-primary/50 hover:text-primary",
+                          ? "bg-primary text-primary-foreground"
+                          : "bg-card/60 text-muted-foreground hover:bg-primary/10 hover:text-primary",
                       )}
                     >
                       <input
