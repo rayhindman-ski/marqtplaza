@@ -35,7 +35,17 @@ type Listing = {
   sourceUrl?: string;
   businessCategory?: BusinessCategory;
   source?: ListingSource;
+  sourceName?: string;
 };
+
+function sourceNameFromUrl(sourceUrl?: string): string | undefined {
+  if (!sourceUrl) return undefined;
+  try {
+    return new URL(sourceUrl).hostname.replace(/^www\./, "");
+  } catch {
+    return undefined;
+  }
+}
 
 // Bounding boxes for each supported city (south, west, north, east)
 const CITY_BOUNDS: Record<string, { s: number; w: number; n: number; e: number }> = {
@@ -434,6 +444,7 @@ async function fetchGooglePlaces(
         lng,
         sourceUrl: googlePlaceUrl(place),
         source: "google_maps",
+        sourceName: "Google Maps",
       });
       if (results.length >= GOOGLE_PLACES_MAX_RESULTS) break;
     }
@@ -528,6 +539,7 @@ function fetchOpenStreetMapBusinesses(elements: OsmElement[], section: Exclude<L
         lat: element.lat,
         lng: element.lon,
         source: "openstreetmap",
+        sourceName: "OpenStreetMap",
       };
     });
 }
@@ -591,9 +603,14 @@ router.get("/listings", async (req, res) => {
   // All cities have hand-curated datasets. For Den Haag, source-scanned events are
   // persisted separately and merged in so a completed scan changes the public list.
   const curated = MARKERS.filter((m) => m.locationId === cityId);
+  const curatedListings: Listing[] = curated.map((listing) => ({
+    ...listing,
+    source: "curated",
+    sourceName: sourceNameFromUrl(listing.sourceUrl),
+  }));
   if (curated.length > 0) {
     if (cityId !== "dhg") {
-      res.json({ listings: curated, source: "curated" });
+      res.json({ listings: curatedListings, source: "curated" });
       return;
     }
 
@@ -664,15 +681,16 @@ router.get("/listings", async (req, res) => {
           event.openingTimes ? `Opening times: ${event.openingTimes}` : "",
           event.venue ?? "Venue not provided",
           event.isApproximateLocation ? "Map pin: Den Haag city centre (exact coordinates unavailable)" : "",
-          `Source: ${event.sourceName}`,
         ].filter(Boolean).join(" · "),
         lat: event.lat,
         lng: event.lng,
         sourceUrl: event.canonicalUrl,
+         source: "source_scan" as const,
+         sourceName: event.sourceName,
         isApproximateLocation: event.isApproximateLocation,
       }));
       res.json({
-        listings: [...curated, ...discoveredListings],
+        listings: [...curatedListings, ...discoveredListings],
         source: "curated",
         message: discoveredListings.length > 0
           ? `${discoveredListings.length} source-scanned event${discoveredListings.length === 1 ? "" : "s"} added to the curated Den Haag activities.`
@@ -680,7 +698,7 @@ router.get("/listings", async (req, res) => {
       });
     } catch {
       res.json({
-        listings: curated,
+        listings: curatedListings,
         source: "curated",
         message: "Curated activities are available; source-scanned events are temporarily unavailable.",
       });
@@ -711,6 +729,8 @@ router.get("/listings", async (req, res) => {
         lat: number;
         lng: number;
         sourceUrl?: string;
+        source: ListingSource;
+        sourceName: string;
       }>>((acc, el) => {
         const category = classifyNode(el.tags);
         if (!category) return acc;
@@ -729,14 +749,21 @@ router.get("/listings", async (req, res) => {
           details: detailsFromTags(el.tags, category),
           lat: el.lat,
           lng: el.lon,
-          // sourceUrl not available for live OSM entries
+          source: "openstreetmap",
+          sourceName: "OpenStreetMap",
         });
         return acc;
       }, []);
 
     // If Overpass returned nothing meaningful, fall back to static data
     if (listings.length === 0) {
-      const fallback = MARKERS.filter((m) => m.locationId === cityId);
+      const fallback = MARKERS
+        .filter((m) => m.locationId === cityId)
+        .map((listing) => ({
+          ...listing,
+          source: "curated" as const,
+          sourceName: sourceNameFromUrl(listing.sourceUrl),
+        }));
       res.json({
         listings: fallback,
         source: "fallback",
@@ -748,7 +775,13 @@ router.get("/listings", async (req, res) => {
     res.json({ listings, source: "live" });
   } catch {
     // Overpass unreachable or timed out – serve static fallback so the UI is never broken
-    const fallback = MARKERS.filter((m) => m.locationId === cityId);
+    const fallback = MARKERS
+      .filter((m) => m.locationId === cityId)
+      .map((listing) => ({
+        ...listing,
+        source: "curated" as const,
+        sourceName: sourceNameFromUrl(listing.sourceUrl),
+      }));
     res.json({
       listings: fallback,
       source: "fallback",

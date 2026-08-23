@@ -26,6 +26,8 @@ export interface Listing {
   sourceUrl?: string;
   businessCategory?: BusinessCategory;
   source?: ListingSource;
+  /** Human-readable publisher or provider that listed this item, distinct from its destination URL. */
+  sourceName?: string;
   /** Whether the map pin uses the Den Haag city centre because no exact venue coordinates were supplied. */
   isApproximateLocation?: boolean;
 }

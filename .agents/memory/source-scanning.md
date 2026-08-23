@@ -22,3 +22,9 @@ Publication metrics must distinguish inspected links from captured events. Only 
 **Why:** A crawler can inspect thousands of safe same-origin links while finding only a few candidates. Reporting the difference as rejected events makes source quality and coverage look far worse than they are.
 
 **How to apply:** Report pages/links examined, captured events, eligible events, and each explicit publication reason independently. Never treat a source-listing URL as event-locality proof; require event-specific venue/address/description evidence or in-bounds coordinates.
+
+Public event listings must preserve the human-readable publisher that listed the event separately from the event’s destination URL.
+
+**Why:** A link tells visitors where to open an event, but it does not make the discovery provenance visible or auditable.
+
+**How to apply:** Keep the event URL as the destination link and return a distinct publisher/source-name field from scanned records. For curated records, provide a readable publisher label without reusing the destination URL as the provenance value.

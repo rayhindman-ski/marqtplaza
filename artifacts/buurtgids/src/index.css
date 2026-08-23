@@ -95,3 +95,31 @@
     color: hsl(var(--foreground));
   }
 }
+
+@layer components {
+  .marqtplaza-map-marker {
+    background: linear-gradient(135deg, #11b8c5 0%, #168ca4 42%, #f36c21 100%);
+    border: 3px solid rgba(255, 255, 255, 0.96);
+    box-shadow:
+      0 7px 16px -5px rgba(23, 34, 53, 0.42),
+      0 0 0 2px rgba(17, 184, 197, 0.22),
+      inset 0 1px 0 rgba(255, 255, 255, 0.48);
+    color: white;
+  }
+
+  .marqtplaza-map-marker::before {
+    position: absolute;
+    inset: 5px;
+    border: 1px solid rgba(255, 255, 255, 0.34);
+    border-radius: 9999px;
+    content: '';
+    pointer-events: none;
+  }
+
+  .marqtplaza-map-marker:hover {
+    box-shadow:
+      0 10px 20px -5px rgba(23, 34, 53, 0.48),
+      0 0 0 3px rgba(243, 108, 33, 0.28),
+      inset 0 1px 0 rgba(255, 255, 255, 0.56);
+  }
+}

@@ -63,6 +63,8 @@ export interface Marker {
   businessCategory?: BusinessCategory;
   /** Provider or editorial source for this listing. */
   source?: ListingSource;
+  /** Human-readable publisher or provider that listed this item. */
+  sourceName?: string;
 }
 
 // Active cities — add more Location entries here when expanding beyond Den Haag.

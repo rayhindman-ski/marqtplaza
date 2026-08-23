@@ -29,15 +29,11 @@ const CATEGORY_ICONS: Record<MapCategory, LucideIcon> = {
 };
 
 const MAP_STYLES: google.maps.MapTypeStyle[] = [
-  { elementType: 'geometry', stylers: [{ color: '#f5f5f0' }] },
-  { elementType: 'labels.text.fill', stylers: [{ color: '#616161' }] },
-  { elementType: 'labels.text.stroke', stylers: [{ color: '#f5f5f5' }] },
-  { featureType: 'poi', elementType: 'geometry', stylers: [{ color: '#eeede8' }] },
-  { featureType: 'poi.park', elementType: 'geometry', stylers: [{ color: '#c8e6c9' }] },
-  { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#ffffff' }] },
-  { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#e8e0d8' }] },
-  { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#b3d4e8' }] },
+  { elementType: 'labels.text', stylers: [{ visibility: 'off' }] },
+  { elementType: 'labels.text.stroke', stylers: [{ visibility: 'off' }] },
+  { elementType: 'labels.icon', stylers: [{ visibility: 'on' }] },
 ];
+const MARQTPLAZA_MARKER_GRADIENT = 'linear-gradient(135deg, #11b8c5 0%, #168ca4 42%, #f36c21 100%)';
 
 const TILE_SIZE = 256;
 const MIN_TILE_ZOOM = 10;
@@ -64,6 +60,59 @@ interface LatLng {
 interface TileViewport {
   center: LatLng;
   zoom: number;
+}
+
+type HtmlMarkerOverlay = google.maps.OverlayView & {
+  setContent: (content: HTMLElement) => void;
+  setZIndex: (zIndex: number) => void;
+};
+
+function createHtmlMarkerOverlay(
+  map: google.maps.Map,
+  position: google.maps.LatLngLiteral,
+  initialContent: HTMLElement,
+  initialZIndex: number,
+): HtmlMarkerOverlay {
+  class MarkerOverlay extends google.maps.OverlayView {
+    private content = initialContent;
+    private zIndex = initialZIndex;
+
+    onAdd() {
+      const panes = this.getPanes();
+      if (!panes) return;
+      panes.overlayMouseTarget.appendChild(this.content);
+    }
+
+    draw() {
+      const projection = this.getProjection();
+      const point = projection.fromLatLngToDivPixel(position);
+      if (!point) return;
+      this.content.style.left = `${point.x}px`;
+      this.content.style.top = `${point.y}px`;
+      this.content.style.zIndex = String(this.zIndex);
+    }
+
+    onRemove() {
+      this.content.remove();
+    }
+
+    setContent(content: HTMLElement) {
+      if (this.content.parentElement) {
+        this.content.replaceWith(content);
+      }
+      this.content = content;
+      this.draw();
+    }
+
+    setZIndex(zIndex: number) {
+      this.zIndex = zIndex;
+      this.content.style.zIndex = String(zIndex);
+    }
+  }
+
+  const overlay = new MarkerOverlay() as HtmlMarkerOverlay;
+  overlay.setMap(map);
+  return overlay;
 }
 
 type MapPoint = Pick<MarkerData, 'id' | 'name' | 'category' | 'description' | 'details' | 'lat' | 'lng'> & {
@@ -261,11 +310,11 @@ function CoordinateMapFallback({
         const color = getCategoryColor(point.category);
         const Icon = getCategoryIcon(point.category);
 
-        const className = "flex items-center justify-center rounded-full border-2 border-white shadow-lg transition-transform hover:scale-110 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/35";
+        const className = "marqtplaza-map-marker relative flex items-center justify-center rounded-full transition-transform hover:scale-110 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/35";
         const style = {
           width: isSelected ? 48 : 38,
           height: isSelected ? 48 : 38,
-          backgroundColor: color,
+          boxShadow: isSelected ? `0 0 0 5px ${color}44, 0 8px 18px -6px rgba(23,34,53,0.5)` : undefined,
         };
         const ariaLabel = `Show ${point.name} at ${point.lat.toFixed(5)}, ${point.lng.toFixed(5)}`;
         const icon = <Icon className="h-5 w-5 text-white" strokeWidth={2.5} aria-hidden="true" />;
@@ -529,12 +578,11 @@ function TileMapView({
         const color = getCategoryColor(point.category);
         const Icon = getCategoryIcon(point.category);
 
-        const className = "flex items-center justify-center rounded-full border-2 border-white font-black text-white shadow-lg transition-transform hover:scale-110 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/35";
+        const className = "marqtplaza-map-marker relative flex items-center justify-center rounded-full font-black text-white transition-transform hover:scale-110 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/35";
         const style = {
           width: isSelected ? 50 : 43,
           height: isSelected ? 50 : 43,
-          backgroundColor: color,
-          boxShadow: isSelected ? `0 0 0 4px ${color}55, 0 2px 10px rgba(0,0,0,0.22)` : undefined,
+          boxShadow: isSelected ? `0 0 0 5px ${color}44, 0 8px 18px -6px rgba(23,34,53,0.5)` : undefined,
         };
         const ariaLabel = `Open ${point.name} at ${point.lat.toFixed(5)}, ${point.lng.toFixed(5)}${savedIds.has(point.id) ? ', saved' : ''}`;
         const icon = (
@@ -543,7 +591,7 @@ function TileMapView({
             {savedIds.has(point.id) && (
               <span
                 className="absolute -right-1 -top-1 h-3 w-3 rounded-full border-2 border-white"
-                style={{ backgroundColor: color }}
+                style={{ backgroundColor: '#f36c21' }}
               />
             )}
           </>
@@ -634,8 +682,7 @@ function GoogleMapCanvas({
 }: GoogleMapViewProps & { onUnavailable: () => void }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<google.maps.Map | null>(null);
-  const markerLibraryRef = useRef<google.maps.MarkerLibrary | null>(null);
-  const markersRef = useRef<Map<string, google.maps.marker.AdvancedMarkerElement>>(new Map());
+  const markersRef = useRef<Map<string, HtmlMarkerOverlay>>(new Map());
   const [mapReady, setMapReady] = useState(false);
   const location = getLocation(locationId);
 
@@ -652,10 +699,12 @@ function GoogleMapCanvas({
         'justify-content:center',
         'width:1px',
         'height:1px',
+        'transform:translate(-50%,-50%)',
         `z-index:${isSelected ? 100 : 1}`,
       ].join(';');
       const element = document.createElement('button');
-      const size = isSelected ? 50 : 43;
+      const size = isSelected ? 54 : 46;
+      element.className = 'marqtplaza-map-marker';
       element.style.cssText = [
         'position:relative',
         'z-index:1',
@@ -665,16 +714,17 @@ function GoogleMapCanvas({
         `width:${size}px`,
         `height:${size}px`,
         'border-radius:50%',
-        `background:${isSelected ? color : '#ffffff'}`,
-        `border:2.5px solid ${color}`,
-        'box-shadow:0 2px 10px rgba(0,0,0,0.22)',
-        `color:${isSelected ? '#fff' : color}`,
+        `background:${MARQTPLAZA_MARKER_GRADIENT}`,
+        'border:3px solid rgba(255,255,255,0.96)',
+        `box-shadow:${isSelected ? `0 0 0 5px ${color}44, 0 8px 18px -6px rgba(23,34,53,0.5)` : '0 7px 16px -5px rgba(23,34,53,0.42), 0 0 0 2px rgba(17,184,197,0.22), inset 0 1px 0 rgba(255,255,255,0.48)'}`,
+        'color:#fff',
         'cursor:pointer',
         'text-decoration:none',
         'padding:0',
       ].join(';');
       element.setAttribute('type', 'button');
       element.setAttribute('aria-label', t.openMarker(marker.name));
+      element.addEventListener('click', () => onMarkerClick(marker.id));
       const icon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
       icon.setAttribute('viewBox', '0 0 24 24');
       icon.setAttribute('width', '20');
@@ -685,7 +735,7 @@ function GoogleMapCanvas({
       icon.setAttribute('stroke-width', '2');
       icon.setAttribute('stroke-linecap', 'round');
       icon.setAttribute('stroke-linejoin', 'round');
-      icon.style.color = isSelected ? '#fff' : color;
+       icon.style.color = '#fff';
       icon.innerHTML = getCategoryIconMarkup(marker.category);
       element.appendChild(icon);
 
@@ -698,7 +748,7 @@ function GoogleMapCanvas({
           'width:12px',
           'height:12px',
           'border-radius:50%',
-          `background:${color}`,
+          'background:#f36c21',
           'border:2px solid #fff',
         ].join(';');
         element.appendChild(badge);
@@ -764,7 +814,7 @@ function GoogleMapCanvas({
 
       return wrapper;
     },
-    [language],
+    [language, onMarkerClick],
   );
 
   useEffect(() => {
@@ -783,23 +833,18 @@ function GoogleMapCanvas({
       apiOptionsSet = true;
     }
 
-    Promise.all([
-      importLibrary('maps') as Promise<google.maps.MapsLibrary>,
-      importLibrary('marker') as Promise<google.maps.MarkerLibrary>,
-    ])
-      .then(([{ Map: GoogleMap }, markerLibrary]) => {
+    (importLibrary('maps') as Promise<google.maps.MapsLibrary>)
+      .then(({ Map: GoogleMap }) => {
         if (disposed || !containerRef.current) return;
         mapRef.current = new GoogleMap(containerRef.current, {
           center: { lat: location.lat, lng: location.lng },
           zoom: location.zoom,
-          mapId: 'DEMO_MAP_ID',
           styles: MAP_STYLES,
           zoomControl: true,
           mapTypeControl: false,
           streetViewControl: false,
           fullscreenControl: false,
         });
-        markerLibraryRef.current = markerLibrary;
         setMapReady(true);
       })
       .catch(onUnavailable);
@@ -829,16 +874,16 @@ function GoogleMapCanvas({
   }, [location, mapReady, selectedNeighborhoods]);
 
   useEffect(() => {
-    if (!mapReady || !mapRef.current || !markerLibraryRef.current) return;
+    if (!mapReady || !mapRef.current) return;
 
     const attachPreviewPriority = (
-      mapMarker: google.maps.marker.AdvancedMarkerElement,
+      mapMarker: HtmlMarkerOverlay,
       content: HTMLElement,
       isSelected: boolean,
     ) => {
       const handlePreviewVisibility = (event: Event) => {
         const visible = (event as CustomEvent<{ visible: boolean }>).detail?.visible;
-        mapMarker.zIndex = visible ? 1000 : isSelected ? 100 : 1;
+        mapMarker.setZIndex(visible ? 1000 : isSelected ? 100 : 1);
       };
       content.addEventListener('marker-preview-visibility', handlePreviewVisibility);
     };
@@ -846,7 +891,7 @@ function GoogleMapCanvas({
     const newIds = new Set(markers.map((marker) => marker.id));
     for (const [id, mapMarker] of markersRef.current) {
       if (!newIds.has(id)) {
-        mapMarker.map = null;
+        mapMarker.setMap(null);
         markersRef.current.delete(id);
       }
     }
@@ -858,21 +903,19 @@ function GoogleMapCanvas({
       if (existing) {
         const content = buildMarkerEl(marker, isSelected, savedIds.has(marker.id));
         attachPreviewPriority(existing, content, isSelected);
-        existing.content = content;
-        existing.zIndex = isSelected ? 100 : 1;
+        existing.setContent(content);
+        existing.setZIndex(isSelected ? 100 : 1);
         continue;
       }
 
       const content = buildMarkerEl(marker, isSelected, savedIds.has(marker.id));
-      const mapMarker = new markerLibraryRef.current.AdvancedMarkerElement({
-        map: mapRef.current,
-        position: { lat: marker.lat, lng: marker.lng },
+      const mapMarker = createHtmlMarkerOverlay(
+        mapRef.current,
+        { lat: marker.lat, lng: marker.lng },
         content,
-        title: marker.name,
-        zIndex: isSelected ? 100 : 1,
-      });
+        isSelected ? 100 : 1,
+      );
       attachPreviewPriority(mapMarker, content, isSelected);
-      mapMarker.addListener('click', () => onMarkerClick(marker.id));
       markersRef.current.set(marker.id, mapMarker);
     }
   }, [buildMarkerEl, mapReady, markers, onMarkerClick, savedIds, selectedMarkerId]);
@@ -887,7 +930,7 @@ function GoogleMapCanvas({
 
   useEffect(() => () => {
     for (const mapMarker of markersRef.current.values()) {
-      mapMarker.map = null;
+      mapMarker.setMap(null);
     }
     markersRef.current.clear();
   }, []);

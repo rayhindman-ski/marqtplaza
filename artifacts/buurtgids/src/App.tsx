@@ -534,6 +534,8 @@ function MarkerCard({
   const Icon = CATEGORY_ICONS[marker.category];
   const DetailIcon = DETAIL_ICONS[marker.category];
   const copy = getMarkerCopy(marker, language);
+  const sourceLabel = marker.sourceName
+    ?? (marker.source ? getListingSourceName(marker.source, language) : undefined);
 
   return (
     <div
@@ -571,16 +573,16 @@ function MarkerCard({
             )}>{marker.name}</h3>
             <SaveButton saved={isSaved} onToggle={onSave} />
           </div>
-           {(marker.businessCategory || marker.source) && (
+           {(marker.businessCategory || sourceLabel) && (
              <div className="mb-3 flex flex-wrap items-center gap-1.5">
                {marker.businessCategory && (
                  <span className="rounded-md bg-primary/10 px-2 py-1 text-[11px] font-bold text-primary">
                    {getBusinessCategoryName(marker.businessCategory, language)}
                  </span>
                )}
-               {marker.source && (
+               {sourceLabel && (
                  <span className="rounded-md bg-muted px-2 py-1 text-[11px] font-semibold text-muted-foreground">
-                   {getListingSourceName(marker.source, language)}
+                   {sourceLabel}
                  </span>
                )}
              </div>
@@ -832,6 +834,7 @@ function DiscoveryState({
       sourceUrl: (l as { sourceUrl?: string }).sourceUrl,
         businessCategory: (l as { businessCategory?: BusinessCategory }).businessCategory,
         source: (l as { source?: ListingSource }).source,
+        sourceName: (l as { sourceName?: string }).sourceName,
     };
   });
 
@@ -931,10 +934,10 @@ function DiscoveryState({
                     <label
                       key={section}
                       className={cn(
-                        "flex cursor-pointer items-center gap-2 rounded-lg border px-2 py-1.5 text-[11px] font-semibold transition-colors",
+                        "flex min-h-9 cursor-pointer items-center gap-2 rounded-xl border px-2.5 py-2 text-[11px] font-semibold transition-all",
                         isChecked
-                          ? "border-foreground bg-foreground text-background"
-                          : "border-border bg-muted/40 text-muted-foreground hover:border-primary/50 hover:text-primary",
+                          ? "border-primary/50 bg-primary/10 text-foreground shadow-[0_3px_10px_-6px_rgba(243,108,33,0.8)]"
+                          : "border-border/70 bg-card/70 text-muted-foreground hover:border-primary/40 hover:bg-primary/5 hover:text-foreground",
                       )}
                     >
                       <input
@@ -965,10 +968,10 @@ function DiscoveryState({
                       <label
                         key={subcategory}
                         className={cn(
-                          "flex cursor-pointer items-center gap-2 rounded-lg border px-2 py-1.5 text-[11px] font-semibold transition-colors",
+                          "flex min-h-9 cursor-pointer items-center gap-2 rounded-xl border px-2.5 py-2 text-[11px] font-semibold transition-all",
                           isChecked
-                            ? "border-primary bg-primary/10 text-primary"
-                            : "border-border bg-muted/40 text-muted-foreground hover:border-primary/50 hover:text-primary",
+                            ? "border-primary/50 bg-primary/10 text-foreground shadow-[0_3px_10px_-6px_rgba(243,108,33,0.8)]"
+                            : "border-border/70 bg-card/70 text-muted-foreground hover:border-primary/40 hover:bg-primary/5 hover:text-foreground",
                         )}
                       >
                         <input
@@ -1012,10 +1015,10 @@ function DiscoveryState({
               <div className="grid min-w-0 grid-cols-2 gap-1.5 sm:grid-cols-3">
                 <label
                   className={cn(
-                      "flex min-w-0 cursor-pointer items-center gap-2 rounded-lg px-2.5 py-1.5 text-[11px] font-bold transition-colors",
+                      "flex min-h-11 min-w-0 cursor-pointer items-center gap-2 rounded-xl border px-2.5 py-2 text-[11px] font-bold transition-all",
                     selectedNeighborhoods.length === 0
-                       ? "bg-foreground text-background"
-                       : "bg-card/60 text-muted-foreground hover:bg-primary/10 hover:text-primary",
+                       ? "border-primary/50 bg-primary/10 text-foreground shadow-[0_3px_10px_-6px_rgba(243,108,33,0.8)]"
+                       : "border-border/60 bg-card/70 text-muted-foreground hover:border-primary/40 hover:bg-primary/5 hover:text-foreground",
                   )}
                 >
                   <input
@@ -1027,7 +1030,7 @@ function DiscoveryState({
                     }}
                     className="h-4 w-4 shrink-0 accent-primary"
                   />
-                  <span className="min-w-0 break-words">{t.allNeighborhoods}</span>
+                   <span className="min-w-0 truncate whitespace-nowrap">{t.allNeighborhoods}</span>
                 </label>
                 {location.neighborhoods.map((neighborhood) => {
                   const isChecked = selectedNeighborhoods.includes(neighborhood);
@@ -1035,10 +1038,10 @@ function DiscoveryState({
                     <label
                       key={neighborhood}
                       className={cn(
-                        "flex min-w-0 cursor-pointer items-center gap-2 rounded-lg px-2.5 py-1.5 text-[11px] font-semibold transition-colors",
+                        "flex min-h-11 min-w-0 cursor-pointer items-center gap-2 rounded-xl border px-2.5 py-2 text-[11px] font-semibold transition-all",
                         isChecked
-                          ? "bg-primary text-primary-foreground"
-                          : "bg-card/60 text-muted-foreground hover:bg-primary/10 hover:text-primary",
+                          ? "border-primary/50 bg-primary/10 text-foreground shadow-[0_3px_10px_-6px_rgba(243,108,33,0.8)]"
+                          : "border-border/60 bg-card/70 text-muted-foreground hover:border-primary/40 hover:bg-primary/5 hover:text-foreground",
                       )}
                     >
                       <input
@@ -1047,7 +1050,7 @@ function DiscoveryState({
                         onChange={() => toggleNeighborhood(neighborhood)}
                         className="h-4 w-4 shrink-0 accent-primary"
                       />
-                      <span className="min-w-0 break-words">{neighborhood}</span>
+                      <span className="min-w-0 truncate whitespace-nowrap">{neighborhood}</span>
                     </label>
                   );
                 })}

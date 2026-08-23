@@ -492,6 +492,9 @@ components:
           $ref: "#/components/schemas/BusinessCategory"
         source:
           $ref: "#/components/schemas/ListingSource"
+        sourceName:
+          type: string
+          description: Human-readable publisher or provider that listed this item, distinct from its destination URL.
         isApproximateLocation:
           type: boolean
           description: Whether the map pin uses the Den Haag city centre because no exact venue coordinates were supplied.
