@@ -92,6 +92,7 @@ export const translations = {
     liveDataBadge: 'Live',
     curatedDataBadge: 'Samengesteld',
     dataUnavailable: 'Live data tijdelijk niet beschikbaar – gecureerde vermeldingen worden weergegeven',
+    listingsCoverageNote: 'Brede selectie uit Google Places en OpenStreetMap; geen volledige bedrijvengids.',
     // Capture page
     capture: 'Vastleggen',
     captureTitle: 'Bedrijven vastleggen',
@@ -207,6 +208,7 @@ export const translations = {
     liveDataBadge: 'Live',
     curatedDataBadge: 'Curated',
     dataUnavailable: 'Live data temporarily unavailable – showing curated listings',
+    listingsCoverageNote: 'Broad selection from Google Places and OpenStreetMap; not a complete business directory.',
     // Capture page
     capture: 'Capture',
     captureTitle: 'Capture Businesses',

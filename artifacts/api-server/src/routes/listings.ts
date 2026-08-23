@@ -313,33 +313,69 @@ function businessCategoryForGooglePlace(
   place: GooglePlace,
   section: Exclude<ListingSection, "events">,
 ): BusinessCategory {
+  if (section === "food-drink") return "Food & Drink";
   const primaryType = place.primaryType?.toLowerCase();
   if (primaryType) {
     const mappedCategory = GOOGLE_TYPE_TO_BUSINESS_CATEGORY[primaryType];
     if (mappedCategory) return mappedCategory;
   }
-  return section === "food-drink" ? "Food & Drink" : "Professional Services";
+  return "Professional Services";
 }
 
 const GOOGLE_PLACES_URL = "https://places.googleapis.com/v1/places:searchText";
 const GOOGLE_PLACES_TIMEOUT_MS = 12_000;
-const GOOGLE_PLACES_MAX_RESULTS = 180;
-const GOOGLE_PLACES_MAX_PAGES_PER_SEARCH = 3;
+const GOOGLE_PLACES_MAX_RESULTS = 1000;
+const GOOGLE_PLACES_MAX_PAGES_PER_SEARCH = 2;
+const GOOGLE_PLACES_CONCURRENCY = 6;
 const GOOGLE_PLACES_CACHE_TTL_MS = 15 * 60 * 1000;
+const OPEN_STREET_MAP_RESULT_RESERVE = 0.25;
 const googlePlacesCache = new Map<string, { expiresAt: number; listings: Listing[] }>();
+const googlePlacesRequests = new Map<string, Promise<Listing[]>>();
+let activeGoogleRequests = 0;
+const queuedGoogleRequests: Array<() => void> = [];
+const overpassCache = new Map<string, { expiresAt: number; elements: OsmElement[] }>();
+const overpassRequests = new Map<string, Promise<OsmElement[]>>();
 
-const GOOGLE_SEARCHES: Record<Exclude<ListingSection, "events">, string[]> = {
+type GeographicBounds = { s: number; w: number; n: number; e: number };
+type GoogleSearchSpec = { textQuery: string; bounds: GeographicBounds };
+
+// Text Search is ranked and query-scoped, so one city-wide query systematically
+// misses smaller businesses. These overlapping cells give every part of The
+// Hague a chance to rank for each relevant business group while the final
+// bounds/evidence checks remain the source of truth.
+const HAGUE_DISCOVERY_AREAS: GeographicBounds[] = [
+  { s: 52.05, w: 4.26, n: 52.082, e: 4.315 },
+  { s: 52.05, w: 4.305, n: 52.082, e: 4.36 },
+  { s: 52.078, w: 4.26, n: 52.11, e: 4.315 },
+  { s: 52.078, w: 4.305, n: 52.11, e: 4.36 },
+];
+
+const GOOGLE_SEARCH_TERMS: Record<Exclude<ListingSection, "events">, string[]> = {
   businesses: [
-    "local businesses in The Hague Netherlands",
-    "shops in The Hague Netherlands",
-    "local services in The Hague Netherlands",
+    "shops and retail businesses in The Hague Netherlands",
+    "healthcare and beauty businesses in The Hague Netherlands",
+    "professional services and offices in The Hague Netherlands",
+    "lawyers accountants banks and real estate agencies in The Hague Netherlands",
+    "home repair and automotive services in The Hague Netherlands",
+    "schools childcare hotels and travel services in The Hague Netherlands",
+    "gyms sports clubs arts and culture businesses in The Hague Netherlands",
   ],
   "food-drink": [
-    "cafes in The Hague Netherlands",
-    "restaurants in The Hague Netherlands",
-    "bars in The Hague Netherlands",
+    "restaurants and cafes in The Hague Netherlands",
+    "bars pubs and nightlife in The Hague Netherlands",
+    "bakeries and food shops in The Hague Netherlands",
+    "takeaway and fast food in The Hague Netherlands",
   ],
 };
+
+function googleSearchSpecs(section: Exclude<ListingSection, "events">): GoogleSearchSpec[] {
+  return HAGUE_DISCOVERY_AREAS.flatMap((area) =>
+    GOOGLE_SEARCH_TERMS[section].map((term) => ({
+      textQuery: term,
+      bounds: area,
+    })),
+  );
+}
 
 function googlePlaceDescription(place: GooglePlace, section: Exclude<ListingSection, "events">): string {
   const type = place.primaryTypeDisplayName?.text
@@ -366,101 +402,205 @@ function googlePlaceUrl(place: GooglePlace): string | undefined {
     : undefined;
 }
 
+async function withGoogleRequestSlot<T>(operation: () => Promise<T>): Promise<T> {
+  await new Promise<void>((resolve) => {
+    const grant = () => {
+      activeGoogleRequests += 1;
+      resolve();
+    };
+    if (activeGoogleRequests < GOOGLE_PLACES_CONCURRENCY) {
+      grant();
+    } else {
+      queuedGoogleRequests.push(grant);
+    }
+  });
+  try {
+    return await operation();
+  } finally {
+    activeGoogleRequests -= 1;
+    queuedGoogleRequests.shift()?.();
+  }
+}
+
 async function fetchGooglePlaces(
+  bounds: { s: number; w: number; n: number; e: number },
+  section: Exclude<ListingSection, "events">,
+): Promise<Listing[]> {
+  const cacheKey = section;
+  const cached = googlePlacesCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) return cached.listings;
+  const inFlight = googlePlacesRequests.get(cacheKey);
+  if (inFlight) return inFlight;
+
+  const request = collectGooglePlaces(bounds, section);
+  googlePlacesRequests.set(cacheKey, request);
+  try {
+    const listings = await request;
+    googlePlacesCache.set(cacheKey, { expiresAt: Date.now() + GOOGLE_PLACES_CACHE_TTL_MS, listings });
+    return listings;
+  } finally {
+    googlePlacesRequests.delete(cacheKey);
+  }
+}
+
+async function collectGooglePlaces(
   bounds: { s: number; w: number; n: number; e: number },
   section: Exclude<ListingSection, "events">,
 ): Promise<Listing[]> {
   const apiKey = process.env.GOOGLE_MAPS_API_KEY;
   if (!apiKey) return [];
 
-  const cacheKey = section;
-  const cached = googlePlacesCache.get(cacheKey);
-  if (cached && cached.expiresAt > Date.now()) return cached.listings;
-
-  const results: Listing[] = [];
   const seen = new Set<string>();
-  const searches = GOOGLE_SEARCHES[section];
-  for (const textQuery of searches) {
-    let pageToken: string | undefined;
-    for (let page = 0; page < GOOGLE_PLACES_MAX_PAGES_PER_SEARCH; page += 1) {
-      const response = await fetch(GOOGLE_PLACES_URL, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Goog-Api-Key": apiKey,
-          "X-Goog-FieldMask": [
-            "places.id",
-            "places.displayName",
-            "places.formattedAddress",
-            "places.location",
-            "places.primaryType",
-            "places.primaryTypeDisplayName",
-            "places.googleMapsUri",
-            "places.websiteUri",
-            "places.rating",
-            "places.userRatingCount",
-            "places.regularOpeningHours.weekdayDescriptions",
-            "nextPageToken",
-          ].join(","),
-        },
-        body: JSON.stringify({
-          textQuery,
-          languageCode: "nl",
-          regionCode: "NL",
-          pageSize: 20,
-          ...(pageToken ? { pageToken } : {}),
-          locationBias: {
-            rectangle: {
-              low: { latitude: bounds.s - 0.01, longitude: bounds.w - 0.01 },
-              high: { latitude: bounds.n + 0.01, longitude: bounds.e + 0.01 },
-            },
+  const searches = googleSearchSpecs(section);
+  const resultsBySearch = searches.map((): Listing[] => []);
+  let nextSearchIndex = 0;
+  const worker = async () => {
+    while (true) {
+      const searchIndex = nextSearchIndex++;
+      if (searchIndex >= searches.length) return;
+      const search = searches[searchIndex];
+      const searchResults = resultsBySearch[searchIndex];
+      let pageToken: string | undefined;
+      for (let page = 0; page < GOOGLE_PLACES_MAX_PAGES_PER_SEARCH; page += 1) {
+        const response = await withGoogleRequestSlot(() => fetch(GOOGLE_PLACES_URL, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Goog-Api-Key": apiKey,
+            "X-Goog-FieldMask": [
+              "places.id",
+              "places.displayName",
+              "places.formattedAddress",
+              "places.location",
+              "places.primaryType",
+              "places.primaryTypeDisplayName",
+              "places.googleMapsUri",
+              "places.websiteUri",
+              "places.rating",
+              "places.userRatingCount",
+              "places.regularOpeningHours.weekdayDescriptions",
+              "nextPageToken",
+            ].join(","),
           },
-        }),
-        signal: AbortSignal.timeout(GOOGLE_PLACES_TIMEOUT_MS),
-      });
-      if (!response.ok) {
-        throw new Error(`Google Places HTTP ${response.status}`);
-      }
+          body: JSON.stringify({
+            textQuery: search.textQuery,
+            languageCode: "nl",
+            regionCode: "NL",
+            pageSize: 20,
+            ...(pageToken ? { pageToken } : {}),
+            locationBias: {
+              rectangle: {
+                low: { latitude: search.bounds.s, longitude: search.bounds.w },
+                high: { latitude: search.bounds.n, longitude: search.bounds.e },
+              },
+            },
+          }),
+          signal: AbortSignal.timeout(GOOGLE_PLACES_TIMEOUT_MS),
+        }));
+        if (!response.ok) {
+          throw new Error(`Google Places HTTP ${response.status}`);
+        }
 
-      const data = (await response.json()) as GooglePlacesResponse;
-      for (const place of data.places ?? []) {
-        const name = place.displayName?.text?.trim();
-        const address = place.formattedAddress?.trim();
-        const lat = place.location?.latitude;
-        const lng = place.location?.longitude;
-        if (!name || !address || typeof lat !== "number" || typeof lng !== "number") continue;
-        if (!isInHagueBounds(lat, lng) || !hasHagueEvidence(address)) continue;
+        const data = (await response.json()) as GooglePlacesResponse;
+        for (const place of data.places ?? []) {
+          const name = place.displayName?.text?.trim();
+          const address = place.formattedAddress?.trim();
+          const lat = place.location?.latitude;
+          const lng = place.location?.longitude;
+          if (!name || !address || typeof lat !== "number" || typeof lng !== "number") continue;
+          if (!isInHagueBounds(lat, lng) || !hasHagueEvidence(address)) continue;
 
-        const key = place.id ?? `${normalizedTitle(name)}|${normalizedTitle(address)}`;
-        if (seen.has(key)) continue;
-        seen.add(key);
-        const { x, y } = toXY(lat, lng, bounds);
-        results.push({
-          id: `google-${place.id ?? normalizedTitle(name).replace(/\s+/g, "-")}`,
-          locationId: "dhg",
-          category: section === "food-drink" ? "Food & Drink" : "Businesses",
-          businessCategory: businessCategoryForGooglePlace(place, section),
-          name,
-          description: googlePlaceDescription(place, section),
-          x,
-          y,
-          details: googlePlaceDetails(place),
-          lat,
-          lng,
-          sourceUrl: googlePlaceUrl(place),
-          source: "google_maps",
-          sourceName: "Google Maps",
-        });
-        if (results.length >= GOOGLE_PLACES_MAX_RESULTS) break;
+          const key = place.id ?? `${normalizedTitle(name)}|${normalizedTitle(address)}`;
+          if (seen.has(key)) continue;
+          seen.add(key);
+          const { x, y } = toXY(lat, lng, bounds);
+          searchResults.push({
+            id: `google-${place.id ?? normalizedTitle(name).replace(/\s+/g, "-")}`,
+            locationId: "dhg",
+            category: section === "food-drink" ? "Food & Drink" : "Businesses",
+            businessCategory: businessCategoryForGooglePlace(place, section),
+            name,
+            description: googlePlaceDescription(place, section),
+            x,
+            y,
+            details: googlePlaceDetails(place),
+            lat,
+            lng,
+            sourceUrl: googlePlaceUrl(place),
+            source: "google_maps",
+            sourceName: "Google Maps",
+          });
+        }
+        if (!data.nextPageToken) break;
+        pageToken = data.nextPageToken;
       }
-      if (results.length >= GOOGLE_PLACES_MAX_RESULTS || !data.nextPageToken) break;
-      pageToken = data.nextPageToken;
     }
-    if (results.length >= GOOGLE_PLACES_MAX_RESULTS) break;
+  };
+
+  const workerResults = await Promise.allSettled(
+    Array.from({ length: Math.min(GOOGLE_PLACES_CONCURRENCY, searches.length) }, () => worker()),
+  );
+  const results: Listing[] = [];
+  for (let resultIndex = 0; results.length < GOOGLE_PLACES_MAX_RESULTS; resultIndex += 1) {
+    let foundResult = false;
+    for (const searchResults of resultsBySearch) {
+      const result = searchResults[resultIndex];
+      if (!result) continue;
+      results.push(result);
+      foundResult = true;
+      if (results.length >= GOOGLE_PLACES_MAX_RESULTS) break;
+    }
+    if (!foundResult) break;
+  }
+  if (results.length === 0) {
+    const failure = workerResults.find(
+      (result): result is PromiseRejectedResult => result.status === "rejected",
+    );
+    if (failure) throw failure.reason;
   }
 
-  googlePlacesCache.set(cacheKey, { expiresAt: Date.now() + GOOGLE_PLACES_CACHE_TTL_MS, listings: results });
   return results;
+}
+
+function listingDedupeKey(listing: Pick<Listing, "name" | "lat" | "lng">): string {
+  // A ~100m coordinate bucket keeps separate branches with the same name while
+  // removing the same place when Google and OSM use slightly different pins.
+  return `${normalizedTitle(listing.name)}|${Math.round(listing.lat * 1000)}|${Math.round(listing.lng * 1000)}`;
+}
+
+function mergeBusinessListings(
+  googleListings: Listing[],
+  osmListings: Listing[],
+): { listings: Listing[]; osmAdded: number } {
+  const listings: Listing[] = [];
+  const seen = new Set<string>();
+  const addListing = (listing: Listing): boolean => {
+    const key = listingDedupeKey(listing);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    listings.push(listing);
+    return true;
+  };
+  const reservedForOsm = Math.min(
+    osmListings.length,
+    Math.ceil(GOOGLE_PLACES_MAX_RESULTS * OPEN_STREET_MAP_RESULT_RESERVE),
+  );
+  const preferredGoogleCount = Math.max(0, GOOGLE_PLACES_MAX_RESULTS - reservedForOsm);
+  for (const listing of googleListings.slice(0, preferredGoogleCount)) addListing(listing);
+
+  let osmAdded = 0;
+  for (const listing of osmListings) {
+    if (listings.length >= GOOGLE_PLACES_MAX_RESULTS) break;
+    if (addListing(listing)) osmAdded += 1;
+  }
+  for (const listing of googleListings.slice(preferredGoogleCount)) {
+    if (listings.length >= GOOGLE_PLACES_MAX_RESULTS) break;
+    addListing(listing);
+  }
+  return {
+    listings,
+    osmAdded,
+  };
 }
 
 function businessCategoryForOsmTags(
@@ -566,6 +706,29 @@ interface OsmResponse {
 async function fetchCityListings(
   bounds: { s: number; w: number; n: number; e: number },
 ): Promise<OsmElement[]> {
+  const cacheKey = `${bounds.s}:${bounds.w}:${bounds.n}:${bounds.e}`;
+  const cached = overpassCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) return cached.elements;
+  const inFlight = overpassRequests.get(cacheKey);
+  if (inFlight) return inFlight;
+
+  const request = fetchCityListingsFromOverpass(bounds);
+  overpassRequests.set(cacheKey, request);
+  try {
+    const elements = await request;
+    overpassCache.set(cacheKey, {
+      expiresAt: Date.now() + GOOGLE_PLACES_CACHE_TTL_MS,
+      elements,
+    });
+    return elements;
+  } finally {
+    overpassRequests.delete(cacheKey);
+  }
+}
+
+async function fetchCityListingsFromOverpass(
+  bounds: { s: number; w: number; n: number; e: number },
+): Promise<OsmElement[]> {
   // Single query combining businesses, events, and specials to avoid rate limits
   const bbox = `${bounds.s},${bounds.w},${bounds.n},${bounds.e}`;
   const query = `[out:json][timeout:20];
@@ -575,7 +738,7 @@ async function fetchCityListings(
   node[leisure][name](${bbox});
   node[tourism][name](${bbox});
 );
-out 120;`;
+  out 500;`;
 
   const url =
     "https://overpass-api.de/api/interpreter?data=" + encodeURIComponent(query);
@@ -626,10 +789,21 @@ router.get("/listings", async (req, res) => {
       try {
         const googleListings = await fetchGooglePlaces(bounds, listingSection);
         if (googleListings.length > 0) {
+          let mergedListings = googleListings;
+          let osmAdded = 0;
+          try {
+            const elements = await fetchCityListings(bounds);
+            const supplementalListings = fetchOpenStreetMapBusinesses(elements, listingSection, bounds);
+            const merged = mergeBusinessListings(googleListings, supplementalListings);
+            mergedListings = merged.listings;
+            osmAdded = merged.osmAdded;
+          } catch (error) {
+            console.warn("[listings] OpenStreetMap supplement unavailable:", error instanceof Error ? error.message : error);
+          }
           res.json({
-            listings: googleListings,
+            listings: mergedListings,
             source: "google_places",
-            message: `${googleListings.length} Haagse ${listingSection === "food-drink" ? "horecazaken" : "bedrijven"} uit Google Places.`,
+            message: `${googleListings.length} Haagse ${listingSection === "food-drink" ? "horecazaken" : "bedrijven"} uit Google Places${osmAdded > 0 ? ` en ${osmAdded} aanvullende OpenStreetMap-vermeldingen` : ""}.`,
           });
           return;
         }

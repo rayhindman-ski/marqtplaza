@@ -872,6 +872,7 @@ function DiscoveryState({
   const refetch = () => Promise.all(selectedQueries.map((query) => query.refetch()));
   const isLive = selectedData.some((result) => result.source === 'live');
   const isGooglePlaces = selectedData.some((result) => result.source === 'google_places');
+  const hasOpenStreetMap = selectedListings.some((listing) => listing.source === 'openstreetmap');
   const isFallback = selectedData.some((result) => result.source === 'fallback');
   const isCurated = selectedData.some((result) => result.source === 'curated');
   const fallbackMessage = selectedData
@@ -1083,7 +1084,7 @@ function DiscoveryState({
             ) : isGooglePlaces ? (
               <span className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-full">
                 <MapPinned className="w-3 h-3" />
-                Google Places
+                {hasOpenStreetMap ? 'Google Places + OpenStreetMap' : 'Google Places'}
               </span>
             ) : isCurated ? (
               <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary bg-primary/5 border border-primary/20 px-2.5 py-1 rounded-full">
@@ -1098,6 +1099,9 @@ function DiscoveryState({
             ) : null}
             {isFallback && fallbackMessage && (
               <span className="text-xs text-muted-foreground">{fallbackMessage}</span>
+            )}
+            {isGooglePlaces && (
+              <span className="w-full text-xs text-muted-foreground">{t.listingsCoverageNote}</span>
             )}
           </div>
         )}
