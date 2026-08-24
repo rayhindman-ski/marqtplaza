@@ -68,7 +68,7 @@ export default function NewsFeedView() {
             <Link href="/">
               <img
                 src="/marqtplaza-logo-nl.svg"
-                alt="Marqtplaza - De digitale dorps kern"
+                alt="Marqtplaza - De digitale dorpskern"
                 className="h-12 md:h-16 w-auto"
               />
             </Link>
