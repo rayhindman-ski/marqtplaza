@@ -328,7 +328,7 @@ export async function ensureNewsSourceStatusStorage(database: typeof db = db): P
 }
 
 async function claimDueNewsSourceIds(
-  database: typeof db = db,
+  database: Pick<typeof db, "execute"> = db,
   now = new Date(),
 ): Promise<string[]> {
   const retryLeaseUntil = new Date(now.getTime() + NEWS_RETRY_LEASE_MS);
@@ -340,7 +340,7 @@ async function claimDueNewsSourceIds(
         (status IN ('blocked', 'error') AND next_scan_at <= ${now})
         OR (status = 'pending' AND next_scan_at IS NULL)
       )
-        AND (retry_lease_until IS NULL OR retry_lease_until < ${now})
+        AND (retry_lease_until IS NULL OR retry_lease_until <= ${now})
       ORDER BY next_scan_at ASC NULLS FIRST
       LIMIT ${MAX_SCHEDULED_SOURCES_PER_RUN}
       FOR UPDATE SKIP LOCKED
@@ -456,5 +456,6 @@ export const newsTesting = {
   claimDueNewsSourceIds,
   isPublishedNewsArticle,
   nextRetryAt,
+  recordSourceScan,
   sources: NEWS_SOURCES,
 };

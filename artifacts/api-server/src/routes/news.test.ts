@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { afterEach, describe, it } from "node:test";
-import { newsArticlesTable } from "@workspace/db";
-import { newsTesting, scanSource, type NewsSource } from "./news";
+import { db, newsArticlesTable, newsSourceStatusesTable, pool } from "@workspace/db";
+import { inArray } from "drizzle-orm";
+import { ensureNewsSourceStatusStorage, newsTesting, scanSource, type NewsSource } from "./news";
 
 type StoredArticle = {
   canonicalUrl: string;
@@ -233,5 +234,84 @@ describe("news crawler regressions", () => {
     assert.equal(result.articlesCaptured, 1);
     assert.equal(result.articlesPublished, 1);
     assert.equal(result.pagesFailed, 1);
+  });
+});
+
+
+describe("news retry leases (database integration)", { skip: !process.env.NEWS_SOURCE_STATUS_INTEGRATION }, () => {
+  it("claims due sources disjointly and does not reclaim active leases", async () => {
+    const now = new Date("2026-08-23T10:00:00.000Z");
+    const sourceIds = Array.from({ length: 6 }, (_, index) => `news-lease-test-${process.pid}-${index}`);
+    const rows = sourceIds.map((sourceId, index) => ({
+      sourceId,
+      sourceName: `News lease integration source ${index}`,
+      sourceUrl: `https://${sourceId}.example.test/`,
+      status: index % 2 === 0 ? "blocked" : "error",
+      lastScannedAt: new Date(now.getTime() - 60 * 60 * 1000),
+      nextScanAt: new Date(now.getTime() - 1),
+      retryLeaseUntil: null,
+      message: "integration test",
+      articlesCaptured: 0,
+      articlesPublished: 0,
+      articlesUpdated: 0,
+      pagesFailed: 1,
+    }));
+
+    await ensureNewsSourceStatusStorage(db);
+    await db.transaction(async (transaction) => {
+      await transaction.insert(newsSourceStatusesTable).values(rows);
+    });
+
+    try {
+      const [firstClaims, secondClaims] = await Promise.all([
+        db.transaction((transaction) => newsTesting.claimDueNewsSourceIds(transaction, now)),
+        db.transaction((transaction) => newsTesting.claimDueNewsSourceIds(transaction, now)),
+      ]);
+      const allClaims = [...firstClaims, ...secondClaims];
+
+      assert.equal(firstClaims.length, 3);
+      assert.equal(secondClaims.length, 3);
+      assert.equal(new Set(allClaims).size, sourceIds.length);
+      assert.deepEqual(new Set(allClaims), new Set(sourceIds));
+
+      const beforeExpiry = await newsTesting.claimDueNewsSourceIds(
+        db,
+        new Date(now.getTime() + 15 * 60 * 1000 - 1),
+      );
+      assert.deepEqual(beforeExpiry, []);
+
+      const clearedSourceId = allClaims[0];
+      const clearedSource = {
+        id: clearedSourceId,
+        name: "Cleared integration source",
+        newsUrl: `https://${clearedSourceId}.example.test/`,
+      };
+      await newsTesting.recordSourceScan(clearedSource, {
+        sourceId: clearedSourceId,
+        sourceName: clearedSource.name,
+        scannedUrl: clearedSource.newsUrl,
+        status: "found",
+        articlesCaptured: 1,
+        articlesPublished: 1,
+        articlesUpdated: 0,
+        articlesRejected: 0,
+        pagesRead: 1,
+        pagesFailed: 0,
+        crawlLimitReached: false,
+        message: "scan cleared the retry state",
+      }, db, new Date(now.getTime() + 1 * 60 * 1000));
+
+      const afterScanResult = await newsTesting.claimDueNewsSourceIds(
+        db,
+        new Date(now.getTime() + 15 * 60 * 1000),
+      );
+      assert.equal(afterScanResult.includes(clearedSourceId), false);
+      assert.equal(afterScanResult.length, 3);
+    } finally {
+      await db.delete(newsSourceStatusesTable).where(
+        inArray(newsSourceStatusesTable.sourceId, sourceIds),
+      );
+      await pool.end();
+    }
   });
 });
