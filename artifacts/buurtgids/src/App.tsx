@@ -457,6 +457,37 @@ function SearchState({
   );
 }
 
+function NeighborhoodActionButtons({
+  language,
+  onSelectAll,
+  onDeselectAll,
+}: {
+  language: Language;
+  onSelectAll: () => void;
+  onDeselectAll: () => void;
+}) {
+  const t = translations[language];
+
+  return (
+    <div className="grid grid-cols-2 gap-2">
+      <button
+        type="button"
+        onClick={onSelectAll}
+        className="min-h-9 rounded-xl border border-primary/40 bg-primary/10 px-2.5 py-2 text-[11px] font-extrabold text-primary transition-colors hover:bg-primary/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+      >
+        {t.selectAllNeighborhoods}
+      </button>
+      <button
+        type="button"
+        onClick={onDeselectAll}
+        className="min-h-9 rounded-xl border border-border/70 bg-card/70 px-2.5 py-2 text-[11px] font-extrabold text-muted-foreground transition-colors hover:border-primary/40 hover:bg-primary/5 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+      >
+        {t.clearNeighborhoodSelection}
+      </button>
+    </div>
+  );
+}
+
 const CATEGORY_ICONS: Record<Category, React.ElementType> = {
   Museums: Landmark,
   Tours: RouteIcon,
@@ -873,6 +904,16 @@ function DiscoveryState({
     setSelectedMarker(null);
   };
 
+  const selectAllNeighborhoods = () => {
+    setSelectedNeighborhoods(location.neighborhoods);
+    setSelectedMarker(null);
+  };
+
+  const deselectAllNeighborhoods = () => {
+    setSelectedNeighborhoods([]);
+    setSelectedMarker(null);
+  };
+
   useEffect(() => {
     setTopLevelCategories(initialPostcode ? allTopLevelState() : topLevelStateFor(listingSection));
     setSubcategories(initialPostcode ? allSubcategoryState() : subcategoryStateFor(listingSection));
@@ -1120,27 +1161,12 @@ function DiscoveryState({
               <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
                 {t.neighborhoods}
               </p>
-              <div className="mt-2 grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelectedNeighborhoods(location.neighborhoods);
-                    setSelectedMarker(null);
-                  }}
-                  className="min-h-9 rounded-xl border border-primary/40 bg-primary/10 px-2.5 py-2 text-[11px] font-extrabold text-primary transition-colors hover:bg-primary/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                >
-                  {t.selectAllNeighborhoods}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelectedNeighborhoods([]);
-                    setSelectedMarker(null);
-                  }}
-                  className="min-h-9 rounded-xl border border-border/70 bg-card/70 px-2.5 py-2 text-[11px] font-extrabold text-muted-foreground transition-colors hover:border-primary/40 hover:bg-primary/5 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                >
-                  {t.clearNeighborhoodSelection}
-                </button>
+              <div className="mt-2">
+                <NeighborhoodActionButtons
+                  language={language}
+                  onSelectAll={selectAllNeighborhoods}
+                  onDeselectAll={deselectAllNeighborhoods}
+                />
               </div>
             </div>
             <div
@@ -1348,6 +1374,20 @@ function DiscoveryState({
 
       {/* Map Area */}
       <div className="flex-1 relative h-full w-full overflow-hidden bg-background">
+        {view === 'map' && (
+          <div className="absolute left-4 right-4 top-4 z-20 md:hidden">
+            <div className="rounded-2xl border border-border/70 bg-card/95 p-3 shadow-xl backdrop-blur-xl">
+              <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
+                {t.neighborhoods}
+              </p>
+              <NeighborhoodActionButtons
+                language={language}
+                onSelectAll={selectAllNeighborhoods}
+                onDeselectAll={deselectAllNeighborhoods}
+              />
+            </div>
+          </div>
+        )}
         <GoogleMapView
           language={language}
           locationId={location.id}
