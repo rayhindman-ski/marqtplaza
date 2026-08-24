@@ -35,7 +35,7 @@ const MAP_STYLES: google.maps.MapTypeStyle[] = [
   { elementType: 'labels.text.stroke', stylers: [{ visibility: 'off' }] },
   { elementType: 'labels.icon', stylers: [{ visibility: 'on' }] },
 ];
-const MARQTPLAZA_MARKER_GRADIENT = 'linear-gradient(135deg, #11b8c5 0%, #168ca4 42%, #f36c21 100%)';
+const MARQTPLAZA_MARKER_GRADIENT = 'linear-gradient(135deg, #ff9a52 0%, #f36c21 48%, #c94d12 100%)';
 
 const TILE_SIZE = 256;
 const MIN_TILE_ZOOM = 10;
@@ -720,7 +720,7 @@ function GoogleMapCanvas({
         'border-radius:50%',
         `background:${MARQTPLAZA_MARKER_GRADIENT}`,
         'border:3px solid rgba(255,255,255,0.96)',
-        `box-shadow:${isSelected ? `0 0 0 5px ${color}44, 0 8px 18px -6px rgba(23,34,53,0.5)` : '0 7px 16px -5px rgba(23,34,53,0.42), 0 0 0 2px rgba(17,184,197,0.22), inset 0 1px 0 rgba(255,255,255,0.48)'}`,
+         `box-shadow:${isSelected ? `0 0 0 5px ${color}44, 0 8px 18px -6px rgba(23,34,53,0.5)` : '0 7px 16px -5px rgba(23,34,53,0.42), 0 0 0 2px rgba(243,108,33,0.28), inset 0 1px 0 rgba(255,255,255,0.48)'}`,
         'color:#fff',
         'cursor:pointer',
         'text-decoration:none',

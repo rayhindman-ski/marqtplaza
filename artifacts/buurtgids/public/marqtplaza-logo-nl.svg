@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 120" width="100%" height="100%">
+  <g font-family="system-ui, -apple-system, sans-serif" font-weight="800">
+    <text x="250" y="70" text-anchor="middle" font-size="68" letter-spacing="-2">
+      <tspan fill="#1598AC">marqt</tspan>
+      <tspan fill="#F36C21">plaza</tspan>
+      <tspan fill="#1598AC">.com</tspan>
+    </text>
+  </g>
+  <g font-family="system-ui, -apple-system, sans-serif" font-weight="700" font-size="14" letter-spacing="3">
+    <line x1="60" y1="100" x2="115" y2="100" stroke="#F36C21" stroke-width="2" />
+    <text x="250" y="105" text-anchor="middle" fill="#1598AC">De digitale dorps kern</text>
+    <line x1="385" y1="100" x2="440" y2="100" stroke="#F36C21" stroke-width="2" />
+  </g>
+</svg>
