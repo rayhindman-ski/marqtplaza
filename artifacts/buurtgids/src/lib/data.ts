@@ -61,6 +61,7 @@ export const BUSINESS_CATEGORIES: BusinessCategory[] = [
 ];
 
 export type ListingSource = 'google_maps' | 'openstreetmap' | 'curated' | 'source_scan';
+export type SocialMapReviewStatus = 'verified' | 'review_due' | 'changed' | 'unavailable';
 
 export interface Location {
   id: string;
@@ -101,6 +102,10 @@ export interface Marker {
   officialUrl?: string;
   sourcePageUrl?: string;
   snapshotDate?: string;
+  reviewStatus?: SocialMapReviewStatus;
+  reviewReason?: string | null;
+  lastCheckedAt?: string;
+  nextReviewAt?: string;
 }
 
 // Active cities — add more Location entries here when expanding beyond Den Haag.

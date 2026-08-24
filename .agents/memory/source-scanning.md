@@ -11,6 +11,12 @@ Source scans must accept source IDs, not arbitrary URLs. The server resolves tho
 
 **How to apply:** Keep the allowlist in the server scan route, fetch robots.txt before crawl admission, handle redirects manually, stream response bodies with page-size and redirect limits, reject duplicate selections, and cap concurrent scans. Bound links, index pages, detail pages, and sitemaps separately; report budget-skipped and robots-protected pages truthfully. For every selected source, return a distinct status for events found, no detectable events, automated access blocked, or fetch error. Never silently collapse blocked and failed scans into an empty result.
 
+For periodic curated-listing checks, record a redirect as editorial review work and do not fetch its target.
+
+**Why:** A trusted source can be changed or compromised and redirect to an internal service. The redirect target is useful evidence for an editor, but does not need a server-side request to determine that the public link has changed.
+
+**How to apply:** Fetch only the compile-time curated HTTPS source URL after public-address validation. Use manual redirects, retain the target as metadata, and mark the record as changed without resolving or requesting the target.
+
 Only publish a scanned activity to the public event list when it has a valid upcoming date and verified local evidence (coordinates or Den Haag venue/context). Keep incomplete candidates in scan feedback, not the public list.
 
 **Why:** Source landing pages and evergreen articles produce many event-like links that otherwise accumulate as stale or non-local public listings.

@@ -18,6 +18,8 @@ tags:
     description: Den Haag activity source scanning
   - name: event-review
     description: Editorial review of source-scanned Den Haag event candidates
+  - name: social-map-review
+    description: Periodic source review of curated Den Haag support locations
   - name: news
     description: Den Haag news aggregation
 paths:
@@ -204,6 +206,52 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ListingsResponse"
+
+  /social-map/review:
+    get:
+      operationId: getSocialMapReview
+      tags: [social-map-review]
+      summary: Get the curated Den Haag social-map review queue
+      description: Returns source status for every curated support location and the last successful public snapshot date.
+      responses:
+        "200":
+          description: Social-map review status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SocialMapReviewResponse"
+        "401":
+          description: Authentication is required
+        "403":
+          description: An editor role is required
+    post:
+      operationId: runSocialMapReview
+      tags: [social-map-review]
+      summary: Run the periodic source review for curated support locations
+      description: Checks official and verification pages. The public snapshot date changes only when every source check succeeds.
+      responses:
+        "200":
+          description: Completed social-map review
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SocialMapReviewResponse"
+        "401":
+          description: Authentication is required
+        "403":
+          description: An editor role is required
+        "409":
+          description: A review is already in progress
+        "502":
+          description: The review could not be completed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                required: [error]
 
   /news:
     get:
@@ -671,6 +719,18 @@ components:
         snapshotDate:
           type: string
           description: Date the curated social-map selection was last checked.
+        reviewStatus:
+          $ref: "#/components/schemas/SocialMapReviewStatus"
+        reviewReason:
+          type: string
+          nullable: true
+          description: Why this social-map record needs editorial attention, when applicable.
+        lastCheckedAt:
+          type: string
+          description: Date or timestamp of the latest source review for this record.
+        nextReviewAt:
+          type: string
+          description: Scheduled date for the next source review.
       required:
         - id
         - locationId
@@ -721,6 +781,95 @@ components:
         - Werk en opleiding
         - Wonen en huishouden
         - Zorg voor een naaste
+
+    SocialMapReviewStatus:
+      type: string
+      description: Public-safe status of a curated social-map record.
+      enum: [verified, review_due, changed, unavailable]
+
+    SocialMapSourceStatus:
+      type: string
+      description: Result of checking one official or verification source page.
+      enum: [available, redirected, unavailable, address_mismatch]
+
+    SocialMapSourceKind:
+      type: string
+      enum: [official_url, source_page_url]
+
+    SocialMapReviewCheck:
+      type: object
+      properties:
+        listingId:
+          type: string
+        kind:
+          $ref: "#/components/schemas/SocialMapSourceKind"
+        url:
+          type: string
+        status:
+          $ref: "#/components/schemas/SocialMapSourceStatus"
+        httpStatus:
+          type: number
+          nullable: true
+        finalUrl:
+          type: string
+          nullable: true
+        checkedAt:
+          type: string
+        message:
+          type: string
+      required: [listingId, kind, url, status, httpStatus, finalUrl, checkedAt]
+
+    SocialMapReviewItem:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        address:
+          type: string
+        officialUrl:
+          type: string
+        sourcePageUrl:
+          type: string
+        status:
+          $ref: "#/components/schemas/SocialMapReviewStatus"
+        sourceStatus:
+          $ref: "#/components/schemas/SocialMapSourceStatus"
+        reason:
+          type: string
+          nullable: true
+        lastCheckedAt:
+          type: string
+        nextReviewAt:
+          type: string
+      required: [id, name, address, officialUrl, sourcePageUrl, status, sourceStatus, reason, lastCheckedAt, nextReviewAt]
+
+    SocialMapReviewResponse:
+      type: object
+      properties:
+        snapshotDate:
+          type: string
+          description: Last date on which every source check succeeded.
+        lastRunAt:
+          type: string
+          nullable: true
+        successful:
+          type: boolean
+        intervalDays:
+          type: number
+          minimum: 1
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/SocialMapReviewItem"
+        checks:
+          type: array
+          items:
+            $ref: "#/components/schemas/SocialMapReviewCheck"
+        message:
+          type: string
+      required: [snapshotDate, lastRunAt, successful, intervalDays, items, checks, message]
 
     ListingsResponse:
       type: object

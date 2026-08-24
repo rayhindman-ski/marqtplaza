@@ -373,6 +373,19 @@ export const SocialMapCategory = {
   Zorg_voor_een_naaste: 'Zorg voor een naaste',
 } as const;
 
+/**
+ * Public-safe status of a curated social-map record.
+ */
+export type SocialMapReviewStatus = typeof SocialMapReviewStatus[keyof typeof SocialMapReviewStatus];
+
+
+export const SocialMapReviewStatus = {
+  verified: 'verified',
+  review_due: 'review_due',
+  changed: 'changed',
+  unavailable: 'unavailable',
+} as const;
+
 export interface Listing {
   id: string;
   locationId: string;
@@ -405,6 +418,70 @@ export interface Listing {
   sourcePageUrl?: string;
   /** Date the curated social-map selection was last checked. */
   snapshotDate?: string;
+  reviewStatus?: SocialMapReviewStatus;
+  /** Why this social-map record needs editorial attention, when applicable. */
+  reviewReason?: string | null;
+  /** Date or timestamp of the latest source review for this record. */
+  lastCheckedAt?: string;
+  /** Scheduled date for the next source review. */
+  nextReviewAt?: string;
+}
+
+/**
+ * Result of checking one official or verification source page.
+ */
+export type SocialMapSourceStatus = typeof SocialMapSourceStatus[keyof typeof SocialMapSourceStatus];
+
+
+export const SocialMapSourceStatus = {
+  available: 'available',
+  redirected: 'redirected',
+  unavailable: 'unavailable',
+  address_mismatch: 'address_mismatch',
+} as const;
+
+export type SocialMapSourceKind = typeof SocialMapSourceKind[keyof typeof SocialMapSourceKind];
+
+
+export const SocialMapSourceKind = {
+  official_url: 'official_url',
+  source_page_url: 'source_page_url',
+} as const;
+
+export interface SocialMapReviewCheck {
+  listingId: string;
+  kind: SocialMapSourceKind;
+  url: string;
+  status: SocialMapSourceStatus;
+  httpStatus: number | null;
+  finalUrl: string | null;
+  checkedAt: string;
+  message?: string;
+}
+
+export interface SocialMapReviewItem {
+  id: string;
+  name: string;
+  address: string;
+  officialUrl: string;
+  sourcePageUrl: string;
+  status: SocialMapReviewStatus;
+  sourceStatus: SocialMapSourceStatus;
+  reason: string | null;
+  lastCheckedAt: string;
+  nextReviewAt: string;
+}
+
+export interface SocialMapReviewResponse {
+  /** Last date on which every source check succeeded. */
+  snapshotDate: string;
+  lastRunAt: string | null;
+  successful: boolean;
+  /** @minimum 1 */
+  intervalDays: number;
+  items: SocialMapReviewItem[];
+  checks: SocialMapReviewCheck[];
+  message: string;
 }
 
 export type ListingsResponseSource = typeof ListingsResponseSource[keyof typeof ListingsResponseSource];
@@ -561,6 +638,10 @@ export const GetListingsSection = {
   'food-drink': 'food-drink',
   'social-map': 'social-map',
 } as const;
+
+export type RunSocialMapReview502 = {
+  error: string;
+};
 
 export type GetNewsParams = {
 subcategory?: NewsSubcategory;

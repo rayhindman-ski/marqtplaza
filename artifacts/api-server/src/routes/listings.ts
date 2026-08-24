@@ -9,6 +9,7 @@ import {
   SOCIAL_MAP_SOURCE_NOTE,
   type SocialMapCategory,
 } from "../lib/social-map-listings.js";
+import { getSocialMapReviewReport } from "../lib/social-map-review.js";
 
 const router: IRouter = Router();
 type ListingSection = "events" | "businesses" | "food-drink" | "social-map";
@@ -48,6 +49,10 @@ type Listing = {
   officialUrl?: string;
   sourcePageUrl?: string;
   snapshotDate?: string;
+  reviewStatus?: "verified" | "review_due" | "changed" | "unavailable";
+  reviewReason?: string | null;
+  lastCheckedAt?: string;
+  nextReviewAt?: string;
 };
 
 function sourceNameFromUrl(sourceUrl?: string): string | undefined {
@@ -901,8 +906,11 @@ router.get("/listings", async (req, res) => {
       });
       return;
     }
+    const reviewReport = await getSocialMapReviewReport();
+    const reviewItems = new Map(reviewReport.items.map((item) => [item.id, item]));
     const listings: Listing[] = SOCIAL_MAP_LISTINGS.map((listing) => {
       const { x, y } = toXY(listing.lat, listing.lng, bounds);
+      const review = reviewItems.get(listing.id);
       return {
         id: listing.id,
         locationId: "dhg",
@@ -922,13 +930,17 @@ router.get("/listings", async (req, res) => {
         address: listing.address,
         neighborhood: listing.neighborhood,
         socialCategory: listing.socialCategory,
-        snapshotDate: SOCIAL_MAP_SNAPSHOT_DATE,
+        snapshotDate: reviewReport.snapshotDate,
+        reviewStatus: review?.status ?? "review_due",
+        reviewReason: review?.reason ?? "No source-review record is available",
+        lastCheckedAt: review?.lastCheckedAt ?? SOCIAL_MAP_SNAPSHOT_DATE,
+        nextReviewAt: review?.nextReviewAt ?? SOCIAL_MAP_SNAPSHOT_DATE,
       };
     });
     res.json({
       listings,
       source: "curated",
-      message: `${SOCIAL_MAP_SOURCE_NOTE} Snapshot: ${SOCIAL_MAP_SNAPSHOT_DATE}.`,
+      message: `${SOCIAL_MAP_SOURCE_NOTE} Snapshot: ${reviewReport.snapshotDate}.`,
     });
     return;
   }

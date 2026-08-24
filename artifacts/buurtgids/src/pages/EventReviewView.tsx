@@ -80,6 +80,12 @@ export default function EventReviewView() {
             <p className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-primary">Editorial workspace</p>
             <h1 data-testid="text-event-review-title" className="truncate text-lg font-extrabold tracking-tight text-foreground sm:text-xl">Event Review</h1>
           </div>
+          <Link
+            href="/beoordelen/sociale-kaart"
+            className="rounded-full border border-border bg-card px-3 py-1.5 text-xs font-bold text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary"
+          >
+            Sociale kaart
+          </Link>
         </div>
       </header>
 

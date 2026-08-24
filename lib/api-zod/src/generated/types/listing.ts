@@ -9,6 +9,7 @@ import type { BusinessCategory } from './businessCategory';
 import type { ListingCategory } from './listingCategory';
 import type { ListingSource } from './listingSource';
 import type { SocialMapCategory } from './socialMapCategory';
+import type { SocialMapReviewStatus } from './socialMapReviewStatus';
 
 export interface Listing {
   id: string;
@@ -42,4 +43,11 @@ export interface Listing {
   sourcePageUrl?: string;
   /** Date the curated social-map selection was last checked. */
   snapshotDate?: string;
+  reviewStatus?: SocialMapReviewStatus;
+  /** Why this social-map record needs editorial attention, when applicable. */
+  reviewReason?: string | null;
+  /** Date or timestamp of the latest source review for this record. */
+  lastCheckedAt?: string;
+  /** Scheduled date for the next source review. */
+  nextReviewAt?: string;
 }

@@ -38,7 +38,9 @@ import type {
   NewsScanResponse,
   NewsSourceStatusResponse,
   PersistOutcome,
+  RunSocialMapReview502,
   ScanResultList,
+  SocialMapReviewResponse,
   SourceScanRequest,
   SourceScanResponse
 } from './api.schemas';
@@ -672,6 +674,156 @@ export function useGetListings<TData = Awaited<ReturnType<typeof getListings>>, 
 
 
 
+
+export const getGetSocialMapReviewUrl = () => {
+
+
+
+
+  return `/api/social-map/review`
+}
+
+/**
+ * Returns source status for every curated support location and the last successful public snapshot date.
+ * @summary Get the curated Den Haag social-map review queue
+ */
+export const getSocialMapReview = async ( options?: Parameters<typeof customFetch>[1]): Promise<SocialMapReviewResponse> => {
+
+  return customFetch<SocialMapReviewResponse>(getGetSocialMapReviewUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetSocialMapReviewQueryKey = () => {
+    return [
+    `/api/social-map/review`
+    ] as const;
+    }
+
+
+export const getGetSocialMapReviewQueryOptions = <TData = Awaited<ReturnType<typeof getSocialMapReview>>, TError = ErrorType<void>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSocialMapReview>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetSocialMapReviewQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getSocialMapReview>>> = ({ signal }) => getSocialMapReview({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getSocialMapReview>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetSocialMapReviewQueryResult = NonNullable<Awaited<ReturnType<typeof getSocialMapReview>>>
+export type GetSocialMapReviewQueryError = ErrorType<void>
+
+
+/**
+ * @summary Get the curated Den Haag social-map review queue
+ */
+
+export function useGetSocialMapReview<TData = Awaited<ReturnType<typeof getSocialMapReview>>, TError = ErrorType<void>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSocialMapReview>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetSocialMapReviewQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getRunSocialMapReviewUrl = () => {
+
+
+
+
+  return `/api/social-map/review`
+}
+
+/**
+ * Checks official and verification pages. The public snapshot date changes only when every source check succeeds.
+ * @summary Run the periodic source review for curated support locations
+ */
+export const runSocialMapReview = async ( options?: Parameters<typeof customFetch>[1]): Promise<SocialMapReviewResponse> => {
+
+  return customFetch<SocialMapReviewResponse>(getRunSocialMapReviewUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getRunSocialMapReviewMutationOptions = <TError = ErrorType<void | RunSocialMapReview502>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof runSocialMapReview>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof runSocialMapReview>>, TError,void, TContext> => {
+
+const mutationKey = ['runSocialMapReview'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof runSocialMapReview>>, void> = () => {
+
+
+          return  runSocialMapReview(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RunSocialMapReviewMutationResult = NonNullable<Awaited<ReturnType<typeof runSocialMapReview>>>
+
+    export type RunSocialMapReviewMutationError = ErrorType<void | RunSocialMapReview502>
+
+    /**
+ * @summary Run the periodic source review for curated support locations
+ */
+export const useRunSocialMapReview = <TError = ErrorType<void | RunSocialMapReview502>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof runSocialMapReview>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof runSocialMapReview>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getRunSocialMapReviewMutationOptions(options));
+    }
 
 export const getGetNewsUrl = (params?: GetNewsParams,) => {
   const normalizedParams = new URLSearchParams();

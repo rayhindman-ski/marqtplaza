@@ -15,6 +15,8 @@ import * as zod from 'zod';
 export const HealthCheckResponse = zod.object({
   "status": zod.string()
 })
+
+
 /**
  * @summary Search for businesses
  */
@@ -161,6 +163,7 @@ export const ScanActivitySourcesResponse = zod.object({
   "error": zod.string().optional()
 })
 
+
 /**
  * @summary Get excluded source-scanned event candidates for editorial review
  */
@@ -267,10 +270,90 @@ export const GetListingsResponse = zod.object({
   "socialCategory": zod.enum(['Geldzaken', 'Gezin en opvoeden', 'Gezondheid', 'Hobby\'s en interesses', 'Ondersteuning', 'Ontmoeten en samenleven', 'Sporten en bewegen', 'Taal en computer', 'Vervoer', 'Werk en opleiding', 'Wonen en huishouden', 'Zorg voor een naaste']).optional().describe('Curated support theme for the Den Haag social map.'),
   "officialUrl": zod.string().optional().describe('Verified organization or service website for a social-map location.'),
   "sourcePageUrl": zod.string().optional().describe('Public source page used to verify a social-map location.'),
-  "snapshotDate": zod.string().optional().describe('Date the curated social-map selection was last checked.')
+  "snapshotDate": zod.string().optional().describe('Date the curated social-map selection was last checked.'),
+  "reviewStatus": zod.enum(['verified', 'review_due', 'changed', 'unavailable']).optional().describe('Public-safe status of a curated social-map record.'),
+  "reviewReason": zod.string().nullish().describe('Why this social-map record needs editorial attention, when applicable.'),
+  "lastCheckedAt": zod.string().optional().describe('Date or timestamp of the latest source review for this record.'),
+  "nextReviewAt": zod.string().optional().describe('Scheduled date for the next source review.')
 })),
   "source": zod.enum(['live', 'google_places', 'fallback', 'curated']),
   "message": zod.string().optional()
+})
+
+
+/**
+ * Returns source status for every curated support location and the last successful public snapshot date.
+ * @summary Get the curated Den Haag social-map review queue
+ */
+
+
+
+export const GetSocialMapReviewResponse = zod.object({
+  "snapshotDate": zod.string().describe('Last date on which every source check succeeded.'),
+  "lastRunAt": zod.string().nullable(),
+  "successful": zod.boolean(),
+  "intervalDays": zod.number().min(1),
+  "items": zod.array(zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "address": zod.string(),
+  "officialUrl": zod.string(),
+  "sourcePageUrl": zod.string(),
+  "status": zod.enum(['verified', 'review_due', 'changed', 'unavailable']).describe('Public-safe status of a curated social-map record.'),
+  "sourceStatus": zod.enum(['available', 'redirected', 'unavailable', 'address_mismatch']).describe('Result of checking one official or verification source page.'),
+  "reason": zod.string().nullable(),
+  "lastCheckedAt": zod.string(),
+  "nextReviewAt": zod.string()
+})),
+  "checks": zod.array(zod.object({
+  "listingId": zod.string(),
+  "kind": zod.enum(['official_url', 'source_page_url']),
+  "url": zod.string(),
+  "status": zod.enum(['available', 'redirected', 'unavailable', 'address_mismatch']).describe('Result of checking one official or verification source page.'),
+  "httpStatus": zod.number().nullable(),
+  "finalUrl": zod.string().nullable(),
+  "checkedAt": zod.string(),
+  "message": zod.string().optional()
+})),
+  "message": zod.string()
+})
+
+
+/**
+ * Checks official and verification pages. The public snapshot date changes only when every source check succeeds.
+ * @summary Run the periodic source review for curated support locations
+ */
+
+
+
+export const RunSocialMapReviewResponse = zod.object({
+  "snapshotDate": zod.string().describe('Last date on which every source check succeeded.'),
+  "lastRunAt": zod.string().nullable(),
+  "successful": zod.boolean(),
+  "intervalDays": zod.number().min(1),
+  "items": zod.array(zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "address": zod.string(),
+  "officialUrl": zod.string(),
+  "sourcePageUrl": zod.string(),
+  "status": zod.enum(['verified', 'review_due', 'changed', 'unavailable']).describe('Public-safe status of a curated social-map record.'),
+  "sourceStatus": zod.enum(['available', 'redirected', 'unavailable', 'address_mismatch']).describe('Result of checking one official or verification source page.'),
+  "reason": zod.string().nullable(),
+  "lastCheckedAt": zod.string(),
+  "nextReviewAt": zod.string()
+})),
+  "checks": zod.array(zod.object({
+  "listingId": zod.string(),
+  "kind": zod.enum(['official_url', 'source_page_url']),
+  "url": zod.string(),
+  "status": zod.enum(['available', 'redirected', 'unavailable', 'address_mismatch']).describe('Result of checking one official or verification source page.'),
+  "httpStatus": zod.number().nullable(),
+  "finalUrl": zod.string().nullable(),
+  "checkedAt": zod.string(),
+  "message": zod.string().optional()
+})),
+  "message": zod.string()
 })
 
 

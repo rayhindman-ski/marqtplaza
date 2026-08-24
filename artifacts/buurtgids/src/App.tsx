@@ -9,7 +9,7 @@ import {
   Map as MapIcon, List, Clock, Newspaper,
   Globe2, Bookmark, BookmarkCheck, X, ChevronDown, ChevronUp,
   ScanSearch, RefreshCw, WifiOff, Radio, MapPinned,
-  Landmark, Route as RouteIcon, Baby, Building2, Coffee, Gamepad2, HandHeart, Waves, ShoppingBag, ExternalLink
+  Landmark, Route as RouteIcon, Baby, Building2, Coffee, Gamepad2, HandHeart, Waves, ShoppingBag, ExternalLink, AlertCircle
 } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -27,11 +27,13 @@ import {
   type ListingSource,
   type Marker,
   type SocialMapCategory,
+  type SocialMapReviewStatus,
 } from './lib/data';
 import { GoogleMapView } from './components/GoogleMapView';
 import CaptureView from './pages/CaptureView';
 import SourceDirectoryView from './pages/SourceDirectoryView';
 import EventReviewView from './pages/EventReviewView';
+import SocialMapReviewView from './pages/SocialMapReviewView';
 import NewsFeedView from './pages/NewsFeedView';
 import NewsArticleView from './pages/NewsArticleView';
 import { useEditorAccess } from './lib/editorAccess';
@@ -114,6 +116,16 @@ function subcategoryLabelFor(subcategory: FilterSubcategory, language: Language)
     return getSocialMapCategoryName(subcategory as SocialMapCategory, language);
   }
   return getBusinessCategoryName(subcategory as BusinessCategory, language);
+}
+
+function socialMapReviewLabel(status: SocialMapReviewStatus, language: Language): string {
+  const labels: Record<SocialMapReviewStatus, { nl: string; en: string }> = {
+    verified: { nl: 'Bron gecontroleerd', en: 'Source checked' },
+    review_due: { nl: 'Broncontrole gepland', en: 'Source review due' },
+    changed: { nl: 'Wijziging ter controle', en: 'Change needs review' },
+    unavailable: { nl: 'Bron tijdelijk onbereikbaar', en: 'Source temporarily unavailable' },
+  };
+  return labels[status][language];
 }
 function LanguageSelector({
   language,
@@ -597,7 +609,7 @@ function MarkerCard({
             )}>{marker.name}</h3>
             <SaveButton saved={isSaved} onToggle={onSave} />
           </div>
-           {(marker.businessCategory || marker.socialCategory || sourceLabel) && (
+           {(marker.businessCategory || marker.socialCategory || sourceLabel || marker.reviewStatus) && (
              <div className="mb-3 flex flex-wrap items-center gap-1.5">
                {marker.businessCategory && (
                  <span className="rounded-md bg-primary/10 px-2 py-1 text-[11px] font-bold text-primary">
@@ -614,6 +626,15 @@ function MarkerCard({
                    {sourceLabel}
                  </span>
                )}
+                {marker.reviewStatus && marker.reviewStatus !== 'verified' && (
+                  <span
+                    data-testid={`social-map-review-status-${marker.id}`}
+                    className="inline-flex items-center gap-1 rounded-md bg-amber-500/10 px-2 py-1 text-[11px] font-bold text-amber-800"
+                  >
+                    <AlertCircle className="h-3 w-3" aria-hidden="true" />
+                    {socialMapReviewLabel(marker.reviewStatus, language)}
+                  </span>
+                )}
              </div>
            )}
           <p className="text-muted-foreground text-sm mb-3 line-clamp-2 leading-relaxed">{copy.description}</p>
@@ -871,6 +892,7 @@ function DiscoveryState({
     .map((query) => query.data)
     .filter((result): result is NonNullable<typeof result> => Boolean(result));
   const selectedListings = selectedData.flatMap((result) => result.listings);
+  const socialMapSnapshotDate = selectedListings.find((listing) => listing.snapshotDate)?.snapshotDate;
   const visibleSubcategories = Array.from(new Set(
     selectedTopLevelSections.flatMap(subcategoriesForTopLevel),
   ));
@@ -901,6 +923,10 @@ function DiscoveryState({
         officialUrl: l.officialUrl,
         sourcePageUrl: l.sourcePageUrl,
         snapshotDate: l.snapshotDate,
+        reviewStatus: l.reviewStatus as SocialMapReviewStatus | undefined,
+        reviewReason: l.reviewReason,
+        lastCheckedAt: l.lastCheckedAt,
+        nextReviewAt: l.nextReviewAt,
     };
   });
 
@@ -1206,10 +1232,19 @@ function DiscoveryState({
                 {selectedTopLevelSections.includes('social-map') ? t.socialMapCoverageNote : t.listingsCoverageNote}
               </p>
             )}
-            {selectedTopLevelSections.includes('social-map') && selectedListings[0]?.snapshotDate && (
-              <span className="w-full text-xs text-muted-foreground">
-                {t.socialMapSnapshot(selectedListings[0].snapshotDate)}
+            {selectedTopLevelSections.includes('social-map') && socialMapSnapshotDate && (
+              <span data-testid="text-social-map-public-snapshot-date" className="w-full text-xs text-muted-foreground">
+                {t.socialMapSnapshot(socialMapSnapshotDate)}
               </span>
+            )}
+            {selectedTopLevelSections.includes('social-map') && selectedListings.some((listing) =>
+              listing.reviewStatus && listing.reviewStatus !== 'verified',
+            ) && (
+              <p className="w-full rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-900">
+                {language === 'nl'
+                  ? 'Een of meer bronnen vragen om controle. De getoonde snapshotdatum is niet vernieuwd totdat alle broncontroles slagen.'
+                  : 'One or more sources need review. The displayed snapshot date is not renewed until every source check passes.'}
+              </p>
             )}
           </div>
         )}
@@ -1583,6 +1618,7 @@ export default function App() {
           <Route path="/capture" component={CaptureRoute} />
           <Route path="/bronnen" component={SourceDirectoryView} />
           <Route path="/beoordelen" component={EventReviewRoute} />
+          <Route path="/beoordelen/sociale-kaart" component={SocialMapReviewRoute} />
           <Route path="/sign-in/*?" component={SignInPage} />
           <Route path="/sign-up/*?" component={SignUpPage} />
           <Route path="/nieuws" component={NewsFeedView} />
@@ -1771,6 +1807,33 @@ function EventReviewRoute() {
   return (
     <EventReviewView />
   );
+}
+
+function SocialMapReviewRoute() {
+  const { isEditor, isLoaded, isSignedIn } = useEditorAccess();
+  if (!isLoaded) {
+    return <div className="min-h-screen bg-background" />;
+  }
+  if (!isSignedIn) {
+    return <Redirect to="/sign-in" />;
+  }
+  if (!isEditor) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-background px-5 text-center">
+        <div className="max-w-md rounded-3xl border border-border bg-card p-8 shadow-sm">
+          <p className="text-sm font-bold text-primary">Restricted workspace</p>
+          <h1 className="mt-2 text-2xl font-extrabold text-foreground">Editor access required</h1>
+          <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
+            This source-review queue is available only to accounts with an editor role.
+          </p>
+          <Link href="/" className="mt-6 inline-flex text-sm font-bold text-primary hover:underline">
+            Return to Buurtplaza
+          </Link>
+        </div>
+      </main>
+    );
+  }
+  return <SocialMapReviewView />;
 }
 
 const clerkProxyUrl = import.meta.env.VITE_CLERK_PROXY_URL;
