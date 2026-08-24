@@ -89,7 +89,7 @@ export default function NewsFeedView() {
             <MapPin className="w-3.5 h-3.5 text-[#F36C21]" />
             Den Haag
           </div>
-          <h1 className="font-serif text-6xl md:text-8xl lg:text-9xl font-black text-[#072C1E] tracking-tight mb-6 leading-none">
+          <h1 className="news-title text-6xl md:text-8xl lg:text-9xl font-bold text-[#072C1E] tracking-tight mb-6 leading-[0.88]">
             Haags<span className="text-[#F36C21] italic font-medium ml-1 md:ml-2">Nieuws</span>
           </h1>
           <p className="text-lg md:text-xl text-[#072C1E]/70 max-w-2xl font-medium leading-relaxed">
