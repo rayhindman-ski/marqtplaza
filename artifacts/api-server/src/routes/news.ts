@@ -50,7 +50,7 @@ const NEWS_SOURCES: NewsSource[] = [
 const SOURCE_BY_ID = new Map(NEWS_SOURCES.map((source) => [source.id, source]));
 const SUBCATEGORIES: NewsSubcategory[] = ["city", "politics", "safety", "culture", "sport", "business", "community"];
 const CRAWLER_USER_AGENT = "marqtplaza.com/1.0";
-const MAX_DETAILS_PER_SOURCE = 8;
+const MAX_DETAILS_PER_SOURCE = 24;
 const MAX_RESPONSE_CHARS = 500_000;
 const FETCH_TIMEOUT_MS = 7_000;
 const MAX_REDIRECTS = 3;
@@ -60,10 +60,12 @@ const RETRY_INTERVALS_MS: Record<"blocked" | "error", number> = {
   error: 2 * 60 * 60 * 1000,
 };
 const NEWS_SCHEDULER_INTERVAL_MS = 15 * 60 * 1000;
+const NEWS_QUEUE_DRAIN_INTERVAL_MS = 15 * 1000;
 const MAX_SCHEDULED_SOURCES_PER_RUN = 3;
 const NEWS_RETRY_LEASE_MS = 15 * 60 * 1000;
 let activeScans = 0;
 let schedulerTimer: NodeJS.Timeout | undefined;
+let schedulerStarted = false;
 
 function cleanText(value: string): string {
   return value.replace(/<[^>]*>/g, " ").replace(/&(?:amp|nbsp);/g, " ").replace(/&quot;/g, "\"").replace(/&#39;|&apos;/g, "'").replace(/\s+/g, " ").trim();
@@ -315,6 +317,14 @@ export async function ensureNewsSourceStatusStorage(database: typeof db = db): P
     ALTER TABLE news_source_statuses
     ADD COLUMN IF NOT EXISTS retry_lease_until timestamptz
   `);
+  await database.insert(newsSourceStatusesTable).values(
+    NEWS_SOURCES.map((source) => ({
+      sourceId: source.id,
+      sourceName: source.name,
+      sourceUrl: source.newsUrl,
+      status: "pending" as const,
+    })),
+  ).onConflictDoNothing();
 }
 
 async function claimDueNewsSourceIds(
@@ -326,10 +336,12 @@ async function claimDueNewsSourceIds(
     WITH due AS (
       SELECT source_id
       FROM news_source_statuses
-      WHERE status IN ('blocked', 'error')
-        AND next_scan_at <= ${now}
+      WHERE (
+        (status IN ('blocked', 'error') AND next_scan_at <= ${now})
+        OR (status = 'pending' AND next_scan_at IS NULL)
+      )
         AND (retry_lease_until IS NULL OR retry_lease_until < ${now})
-      ORDER BY next_scan_at ASC
+      ORDER BY next_scan_at ASC NULLS FIRST
       LIMIT ${MAX_SCHEDULED_SOURCES_PER_RUN}
       FOR UPDATE SKIP LOCKED
     )
@@ -362,14 +374,24 @@ export async function runScheduledNewsScans(
 }
 
 export function startNewsSourceScheduler(database: typeof db = db): void {
-  if (schedulerTimer) return;
-  const run = () => {
-    void runScheduledNewsScans(database).catch((error: unknown) => {
+  if (schedulerStarted) return;
+  schedulerStarted = true;
+  const run = async () => {
+    let completed = 0;
+    try {
+      completed = (await runScheduledNewsScans(database)).length;
+    } catch (error: unknown) {
       console.error("Scheduled news-source retry failed.", error);
-    });
+    } finally {
+      schedulerTimer = setTimeout(
+        () => { void run(); },
+        completed === MAX_SCHEDULED_SOURCES_PER_RUN
+          ? NEWS_QUEUE_DRAIN_INTERVAL_MS
+          : NEWS_SCHEDULER_INTERVAL_MS,
+      );
+    }
   };
-  run();
-  schedulerTimer = setInterval(run, NEWS_SCHEDULER_INTERVAL_MS);
+  void run();
 }
 
 router.get("/news", async (req, res): Promise<void> => {
