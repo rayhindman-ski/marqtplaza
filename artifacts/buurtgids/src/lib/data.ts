@@ -62,6 +62,9 @@ export const BUSINESS_CATEGORIES: BusinessCategory[] = [
 
 export type ListingSource = 'google_maps' | 'openstreetmap' | 'curated' | 'source_scan';
 export type SocialMapReviewStatus = 'verified' | 'review_due' | 'changed' | 'unavailable';
+export type EventPriceType = 'free' | 'low-cost' | 'paid' | 'unknown';
+export type EventMealType = 'community-meal' | 'food-support';
+export type EventActivityKind = 'community' | 'culture' | 'learning' | 'movement' | 'meal' | 'family' | 'market' | 'outdoor' | 'entertainment';
 
 export interface Location {
   id: string;
@@ -84,6 +87,7 @@ export interface Marker {
   /** Provider-supplied street address when one is available. */
   address?: string;
   description: string;
+  startsAt?: string | null;
   x: number;
   y: number;
   details: string;
@@ -106,6 +110,14 @@ export interface Marker {
   reviewReason?: string | null;
   lastCheckedAt?: string;
   nextReviewAt?: string;
+  sourceGroup?: 'city-agenda' | 'culture' | 'community' | 'meals';
+  organizer?: string | null;
+  activityKind?: EventActivityKind | null;
+  priceType?: EventPriceType;
+  priceText?: string | null;
+  mealType?: EventMealType | null;
+  audience?: string | null;
+  recurrenceText?: string | null;
 }
 
 // Active cities — add more Location entries here when expanding beyond Den Haag.

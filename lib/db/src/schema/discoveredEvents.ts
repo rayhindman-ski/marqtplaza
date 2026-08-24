@@ -1,5 +1,7 @@
+import { sql } from "drizzle-orm";
 import {
   boolean,
+  check,
   doublePrecision,
   index,
   pgTable,
@@ -23,6 +25,15 @@ export const discoveredEventsTable = pgTable(
     openingTimes: text("opening_times"),
     venue: text("venue"),
     category: text("category").notNull(),
+    sourceGroup: text("source_group").notNull().default("city-agenda"),
+    organizer: text("organizer"),
+    activityKind: text("activity_kind"),
+    priceType: text("price_type").notNull().default("unknown"),
+    priceText: text("price_text"),
+    mealType: text("meal_type"),
+    audience: text("audience"),
+    neighborhood: text("neighborhood"),
+    recurrenceText: text("recurrence_text"),
     lat: doublePrecision("lat").notNull(),
     lng: doublePrecision("lng").notNull(),
     x: doublePrecision("x").notNull(),
@@ -39,6 +50,22 @@ export const discoveredEventsTable = pgTable(
   (table) => [
     uniqueIndex("discovered_events_canonical_url_unique").on(table.canonicalUrl),
     index("discovered_events_location_id_index").on(table.locationId),
+    check(
+      "discovered_events_source_group_check",
+      sql`${table.sourceGroup} in ('city-agenda', 'culture', 'community', 'meals', 'agenda')`,
+    ),
+    check(
+      "discovered_events_activity_kind_check",
+      sql`${table.activityKind} is null or ${table.activityKind} in ('community', 'culture', 'learning', 'movement', 'meal', 'family', 'market', 'outdoor', 'entertainment')`,
+    ),
+    check(
+      "discovered_events_price_type_check",
+      sql`${table.priceType} in ('free', 'low-cost', 'paid', 'unknown')`,
+    ),
+    check(
+      "discovered_events_meal_type_check",
+      sql`${table.mealType} is null or ${table.mealType} in ('community-meal', 'food-support')`,
+    ),
   ],
 );
 

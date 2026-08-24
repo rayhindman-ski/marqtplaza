@@ -9,7 +9,7 @@
 export interface SourceScanRequest {
   /**
      * @minItems 1
-     * @maxItems 24
+     * @maxItems 29
      */
   sourceIds: string[];
 }

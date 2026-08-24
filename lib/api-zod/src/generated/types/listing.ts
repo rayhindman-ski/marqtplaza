@@ -6,8 +6,12 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { BusinessCategory } from './businessCategory';
+import type { ListingActivityKind } from './listingActivityKind';
 import type { ListingCategory } from './listingCategory';
+import type { ListingMealType } from './listingMealType';
+import type { ListingPriceType } from './listingPriceType';
 import type { ListingSource } from './listingSource';
+import type { ListingSourceGroup } from './listingSourceGroup';
 import type { SocialMapCategory } from './socialMapCategory';
 import type { SocialMapReviewStatus } from './socialMapReviewStatus';
 
@@ -19,6 +23,8 @@ export interface Listing {
   /** Provider-supplied or curated visitor address when one is available. */
   address?: string;
   description: string;
+  /** Verified upcoming event start date and time when this listing is an event. */
+  startsAt?: string;
   x: number;
   y: number;
   details: string;
@@ -34,6 +40,17 @@ export interface Listing {
   sourceName?: string;
   /** Whether the map pin uses the Den Haag city centre because no exact venue coordinates were supplied. */
   isApproximateLocation?: boolean;
+  /** The approved source stream that supplied this event. */
+  sourceGroup?: ListingSourceGroup;
+  /** The organizer explicitly named by the source. */
+  organizer?: string;
+  activityKind?: ListingActivityKind;
+  /** Price access is only shown when the source gives explicit evidence. */
+  priceType?: ListingPriceType;
+  priceText?: string;
+  mealType?: ListingMealType;
+  audience?: string;
+  recurrenceText?: string;
   /** Den Haag neighborhood context for a curated social-map location. */
   neighborhood?: string;
   socialCategory?: SocialMapCategory;

@@ -450,7 +450,7 @@ components:
         sourceIds:
           type: array
           minItems: 1
-          maxItems: 24
+          maxItems: 29
           items:
             type: string
       required: [sourceIds]
@@ -473,6 +473,28 @@ components:
         category:
           type: string
           enum: [Museums, Tours, Family, Entertainment, Outdoors, Markets]
+        sourceGroup:
+          type: string
+          enum: [city-agenda, culture, community, meals]
+        organizer:
+          type: string
+        activityKind:
+          type: string
+          enum: [community, culture, learning, movement, meal, family, market, outdoor, entertainment]
+        priceType:
+          type: string
+          enum: [free, low-cost, paid, unknown]
+        priceText:
+          type: string
+        mealType:
+          type: string
+          enum: [community-meal, food-support]
+        audience:
+          type: string
+        neighborhood:
+          type: string
+        recurrenceText:
+          type: string
         reviewReason:
           type: string
           enum: [missing_date, out_of_window, missing_locality, foreign_location]
@@ -601,6 +623,24 @@ components:
           type: [string, "null"]
         category:
           type: string
+        sourceGroup:
+          type: string
+        organizer:
+          type: [string, "null"]
+        activityKind:
+          type: [string, "null"]
+        priceType:
+          type: string
+        priceText:
+          type: [string, "null"]
+        mealType:
+          type: [string, "null"]
+        audience:
+          type: [string, "null"]
+        neighborhood:
+          type: [string, "null"]
+        recurrenceText:
+          type: [string, "null"]
         lat:
           type: number
         lng:
@@ -680,6 +720,9 @@ components:
           description: Provider-supplied or curated visitor address when one is available.
         description:
           type: string
+        startsAt:
+          type: string
+          description: Verified upcoming event start date and time when this listing is an event.
         x:
           type: number
         y:
@@ -705,6 +748,29 @@ components:
         isApproximateLocation:
           type: boolean
           description: Whether the map pin uses the Den Haag city centre because no exact venue coordinates were supplied.
+        sourceGroup:
+          type: string
+          enum: [city-agenda, culture, community, meals]
+          description: The approved source stream that supplied this event.
+        organizer:
+          type: string
+          description: The organizer explicitly named by the source.
+        activityKind:
+          type: string
+          enum: [community, culture, learning, movement, meal, family, market, outdoor, entertainment]
+        priceType:
+          type: string
+          enum: [free, low-cost, paid, unknown]
+          description: Price access is only shown when the source gives explicit evidence.
+        priceText:
+          type: string
+        mealType:
+          type: string
+          enum: [community-meal, food-support]
+        audience:
+          type: string
+        recurrenceText:
+          type: string
         neighborhood:
           type: string
           description: Den Haag neighborhood context for a curated social-map location.

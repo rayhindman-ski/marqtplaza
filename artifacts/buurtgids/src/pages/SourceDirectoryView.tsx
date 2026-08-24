@@ -245,7 +245,7 @@ export default function SourceDirectoryView() {
             )}
             <div className="hidden items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700 sm:flex">
               <ShieldCheck className="h-3.5 w-3.5" />
-              24 sources reviewed
+                {DEN_HAAG_ACTIVITY_SOURCES.length} sources reviewed
             </div>
           </div>
         </div>

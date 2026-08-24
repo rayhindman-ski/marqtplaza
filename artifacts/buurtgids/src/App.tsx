@@ -26,6 +26,7 @@ import {
   type Category,
   type ListingSource,
   type Marker,
+  type EventActivityKind,
   type SocialMapCategory,
   type SocialMapReviewStatus,
 } from './lib/data';
@@ -70,6 +71,49 @@ type ListingSection = 'events' | 'businesses' | 'food-drink' | 'social-map';
 type FilterSubcategory = Exclude<Category, 'Businesses' | 'Social map'> | BusinessCategory | SocialMapCategory;
 const TOP_LEVEL_SECTIONS: ListingSection[] = ['events', 'food-drink', 'social-map', 'businesses'];
 const DEFAULT_START_SECTION: ListingSection = 'events';
+type AgendaTimeFilter = 'all' | 'today' | 'week';
+type AgendaPriceFilter = 'all' | 'free' | 'low-cost';
+
+const eventActivityLabels: Record<EventActivityKind, { nl: string; en: string }> = {
+  community: { nl: 'Samen in de buurt', en: 'Community' },
+  culture: { nl: 'Cultuur', en: 'Culture' },
+  learning: { nl: 'Leren & oefenen', en: 'Learning' },
+  movement: { nl: 'Bewegen', en: 'Movement' },
+  meal: { nl: 'Maaltijd', en: 'Meal' },
+  family: { nl: 'Gezin', en: 'Family' },
+  market: { nl: 'Markt', en: 'Market' },
+  outdoor: { nl: 'Buiten', en: 'Outdoors' },
+  entertainment: { nl: 'Uitgaan', en: 'Entertainment' },
+};
+
+function eventBadgeLabel(
+  marker: Marker,
+  language: Language,
+): Array<{ key: string; label: string; className: string }> {
+  const badges: Array<{ key: string; label: string; className: string }> = [];
+  if (marker.activityKind) {
+    badges.push({
+      key: 'kind',
+      label: eventActivityLabels[marker.activityKind][language],
+      className: 'bg-sky-600/10 text-sky-800',
+    });
+  }
+  if (marker.priceType === 'free') {
+    badges.push({ key: 'free', label: language === 'nl' ? 'Gratis' : 'Free', className: 'bg-emerald-600/10 text-emerald-800' });
+  } else if (marker.priceType === 'low-cost') {
+    badges.push({ key: 'low-cost', label: language === 'nl' ? 'Laag tarief' : 'Low cost', className: 'bg-amber-500/10 text-amber-900' });
+  }
+  if (marker.mealType) {
+    badges.push({
+      key: 'meal',
+      label: marker.mealType === 'food-support'
+        ? (language === 'nl' ? 'Voedselhulp' : 'Food support')
+        : (language === 'nl' ? 'Maaltijd' : 'Meal'),
+      className: 'bg-orange-600/10 text-orange-800',
+    });
+  }
+  return badges.slice(0, 3);
+}
 
 function topLevelStateFor(section: ListingSection): Record<ListingSection, boolean> {
   return Object.fromEntries(
@@ -715,7 +759,7 @@ function MarkerCard({
             )}>{marker.name}</h3>
             <SaveButton saved={isSaved} onToggle={onSave} />
           </div>
-           {(marker.businessCategory || marker.socialCategory || sourceLabel || marker.reviewStatus) && (
+           {(marker.businessCategory || marker.socialCategory || sourceLabel || marker.reviewStatus || (topLevelForMarker(marker) === 'events' && eventBadgeLabel(marker, language).length > 0)) && (
              <div className="mb-3 flex flex-wrap items-center gap-1.5">
                {marker.businessCategory && (
                  <span className="rounded-md bg-primary/10 px-2 py-1 text-[11px] font-bold text-primary">
@@ -741,6 +785,11 @@ function MarkerCard({
                     {socialMapReviewLabel(marker.reviewStatus, language)}
                   </span>
                 )}
+                {topLevelForMarker(marker) === 'events' && eventBadgeLabel(marker, language).map((badge) => (
+                  <span key={badge.key} className={cn('rounded-md px-2 py-1 text-[11px] font-bold', badge.className)}>
+                    {badge.label}
+                  </span>
+                ))}
              </div>
            )}
           <p className="text-muted-foreground text-sm mb-3 line-clamp-2 leading-relaxed">{copy.description}</p>
@@ -889,6 +938,9 @@ function DiscoveryState({
   const [postcodeFilter, setPostcodeFilter] = useState(initialPostcode ?? '');
   const [selectedMarker, setSelectedMarker] = useState<string | null>(null);
   const [view, setView] = useState<'map' | 'list'>('map');
+  const [agendaTime, setAgendaTime] = useState<AgendaTimeFilter>('all');
+  const [agendaPrice, setAgendaPrice] = useState<AgendaPriceFilter>('all');
+  const [mealOnly, setMealOnly] = useState(false);
 
   // Fetch selected top-level sections only; each query keeps its generated cache key.
   const eventsQuery = useGetListings(
@@ -1040,6 +1092,7 @@ function DiscoveryState({
       x: l.x,
       y: l.y,
       details: l.details,
+      startsAt: l.startsAt,
       lat: l.lat,
       lng: l.lng,
       sourceUrl: (l as { sourceUrl?: string }).sourceUrl,
@@ -1056,6 +1109,14 @@ function DiscoveryState({
         reviewReason: l.reviewReason,
         lastCheckedAt: l.lastCheckedAt,
         nextReviewAt: l.nextReviewAt,
+        sourceGroup: l.sourceGroup,
+        organizer: l.organizer,
+        activityKind: l.activityKind as EventActivityKind | null | undefined,
+        priceType: l.priceType,
+        priceText: l.priceText,
+        mealType: l.mealType,
+        audience: l.audience,
+        recurrenceText: l.recurrenceText,
     };
   });
 
@@ -1077,6 +1138,19 @@ function DiscoveryState({
     }
     if (markerTopLevel === 'events' && markerSubcategory && !subcategories[markerSubcategory]) {
       return false;
+    }
+    if (markerTopLevel === 'events') {
+      if (agendaPrice !== 'all' && marker.priceType !== agendaPrice) return false;
+      if (mealOnly && !marker.mealType) return false;
+      if (agendaTime !== 'all') {
+        const startsAt = marker.startsAt ? new Date(marker.startsAt) : null;
+        if (!startsAt || Number.isNaN(startsAt.getTime())) return false;
+        const today = new Date();
+        const dayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+        const dayEnd = new Date(dayStart);
+        dayEnd.setDate(dayEnd.getDate() + (agendaTime === 'today' ? 1 : 7));
+        if (startsAt < dayStart || startsAt >= dayEnd) return false;
+      }
     }
     const normalizedPostcode = postcodeFilter.trim().toUpperCase().replace(/\s/g, '');
     if (
@@ -1235,6 +1309,65 @@ function DiscoveryState({
               </div>
             )}
           </div>
+          {topLevelCategories.events && (
+            <div className="mt-4 border-t border-border/70 pt-4">
+              <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
+                {language === 'nl' ? 'Activiteitenkalender' : 'Activity calendar'}
+              </p>
+              <div className="flex flex-wrap gap-1.5" role="group" aria-label={language === 'nl' ? 'Agenda filters' : 'Calendar filters'}>
+                {([
+                  ['all', language === 'nl' ? 'Alle data' : 'All dates'],
+                  ['today', language === 'nl' ? 'Vandaag' : 'Today'],
+                  ['week', language === 'nl' ? 'Deze week' : 'This week'],
+                ] as Array<[AgendaTimeFilter, string]>).map(([value, label]) => (
+                  <button
+                    type="button"
+                    key={value}
+                    onClick={() => { setAgendaTime(value); setSelectedMarker(null); }}
+                    className={cn(
+                      'min-h-8 rounded-lg border px-2.5 py-1.5 text-[11px] font-bold transition-colors',
+                      agendaTime === value ? 'border-primary/50 bg-primary/10 text-foreground' : 'border-border/70 bg-card text-muted-foreground hover:border-primary/40',
+                    )}
+                  >
+                    {label}
+                  </button>
+                ))}
+                {([
+                  ['free', language === 'nl' ? 'Gratis' : 'Free'],
+                  ['low-cost', language === 'nl' ? 'Laag tarief' : 'Low cost'],
+                ] as Array<[Exclude<AgendaPriceFilter, 'all'>, string]>).map(([value, label]) => (
+                  <button
+                    type="button"
+                    key={value}
+                    onClick={() => { setAgendaPrice(current => current === value ? 'all' : value); setSelectedMarker(null); }}
+                    aria-pressed={agendaPrice === value}
+                    className={cn(
+                      'min-h-8 rounded-lg border px-2.5 py-1.5 text-[11px] font-bold transition-colors',
+                      agendaPrice === value ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-900' : 'border-border/70 bg-card text-muted-foreground hover:border-primary/40',
+                    )}
+                  >
+                    {label}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => { setMealOnly(current => !current); setSelectedMarker(null); }}
+                  aria-pressed={mealOnly}
+                  className={cn(
+                    'min-h-8 rounded-lg border px-2.5 py-1.5 text-[11px] font-bold transition-colors',
+                    mealOnly ? 'border-orange-500/50 bg-orange-500/10 text-orange-900' : 'border-border/70 bg-card text-muted-foreground hover:border-primary/40',
+                  )}
+                >
+                  {language === 'nl' ? 'Maaltijden' : 'Meals'}
+                </button>
+              </div>
+              <p className="mt-2 text-[10px] leading-relaxed text-muted-foreground">
+                {language === 'nl'
+                  ? 'Gratis, laag tarief en maaltijd worden alleen getoond als de bron dit expliciet vermeldt.'
+                  : 'Free, low-cost, and meal labels appear only when the source states them explicitly.'}
+              </p>
+            </div>
+          )}
           <div className="mt-5 border-t border-border/70 pt-4">
             <div className="mb-2">
               <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
@@ -1549,6 +1682,19 @@ function EventDetailView({ eventId, listingSection = 'events' }: { eventId: stri
   const category = listing.category as Category;
   const Icon = CATEGORY_ICONS[category] ?? MapPinOff;
   const sourceUrl = (listing as typeof listing & { sourceUrl?: string }).sourceUrl;
+  const practicalDetails = listingSection === 'events'
+    ? [
+      listing.organizer ? `${language === 'nl' ? 'Organisatie' : 'Organizer'}: ${listing.organizer}` : '',
+      listing.priceType === 'free' ? (language === 'nl' ? 'Gratis' : 'Free') : '',
+      listing.priceType === 'low-cost' ? (language === 'nl' ? 'Laag tarief' : 'Low cost') : '',
+      listing.priceText ?? '',
+      listing.mealType === 'food-support'
+        ? (language === 'nl' ? 'Voedselhulp' : 'Food support')
+        : listing.mealType ? (language === 'nl' ? 'Maaltijd' : 'Meal') : '',
+      listing.audience ? `${language === 'nl' ? 'Voor' : 'For'}: ${listing.audience}` : '',
+      listing.recurrenceText ?? '',
+    ].filter(Boolean)
+    : [];
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -1596,6 +1742,14 @@ function EventDetailView({ eventId, listingSection = 'events' }: { eventId: stri
                 Lat {listing.lat.toFixed(5)} · Lng {listing.lng.toFixed(5)}
               </p>
             </div>
+            {practicalDetails.length > 0 && (
+              <div className="rounded-2xl border border-border bg-muted/40 p-4 sm:col-span-2">
+                <p className="text-xs font-extrabold uppercase tracking-wider text-muted-foreground">
+                  {language === 'nl' ? 'Praktisch' : 'Practical'}
+                </p>
+                <p className="mt-2 text-sm font-bold text-foreground">{practicalDetails.join(' · ')}</p>
+              </div>
+            )}
           </div>
 
           {sourceUrl && (

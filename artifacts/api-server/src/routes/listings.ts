@@ -1023,6 +1023,7 @@ router.get("/listings", async (req, res) => {
         category: event.category,
         name: event.title,
         description: event.description,
+          startsAt: event.startsAt,
         x: event.x,
         y: event.y,
         details: [
@@ -1036,7 +1037,16 @@ router.get("/listings", async (req, res) => {
         sourceUrl: event.canonicalUrl,
          source: "source_scan" as const,
          sourceName: event.sourceName,
-        isApproximateLocation: event.isApproximateLocation,
+          isApproximateLocation: event.isApproximateLocation,
+          sourceGroup: event.sourceGroup === "agenda" ? "city-agenda" : event.sourceGroup,
+          organizer: event.organizer,
+          activityKind: event.activityKind,
+          priceType: event.priceType,
+          priceText: event.priceText,
+          mealType: event.mealType,
+          audience: event.audience,
+          neighborhood: event.neighborhood,
+          recurrenceText: event.recurrenceText,
       }));
       res.json({
         listings: discoveredListings,

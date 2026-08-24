@@ -74,7 +74,7 @@ export interface PersistOutcome {
 export interface SourceScanRequest {
   /**
      * @minItems 1
-     * @maxItems 24
+     * @maxItems 29
      */
   sourceIds: string[];
 }
@@ -89,6 +89,49 @@ export const SourceScanEventCategory = {
   Entertainment: 'Entertainment',
   Outdoors: 'Outdoors',
   Markets: 'Markets',
+} as const;
+
+export type SourceScanEventSourceGroup = typeof SourceScanEventSourceGroup[keyof typeof SourceScanEventSourceGroup];
+
+
+export const SourceScanEventSourceGroup = {
+  'city-agenda': 'city-agenda',
+  culture: 'culture',
+  community: 'community',
+  meals: 'meals',
+} as const;
+
+export type SourceScanEventActivityKind = typeof SourceScanEventActivityKind[keyof typeof SourceScanEventActivityKind];
+
+
+export const SourceScanEventActivityKind = {
+  community: 'community',
+  culture: 'culture',
+  learning: 'learning',
+  movement: 'movement',
+  meal: 'meal',
+  family: 'family',
+  market: 'market',
+  outdoor: 'outdoor',
+  entertainment: 'entertainment',
+} as const;
+
+export type SourceScanEventPriceType = typeof SourceScanEventPriceType[keyof typeof SourceScanEventPriceType];
+
+
+export const SourceScanEventPriceType = {
+  free: 'free',
+  'low-cost': 'low-cost',
+  paid: 'paid',
+  unknown: 'unknown',
+} as const;
+
+export type SourceScanEventMealType = typeof SourceScanEventMealType[keyof typeof SourceScanEventMealType];
+
+
+export const SourceScanEventMealType = {
+  'community-meal': 'community-meal',
+  'food-support': 'food-support',
 } as const;
 
 export type SourceScanEventReviewReason = typeof SourceScanEventReviewReason[keyof typeof SourceScanEventReviewReason];
@@ -109,6 +152,15 @@ export interface SourceScanEvent {
   startsAt?: string;
   venue?: string;
   category?: SourceScanEventCategory;
+  sourceGroup?: SourceScanEventSourceGroup;
+  organizer?: string;
+  activityKind?: SourceScanEventActivityKind;
+  priceType?: SourceScanEventPriceType;
+  priceText?: string;
+  mealType?: SourceScanEventMealType;
+  audience?: string;
+  neighborhood?: string;
+  recurrenceText?: string;
   reviewReason?: SourceScanEventReviewReason;
 }
 
@@ -259,6 +311,22 @@ export interface EventReviewCandidate {
   /** @nullable */
   venue: string | null;
   category: string;
+  sourceGroup?: string;
+  /** @nullable */
+  organizer?: string | null;
+  /** @nullable */
+  activityKind?: string | null;
+  priceType?: string;
+  /** @nullable */
+  priceText?: string | null;
+  /** @nullable */
+  mealType?: string | null;
+  /** @nullable */
+  audience?: string | null;
+  /** @nullable */
+  neighborhood?: string | null;
+  /** @nullable */
+  recurrenceText?: string | null;
   lat: number;
   lng: number;
   status: EventReviewCandidateStatus;
@@ -316,6 +384,55 @@ export const ListingCategory = {
   Businesses: 'Businesses',
   'Food_&_Drink': 'Food & Drink',
   Social_map: 'Social map',
+} as const;
+
+/**
+ * The approved source stream that supplied this event.
+ */
+export type ListingSourceGroup = typeof ListingSourceGroup[keyof typeof ListingSourceGroup];
+
+
+export const ListingSourceGroup = {
+  'city-agenda': 'city-agenda',
+  culture: 'culture',
+  community: 'community',
+  meals: 'meals',
+} as const;
+
+export type ListingActivityKind = typeof ListingActivityKind[keyof typeof ListingActivityKind];
+
+
+export const ListingActivityKind = {
+  community: 'community',
+  culture: 'culture',
+  learning: 'learning',
+  movement: 'movement',
+  meal: 'meal',
+  family: 'family',
+  market: 'market',
+  outdoor: 'outdoor',
+  entertainment: 'entertainment',
+} as const;
+
+/**
+ * Price access is only shown when the source gives explicit evidence.
+ */
+export type ListingPriceType = typeof ListingPriceType[keyof typeof ListingPriceType];
+
+
+export const ListingPriceType = {
+  free: 'free',
+  'low-cost': 'low-cost',
+  paid: 'paid',
+  unknown: 'unknown',
+} as const;
+
+export type ListingMealType = typeof ListingMealType[keyof typeof ListingMealType];
+
+
+export const ListingMealType = {
+  'community-meal': 'community-meal',
+  'food-support': 'food-support',
 } as const;
 
 /**
@@ -394,6 +511,8 @@ export interface Listing {
   /** Provider-supplied or curated visitor address when one is available. */
   address?: string;
   description: string;
+  /** Verified upcoming event start date and time when this listing is an event. */
+  startsAt?: string;
   x: number;
   y: number;
   details: string;
@@ -409,6 +528,17 @@ export interface Listing {
   sourceName?: string;
   /** Whether the map pin uses the Den Haag city centre because no exact venue coordinates were supplied. */
   isApproximateLocation?: boolean;
+  /** The approved source stream that supplied this event. */
+  sourceGroup?: ListingSourceGroup;
+  /** The organizer explicitly named by the source. */
+  organizer?: string;
+  activityKind?: ListingActivityKind;
+  /** Price access is only shown when the source gives explicit evidence. */
+  priceType?: ListingPriceType;
+  priceText?: string;
+  mealType?: ListingMealType;
+  audience?: string;
+  recurrenceText?: string;
   /** Den Haag neighborhood context for a curated social-map location. */
   neighborhood?: string;
   socialCategory?: SocialMapCategory;

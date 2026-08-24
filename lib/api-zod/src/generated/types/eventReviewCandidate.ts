@@ -19,6 +19,22 @@ export interface EventReviewCandidate {
   /** @nullable */
   venue: string | null;
   category: string;
+  sourceGroup?: string;
+  /** @nullable */
+  organizer?: string | null;
+  /** @nullable */
+  activityKind?: string | null;
+  priceType?: string;
+  /** @nullable */
+  priceText?: string | null;
+  /** @nullable */
+  mealType?: string | null;
+  /** @nullable */
+  audience?: string | null;
+  /** @nullable */
+  neighborhood?: string | null;
+  /** @nullable */
+  recurrenceText?: string | null;
   lat: number;
   lng: number;
   status: EventReviewCandidateStatus;

@@ -10,9 +10,13 @@ type SourceDefinition = {
   id: string;
   name: string;
   activityUrl: string;
+  sourceGroup: "city-agenda" | "culture" | "community" | "meals";
 };
 
 type EventCategory = "Museums" | "Tours" | "Family" | "Entertainment" | "Outdoors" | "Markets";
+type ActivityKind = "community" | "culture" | "learning" | "movement" | "meal" | "family" | "market" | "outdoor" | "entertainment";
+type PriceType = "free" | "low-cost" | "paid" | "unknown";
+type MealType = "community-meal" | "food-support";
 type PublicationReason = "missing_date" | "out_of_window" | "missing_locality" | "foreign_location";
 
 type SourceScanEvent = {
@@ -25,6 +29,15 @@ type SourceScanEvent = {
   openingTimes?: string;
   venue?: string;
   category?: EventCategory;
+  organizer?: string;
+  sourceGroup?: SourceDefinition["sourceGroup"];
+  activityKind?: ActivityKind;
+  priceType?: PriceType;
+  priceText?: string;
+  mealType?: MealType;
+  audience?: string;
+  neighborhood?: string;
+  recurrenceText?: string;
   lat?: number;
   lng?: number;
   reviewReason?: PublicationReason;
@@ -66,30 +79,35 @@ type ScanMetrics = {
 };
 
 const DEN_HAAG_SOURCES: SourceDefinition[] = [
-  { id: "getyourguide", name: "GetYourGuide", activityUrl: "https://www.getyourguide.com/en-gb/the-hague-l1267/" },
-  { id: "denhaag-com", name: "DenHaag.com", activityUrl: "https://denhaag.com/en/calendar" },
-  { id: "wearetravelers", name: "We Are Travelers", activityUrl: "https://www.wearetravelers.nl" },
-  { id: "flitz-events", name: "Flitz-Events", activityUrl: "https://flitz-events.nl/teamuitje/den-haag" },
-  { id: "tripadvisor", name: "Tripadvisor", activityUrl: "https://www.tripadvisor.nl/Attractions-g188633-Activities-The_Hague_South_Holland_Province.html" },
-  { id: "kidsproof", name: "Kidsproof Den Haag", activityUrl: "https://www.kidsproof.nl/denhaag/uitjes/uitagenda/" },
-  { id: "reisroutes", name: "Reisroutes", activityUrl: "https://www.reisroutes.nl/stadswandelingen/den-haag/" },
-  { id: "follow-my-footprints", name: "Follow my footprints", activityUrl: "https://www.followmyfootprints.nl/category/nederland/den-haag/" },
-  { id: "dagjeweg", name: "DagjeWeg.NL", activityUrl: "https://www.dagjeweg.nl/dagjeuit/den-haag/stedentrips" },
-  { id: "eventbrite", name: "Eventbrite", activityUrl: "https://www.eventbrite.nl/d/netherlands--the-hague/events/" },
-  { id: "fijnuit", name: "FijnUit", activityUrl: "https://www.fijnuit.nl/den-haag" },
-  { id: "wattedoenin", name: "Wat te doen in", activityUrl: "https://www.wattedoenin.nl/wat-te-doen-in/den-haag/" },
-  { id: "travel-around-with-me", name: "Travel Around With Me", activityUrl: "https://www.travelaroundwithme.com/gratis-doen-den-haag/" },
-  { id: "yellowbrick", name: "Yellowbrick", activityUrl: "https://yellowbrick.nl/blog/wat-te-doen-in-den-haag-tips-and-uitagenda/" },
-  { id: "wannado", name: "Wannado", activityUrl: "https://wannado.nl/wat-te-doen/den-haag/categorie/activiteiten-uitjes" },
-  { id: "see-the-hague", name: "seeTheHague", activityUrl: "https://seethehague.nl/activiteiten-in-den-haag/" },
-  { id: "stappen-in-den-haag", name: "Stappen in Den Haag", activityUrl: "https://stappenindenhaag.nl/de-uitagenda-van-den-haag/" },
-  { id: "weekends-in", name: "Weekends in", activityUrl: "https://week-endsin.com/the-hague/activities/" },
-  { id: "mooiste-stedentrips", name: "Mooiste Stedentrips", activityUrl: "https://mooistestedentrips.nl/mini-break-in-nederland-den-haag/" },
-  { id: "1001activiteiten", name: "1001activiteiten", activityUrl: "https://www.1001activiteiten.nl/provincie-zuid-holland/den-haag" },
-  { id: "uitjes-nl", name: "Uitjes.nl", activityUrl: "https://uitjes.nl/den-haag-uitjes/" },
-  { id: "enter-the-hague", name: "Enter The Hague", activityUrl: "https://www.enterthehague.com/the-hague-free-walking-tour" },
-  { id: "cultuurschakel", name: "CultuurSchakel", activityUrl: "https://www.cultuurschakel.nl/vrije-tijd/cultuur-proeven/" },
-  { id: "lekkerweg", name: "Lekkerweg Tips", activityUrl: "https://www.lekkerwegtips.nl/wat-te-doen-in-den-haag/" },
+  { id: "getyourguide", name: "GetYourGuide", activityUrl: "https://www.getyourguide.com/en-gb/the-hague-l1267/", sourceGroup: "city-agenda" },
+  { id: "denhaag-com", name: "DenHaag.com", activityUrl: "https://denhaag.com/en/calendar", sourceGroup: "city-agenda" },
+  { id: "wearetravelers", name: "We Are Travelers", activityUrl: "https://www.wearetravelers.nl", sourceGroup: "city-agenda" },
+  { id: "flitz-events", name: "Flitz-Events", activityUrl: "https://flitz-events.nl/teamuitje/den-haag", sourceGroup: "city-agenda" },
+  { id: "tripadvisor", name: "Tripadvisor", activityUrl: "https://www.tripadvisor.nl/Attractions-g188633-Activities-The_Hague_South_Holland_Province.html", sourceGroup: "city-agenda" },
+  { id: "kidsproof", name: "Kidsproof Den Haag", activityUrl: "https://www.kidsproof.nl/denhaag/uitjes/uitagenda/", sourceGroup: "city-agenda" },
+  { id: "reisroutes", name: "Reisroutes", activityUrl: "https://www.reisroutes.nl/stadswandelingen/den-haag/", sourceGroup: "city-agenda" },
+  { id: "follow-my-footprints", name: "Follow my footprints", activityUrl: "https://www.followmyfootprints.nl/category/nederland/den-haag/", sourceGroup: "city-agenda" },
+  { id: "dagjeweg", name: "DagjeWeg.NL", activityUrl: "https://www.dagjeweg.nl/dagjeuit/den-haag/stedentrips", sourceGroup: "city-agenda" },
+  { id: "eventbrite", name: "Eventbrite", activityUrl: "https://www.eventbrite.nl/d/netherlands--the-hague/events/", sourceGroup: "city-agenda" },
+  { id: "fijnuit", name: "FijnUit", activityUrl: "https://www.fijnuit.nl/den-haag", sourceGroup: "city-agenda" },
+  { id: "wattedoenin", name: "Wat te doen in", activityUrl: "https://www.wattedoenin.nl/wat-te-doen-in/den-haag/", sourceGroup: "city-agenda" },
+  { id: "travel-around-with-me", name: "Travel Around With Me", activityUrl: "https://www.travelaroundwithme.com/gratis-doen-den-haag/", sourceGroup: "city-agenda" },
+  { id: "yellowbrick", name: "Yellowbrick", activityUrl: "https://yellowbrick.nl/blog/wat-te-doen-in-den-haag-tips-and-uitagenda/", sourceGroup: "city-agenda" },
+  { id: "wannado", name: "Wannado", activityUrl: "https://wannado.nl/wat-te-doen/den-haag/categorie/activiteiten-uitjes", sourceGroup: "city-agenda" },
+  { id: "see-the-hague", name: "seeTheHague", activityUrl: "https://seethehague.nl/activiteiten-in-den-haag/", sourceGroup: "city-agenda" },
+  { id: "stappen-in-den-haag", name: "Stappen in Den Haag", activityUrl: "https://stappenindenhaag.nl/de-uitagenda-van-den-haag/", sourceGroup: "city-agenda" },
+  { id: "weekends-in", name: "Weekends in", activityUrl: "https://week-endsin.com/the-hague/activities/", sourceGroup: "city-agenda" },
+  { id: "mooiste-stedentrips", name: "Mooiste Stedentrips", activityUrl: "https://mooistestedentrips.nl/mini-break-in-nederland-den-haag/", sourceGroup: "city-agenda" },
+  { id: "1001activiteiten", name: "1001activiteiten", activityUrl: "https://www.1001activiteiten.nl/provincie-zuid-holland/den-haag", sourceGroup: "city-agenda" },
+  { id: "uitjes-nl", name: "Uitjes.nl", activityUrl: "https://uitjes.nl/den-haag-uitjes/", sourceGroup: "city-agenda" },
+  { id: "enter-the-hague", name: "Enter The Hague", activityUrl: "https://www.enterthehague.com/the-hague-free-walking-tour", sourceGroup: "city-agenda" },
+  { id: "cultuurschakel", name: "CultuurSchakel", activityUrl: "https://www.cultuurschakel.nl/vrije-tijd/cultuur-proeven/", sourceGroup: "culture" },
+  { id: "lekkerweg", name: "Lekkerweg Tips", activityUrl: "https://www.lekkerwegtips.nl/wat-te-doen-in-den-haag/", sourceGroup: "city-agenda" },
+  { id: "just-peace", name: "Just Peace", activityUrl: "https://www.justpeacethehague.org/en/", sourceGroup: "community" },
+  { id: "amare", name: "Amare", activityUrl: "https://www.amare.nl/nl/agenda", sourceGroup: "culture" },
+  { id: "wijkz", name: "Wijkz", activityUrl: "https://wijkz.nl/activiteiten/", sourceGroup: "community" },
+  { id: "de-mussen", name: "De Mussen", activityUrl: "https://www.demussen.nl/activiteiten/", sourceGroup: "community" },
+  { id: "participatiekeuken", name: "Participatiekeuken", activityUrl: "https://www.participatiekeuken.nl/vredesdiners", sourceGroup: "meals" },
 ];
 
 const SOURCE_BY_ID = new Map(DEN_HAAG_SOURCES.map((source) => [source.id, source]));
@@ -98,7 +116,9 @@ const EVENT_TERMS = [
   "festival", "concert", "workshop", "markt", "market", "theater", "theatre",
   "tentoonstelling", "expositie", "exhibition", "expo", "tour", "show",
   "optreden", "performance", "what's on", "things to do", "film", "comedy",
-  "dance", "jazz", "music", "lecture", "lezing", "cabaret",
+  "dance", "jazz", "music", "lecture", "lezing", "cabaret", "ontmoeten",
+  "samen eten", "maaltijd", "diner", "inloop", "buurtactiviteit", "participatie",
+  "taalcafé", "koffieochtend", "bewegen", "vrijwilliger",
 ];
 const NAVIGATION_LINK_TITLES = new Set([
   "nederlands", "english", "frans", "deutsch", "skip filters", "skip to content",
@@ -106,6 +126,9 @@ const NAVIGATION_LINK_TITLES = new Set([
   "directly to content", "shopping", "food, drinks & nightlife", "museums & attractions",
   "highlights of the hague", "sport and outdoor", "cycling routes", "walking routes",
   "top 10 must-sees", "royal the hague", "the hague's districts", "the hague & sustainability",
+  "onze organisatie", "wat wij doen", "onze partners", "nieuws", "algemene voorwaarden",
+  "privacy statement", "privacy policy", "inschrijven", "aanmelden", "contact", "vacatures",
+  "horeca aanschuiftafel", "kom ook helpen",
 ]);
 const MAX_PAGES_PER_SOURCE = 100;
 const MAX_INDEX_PAGES = 24;
@@ -259,6 +282,86 @@ function classifyEvent(value: string): EventCategory {
   return "Entertainment";
 }
 
+function organizerName(value: unknown): string | undefined {
+  if (typeof value === "string") return shorten(value, 160);
+  if (Array.isArray(value)) {
+    return value.map(organizerName).find((name): name is string => Boolean(name));
+  }
+  if (!value || typeof value !== "object") return undefined;
+  const record = value as Record<string, unknown>;
+  return organizerName(record.name);
+}
+
+function eventMetadata(
+  evidence: string,
+  source: SourceDefinition,
+  offerValue?: unknown,
+): Pick<SourceScanEvent, "sourceGroup" | "activityKind" | "priceType" | "priceText" | "mealType" | "audience" | "neighborhood" | "recurrenceText"> {
+  const clean = stripMarkup(evidence).replace(/\s+/g, " ").trim();
+  const text = clean.toLowerCase();
+  const offer = Array.isArray(offerValue) ? offerValue[0] : offerValue;
+  const rawOfferPrice = offer && typeof offer === "object"
+    ? (offer as Record<string, unknown>).price
+    : undefined;
+  const offerPrice = typeof rawOfferPrice === "number" && Number.isFinite(rawOfferPrice)
+    ? rawOfferPrice
+    : typeof rawOfferPrice === "string" && rawOfferPrice.trim() !== "" && Number.isFinite(Number(rawOfferPrice))
+      ? Number(rawOfferPrice)
+      : Number.NaN;
+  const explicitPrice = clean.match(/(?:€\s?\d+(?:[,.]\d{1,2})?|(?:gratis|free)\b|laag(?:e)?\s+(?:prijs|tarief|bijdrage)|low[- ]cost|betaalbare?\s+(?:prijs|bijdrage)|eigen bijdrage\s+van\s+€?\s?\d+(?:[,.]\d{1,2})?)/i)?.[0];
+  const hasMeal = /\b(samen eten|maaltijd|diner|lunch|ontbijt|buurtmaaltijd|eet(?:-|\s)?café|food support|voedselhulp)\b/i.test(clean);
+  const mealType: MealType | undefined = hasMeal
+    ? /\b(voedselhulp|voedselbank|food support|uitgifte)\b/i.test(clean) ? "food-support" : "community-meal"
+    : undefined;
+  const priceType: PriceType = /\b(gratis|free)\b/i.test(clean) || offerPrice === 0
+    ? "free"
+    : /\b(laag(?:e)?\s+(?:prijs|tarief|bijdrage)|low[- ]cost|betaalbare?\s+(?:prijs|bijdrage)|eigen bijdrage)\b/i.test(clean)
+      ? "low-cost"
+      : "unknown";
+  const activityKind: ActivityKind | undefined = mealType
+    ? "meal"
+    : /\b(workshop|cursus|lezing|taalcafé|training|learning|learn)\b/i.test(text)
+      ? "learning"
+      : /\b(sport|bewegen|yoga|wandelen|dance|dans)\b/i.test(text)
+        ? "movement"
+        : /\b(ontmoet|inloop|participatie|buurt|vrijwillig|community|social)\b/i.test(text)
+          ? "community"
+          : /\b(concert|theater|muziek|film|cabaret|performance)\b/i.test(text)
+            ? "entertainment"
+            : /\b(kunst|cultuur|tentoonstelling|expo|museum)\b/i.test(text)
+              ? "culture"
+              : /\b(markt|market)\b/i.test(text)
+                ? "market"
+                : /\b(strand|park|outdoor|buiten|natuur)\b/i.test(text)
+                  ? "outdoor"
+                  : /\b(kind|gezin|family|children)\b/i.test(text)
+                    ? "family"
+                    : undefined;
+  const audiencePatterns: Array<[RegExp, string]> = [
+    [/\b(senioren|ouderen|55\+|65\+)\b/i, "senioren"],
+    [/\b(jongeren|young people|16[-–]27)\b/i, "jongeren"],
+    [/\b(kinderen|kids|children|gezinnen|families)\b/i, "gezinnen"],
+    [/\b(nieuwkomers|newcomers|vluchtelingen|refugees)\b/i, "nieuwkomers"],
+  ];
+  const audience = audiencePatterns.find(([pattern]) => pattern.test(clean))?.[1];
+  const neighborhood = [
+    "Scheveningen", "Kijkduin", "Loosduinen", "Laak", "Laakkwartier", "Schilderswijk",
+    "Segbroek", "Escamp", "Haagse Hout", "Ypenburg", "Leidschenveen", "Centrum",
+  ].find((candidate) => new RegExp(`\\b${candidate.replace(" ", "\\s+")}\\b`, "i").test(clean));
+  const recurrence = clean.match(/\b(?:elke|iedere|every)\s+(?:week|weekend|maandag|dinsdag|woensdag|donderdag|vrijdag|zaterdag|zondag|month|maand)\b[^.]{0,70}/i)?.[0];
+
+  return {
+    sourceGroup: source.sourceGroup,
+    activityKind,
+    priceType,
+    priceText: priceType === "unknown" ? undefined : explicitPrice ? shorten(explicitPrice, 80) : offerPrice === 0 ? "€0" : undefined,
+    mealType,
+    audience,
+    neighborhood,
+    recurrenceText: recurrence ? shorten(recurrence, 140) : undefined,
+  };
+}
+
 function parseCoordinates(value: unknown): { lat?: number; lng?: number } {
   if (!value || typeof value !== "object") return {};
   const record = value as Record<string, unknown>;
@@ -407,6 +510,11 @@ function eventFromStructuredNode(
     ? node.eventSchedule as Record<string, unknown>
     : undefined;
   const startsAt = firstDateValue(node.startDate) ?? firstDateValue(schedule?.startDate);
+  const metadata = eventMetadata(
+    `${title} ${description ?? ""}`,
+    source,
+    node.offers,
+  );
 
   return {
     title,
@@ -416,6 +524,8 @@ function eventFromStructuredNode(
     openingTimes: openingTimesFromStructuredNode(node, schedule),
     venue: venueFromLocation(location),
     category: classifyEvent(`${title} ${description ?? ""}`),
+    organizer: organizerName(node.organizer ?? node.publisher),
+    ...metadata,
     ...coordinates,
   };
 }
@@ -527,6 +637,48 @@ function pageCalendarField(html: string, field: "UID" | "LOCATION"): string | un
   return undefined;
 }
 
+function calendarEventFromText(
+  calendar: string,
+  pageUrl: string,
+  source: SourceDefinition,
+): SourceScanEvent | null {
+  const event = calendar.match(/BEGIN:VEVENT\s*([\s\S]*?)END:VEVENT/i)?.[1];
+  if (!event) return null;
+  const value = (field: string) => event
+    .match(new RegExp(`^${field}(?:;[^:]*)?:(.+)$`, "mi"))?.[1]
+    ?.replace(/\\n/gi, " ")
+    .replace(/\\,/g, ",")
+    .trim();
+  const title = shorten(value("SUMMARY"), 180);
+  const rawStart = value("DTSTART");
+  if (!title || !rawStart) return null;
+  const start = rawStart.match(/^(\d{4})(\d{2})(\d{2})(?:T(\d{2})(\d{2})(?:\d{2})?(Z?))?$/);
+  const startsAt = start
+    ? start[3] && start[4]
+      ? calendarDateTime(start[1], start[2], start[3], start[4], start[5], start[6] === "Z")
+      : normalizedDate(start[1], start[2], start[3])
+    : normalizeDateValue(rawStart);
+  const rawEnd = value("DTEND");
+  const end = rawEnd?.match(/^(\d{4})(\d{2})(\d{2})(?:T(\d{2})(\d{2})(?:\d{2})?(Z?))?$/);
+  const openingTimes = start?.[3] && start?.[4] && end?.[4] && end?.[5]
+    ? `${start[4]}:${start[5]}-${end[4]}:${end[5]}`
+    : undefined;
+  const description = shorten(value("DESCRIPTION"));
+  const venue = shorten(value("LOCATION"), 180);
+  const metadata = eventMetadata(`${title} ${description ?? ""}`, source);
+  return {
+    title,
+    url: pageUrl,
+    sourceEventId: value("UID"),
+    description,
+    startsAt,
+    openingTimes,
+    venue,
+    category: classifyEvent(`${title} ${description ?? ""}`),
+    ...metadata,
+  };
+}
+
 function pageVenue(html: string): string | undefined {
   const eventLocation = html.match(/<(?:div|span|p)\b[^>]*class=["'][^"']*playlist-item__location__link[^"']*["'][^>]*>([\s\S]*?)<\/(?:div|span|p)>/i);
   const address = html.match(/<address\b[^>]*>([\s\S]*?)<\/address>/i)
@@ -579,10 +731,17 @@ function linkCandidatesFromPage(
   html: string,
   pageUrl: string,
   source: SourceDefinition,
-): { candidates: SourceScanEvent[]; indexLinks: CrawlPage[]; sitemapLinks: CrawlPage[]; linksExamined: number } {
+): {
+  candidates: SourceScanEvent[];
+  indexLinks: CrawlPage[];
+  sitemapLinks: CrawlPage[];
+  calendarLinks: CrawlPage[];
+  linksExamined: number;
+} {
   const candidates: SourceScanEvent[] = [];
   const indexLinks: CrawlPage[] = [];
   const sitemapLinks: CrawlPage[] = [];
+  const calendarLinks: CrawlPage[] = [];
   const seen = new Set<string>();
   let linksExamined = 0;
   const anchorPattern = /<a\b[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
@@ -603,6 +762,11 @@ function linkCandidatesFromPage(
       sitemapLinks.push({ url, depth: 0, type: "sitemap" });
       continue;
     }
+    if (/\.ics(?:\?|$)/i.test(url) && !seen.has(url)) {
+      seen.add(url);
+      calendarLinks.push({ url, depth: 0, type: "detail", fallbackTitle: title });
+      continue;
+    }
     if (pagination && !NAVIGATION_LINK_TITLES.has(title.toLowerCase()) && !seen.has(url)) {
       seen.add(url);
       indexLinks.push({ url, depth: 0, type: "index" });
@@ -617,7 +781,7 @@ function linkCandidatesFromPage(
     candidates.push({ title, url, category: classifyEvent(title) });
     if (candidates.length >= MAX_EVENTS_PER_SOURCE) break;
   }
-  return { candidates, indexLinks, sitemapLinks, linksExamined };
+  return { candidates, indexLinks, sitemapLinks, calendarLinks, linksExamined };
 }
 
 function sitemapUrlsFromPage(html: string, pageUrl: string, source: SourceDefinition): string[] {
@@ -648,9 +812,15 @@ function htmlEventFromPage(
   source: SourceDefinition,
   fallbackTitle?: string,
 ): SourceScanEvent | null {
+  const calendarEvent = calendarEventFromText(html, pageUrl, source);
+  if (calendarEvent) return calendarEvent;
   const title = pageTitle(html) ?? fallbackTitle;
   if (!title) return null;
   const description = pageDescription(html);
+  const metadata = eventMetadata(
+    `${title} ${description ?? ""}`,
+    source,
+  );
   return {
     title,
     url: pageUrl,
@@ -660,6 +830,7 @@ function htmlEventFromPage(
     openingTimes: pageOpeningTimes(html),
     venue: pageVenue(html),
     category: classifyEvent(`${title} ${description ?? ""}`),
+    ...metadata,
   };
 }
 
@@ -863,6 +1034,15 @@ async function persistEvents(source: SourceDefinition, events: SourceScanEvent[]
       openingTimes: event.openingTimes ?? null,
       venue: event.venue ?? null,
       category: event.category ?? "Entertainment",
+      sourceGroup: event.sourceGroup ?? source.sourceGroup,
+      organizer: event.organizer ?? null,
+      activityKind: event.activityKind ?? null,
+      priceType: event.priceType ?? "unknown",
+      priceText: event.priceText ?? null,
+      mealType: event.mealType ?? null,
+      audience: event.audience ?? null,
+      neighborhood: event.neighborhood ?? null,
+      recurrenceText: event.recurrenceText ?? null,
       ...coordinates,
       reviewStatus,
       reviewReason: publicationStatusForEvent === "eligible" ? null : publicationStatusForEvent,
@@ -883,6 +1063,17 @@ async function persistEvents(source: SourceDefinition, events: SourceScanEvent[]
           ? sql`CASE WHEN ${discoveredEventsTable.reviewedAt} IS NULL THEN excluded.venue ELSE ${discoveredEventsTable.venue} END`
           : sql`${discoveredEventsTable.venue}`,
         category: event.category ?? "Entertainment",
+        sourceGroup: event.sourceGroup ?? source.sourceGroup,
+        organizer: event.organizer ? sql`excluded.organizer` : sql`${discoveredEventsTable.organizer}`,
+        activityKind: event.activityKind ? sql`excluded.activity_kind` : sql`${discoveredEventsTable.activityKind}`,
+        priceType: event.priceType && event.priceType !== "unknown"
+          ? sql`excluded.price_type`
+          : sql`${discoveredEventsTable.priceType}`,
+        priceText: event.priceText ? sql`excluded.price_text` : sql`${discoveredEventsTable.priceText}`,
+        mealType: event.mealType ? sql`excluded.meal_type` : sql`${discoveredEventsTable.mealType}`,
+        audience: event.audience ? sql`excluded.audience` : sql`${discoveredEventsTable.audience}`,
+        neighborhood: event.neighborhood ? sql`excluded.neighborhood` : sql`${discoveredEventsTable.neighborhood}`,
+        recurrenceText: event.recurrenceText ? sql`excluded.recurrence_text` : sql`${discoveredEventsTable.recurrenceText}`,
         lat: coordinates.isApproximateLocation
           ? sql`${discoveredEventsTable.lat}`
           : sql`CASE WHEN ${discoveredEventsTable.reviewedAt} IS NULL THEN excluded.lat ELSE ${discoveredEventsTable.lat} END`,
@@ -1036,6 +1227,7 @@ async function scanSource(source: SourceDefinition) {
     if (next.type === "index") {
       for (const indexPage of linked.indexLinks) enqueue(indexPage);
       for (const sitemapPage of linked.sitemapLinks) enqueue(sitemapPage);
+      for (const calendarPage of linked.calendarLinks) enqueue(calendarPage);
       for (const event of linked.candidates) {
         if (!captured.has(event.url)) captured.set(event.url, event);
         enqueue({ url: event.url, depth: next.depth + 1, type: "detail", fallbackTitle: event.title });
@@ -1080,6 +1272,15 @@ async function scanSource(source: SourceDefinition) {
         openingTimes: extracted?.openingTimes ?? structured?.openingTimes ?? event.openingTimes,
         venue: preferredVenue(extracted?.venue, structured?.venue, event.venue),
         description: enriched.description ?? event.description,
+        organizer: enriched.organizer ?? event.organizer,
+        sourceGroup: enriched.sourceGroup ?? event.sourceGroup,
+        activityKind: enriched.activityKind ?? event.activityKind,
+        priceType: enriched.priceType ?? event.priceType,
+        priceText: enriched.priceText ?? event.priceText,
+        mealType: enriched.mealType ?? event.mealType,
+        audience: enriched.audience ?? event.audience,
+        neighborhood: enriched.neighborhood ?? event.neighborhood,
+        recurrenceText: enriched.recurrenceText ?? event.recurrenceText,
         lat: enriched.lat ?? event.lat,
         lng: enriched.lng ?? event.lng,
       };
@@ -1243,6 +1444,15 @@ function reviewItem(event: typeof discoveredEventsTable.$inferSelect) {
     startsAt: event.startsAt,
     venue: event.venue,
     category: event.category,
+    sourceGroup: event.sourceGroup,
+    organizer: event.organizer,
+    activityKind: event.activityKind,
+    priceType: event.priceType,
+    priceText: event.priceText,
+    mealType: event.mealType,
+    audience: event.audience,
+    neighborhood: event.neighborhood,
+    recurrenceText: event.recurrenceText,
     lat: event.lat,
     lng: event.lng,
     status: event.reviewStatus,

@@ -5,8 +5,12 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { SourceScanEventActivityKind } from './sourceScanEventActivityKind';
 import type { SourceScanEventCategory } from './sourceScanEventCategory';
+import type { SourceScanEventMealType } from './sourceScanEventMealType';
+import type { SourceScanEventPriceType } from './sourceScanEventPriceType';
 import type { SourceScanEventReviewReason } from './sourceScanEventReviewReason';
+import type { SourceScanEventSourceGroup } from './sourceScanEventSourceGroup';
 
 export interface SourceScanEvent {
   title: string;
@@ -16,5 +20,14 @@ export interface SourceScanEvent {
   startsAt?: string;
   venue?: string;
   category?: SourceScanEventCategory;
+  sourceGroup?: SourceScanEventSourceGroup;
+  organizer?: string;
+  activityKind?: SourceScanEventActivityKind;
+  priceType?: SourceScanEventPriceType;
+  priceText?: string;
+  mealType?: SourceScanEventMealType;
+  audience?: string;
+  neighborhood?: string;
+  recurrenceText?: string;
   reviewReason?: SourceScanEventReviewReason;
 }

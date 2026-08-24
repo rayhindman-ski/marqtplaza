@@ -34,3 +34,9 @@ Public event listings must preserve the human-readable publisher that listed the
 **Why:** A link tells visitors where to open an event, but it does not make the discovery provenance visible or auditable.
 
 **How to apply:** Keep the event URL as the destination link and return a distinct publisher/source-name field from scanned records. For curated records, provide a readable publisher label without reusing the destination URL as the provenance value.
+
+Public meal and price labels require event-scoped evidence. Do not infer them from a source category, venue text, generic page copy, or blank structured price.
+
+**Why:** A publisher that often serves meals does not prove every listed activity includes one; JavaScript number coercion can also turn absent prices into a false “free” label.
+
+**How to apply:** Derive public meal and price metadata only from the event’s own title/description or an explicit structured offer. Treat null, blank, boolean, and missing structured prices as unknown; only a finite zero price supports a free label. Keep unknown values unbadged and out of price/meal filters.
