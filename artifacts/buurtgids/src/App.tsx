@@ -69,6 +69,7 @@ const STORAGE_KEY = 'buurtgids_saved_places';
 type ListingSection = 'events' | 'businesses' | 'food-drink' | 'social-map';
 type FilterSubcategory = Exclude<Category, 'Businesses' | 'Social map'> | BusinessCategory | SocialMapCategory;
 const TOP_LEVEL_SECTIONS: ListingSection[] = ['events', 'food-drink', 'social-map', 'businesses'];
+const DEFAULT_START_SECTION: ListingSection = 'events';
 
 function topLevelStateFor(section: ListingSection): Record<ListingSection, boolean> {
   return Object.fromEntries(
@@ -79,6 +80,12 @@ function topLevelStateFor(section: ListingSection): Record<ListingSection, boole
 function allTopLevelState(): Record<ListingSection, boolean> {
   return Object.fromEntries(
     TOP_LEVEL_SECTIONS.map((section) => [section, true]),
+  ) as Record<ListingSection, boolean>;
+}
+
+function noTopLevelState(): Record<ListingSection, boolean> {
+  return Object.fromEntries(
+    TOP_LEVEL_SECTIONS.map((section) => [section, false]),
   ) as Record<ListingSection, boolean>;
 }
 
@@ -97,6 +104,13 @@ function allSubcategoryState(): Record<FilterSubcategory, boolean> {
   return Object.fromEntries(
     Array.from(new Set(TOP_LEVEL_SECTIONS.flatMap(subcategoriesForTopLevel)))
       .map((subcategory) => [subcategory, true]),
+  ) as Record<FilterSubcategory, boolean>;
+}
+
+function noSubcategoryState(): Record<FilterSubcategory, boolean> {
+  return Object.fromEntries(
+    Array.from(new Set(TOP_LEVEL_SECTIONS.flatMap(subcategoriesForTopLevel)))
+      .map((subcategory) => [subcategory, false]),
   ) as Record<FilterSubcategory, boolean>;
 }
 
@@ -437,7 +451,7 @@ function SearchState({
                   <div className="mb-3 flex flex-wrap justify-center gap-2">
                     <button
                       type="button"
-                      onClick={() => onSearch(loc.id)}
+                      onClick={() => onSearch(loc.id, undefined, DEFAULT_START_SECTION)}
                       className="rounded-full border border-primary/40 bg-primary/10 px-3 py-1.5 text-[11px] font-extrabold text-primary transition-colors hover:bg-primary/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                     >
                       {t.selectAllNeighborhoods}
@@ -455,7 +469,7 @@ function SearchState({
                       <button
                         key={neighborhood}
                         type="button"
-                        onClick={() => onSearch(loc.id, neighborhood)}
+                        onClick={() => onSearch(loc.id, neighborhood, DEFAULT_START_SECTION)}
                         className="min-h-10 rounded-xl border border-border/50 bg-card/80 px-3 py-2 text-left text-xs font-semibold text-muted-foreground transition-all hover:border-primary/50 hover:bg-primary/5 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                       >
                         {neighborhood}
@@ -499,6 +513,37 @@ function NeighborhoodActionButtons({
         className="min-h-9 rounded-xl border border-border/70 bg-card/70 px-2.5 py-2 text-[11px] font-extrabold text-muted-foreground transition-colors hover:border-primary/40 hover:bg-primary/5 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
       >
         {t.clearNeighborhoodSelection}
+      </button>
+    </div>
+  );
+}
+
+function CategoryActionButtons({
+  language,
+  onSelectAll,
+  onDeselectAll,
+}: {
+  language: Language;
+  onSelectAll: () => void;
+  onDeselectAll: () => void;
+}) {
+  const t = translations[language];
+
+  return (
+    <div className="grid grid-cols-2 gap-2">
+      <button
+        type="button"
+        onClick={onSelectAll}
+        className="min-h-9 rounded-xl border border-primary/40 bg-primary/10 px-2.5 py-2 text-[11px] font-extrabold text-primary transition-colors hover:bg-primary/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+      >
+        {t.selectAllCategories}
+      </button>
+      <button
+        type="button"
+        onClick={onDeselectAll}
+        className="min-h-9 rounded-xl border border-border/70 bg-card/70 px-2.5 py-2 text-[11px] font-extrabold text-muted-foreground transition-colors hover:border-primary/40 hover:bg-primary/5 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+      >
+        {t.clearCategorySelection}
       </button>
     </div>
   );
@@ -893,6 +938,18 @@ function DiscoveryState({
     setSelectedMarker(null);
   };
 
+  const selectAllCategories = () => {
+    setTopLevelCategories(allTopLevelState());
+    setSubcategories(allSubcategoryState());
+    setSelectedMarker(null);
+  };
+
+  const deselectAllCategories = () => {
+    setTopLevelCategories(noTopLevelState());
+    setSubcategories(noSubcategoryState());
+    setSelectedMarker(null);
+  };
+
   const toggleSubcategory = (subcategory: FilterSubcategory) => {
     setSubcategories((previous) => ({
       ...previous,
@@ -970,11 +1027,10 @@ function DiscoveryState({
     selectedTopLevelSections.flatMap(subcategoriesForTopLevel),
   ));
 
-  // Use API data when available, falling back to coordinate-complete static activities for events.
-  const fallbackMarkers = selectedTopLevelSections.includes('events')
-    ? MARKERS.filter((marker) => marker.locationId === location.id)
-    : [];
-  const allMarkers: Marker[] = (selectedListings.length > 0 ? selectedListings : fallbackMarkers).map(l => {
+  // The listings API already scopes each result to the selected section. Do not
+  // fill an empty event response with general static attractions: a first visit
+  // must show actual events only, or the explicit empty-event state.
+  const allMarkers: Marker[] = selectedListings.map(l => {
     return {
       id: l.id,
       locationId: l.locationId,
@@ -1100,6 +1156,13 @@ function DiscoveryState({
               <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
                 {t.topLevelCategories}
               </p>
+              <div className="mb-2">
+                <CategoryActionButtons
+                  language={language}
+                  onSelectAll={selectAllCategories}
+                  onDeselectAll={deselectAllCategories}
+                />
+              </div>
               <div
                 role="group"
                 aria-label={t.topLevelCategories}
@@ -1394,6 +1457,14 @@ function DiscoveryState({
           <div className="absolute left-4 right-4 top-4 z-20 md:hidden">
             <div className="rounded-2xl border border-border/70 bg-card/95 p-3 shadow-xl backdrop-blur-xl">
               <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
+                {t.topLevelCategories}
+              </p>
+              <CategoryActionButtons
+                language={language}
+                onSelectAll={selectAllCategories}
+                onDeselectAll={deselectAllCategories}
+              />
+              <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
                 {t.neighborhoods}
               </p>
               <NeighborhoodActionButtons
@@ -1566,7 +1637,7 @@ function EventDetailRoute() {
     || requestedSection === 'food-drink'
     || requestedSection === 'social-map'
     ? requestedSection
-    : 'events';
+    : DEFAULT_START_SECTION;
   return <EventDetailView eventId={params?.eventId ?? ''} listingSection={listingSection} />;
 }
 
@@ -1581,7 +1652,7 @@ function getInitialListingSection(): ListingSection {
     || requestedSection === 'food-drink'
     || requestedSection === 'social-map'
     ? requestedSection
-    : 'events';
+    : DEFAULT_START_SECTION;
 }
 
 function MainApp({ initialLocationId }: { initialLocationId?: string } = {}) {
@@ -1643,7 +1714,7 @@ function MainApp({ initialLocationId }: { initialLocationId?: string } = {}) {
     <SearchState
       language={language}
       onLanguageChange={setLanguage}
-      onSearch={(locId, neighborhood, listingSection = 'events', postcode) => {
+      onSearch={(locId, neighborhood, listingSection = DEFAULT_START_SECTION, postcode) => {
         setScreen({
           kind: 'discovery',
           locationId: locId,

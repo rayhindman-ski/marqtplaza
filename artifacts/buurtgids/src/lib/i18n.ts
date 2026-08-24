@@ -39,6 +39,8 @@ export const translations = {
       'Social map': 'Sociale kaart',
     },
     topLevelCategories: 'Hoofdcategorieën',
+    selectAllCategories: 'Selecteer alles',
+    clearCategorySelection: 'Deselecteer alles',
     subcategories: 'Subcategorieën',
     businessCategories: {
       'Retail & Shopping': 'Winkelen & retail',
@@ -178,6 +180,8 @@ export const translations = {
       'Social map': 'Social map',
     },
     topLevelCategories: 'Top-level categories',
+    selectAllCategories: 'Select all',
+    clearCategorySelection: 'Deselect all',
     subcategories: 'Subcategories',
     businessCategories: {
       'Retail & Shopping': 'Retail & shopping',

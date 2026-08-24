@@ -1016,15 +1016,7 @@ router.get("/listings", async (req, res) => {
           gte(discoveredEventsTable.startsAt, today),
         ))
         .orderBy(asc(discoveredEventsTable.startsAt), desc(discoveredEventsTable.lastSeenAt));
-      const curatedUrls = new Set(
-        curated.map((listing) => canonicalExternalUrl(listing.sourceUrl)).filter((url): url is string => Boolean(url)),
-      );
-      const curatedTitles = new Set(curated.map((listing) => normalizedTitle(listing.name)));
       const discoveredListings = discovered
-        .filter((event) =>
-          !curatedUrls.has(canonicalExternalUrl(event.canonicalUrl) ?? event.canonicalUrl) &&
-          !curatedTitles.has(normalizedTitle(event.title)),
-        )
         .map((event) => ({
         id: `source-${event.id}`,
         locationId: event.locationId,
@@ -1047,17 +1039,17 @@ router.get("/listings", async (req, res) => {
         isApproximateLocation: event.isApproximateLocation,
       }));
       res.json({
-        listings: [...curatedListings, ...discoveredListings],
-        source: "curated",
+        listings: discoveredListings,
+        source: discoveredListings.length > 0 ? "live" : "fallback",
         message: discoveredListings.length > 0
-          ? `${discoveredListings.length} source-scanned event${discoveredListings.length === 1 ? "" : "s"} added to the curated Den Haag activities.`
-          : undefined,
+          ? `${discoveredListings.length} verified upcoming event${discoveredListings.length === 1 ? "" : "s"} found in Den Haag.`
+          : "Er zijn momenteel geen gecontroleerde aankomende evenementen beschikbaar.",
       });
     } catch {
       res.json({
-        listings: curatedListings,
-        source: "curated",
-        message: "Curated activities are available; source-scanned events are temporarily unavailable.",
+        listings: [],
+        source: "fallback",
+        message: "Actuele evenementen zijn tijdelijk niet beschikbaar.",
       });
     }
     return;

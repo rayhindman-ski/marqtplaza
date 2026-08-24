@@ -9,3 +9,4 @@
 - [Google Places discovery](google-places-discovery.md) — follow bounded next-page results; a first-page-only search makes the business inventory look incomplete.
 - [OpenAPI client regeneration](openapi-client-regeneration.md) — regenerate the shared client after merged endpoint changes before judging downstream typecheck failures.
 - [Homepage postcode routing](homepage-postcode-routing.md) — valid Haagse postcodes belong on the search homepage and must navigate to a refreshable discovery URL.
+- [Events-only first map](events-first-map.md) — event discovery must never fall back to generic attractions; show verified upcoming events or an explicit empty state.
