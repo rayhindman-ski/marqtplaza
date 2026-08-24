@@ -158,9 +158,9 @@ function ReferenceCategoryNav({
   return (
     <nav
       aria-label="Categories"
-      className="absolute left-0 top-0 z-30 hidden w-full border-b border-border/70 bg-card/85 px-6 py-4 backdrop-blur-md lg:block"
+      className="absolute left-0 top-0 z-30 flex w-full overflow-x-auto border-b border-border/70 bg-card/85 px-4 py-3 pr-24 backdrop-blur-md sm:px-6 sm:pr-6"
     >
-      <div className="mx-auto flex max-w-6xl items-center justify-center gap-7">
+      <div className="mx-auto flex min-w-max max-w-6xl items-center justify-center gap-4 sm:gap-7">
         {t.navCategories.map((category) => {
           if (category.id === 'news') {
             return (
@@ -317,22 +317,6 @@ function SearchState({
           <span>{t.savedCount(savedCount)}</span>
         </button>
       )}
-
-      {/* Mobile shortcuts (the desktop category nav is hidden below lg) */}
-      <div className="lg:hidden absolute bottom-8 left-6 z-10 flex items-center gap-2 flex-wrap">
-        <Link href="/nieuws" className="flex items-center gap-2 px-4 py-2.5 bg-card/90 backdrop-blur-sm border border-border/60 rounded-full text-sm font-bold text-foreground hover:border-primary/50 hover:text-primary shadow-md hover:shadow-lg transition-all">
-          <Newspaper className="w-4 h-4 text-primary" />
-          <span>Nieuws</span>
-        </Link>
-        <Link href="/capture" className="flex items-center gap-2 px-4 py-2.5 bg-card/90 backdrop-blur-sm border border-border/60 rounded-full text-sm font-bold text-foreground hover:border-primary/50 hover:text-primary shadow-md hover:shadow-lg transition-all">
-          <ScanSearch className="w-4 h-4 text-primary" />
-          <span>{t.capture}</span>
-        </Link>
-        <Link href="/bronnen" className="flex items-center gap-2 px-4 py-2.5 bg-card/90 backdrop-blur-sm border border-border/60 rounded-full text-sm font-bold text-foreground hover:border-primary/50 hover:text-primary shadow-md hover:shadow-lg transition-all">
-          <Radio className="w-4 h-4 text-primary" />
-          <span>Sources</span>
-        </Link>
-      </div>
 
       <div className="z-10 w-full max-w-6xl text-center space-y-10 animate-in fade-in slide-in-from-bottom-8 duration-700 ease-out">
         <div className="space-y-5">
@@ -819,6 +803,12 @@ function DiscoveryState({
     setSelectedMarker(null);
   };
 
+  const selectTopLevelSection = (section: ListingSection) => {
+    setTopLevelCategories(topLevelStateFor(section));
+    setSubcategories(subcategoryStateFor(section));
+    setSelectedMarker(null);
+  };
+
   const toggleSubcategory = (subcategory: FilterSubcategory) => {
     setSubcategories((previous) => ({
       ...previous,
@@ -964,6 +954,11 @@ function DiscoveryState({
 
   return (
     <div className="flex h-screen w-full overflow-hidden bg-background">
+      <ReferenceCategoryNav
+        language={language}
+        onThingsToDo={() => selectTopLevelSection('events')}
+        onSectionSelect={selectTopLevelSection}
+      />
       <LanguageSelector language={language} onLanguageChange={onLanguageChange} />
 
       {/* Sidebar List */}
