@@ -118,7 +118,7 @@ export const LOCATIONS: Location[] = [
     lng: 4.3007,
     zoom: 13,
     mapType: 'denhaag',
-    postcodes: ['2500','2501','2502','2503','2504','2505','2506','2507','2508','2509','2510','2511','2512','2513','2514','2515','2516','2517','2518','2519'],
+    postcodes: Array.from({ length: 100 }, (_, index) => String(2500 + index)),
     neighborhoods: [
       'Centrum',
       'Archipelbuurt',

@@ -76,6 +76,12 @@ function topLevelStateFor(section: ListingSection): Record<ListingSection, boole
   ) as Record<ListingSection, boolean>;
 }
 
+function allTopLevelState(): Record<ListingSection, boolean> {
+  return Object.fromEntries(
+    TOP_LEVEL_SECTIONS.map((section) => [section, true]),
+  ) as Record<ListingSection, boolean>;
+}
+
 function subcategoryStateFor(section: ListingSection): Record<FilterSubcategory, boolean> {
   const active = subcategoriesForTopLevel(section);
   const eventSubcategories = EVENT_CATEGORIES.filter(
@@ -84,6 +90,13 @@ function subcategoryStateFor(section: ListingSection): Record<FilterSubcategory,
   );
   return Object.fromEntries(
     [...eventSubcategories, ...BUSINESS_CATEGORIES, ...SOCIAL_MAP_CATEGORIES].map((category) => [category, active.includes(category)]),
+  ) as Record<FilterSubcategory, boolean>;
+}
+
+function allSubcategoryState(): Record<FilterSubcategory, boolean> {
+  return Object.fromEntries(
+    Array.from(new Set(TOP_LEVEL_SECTIONS.flatMap(subcategoriesForTopLevel)))
+      .map((subcategory) => [subcategory, true]),
   ) as Record<FilterSubcategory, boolean>;
 }
 
@@ -250,7 +263,7 @@ function SearchState({
 }: {
   language: Language;
   onLanguageChange: (language: Language) => void;
-  onSearch: (locId: string, neighborhood?: string, section?: ListingSection) => void;
+  onSearch: (locId: string, neighborhood?: string, section?: ListingSection, postcode?: string) => void;
   savedCount: number;
   onViewSaved: () => void;
 }) {
@@ -279,16 +292,17 @@ function SearchState({
       return;
     }
     const normalizedQuery = query.trim().toLocaleLowerCase('nl-NL').replace(/\s+/g, ' ');
-    const normalizedPostcode = normalizedQuery.replace(/\s/g, '');
+    const normalizedPostcode = query.trim().toLocaleUpperCase('nl-NL').replace(/\s+/g, '');
+    const isPostcodeQuery = /^\d{4}(?:[A-Z]{2})?$/.test(normalizedPostcode);
     const matched = LOCATIONS.find(l =>
       l.name.toLocaleLowerCase('nl-NL') === normalizedQuery ||
       l.nameNl.toLocaleLowerCase('nl-NL') === normalizedQuery ||
-      l.postcodes.some((postcode) => normalizedPostcode.startsWith(postcode))
+      (isPostcodeQuery && l.postcodes.includes(normalizedPostcode.slice(0, 4)))
     );
 
     if (matched) {
       setError('');
-      onSearch(matched.id);
+      onSearch(matched.id, undefined, 'events', isPostcodeQuery ? normalizedPostcode : undefined);
     } else {
       setError(t.locationNotFound);
     }
@@ -751,6 +765,7 @@ function DiscoveryState({
   locationId,
   listingSection,
   initialNeighborhood,
+  initialPostcode,
   onBack,
   onLanguageChange,
   savedIds,
@@ -761,6 +776,7 @@ function DiscoveryState({
   locationId: string;
   listingSection: ListingSection;
   initialNeighborhood?: string;
+  initialPostcode?: string;
   onBack: () => void;
   onLanguageChange: (language: Language) => void;
   savedIds: Set<string>;
@@ -770,15 +786,15 @@ function DiscoveryState({
   const location = LOCATIONS.find(l => l.id === locationId);
   const t = translations[language];
   const [topLevelCategories, setTopLevelCategories] = useState<Record<ListingSection, boolean>>(
-    () => topLevelStateFor(listingSection),
+    () => initialPostcode ? allTopLevelState() : topLevelStateFor(listingSection),
   );
   const [subcategories, setSubcategories] = useState<Record<FilterSubcategory, boolean>>(
-    () => subcategoryStateFor(listingSection),
+    () => initialPostcode ? allSubcategoryState() : subcategoryStateFor(listingSection),
   );
   const [selectedNeighborhoods, setSelectedNeighborhoods] = useState<string[]>(
     initialNeighborhood ? [initialNeighborhood] : [],
   );
-  const [postcodeFilter, setPostcodeFilter] = useState('');
+  const [postcodeFilter, setPostcodeFilter] = useState(initialPostcode ?? '');
   const [selectedMarker, setSelectedMarker] = useState<string | null>(null);
   const [view, setView] = useState<'map' | 'list'>('map');
 
@@ -858,10 +874,10 @@ function DiscoveryState({
   };
 
   useEffect(() => {
-    setTopLevelCategories(topLevelStateFor(listingSection));
-    setSubcategories(subcategoryStateFor(listingSection));
+    setTopLevelCategories(initialPostcode ? allTopLevelState() : topLevelStateFor(listingSection));
+    setSubcategories(initialPostcode ? allSubcategoryState() : subcategoryStateFor(listingSection));
     setSelectedMarker(null);
-  }, [listingSection]);
+  }, [initialPostcode, listingSection]);
 
   useEffect(() => {
     if (!selectedMarker) return;
@@ -952,7 +968,6 @@ function DiscoveryState({
     const normalizedPostcode = postcodeFilter.trim().toUpperCase().replace(/\s/g, '');
     if (
       normalizedPostcode
-      && marker.category === 'Social map'
       && !marker.address?.toUpperCase().replace(/\s/g, '').includes(normalizedPostcode)
     ) {
       return false;
@@ -1183,20 +1198,18 @@ function DiscoveryState({
                 ? t.neighborhoodsSelected(selectedNeighborhoods.length)
                 : t.allNeighborhoods}
             </p>
-            {selectedTopLevelSections.includes('social-map') && (
-              <label className="mt-3 block">
-                <span className="mb-1 block text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
-                  {t.postcodeFilterLabel}
-                </span>
-                <input
-                  type="search"
-                  value={postcodeFilter}
-                  onChange={(event) => setPostcodeFilter(event.target.value)}
-                  placeholder={t.postcodeFilterPlaceholder}
-                  className="h-10 w-full rounded-xl border border-border/70 bg-card px-3 text-sm font-medium text-foreground outline-none placeholder:text-muted-foreground/70 focus:border-primary focus:ring-2 focus:ring-primary/20"
-                />
-              </label>
-            )}
+            <label className="mt-3 block">
+              <span className="mb-1 block text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
+                {t.postcodeFilterLabel}
+              </span>
+              <input
+                type="search"
+                value={postcodeFilter}
+                onChange={(event) => setPostcodeFilter(event.target.value)}
+                placeholder={t.postcodeFilterPlaceholder}
+                className="h-10 w-full rounded-xl border border-border/70 bg-card px-3 text-sm font-medium text-foreground outline-none placeholder:text-muted-foreground/70 focus:border-primary focus:ring-2 focus:ring-primary/20"
+              />
+            </label>
           </div>
         </div>
 
@@ -1503,7 +1516,7 @@ function EventDetailRoute() {
 
 type AppScreen =
   | { kind: 'search' }
-  | { kind: 'discovery'; locationId: string; neighborhood?: string; listingSection: ListingSection }
+  | { kind: 'discovery'; locationId: string; neighborhood?: string; postcode?: string; listingSection: ListingSection }
   | { kind: 'saved' };
 
 function getInitialListingSection(): ListingSection {
@@ -1523,6 +1536,7 @@ function MainApp({ initialLocationId }: { initialLocationId?: string } = {}) {
           kind: 'discovery',
           locationId: initialLocationId,
           neighborhood: new URLSearchParams(window.location.search).get('neighborhood') || undefined,
+          postcode: new URLSearchParams(window.location.search).get('postcode') || undefined,
           listingSection: getInitialListingSection(),
         }
       : { kind: 'search' },
@@ -1556,6 +1570,7 @@ function MainApp({ initialLocationId }: { initialLocationId?: string } = {}) {
         locationId={screen.locationId}
         listingSection={screen.listingSection}
         initialNeighborhood={screen.neighborhood}
+        initialPostcode={screen.postcode}
         onBack={() => {
           setScreen({ kind: 'search' });
           navigate('/');
@@ -1572,17 +1587,19 @@ function MainApp({ initialLocationId }: { initialLocationId?: string } = {}) {
     <SearchState
       language={language}
       onLanguageChange={setLanguage}
-      onSearch={(locId, neighborhood, listingSection = 'events') => {
+      onSearch={(locId, neighborhood, listingSection = 'events', postcode) => {
         setScreen({
           kind: 'discovery',
           locationId: locId,
           neighborhood,
+          postcode,
           listingSection,
         });
 
         if (locId === 'dhg') {
           const params = new URLSearchParams();
           if (neighborhood) params.set('neighborhood', neighborhood);
+          if (postcode) params.set('postcode', postcode);
           if (listingSection !== 'events') params.set('section', listingSection);
           const query = params.toString();
           navigate(`/activiteiten/den-haag${query ? `?${query}` : ''}`);

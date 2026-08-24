@@ -315,12 +315,15 @@ function CoordinateMapFallback({
         const Icon = getCategoryIcon(point.category);
 
         const className = "marqtplaza-map-marker relative flex items-center justify-center rounded-full transition-transform hover:scale-110 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/35";
-        const style = {
+        const style: React.CSSProperties = {
           width: isSelected ? 48 : 38,
           height: isSelected ? 48 : 38,
           minWidth: isSelected ? 48 : 38,
           minHeight: isSelected ? 48 : 38,
           aspectRatio: '1 / 1',
+          boxSizing: 'border-box',
+          flex: '0 0 auto',
+          overflow: 'hidden',
           boxShadow: isSelected ? `0 0 0 5px ${color}44, 0 8px 18px -6px rgba(23,34,53,0.5)` : undefined,
         };
         const ariaLabel = `Show ${point.name} at ${point.lat.toFixed(5)}, ${point.lng.toFixed(5)}`;
@@ -586,9 +589,15 @@ function TileMapView({
         const Icon = getCategoryIcon(point.category);
 
         const className = "marqtplaza-map-marker relative flex items-center justify-center rounded-full font-black text-white transition-transform hover:scale-110 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/35";
-        const style = {
+        const style: React.CSSProperties = {
           width: isSelected ? 50 : 43,
           height: isSelected ? 50 : 43,
+          minWidth: isSelected ? 50 : 43,
+          minHeight: isSelected ? 50 : 43,
+          aspectRatio: '1 / 1',
+          boxSizing: 'border-box',
+          flex: '0 0 auto',
+          overflow: 'hidden',
           boxShadow: isSelected ? `0 0 0 5px ${color}44, 0 8px 18px -6px rgba(23,34,53,0.5)` : undefined,
         };
         const ariaLabel = `Open ${point.name} at ${point.lat.toFixed(5)}, ${point.lng.toFixed(5)}${savedIds.has(point.id) ? ', saved' : ''}`;
@@ -723,7 +732,10 @@ function GoogleMapCanvas({
          `min-width:${size}px`,
          `min-height:${size}px`,
          'aspect-ratio:1 / 1',
-         'border-radius:9999px',
+         'box-sizing:border-box',
+         'flex:0 0 auto',
+         'overflow:hidden',
+         'border-radius:50%',
         `background:${MARQTPLAZA_MARKER_GRADIENT}`,
         'border:3px solid rgba(255,255,255,0.96)',
          `box-shadow:${isSelected ? `0 0 0 5px ${color}44, 0 8px 18px -6px rgba(23,34,53,0.5)` : '0 7px 16px -5px rgba(23,34,53,0.42), 0 0 0 2px rgba(243,108,33,0.28), inset 0 1px 0 rgba(255,255,255,0.48)'}`,
