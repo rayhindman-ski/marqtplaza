@@ -8,3 +8,4 @@
 - [Business filter hierarchy](business-filter-hierarchy.md) — Businesses owns non-food subcategories; Food & Drink owns its matching one, and children only show when their parent is selected.
 - [Google Places discovery](google-places-discovery.md) — follow bounded next-page results; a first-page-only search makes the business inventory look incomplete.
 - [OpenAPI client regeneration](openapi-client-regeneration.md) — regenerate the shared client after merged endpoint changes before judging downstream typecheck failures.
+- [Homepage postcode routing](homepage-postcode-routing.md) — valid Haagse postcodes belong on the search homepage and must navigate to a refreshable discovery URL.

@@ -1,10 +1,10 @@
 import React from 'react';
-import { useLocation, useParams } from 'wouter';
+import { Link, useLocation, useParams } from 'wouter';
 import { useGetNewsArticle } from '@workspace/api-client-react';
 import { format, parseISO } from 'date-fns';
 import { nl } from 'date-fns/locale';
 import {
-  ArrowLeft, Clock, ExternalLink, Newspaper,
+  ArrowLeft, Clock, ExternalLink, Home, Newspaper,
   MapPin, ShieldAlert, Briefcase, Landmark, Trophy, Users
 } from 'lucide-react';
 import { cn } from '../lib/utils';
@@ -92,15 +92,25 @@ export default function NewsArticleView() {
             <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
             Terug naar overzicht
           </button>
-          
-          <a 
-            href={article.sourceUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-2 text-[#072C1E]/50 hover:text-[#F36C21] transition-colors text-xs font-bold uppercase tracking-widest"
-          >
-            <span className="hidden sm:inline">Origineel op</span> {article.sourceName} <ExternalLink className="w-3.5 h-3.5" />
-          </a>
+
+          <div className="flex items-center gap-4">
+            <Link
+              href="/"
+              aria-label="Naar de homepage"
+              className="inline-flex items-center gap-2 text-xs font-bold text-[#072C1E]/60 hover:text-[#F36C21] transition-colors uppercase tracking-widest"
+            >
+              <Home className="w-4 h-4" />
+              <span className="hidden sm:inline">Homepage</span>
+            </Link>
+            <a
+              href={article.sourceUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 text-[#072C1E]/50 hover:text-[#F36C21] transition-colors text-xs font-bold uppercase tracking-widest"
+            >
+              <span className="hidden sm:inline">Origineel op</span> {article.sourceName} <ExternalLink className="w-3.5 h-3.5" />
+            </a>
+          </div>
         </div>
       </header>
 

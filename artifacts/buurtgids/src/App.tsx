@@ -1470,9 +1470,27 @@ type AppScreen =
   | { kind: 'search' }
   | { kind: 'discovery'; locationId: string; neighborhood?: string; listingSection: ListingSection }
   | { kind: 'saved' };
+
+function getInitialListingSection(): ListingSection {
+  const requestedSection = new URLSearchParams(window.location.search).get('section');
+  return requestedSection === 'businesses'
+    || requestedSection === 'food-drink'
+    || requestedSection === 'social-map'
+    ? requestedSection
+    : 'events';
+}
+
 function MainApp({ initialLocationId }: { initialLocationId?: string } = {}) {
+  const [, navigate] = useLocation();
   const [screen, setScreen] = useState<AppScreen>(() =>
-    initialLocationId ? { kind: 'discovery', locationId: initialLocationId, listingSection: 'events' } : { kind: 'search' },
+    initialLocationId
+      ? {
+          kind: 'discovery',
+          locationId: initialLocationId,
+          neighborhood: new URLSearchParams(window.location.search).get('neighborhood') || undefined,
+          listingSection: getInitialListingSection(),
+        }
+      : { kind: 'search' },
   );
   const [language, setLanguage] = useState<Language>(() => {
     if (typeof window === 'undefined') return 'en';
@@ -1503,7 +1521,10 @@ function MainApp({ initialLocationId }: { initialLocationId?: string } = {}) {
         locationId={screen.locationId}
         listingSection={screen.listingSection}
         initialNeighborhood={screen.neighborhood}
-        onBack={() => setScreen({ kind: 'search' })}
+        onBack={() => {
+          setScreen({ kind: 'search' });
+          navigate('/');
+        }}
         onLanguageChange={setLanguage}
         savedIds={savedIds}
         onToggle={toggle}
@@ -1516,12 +1537,22 @@ function MainApp({ initialLocationId }: { initialLocationId?: string } = {}) {
     <SearchState
       language={language}
       onLanguageChange={setLanguage}
-      onSearch={(locId, neighborhood, listingSection = 'events') => setScreen({
-        kind: 'discovery',
-        locationId: locId,
-        neighborhood,
-        listingSection,
-      })}
+      onSearch={(locId, neighborhood, listingSection = 'events') => {
+        setScreen({
+          kind: 'discovery',
+          locationId: locId,
+          neighborhood,
+          listingSection,
+        });
+
+        if (locId === 'dhg') {
+          const params = new URLSearchParams();
+          if (neighborhood) params.set('neighborhood', neighborhood);
+          if (listingSection !== 'events') params.set('section', listingSection);
+          const query = params.toString();
+          navigate(`/activiteiten/den-haag${query ? `?${query}` : ''}`);
+        }
+      }}
       savedCount={savedCount}
       onViewSaved={() => setScreen({ kind: 'saved' })}
     />
@@ -1543,7 +1574,7 @@ export default function App() {
         <QueryClientProvider client={queryClient}>
         <Switch>
           <Route path="/">
-            <MainApp initialLocationId="dhg" />
+            <MainApp />
           </Route>
           <Route path="/activiteiten/den-haag/:eventId" component={EventDetailRoute} />
           <Route path="/activiteiten/den-haag">

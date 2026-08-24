@@ -103,6 +103,8 @@
   .marqtplaza-map-marker {
     background: linear-gradient(135deg, #ff9a52 0%, #f36c21 48%, #c94d12 100%);
     border: 3px solid rgba(255, 255, 255, 0.96);
+    aspect-ratio: 1 / 1;
+    border-radius: 9999px;
     box-shadow:
       0 7px 16px -5px rgba(23, 34, 53, 0.42),
       0 0 0 2px rgba(243, 108, 33, 0.28),
