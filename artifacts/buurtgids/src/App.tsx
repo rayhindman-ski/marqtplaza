@@ -434,6 +434,22 @@ function SearchState({
                       ? t.chooseNeighborhood(getLocationName(loc, language))
                       : t.popularNeighborhoods}
                   </p>
+                  <div className="mb-3 flex flex-wrap justify-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => onSearch(loc.id)}
+                      className="rounded-full border border-primary/40 bg-primary/10 px-3 py-1.5 text-[11px] font-extrabold text-primary transition-colors hover:bg-primary/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                    >
+                      {t.selectAllNeighborhoods}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedCityId(null)}
+                      className="rounded-full border border-border/70 bg-card/80 px-3 py-1.5 text-[11px] font-extrabold text-muted-foreground transition-colors hover:border-primary/40 hover:bg-primary/5 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                    >
+                      {t.clearNeighborhoodSelection}
+                    </button>
+                  </div>
                   <div className="grid w-full grid-cols-2 gap-2 animate-in fade-in slide-in-from-top-1 duration-300 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
                     {neighborhoodOptions.map((neighborhood) => (
                       <button
