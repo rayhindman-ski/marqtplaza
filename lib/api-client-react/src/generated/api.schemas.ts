@@ -5,6 +5,261 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+export type ClaimStatus = typeof ClaimStatus[keyof typeof ClaimStatus];
+
+
+export const ClaimStatus = {
+  pending: 'pending',
+  approved: 'approved',
+  rejected: 'rejected',
+} as const;
+
+export type DealStatus = typeof DealStatus[keyof typeof DealStatus];
+
+
+export const DealStatus = {
+  pending: 'pending',
+  approved: 'approved',
+  rejected: 'rejected',
+  withdrawn: 'withdrawn',
+} as const;
+
+export interface BusinessListingReference {
+  /** @minLength 1 */
+  cityId: string;
+  /** @minLength 1 */
+  listingId: string;
+  /** @minLength 1 */
+  listingSource: string;
+  /**
+     * @minLength 1
+     * @maxLength 160
+     */
+  name: string;
+  /** @maxLength 240 */
+  address?: string;
+  /** @maxLength 120 */
+  neighborhood?: string;
+  latitude?: number;
+  longitude?: number;
+  sourceUrl?: string;
+}
+
+export interface BusinessProfile {
+  id: number;
+  slug: string;
+  cityId: string;
+  name: string;
+  /** @nullable */
+  address?: string | null;
+  /** @nullable */
+  neighborhood?: string | null;
+  /** @nullable */
+  latitude?: number | null;
+  /** @nullable */
+  longitude?: number | null;
+  /** @nullable */
+  sourceUrl?: string | null;
+  /** @nullable */
+  tagline?: string | null;
+  /** @nullable */
+  description?: string | null;
+  /** @nullable */
+  websiteUrl?: string | null;
+  /** @nullable */
+  phone?: string | null;
+  /** @nullable */
+  email?: string | null;
+  /** @nullable */
+  openingHours?: string | null;
+  /** @nullable */
+  logoUrl?: string | null;
+  /** @nullable */
+  coverUrl?: string | null;
+  isClaimed: boolean;
+  /** @nullable */
+  claimedAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface BusinessClaim {
+  id: number;
+  businessProfileId: number;
+  claimantId: string;
+  contactName: string;
+  contactEmail: string;
+  relationship: string;
+  /** @nullable */
+  evidenceUrl?: string | null;
+  /** @nullable */
+  message?: string | null;
+  status: ClaimStatus;
+  /** @nullable */
+  reviewNote?: string | null;
+  /** @nullable */
+  reviewedAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  profile: BusinessProfile;
+}
+
+export type BusinessClaimList = BusinessClaim[];
+
+export interface BusinessClaimInput {
+  listing: BusinessListingReference;
+  /**
+     * @minLength 2
+     * @maxLength 120
+     */
+  contactName: string;
+  contactEmail: string;
+  /**
+     * @minLength 2
+     * @maxLength 120
+     */
+  relationship: string;
+  evidenceUrl?: string;
+  /** @maxLength 1200 */
+  message?: string;
+}
+
+export interface BusinessProfileUpdate {
+  /**
+     * @minLength 1
+     * @maxLength 160
+     */
+  name?: string;
+  /** @maxLength 160 */
+  tagline?: string;
+  /** @maxLength 2400 */
+  description?: string;
+  websiteUrl?: string;
+  /** @maxLength 50 */
+  phone?: string;
+  email?: string;
+  /** @maxLength 600 */
+  openingHours?: string;
+  logoUrl?: string;
+  coverUrl?: string;
+}
+
+export interface Deal {
+  id: number;
+  businessProfileId: number;
+  businessName?: string;
+  businessSlug?: string;
+  cityId: string;
+  title: string;
+  description: string;
+  category: string;
+  offerText: string;
+  /** @nullable */
+  redemptionUrl?: string | null;
+  /** @nullable */
+  couponCode?: string | null;
+  /** @nullable */
+  imageUrl?: string | null;
+  validFrom: string;
+  validUntil: string;
+  status: DealStatus;
+  /** @nullable */
+  reviewNote?: string | null;
+  /** @nullable */
+  reviewedAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DealInput {
+  /**
+     * @minLength 3
+     * @maxLength 140
+     */
+  title: string;
+  /**
+     * @minLength 10
+     * @maxLength 1200
+     */
+  description: string;
+  /**
+     * @minLength 2
+     * @maxLength 80
+     */
+  category: string;
+  /**
+     * @minLength 2
+     * @maxLength 140
+     */
+  offerText: string;
+  redemptionUrl?: string;
+  /** @maxLength 80 */
+  couponCode?: string;
+  imageUrl?: string;
+  validFrom: string;
+  validUntil: string;
+}
+
+export type DealUpdateStatus = typeof DealUpdateStatus[keyof typeof DealUpdateStatus];
+
+
+export const DealUpdateStatus = {
+  withdrawn: 'withdrawn',
+} as const;
+
+export interface DealUpdate {
+  /**
+     * @minLength 3
+     * @maxLength 140
+     */
+  title?: string;
+  /**
+     * @minLength 10
+     * @maxLength 1200
+     */
+  description?: string;
+  /**
+     * @minLength 2
+     * @maxLength 80
+     */
+  category?: string;
+  /**
+     * @minLength 2
+     * @maxLength 140
+     */
+  offerText?: string;
+  redemptionUrl?: string;
+  /** @maxLength 80 */
+  couponCode?: string;
+  imageUrl?: string;
+  validFrom?: string;
+  validUntil?: string;
+  status?: DealUpdateStatus;
+}
+
+export type ModerationDecisionDecision = typeof ModerationDecisionDecision[keyof typeof ModerationDecisionDecision];
+
+
+export const ModerationDecisionDecision = {
+  approve: 'approve',
+  reject: 'reject',
+} as const;
+
+export interface ModerationDecision {
+  decision: ModerationDecisionDecision;
+  /** @maxLength 500 */
+  reviewNote?: string;
+}
+
+export type OwnedBusinessProfile = BusinessProfile & {
+  role: string;
+  deals: Deal[];
+};
+
+export type PublicBusinessProfile = BusinessProfile & {
+  deals: Deal[];
+};
+
 export interface HealthStatus {
   status: string;
 }
@@ -961,5 +1216,39 @@ export const GetCommunityModerationPostsStatus = {
   pending: 'pending',
   approved: 'approved',
   rejected: 'rejected',
+  all: 'all',
+} as const;
+
+export type GetBusinessClaimModerationParams = {
+status?: GetBusinessClaimModerationStatus;
+};
+
+export type GetBusinessClaimModerationStatus = typeof GetBusinessClaimModerationStatus[keyof typeof GetBusinessClaimModerationStatus];
+
+
+export const GetBusinessClaimModerationStatus = {
+  pending: 'pending',
+  approved: 'approved',
+  rejected: 'rejected',
+  all: 'all',
+} as const;
+
+export type GetDealsParams = {
+cityId: string;
+category?: string;
+};
+
+export type GetDealModerationParams = {
+status?: GetDealModerationStatus;
+};
+
+export type GetDealModerationStatus = typeof GetDealModerationStatus[keyof typeof GetDealModerationStatus];
+
+
+export const GetDealModerationStatus = {
+  pending: 'pending',
+  approved: 'approved',
+  rejected: 'rejected',
+  withdrawn: 'withdrawn',
   all: 'all',
 } as const;

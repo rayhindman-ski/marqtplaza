@@ -658,3 +658,619 @@ export const ToggleCommunityPostParticipationResponse = zod.object({
   "interestedByMe": zod.boolean(),
   "attendingByMe": zod.boolean()
 })
+
+
+/**
+ * @summary Get the signed-in user's business claims
+ */
+export const GetMyBusinessClaimsResponseItem = zod.object({
+  "id": zod.number(),
+  "businessProfileId": zod.number(),
+  "claimantId": zod.string(),
+  "contactName": zod.string(),
+  "contactEmail": zod.string(),
+  "relationship": zod.string(),
+  "evidenceUrl": zod.string().nullish(),
+  "message": zod.string().nullish(),
+  "status": zod.enum(['pending', 'approved', 'rejected']),
+  "reviewNote": zod.string().nullish(),
+  "reviewedAt": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string(),
+  "profile": zod.object({
+  "id": zod.number(),
+  "slug": zod.string(),
+  "cityId": zod.string(),
+  "name": zod.string(),
+  "address": zod.string().nullish(),
+  "neighborhood": zod.string().nullish(),
+  "latitude": zod.number().nullish(),
+  "longitude": zod.number().nullish(),
+  "sourceUrl": zod.string().nullish(),
+  "tagline": zod.string().nullish(),
+  "description": zod.string().nullish(),
+  "websiteUrl": zod.string().nullish(),
+  "phone": zod.string().nullish(),
+  "email": zod.string().nullish(),
+  "openingHours": zod.string().nullish(),
+  "logoUrl": zod.string().nullish(),
+  "coverUrl": zod.string().nullish(),
+  "isClaimed": zod.boolean(),
+  "claimedAt": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+})
+export const GetMyBusinessClaimsResponse = zod.array(GetMyBusinessClaimsResponseItem)
+
+
+/**
+ * @summary Submit a listing claim for editorial review
+ */
+
+
+
+export const createBusinessClaimBodyListingNameMax = 160;
+
+export const createBusinessClaimBodyListingAddressMax = 240;
+
+export const createBusinessClaimBodyListingNeighborhoodMax = 120;
+
+export const createBusinessClaimBodyContactNameMin = 2;
+export const createBusinessClaimBodyContactNameMax = 120;
+
+export const createBusinessClaimBodyRelationshipMin = 2;
+export const createBusinessClaimBodyRelationshipMax = 120;
+
+export const createBusinessClaimBodyMessageMax = 1200;
+
+
+
+export const CreateBusinessClaimBody = zod.object({
+  "listing": zod.object({
+  "cityId": zod.string().min(1),
+  "listingId": zod.string().min(1),
+  "listingSource": zod.string().min(1),
+  "name": zod.string().min(1).max(createBusinessClaimBodyListingNameMax),
+  "address": zod.string().max(createBusinessClaimBodyListingAddressMax).optional(),
+  "neighborhood": zod.string().max(createBusinessClaimBodyListingNeighborhoodMax).optional(),
+  "latitude": zod.number().optional(),
+  "longitude": zod.number().optional(),
+  "sourceUrl": zod.string().optional()
+}),
+  "contactName": zod.string().min(createBusinessClaimBodyContactNameMin).max(createBusinessClaimBodyContactNameMax),
+  "contactEmail": zod.string(),
+  "relationship": zod.string().min(createBusinessClaimBodyRelationshipMin).max(createBusinessClaimBodyRelationshipMax),
+  "evidenceUrl": zod.string().optional(),
+  "message": zod.string().max(createBusinessClaimBodyMessageMax).optional()
+})
+
+export const CreateBusinessClaimResponse = zod.object({
+  "id": zod.number(),
+  "businessProfileId": zod.number(),
+  "claimantId": zod.string(),
+  "contactName": zod.string(),
+  "contactEmail": zod.string(),
+  "relationship": zod.string(),
+  "evidenceUrl": zod.string().nullish(),
+  "message": zod.string().nullish(),
+  "status": zod.enum(['pending', 'approved', 'rejected']),
+  "reviewNote": zod.string().nullish(),
+  "reviewedAt": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string(),
+  "profile": zod.object({
+  "id": zod.number(),
+  "slug": zod.string(),
+  "cityId": zod.string(),
+  "name": zod.string(),
+  "address": zod.string().nullish(),
+  "neighborhood": zod.string().nullish(),
+  "latitude": zod.number().nullish(),
+  "longitude": zod.number().nullish(),
+  "sourceUrl": zod.string().nullish(),
+  "tagline": zod.string().nullish(),
+  "description": zod.string().nullish(),
+  "websiteUrl": zod.string().nullish(),
+  "phone": zod.string().nullish(),
+  "email": zod.string().nullish(),
+  "openingHours": zod.string().nullish(),
+  "logoUrl": zod.string().nullish(),
+  "coverUrl": zod.string().nullish(),
+  "isClaimed": zod.boolean(),
+  "claimedAt": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+})
+
+
+/**
+ * @summary Get business-claim moderation items
+ */
+export const getBusinessClaimModerationQueryStatusDefault = `pending`;
+
+export const GetBusinessClaimModerationQueryParams = zod.object({
+  "status": zod.enum(['pending', 'approved', 'rejected', 'all']).default(getBusinessClaimModerationQueryStatusDefault)
+})
+
+export const GetBusinessClaimModerationResponseItem = zod.object({
+  "id": zod.number(),
+  "businessProfileId": zod.number(),
+  "claimantId": zod.string(),
+  "contactName": zod.string(),
+  "contactEmail": zod.string(),
+  "relationship": zod.string(),
+  "evidenceUrl": zod.string().nullish(),
+  "message": zod.string().nullish(),
+  "status": zod.enum(['pending', 'approved', 'rejected']),
+  "reviewNote": zod.string().nullish(),
+  "reviewedAt": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string(),
+  "profile": zod.object({
+  "id": zod.number(),
+  "slug": zod.string(),
+  "cityId": zod.string(),
+  "name": zod.string(),
+  "address": zod.string().nullish(),
+  "neighborhood": zod.string().nullish(),
+  "latitude": zod.number().nullish(),
+  "longitude": zod.number().nullish(),
+  "sourceUrl": zod.string().nullish(),
+  "tagline": zod.string().nullish(),
+  "description": zod.string().nullish(),
+  "websiteUrl": zod.string().nullish(),
+  "phone": zod.string().nullish(),
+  "email": zod.string().nullish(),
+  "openingHours": zod.string().nullish(),
+  "logoUrl": zod.string().nullish(),
+  "coverUrl": zod.string().nullish(),
+  "isClaimed": zod.boolean(),
+  "claimedAt": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+})
+export const GetBusinessClaimModerationResponse = zod.array(GetBusinessClaimModerationResponseItem)
+
+
+/**
+ * @summary Approve or reject a business claim
+ */
+export const DecideBusinessClaimParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const decideBusinessClaimBodyReviewNoteMax = 500;
+
+
+
+export const DecideBusinessClaimBody = zod.object({
+  "decision": zod.enum(['approve', 'reject']),
+  "reviewNote": zod.string().max(decideBusinessClaimBodyReviewNoteMax).optional()
+})
+
+export const DecideBusinessClaimResponse = zod.object({
+  "id": zod.number(),
+  "businessProfileId": zod.number(),
+  "claimantId": zod.string(),
+  "contactName": zod.string(),
+  "contactEmail": zod.string(),
+  "relationship": zod.string(),
+  "evidenceUrl": zod.string().nullish(),
+  "message": zod.string().nullish(),
+  "status": zod.enum(['pending', 'approved', 'rejected']),
+  "reviewNote": zod.string().nullish(),
+  "reviewedAt": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string(),
+  "profile": zod.object({
+  "id": zod.number(),
+  "slug": zod.string(),
+  "cityId": zod.string(),
+  "name": zod.string(),
+  "address": zod.string().nullish(),
+  "neighborhood": zod.string().nullish(),
+  "latitude": zod.number().nullish(),
+  "longitude": zod.number().nullish(),
+  "sourceUrl": zod.string().nullish(),
+  "tagline": zod.string().nullish(),
+  "description": zod.string().nullish(),
+  "websiteUrl": zod.string().nullish(),
+  "phone": zod.string().nullish(),
+  "email": zod.string().nullish(),
+  "openingHours": zod.string().nullish(),
+  "logoUrl": zod.string().nullish(),
+  "coverUrl": zod.string().nullish(),
+  "isClaimed": zod.boolean(),
+  "claimedAt": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+})
+
+
+/**
+ * @summary Get profiles the signed-in user owns
+ */
+export const GetMyBusinessProfilesResponseItem = zod.object({
+  "id": zod.number(),
+  "slug": zod.string(),
+  "cityId": zod.string(),
+  "name": zod.string(),
+  "address": zod.string().nullish(),
+  "neighborhood": zod.string().nullish(),
+  "latitude": zod.number().nullish(),
+  "longitude": zod.number().nullish(),
+  "sourceUrl": zod.string().nullish(),
+  "tagline": zod.string().nullish(),
+  "description": zod.string().nullish(),
+  "websiteUrl": zod.string().nullish(),
+  "phone": zod.string().nullish(),
+  "email": zod.string().nullish(),
+  "openingHours": zod.string().nullish(),
+  "logoUrl": zod.string().nullish(),
+  "coverUrl": zod.string().nullish(),
+  "isClaimed": zod.boolean(),
+  "claimedAt": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+}).and(zod.object({
+  "role": zod.string(),
+  "deals": zod.array(zod.object({
+  "id": zod.number(),
+  "businessProfileId": zod.number(),
+  "businessName": zod.string().optional(),
+  "businessSlug": zod.string().optional(),
+  "cityId": zod.string(),
+  "title": zod.string(),
+  "description": zod.string(),
+  "category": zod.string(),
+  "offerText": zod.string(),
+  "redemptionUrl": zod.string().nullish(),
+  "couponCode": zod.string().nullish(),
+  "imageUrl": zod.string().nullish(),
+  "validFrom": zod.string(),
+  "validUntil": zod.string(),
+  "status": zod.enum(['pending', 'approved', 'rejected', 'withdrawn']),
+  "reviewNote": zod.string().nullish(),
+  "reviewedAt": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+}))
+}))
+export const GetMyBusinessProfilesResponse = zod.array(GetMyBusinessProfilesResponseItem)
+
+
+/**
+ * @summary Update an approved business profile
+ */
+export const UpdateBusinessProfileParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const updateBusinessProfileBodyNameMax = 160;
+
+export const updateBusinessProfileBodyTaglineMax = 160;
+
+export const updateBusinessProfileBodyDescriptionMax = 2400;
+
+export const updateBusinessProfileBodyPhoneMax = 50;
+
+export const updateBusinessProfileBodyOpeningHoursMax = 600;
+
+
+
+export const UpdateBusinessProfileBody = zod.object({
+  "name": zod.string().min(1).max(updateBusinessProfileBodyNameMax).optional(),
+  "tagline": zod.string().max(updateBusinessProfileBodyTaglineMax).optional(),
+  "description": zod.string().max(updateBusinessProfileBodyDescriptionMax).optional(),
+  "websiteUrl": zod.string().optional(),
+  "phone": zod.string().max(updateBusinessProfileBodyPhoneMax).optional(),
+  "email": zod.string().optional(),
+  "openingHours": zod.string().max(updateBusinessProfileBodyOpeningHoursMax).optional(),
+  "logoUrl": zod.string().optional(),
+  "coverUrl": zod.string().optional()
+})
+
+export const UpdateBusinessProfileResponse = zod.object({
+  "id": zod.number(),
+  "slug": zod.string(),
+  "cityId": zod.string(),
+  "name": zod.string(),
+  "address": zod.string().nullish(),
+  "neighborhood": zod.string().nullish(),
+  "latitude": zod.number().nullish(),
+  "longitude": zod.number().nullish(),
+  "sourceUrl": zod.string().nullish(),
+  "tagline": zod.string().nullish(),
+  "description": zod.string().nullish(),
+  "websiteUrl": zod.string().nullish(),
+  "phone": zod.string().nullish(),
+  "email": zod.string().nullish(),
+  "openingHours": zod.string().nullish(),
+  "logoUrl": zod.string().nullish(),
+  "coverUrl": zod.string().nullish(),
+  "isClaimed": zod.boolean(),
+  "claimedAt": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+
+
+/**
+ * @summary Submit a deal for the owner's approved business
+ */
+export const CreateBusinessDealParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const createBusinessDealBodyTitleMin = 3;
+export const createBusinessDealBodyTitleMax = 140;
+
+export const createBusinessDealBodyDescriptionMin = 10;
+export const createBusinessDealBodyDescriptionMax = 1200;
+
+export const createBusinessDealBodyCategoryMin = 2;
+export const createBusinessDealBodyCategoryMax = 80;
+
+export const createBusinessDealBodyOfferTextMin = 2;
+export const createBusinessDealBodyOfferTextMax = 140;
+
+export const createBusinessDealBodyCouponCodeMax = 80;
+
+
+
+export const CreateBusinessDealBody = zod.object({
+  "title": zod.string().min(createBusinessDealBodyTitleMin).max(createBusinessDealBodyTitleMax),
+  "description": zod.string().min(createBusinessDealBodyDescriptionMin).max(createBusinessDealBodyDescriptionMax),
+  "category": zod.string().min(createBusinessDealBodyCategoryMin).max(createBusinessDealBodyCategoryMax),
+  "offerText": zod.string().min(createBusinessDealBodyOfferTextMin).max(createBusinessDealBodyOfferTextMax),
+  "redemptionUrl": zod.string().optional(),
+  "couponCode": zod.string().max(createBusinessDealBodyCouponCodeMax).optional(),
+  "imageUrl": zod.string().optional(),
+  "validFrom": zod.coerce.date(),
+  "validUntil": zod.coerce.date()
+})
+
+export const CreateBusinessDealResponse = zod.object({
+  "id": zod.number(),
+  "businessProfileId": zod.number(),
+  "businessName": zod.string().optional(),
+  "businessSlug": zod.string().optional(),
+  "cityId": zod.string(),
+  "title": zod.string(),
+  "description": zod.string(),
+  "category": zod.string(),
+  "offerText": zod.string(),
+  "redemptionUrl": zod.string().nullish(),
+  "couponCode": zod.string().nullish(),
+  "imageUrl": zod.string().nullish(),
+  "validFrom": zod.string(),
+  "validUntil": zod.string(),
+  "status": zod.enum(['pending', 'approved', 'rejected', 'withdrawn']),
+  "reviewNote": zod.string().nullish(),
+  "reviewedAt": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+
+
+/**
+ * @summary Update or withdraw an owned deal
+ */
+export const UpdateBusinessDealParams = zod.object({
+  "id": zod.coerce.number(),
+  "dealId": zod.coerce.number()
+})
+
+export const updateBusinessDealBodyTitleMin = 3;
+export const updateBusinessDealBodyTitleMax = 140;
+
+export const updateBusinessDealBodyDescriptionMin = 10;
+export const updateBusinessDealBodyDescriptionMax = 1200;
+
+export const updateBusinessDealBodyCategoryMin = 2;
+export const updateBusinessDealBodyCategoryMax = 80;
+
+export const updateBusinessDealBodyOfferTextMin = 2;
+export const updateBusinessDealBodyOfferTextMax = 140;
+
+export const updateBusinessDealBodyCouponCodeMax = 80;
+
+
+
+export const UpdateBusinessDealBody = zod.object({
+  "title": zod.string().min(updateBusinessDealBodyTitleMin).max(updateBusinessDealBodyTitleMax).optional(),
+  "description": zod.string().min(updateBusinessDealBodyDescriptionMin).max(updateBusinessDealBodyDescriptionMax).optional(),
+  "category": zod.string().min(updateBusinessDealBodyCategoryMin).max(updateBusinessDealBodyCategoryMax).optional(),
+  "offerText": zod.string().min(updateBusinessDealBodyOfferTextMin).max(updateBusinessDealBodyOfferTextMax).optional(),
+  "redemptionUrl": zod.string().optional(),
+  "couponCode": zod.string().max(updateBusinessDealBodyCouponCodeMax).optional(),
+  "imageUrl": zod.string().optional(),
+  "validFrom": zod.coerce.date().optional(),
+  "validUntil": zod.coerce.date().optional(),
+  "status": zod.enum(['withdrawn']).optional()
+})
+
+export const UpdateBusinessDealResponse = zod.object({
+  "id": zod.number(),
+  "businessProfileId": zod.number(),
+  "businessName": zod.string().optional(),
+  "businessSlug": zod.string().optional(),
+  "cityId": zod.string(),
+  "title": zod.string(),
+  "description": zod.string(),
+  "category": zod.string(),
+  "offerText": zod.string(),
+  "redemptionUrl": zod.string().nullish(),
+  "couponCode": zod.string().nullish(),
+  "imageUrl": zod.string().nullish(),
+  "validFrom": zod.string(),
+  "validUntil": zod.string(),
+  "status": zod.enum(['pending', 'approved', 'rejected', 'withdrawn']),
+  "reviewNote": zod.string().nullish(),
+  "reviewedAt": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+
+
+/**
+ * @summary Get one public claimed business profile
+ */
+export const GetBusinessProfileParams = zod.object({
+  "slug": zod.coerce.string()
+})
+
+export const GetBusinessProfileResponse = zod.object({
+  "id": zod.number(),
+  "slug": zod.string(),
+  "cityId": zod.string(),
+  "name": zod.string(),
+  "address": zod.string().nullish(),
+  "neighborhood": zod.string().nullish(),
+  "latitude": zod.number().nullish(),
+  "longitude": zod.number().nullish(),
+  "sourceUrl": zod.string().nullish(),
+  "tagline": zod.string().nullish(),
+  "description": zod.string().nullish(),
+  "websiteUrl": zod.string().nullish(),
+  "phone": zod.string().nullish(),
+  "email": zod.string().nullish(),
+  "openingHours": zod.string().nullish(),
+  "logoUrl": zod.string().nullish(),
+  "coverUrl": zod.string().nullish(),
+  "isClaimed": zod.boolean(),
+  "claimedAt": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+}).and(zod.object({
+  "deals": zod.array(zod.object({
+  "id": zod.number(),
+  "businessProfileId": zod.number(),
+  "businessName": zod.string().optional(),
+  "businessSlug": zod.string().optional(),
+  "cityId": zod.string(),
+  "title": zod.string(),
+  "description": zod.string(),
+  "category": zod.string(),
+  "offerText": zod.string(),
+  "redemptionUrl": zod.string().nullish(),
+  "couponCode": zod.string().nullish(),
+  "imageUrl": zod.string().nullish(),
+  "validFrom": zod.string(),
+  "validUntil": zod.string(),
+  "status": zod.enum(['pending', 'approved', 'rejected', 'withdrawn']),
+  "reviewNote": zod.string().nullish(),
+  "reviewedAt": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+}))
+}))
+
+
+/**
+ * @summary Get active approved deals
+ */
+export const GetDealsQueryParams = zod.object({
+  "cityId": zod.coerce.string(),
+  "category": zod.coerce.string().optional()
+})
+
+export const GetDealsResponseItem = zod.object({
+  "id": zod.number(),
+  "businessProfileId": zod.number(),
+  "businessName": zod.string().optional(),
+  "businessSlug": zod.string().optional(),
+  "cityId": zod.string(),
+  "title": zod.string(),
+  "description": zod.string(),
+  "category": zod.string(),
+  "offerText": zod.string(),
+  "redemptionUrl": zod.string().nullish(),
+  "couponCode": zod.string().nullish(),
+  "imageUrl": zod.string().nullish(),
+  "validFrom": zod.string(),
+  "validUntil": zod.string(),
+  "status": zod.enum(['pending', 'approved', 'rejected', 'withdrawn']),
+  "reviewNote": zod.string().nullish(),
+  "reviewedAt": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+export const GetDealsResponse = zod.array(GetDealsResponseItem)
+
+
+/**
+ * @summary Get deal moderation items
+ */
+export const getDealModerationQueryStatusDefault = `pending`;
+
+export const GetDealModerationQueryParams = zod.object({
+  "status": zod.enum(['pending', 'approved', 'rejected', 'withdrawn', 'all']).default(getDealModerationQueryStatusDefault)
+})
+
+export const GetDealModerationResponseItem = zod.object({
+  "id": zod.number(),
+  "businessProfileId": zod.number(),
+  "businessName": zod.string().optional(),
+  "businessSlug": zod.string().optional(),
+  "cityId": zod.string(),
+  "title": zod.string(),
+  "description": zod.string(),
+  "category": zod.string(),
+  "offerText": zod.string(),
+  "redemptionUrl": zod.string().nullish(),
+  "couponCode": zod.string().nullish(),
+  "imageUrl": zod.string().nullish(),
+  "validFrom": zod.string(),
+  "validUntil": zod.string(),
+  "status": zod.enum(['pending', 'approved', 'rejected', 'withdrawn']),
+  "reviewNote": zod.string().nullish(),
+  "reviewedAt": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+export const GetDealModerationResponse = zod.array(GetDealModerationResponseItem)
+
+
+/**
+ * @summary Approve or reject a submitted deal
+ */
+export const DecideBusinessDealParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const decideBusinessDealBodyReviewNoteMax = 500;
+
+
+
+export const DecideBusinessDealBody = zod.object({
+  "decision": zod.enum(['approve', 'reject']),
+  "reviewNote": zod.string().max(decideBusinessDealBodyReviewNoteMax).optional()
+})
+
+export const DecideBusinessDealResponse = zod.object({
+  "id": zod.number(),
+  "businessProfileId": zod.number(),
+  "businessName": zod.string().optional(),
+  "businessSlug": zod.string().optional(),
+  "cityId": zod.string(),
+  "title": zod.string(),
+  "description": zod.string(),
+  "category": zod.string(),
+  "offerText": zod.string(),
+  "redemptionUrl": zod.string().nullish(),
+  "couponCode": zod.string().nullish(),
+  "imageUrl": zod.string().nullish(),
+  "validFrom": zod.string(),
+  "validUntil": zod.string(),
+  "status": zod.enum(['pending', 'approved', 'rejected', 'withdrawn']),
+  "reviewNote": zod.string().nullish(),
+  "reviewedAt": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+// End of generated contract schemas.

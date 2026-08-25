@@ -10,7 +10,7 @@ import {
   Globe2, Bookmark, BookmarkCheck, X, ChevronDown, ChevronUp,
   ScanSearch, RefreshCw, WifiOff, Radio, MapPinned,
   Landmark, Route as RouteIcon, Baby, Building2, Coffee, Gamepad2, HandHeart, Waves, ShoppingBag, ExternalLink, AlertCircle,
-  CloudSun, Cloud, CloudFog, CloudRain, CloudSnow, Sun, Wind, Droplets
+  CloudSun, Cloud, CloudFog, CloudRain, CloudSnow, Sun, Wind, Droplets, Tag, Store
 } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -46,6 +46,11 @@ import NewsFeedView from './pages/NewsFeedView';
 import NewsArticleView from './pages/NewsArticleView';
 import CommunityFeedView from './pages/CommunityFeedView';
 import CommunityModerationView from './pages/CommunityModerationView';
+import DealsView from './pages/DealsView';
+import BusinessProfileView from './pages/BusinessProfileView';
+import BusinessClaimView from './pages/BusinessClaimView';
+import MyBusinessWorkspace from './pages/MyBusinessWorkspace';
+import BusinessModerationView from './pages/BusinessModerationView';
 import { useEditorAccess } from './lib/editorAccess';
 import {
   getLocationName,
@@ -448,6 +453,20 @@ function ReferenceCategoryNav({
         >
           <HandHeart className="h-4 w-4" />
           {language === 'nl' ? 'Buurtplein' : 'Community'}
+        </Link>
+        <Link
+          href="/deals"
+          className="inline-flex items-center gap-1.5 text-sm font-extrabold text-foreground transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+        >
+          <Tag className="h-4 w-4" />
+          Deals
+        </Link>
+        <Link
+          href="/mijn-bedrijf"
+          className="inline-flex items-center gap-1.5 text-sm font-extrabold text-foreground transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+        >
+          <Store className="h-4 w-4" />
+          Mijn Bedrijf
         </Link>
         <Search className="h-5 w-5 text-foreground" aria-label={t.explore} />
       </div>
@@ -985,22 +1004,33 @@ function MarkerCard({
             <DetailIcon className="w-3.5 h-3.5 opacity-70" />
             {copy.details}
           </div>
-          <div className="mt-2 flex items-center justify-between gap-2">
+          <div className="mt-3 flex items-center justify-between gap-2 border-t border-border/40 pt-3">
             <div className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
               <MapPinned className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
-              <span>{marker.address ?? `Lat ${marker.lat.toFixed(5)} · Lng ${marker.lng.toFixed(5)}`}</span>
+              <span className="truncate max-w-[200px]">{marker.address ?? `Lat ${marker.lat.toFixed(5)} · Lng ${marker.lng.toFixed(5)}`}</span>
             </div>
-            {marker.sourceUrl && (
-              <a
-                href={marker.sourceUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={e => e.stopPropagation()}
-                className="flex items-center gap-0.5 text-[11px] font-semibold text-primary hover:underline shrink-0"
-              >
-                {marker.officialUrl ? t.officialWebsite : (language === 'nl' ? 'Bron' : 'Source')} <ExternalLink className="h-2.5 w-2.5" />
-              </a>
-            )}
+            <div className="flex items-center gap-3 shrink-0">
+              {(marker.category === 'Businesses' || marker.category === 'Food & Drink') && (
+                <Link
+                  href={`/bedrijf-claim?listingId=${marker.id}&cityId=dhg&listingSource=${marker.source || 'google_maps'}&name=${encodeURIComponent(marker.name)}&address=${encodeURIComponent(marker.address || '')}`}
+                  className="flex items-center gap-1 text-[11px] font-bold text-primary hover:text-primary/80 transition-colors"
+                  onClick={e => e.stopPropagation()}
+                >
+                  <Store className="h-3 w-3" /> Eigenaar?
+                </Link>
+              )}
+              {marker.sourceUrl && (
+                <a
+                  href={marker.sourceUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={e => e.stopPropagation()}
+                  className="flex items-center gap-0.5 text-[11px] font-semibold text-secondary hover:underline"
+                >
+                  {marker.officialUrl ? t.officialWebsite : (language === 'nl' ? 'Bron' : 'Source')} <ExternalLink className="h-2.5 w-2.5" />
+                </a>
+              )}
+            </div>
           </div>
           </>}
         </div>
@@ -2141,6 +2171,11 @@ export default function App() {
           <Route path="/sign-up/*?" component={SignUpPage} />
           <Route path="/nieuws" component={NewsFeedView} />
           <Route path="/nieuws/:id" component={NewsArticleView} />
+          <Route path="/deals" component={DealsView} />
+          <Route path="/bedrijf/:slug" component={BusinessProfileView} />
+          <Route path="/bedrijf-claim" component={BusinessClaimView} />
+          <Route path="/mijn-bedrijf" component={MyBusinessWorkspace} />
+          <Route path="/redactie/bedrijven" component={BusinessModerationView} />
           <Route>
             <div className="min-h-screen flex items-center justify-center bg-background text-foreground">
               <div className="text-center">

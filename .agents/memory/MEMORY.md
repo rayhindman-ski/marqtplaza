@@ -12,3 +12,4 @@
 - [Events-only first map](events-first-map.md) — event discovery must never fall back to generic attractions; show verified upcoming events or an explicit empty state.
 - [Brand logo asset](brand-logo-asset.md) — the primary PNG has transparent padding; compact headers need a shared cropped wrapper rather than raw image sizing.
 - [Community contribution privacy](community-privacy.md) — the village-square layer uses moderated local messages, not public profiles or private messaging.
+- [Business claim integrity](business-claim-integrity.md) — claims must resolve current listings server-side and preserve one pending/approved owner path transactionally.

@@ -1,0 +1,174 @@
+import {
+  boolean,
+  date,
+  doublePrecision,
+  index,
+  integer,
+  pgTable,
+  serial,
+  text,
+  timestamp,
+  uniqueIndex,
+} from "drizzle-orm/pg-core";
+import { createInsertSchema } from "drizzle-zod";
+import { sql } from "drizzle-orm";
+import { z } from "zod/v4";
+
+export const businessProfilesTable = pgTable(
+  "business_profiles",
+  {
+    id: serial("id").primaryKey(),
+    slug: text("slug").notNull(),
+    cityId: text("city_id").notNull(),
+    listingSource: text("listing_source").notNull(),
+    listingId: text("listing_id").notNull(),
+    name: text("name").notNull(),
+    address: text("address"),
+    neighborhood: text("neighborhood"),
+    latitude: doublePrecision("latitude"),
+    longitude: doublePrecision("longitude"),
+    sourceUrl: text("source_url"),
+    tagline: text("tagline"),
+    description: text("description"),
+    websiteUrl: text("website_url"),
+    phone: text("phone"),
+    email: text("email"),
+    openingHours: text("opening_hours"),
+    logoUrl: text("logo_url"),
+    coverUrl: text("cover_url"),
+    isClaimed: boolean("is_claimed").notNull().default(false),
+    claimedAt: timestamp("claimed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (table) => [
+    uniqueIndex("business_profiles_slug_unique").on(table.slug),
+    uniqueIndex("business_profiles_city_source_listing_unique").on(
+      table.cityId,
+      table.listingSource,
+      table.listingId,
+    ),
+    index("business_profiles_city_claimed_idx").on(table.cityId, table.isClaimed),
+  ],
+);
+
+export const businessClaimsTable = pgTable(
+  "business_claims",
+  {
+    id: serial("id").primaryKey(),
+    businessProfileId: integer("business_profile_id")
+      .notNull()
+      .references(() => businessProfilesTable.id, { onDelete: "cascade" }),
+    claimantId: text("claimant_id").notNull(),
+    contactName: text("contact_name").notNull(),
+    contactEmail: text("contact_email").notNull(),
+    relationship: text("relationship").notNull(),
+    evidenceUrl: text("evidence_url"),
+    message: text("message"),
+    status: text("status").notNull().default("pending"),
+    reviewNote: text("review_note"),
+    reviewedBy: text("reviewed_by"),
+    reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (table) => [
+    index("business_claims_claimant_idx").on(table.claimantId, table.createdAt),
+    index("business_claims_profile_status_idx").on(
+      table.businessProfileId,
+      table.status,
+    ),
+    uniqueIndex("business_claims_one_pending_per_profile_unique")
+      .on(table.businessProfileId)
+      .where(sql`${table.status} = 'pending'`),
+  ],
+);
+
+export const businessMembersTable = pgTable(
+  "business_members",
+  {
+    id: serial("id").primaryKey(),
+    businessProfileId: integer("business_profile_id")
+      .notNull()
+      .references(() => businessProfilesTable.id, { onDelete: "cascade" }),
+    userId: text("user_id").notNull(),
+    role: text("role").notNull().default("owner"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("business_members_profile_user_unique").on(
+      table.businessProfileId,
+      table.userId,
+    ),
+    index("business_members_user_idx").on(table.userId),
+  ],
+);
+
+export const dealsTable = pgTable(
+  "business_deals",
+  {
+    id: serial("id").primaryKey(),
+    businessProfileId: integer("business_profile_id")
+      .notNull()
+      .references(() => businessProfilesTable.id, { onDelete: "cascade" }),
+    cityId: text("city_id").notNull(),
+    title: text("title").notNull(),
+    description: text("description").notNull(),
+    category: text("category").notNull(),
+    offerText: text("offer_text").notNull(),
+    redemptionUrl: text("redemption_url"),
+    couponCode: text("coupon_code"),
+    imageUrl: text("image_url"),
+    validFrom: date("valid_from", { mode: "string" }).notNull(),
+    validUntil: date("valid_until", { mode: "string" }).notNull(),
+    status: text("status").notNull().default("pending"),
+    reviewNote: text("review_note"),
+    reviewedBy: text("reviewed_by"),
+    reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (table) => [
+    index("business_deals_city_status_idx").on(table.cityId, table.status),
+    index("business_deals_profile_idx").on(table.businessProfileId),
+    index("business_deals_validity_idx").on(table.validFrom, table.validUntil),
+  ],
+);
+
+export const insertBusinessProfileSchema = createInsertSchema(businessProfilesTable).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export const insertBusinessClaimSchema = createInsertSchema(businessClaimsTable).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export const insertBusinessMemberSchema = createInsertSchema(businessMembersTable).omit({
+  id: true,
+  createdAt: true,
+});
+export const insertDealSchema = createInsertSchema(dealsTable).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type BusinessProfile = typeof businessProfilesTable.$inferSelect;
+export type BusinessClaim = typeof businessClaimsTable.$inferSelect;
+export type BusinessMember = typeof businessMembersTable.$inferSelect;
+export type Deal = typeof dealsTable.$inferSelect;
+export type InsertBusinessProfile = z.infer<typeof insertBusinessProfileSchema>;
+export type InsertBusinessClaim = z.infer<typeof insertBusinessClaimSchema>;
+export type InsertBusinessMember = z.infer<typeof insertBusinessMemberSchema>;
+export type InsertDeal = z.infer<typeof insertDealSchema>;

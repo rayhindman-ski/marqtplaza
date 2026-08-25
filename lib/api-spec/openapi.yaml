@@ -26,6 +26,8 @@ tags:
     description: City weather forecast
   - name: community
     description: Resident and organisation community posts
+  - name: businesses
+    description: Business claims, profiles, and local deals
 paths:
   /healthz:
     get:
@@ -500,8 +502,659 @@ paths:
         "404":
           description: Approved active post not found
 
+  /business-claims:
+    get:
+      operationId: getMyBusinessClaims
+      tags: [businesses]
+      summary: Get the signed-in user's business claims
+      responses:
+        "200":
+          description: Claims created by the signed-in user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BusinessClaimList"
+        "401":
+          description: Authentication is required
+    post:
+      operationId: createBusinessClaim
+      tags: [businesses]
+      summary: Submit a listing claim for editorial review
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BusinessClaimInput"
+      responses:
+        "201":
+          description: Submitted claim
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BusinessClaim"
+        "400":
+          description: Invalid claim
+        "401":
+          description: Authentication is required
+        "409":
+          description: A claim is already pending or the listing is claimed
+
+  /business-claims/moderation:
+    get:
+      operationId: getBusinessClaimModeration
+      tags: [businesses]
+      summary: Get business-claim moderation items
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [pending, approved, rejected, all]
+            default: pending
+      responses:
+        "200":
+          description: Claim moderation queue
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BusinessClaimList"
+        "401":
+          description: Authentication is required
+        "403":
+          description: An editor role is required
+
+  /business-claims/moderation/{id}:
+    patch:
+      operationId: decideBusinessClaim
+      tags: [businesses]
+      summary: Approve or reject a business claim
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: number
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ModerationDecision"
+      responses:
+        "200":
+          description: Updated claim
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BusinessClaim"
+        "400":
+          description: Invalid decision
+        "401":
+          description: Authentication is required
+        "403":
+          description: An editor role is required
+        "404":
+          description: Claim not found
+        "409":
+          description: Claim has already been decided
+
+  /business-profiles/mine:
+    get:
+      operationId: getMyBusinessProfiles
+      tags: [businesses]
+      summary: Get profiles the signed-in user owns
+      responses:
+        "200":
+          description: Owned business profiles and deals
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/OwnedBusinessProfile"
+        "401":
+          description: Authentication is required
+
+  /business-profiles/{id}:
+    patch:
+      operationId: updateBusinessProfile
+      tags: [businesses]
+      summary: Update an approved business profile
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: number
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BusinessProfileUpdate"
+      responses:
+        "200":
+          description: Updated business profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BusinessProfile"
+        "400":
+          description: Invalid update
+        "401":
+          description: Authentication is required
+        "403":
+          description: Owner access is required
+        "404":
+          description: Profile not found
+
+  /business-profiles/{id}/deals:
+    post:
+      operationId: createBusinessDeal
+      tags: [businesses]
+      summary: Submit a deal for the owner's approved business
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: number
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DealInput"
+      responses:
+        "201":
+          description: Submitted deal
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Deal"
+        "400":
+          description: Invalid deal
+        "401":
+          description: Authentication is required
+        "403":
+          description: Owner access is required
+        "404":
+          description: Profile not found
+
+  /business-profiles/{id}/deals/{dealId}:
+    patch:
+      operationId: updateBusinessDeal
+      tags: [businesses]
+      summary: Update or withdraw an owned deal
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: number
+        - name: dealId
+          in: path
+          required: true
+          schema:
+            type: number
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DealUpdate"
+      responses:
+        "200":
+          description: Updated deal
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Deal"
+        "400":
+          description: Invalid update
+        "401":
+          description: Authentication is required
+        "403":
+          description: Owner access is required
+        "404":
+          description: Deal not found
+
+  /business-profiles/public/{slug}:
+    get:
+      operationId: getBusinessProfile
+      tags: [businesses]
+      summary: Get one public claimed business profile
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Public profile and active deals
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublicBusinessProfile"
+        "404":
+          description: Claimed profile not found
+
+  /deals:
+    get:
+      operationId: getDeals
+      tags: [businesses]
+      summary: Get active approved deals
+      parameters:
+        - name: cityId
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: category
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Active local deals
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Deal"
+        "400":
+          description: Invalid city
+
+  /deals/moderation:
+    get:
+      operationId: getDealModeration
+      tags: [businesses]
+      summary: Get deal moderation items
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [pending, approved, rejected, withdrawn, all]
+            default: pending
+      responses:
+        "200":
+          description: Deal moderation queue
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Deal"
+        "401":
+          description: Authentication is required
+        "403":
+          description: An editor role is required
+
+  /deals/moderation/{id}:
+    patch:
+      operationId: decideBusinessDeal
+      tags: [businesses]
+      summary: Approve or reject a submitted deal
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: number
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ModerationDecision"
+      responses:
+        "200":
+          description: Updated deal
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Deal"
+        "400":
+          description: Invalid decision
+        "401":
+          description: Authentication is required
+        "403":
+          description: An editor role is required
+        "404":
+          description: Deal not found
+        "409":
+          description: Deal has already been decided
+
 components:
   schemas:
+    ClaimStatus:
+      type: string
+      enum: [pending, approved, rejected]
+
+    DealStatus:
+      type: string
+      enum: [pending, approved, rejected, withdrawn]
+
+    BusinessListingReference:
+      type: object
+      required: [cityId, listingId, listingSource, name]
+      properties:
+        cityId:
+          type: string
+          minLength: 1
+        listingId:
+          type: string
+          minLength: 1
+        listingSource:
+          type: string
+          minLength: 1
+        name:
+          type: string
+          minLength: 1
+          maxLength: 160
+        address:
+          type: string
+          maxLength: 240
+        neighborhood:
+          type: string
+          maxLength: 120
+        latitude:
+          type: number
+        longitude:
+          type: number
+        sourceUrl:
+          type: string
+
+    BusinessProfile:
+      type: object
+      required: [id, slug, cityId, name, isClaimed, createdAt, updatedAt]
+      properties:
+        id:
+          type: number
+        slug:
+          type: string
+        cityId:
+          type: string
+        name:
+          type: string
+        address:
+          type: ["string", "null"]
+        neighborhood:
+          type: ["string", "null"]
+        latitude:
+          type: ["number", "null"]
+        longitude:
+          type: ["number", "null"]
+        sourceUrl:
+          type: ["string", "null"]
+        tagline:
+          type: ["string", "null"]
+        description:
+          type: ["string", "null"]
+        websiteUrl:
+          type: ["string", "null"]
+        phone:
+          type: ["string", "null"]
+        email:
+          type: ["string", "null"]
+        openingHours:
+          type: ["string", "null"]
+        logoUrl:
+          type: ["string", "null"]
+        coverUrl:
+          type: ["string", "null"]
+        isClaimed:
+          type: boolean
+        claimedAt:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+
+    BusinessClaim:
+      type: object
+      required: [id, businessProfileId, claimantId, contactName, contactEmail, relationship, status, createdAt, updatedAt, profile]
+      properties:
+        id:
+          type: number
+        businessProfileId:
+          type: number
+        claimantId:
+          type: string
+        contactName:
+          type: string
+        contactEmail:
+          type: string
+        relationship:
+          type: string
+        evidenceUrl:
+          type: ["string", "null"]
+        message:
+          type: ["string", "null"]
+        status:
+          $ref: "#/components/schemas/ClaimStatus"
+        reviewNote:
+          type: ["string", "null"]
+        reviewedAt:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+        profile:
+          $ref: "#/components/schemas/BusinessProfile"
+
+    BusinessClaimList:
+      type: array
+      items:
+        $ref: "#/components/schemas/BusinessClaim"
+
+    BusinessClaimInput:
+      type: object
+      required: [listing, contactName, contactEmail, relationship]
+      properties:
+        listing:
+          $ref: "#/components/schemas/BusinessListingReference"
+        contactName:
+          type: string
+          minLength: 2
+          maxLength: 120
+        contactEmail:
+          type: string
+        relationship:
+          type: string
+          minLength: 2
+          maxLength: 120
+        evidenceUrl:
+          type: string
+        message:
+          type: string
+          maxLength: 1200
+
+    BusinessProfileUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 160
+        tagline:
+          type: string
+          maxLength: 160
+        description:
+          type: string
+          maxLength: 2400
+        websiteUrl:
+          type: string
+        phone:
+          type: string
+          maxLength: 50
+        email:
+          type: string
+        openingHours:
+          type: string
+          maxLength: 600
+        logoUrl:
+          type: string
+        coverUrl:
+          type: string
+
+    Deal:
+      type: object
+      required: [id, businessProfileId, cityId, title, description, category, offerText, validFrom, validUntil, status, createdAt, updatedAt]
+      properties:
+        id:
+          type: number
+        businessProfileId:
+          type: number
+        businessName:
+          type: string
+        businessSlug:
+          type: string
+        cityId:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        category:
+          type: string
+        offerText:
+          type: string
+        redemptionUrl:
+          type: ["string", "null"]
+        couponCode:
+          type: ["string", "null"]
+        imageUrl:
+          type: ["string", "null"]
+        validFrom:
+          type: string
+        validUntil:
+          type: string
+        status:
+          $ref: "#/components/schemas/DealStatus"
+        reviewNote:
+          type: ["string", "null"]
+        reviewedAt:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+
+    DealInput:
+      type: object
+      required: [title, description, category, offerText, validFrom, validUntil]
+      properties:
+        title:
+          type: string
+          minLength: 3
+          maxLength: 140
+        description:
+          type: string
+          minLength: 10
+          maxLength: 1200
+        category:
+          type: string
+          minLength: 2
+          maxLength: 80
+        offerText:
+          type: string
+          minLength: 2
+          maxLength: 140
+        redemptionUrl:
+          type: string
+        couponCode:
+          type: string
+          maxLength: 80
+        imageUrl:
+          type: string
+        validFrom:
+          type: string
+          format: date
+        validUntil:
+          type: string
+          format: date
+
+    DealUpdate:
+      type: object
+      properties:
+        title:
+          type: string
+          minLength: 3
+          maxLength: 140
+        description:
+          type: string
+          minLength: 10
+          maxLength: 1200
+        category:
+          type: string
+          minLength: 2
+          maxLength: 80
+        offerText:
+          type: string
+          minLength: 2
+          maxLength: 140
+        redemptionUrl:
+          type: string
+        couponCode:
+          type: string
+          maxLength: 80
+        imageUrl:
+          type: string
+        validFrom:
+          type: string
+          format: date
+        validUntil:
+          type: string
+          format: date
+        status:
+          type: string
+          enum: [withdrawn]
+
+    ModerationDecision:
+      type: object
+      required: [decision]
+      properties:
+        decision:
+          type: string
+          enum: [approve, reject]
+        reviewNote:
+          type: string
+          maxLength: 500
+
+    OwnedBusinessProfile:
+      allOf:
+        - $ref: "#/components/schemas/BusinessProfile"
+        - type: object
+          required: [role, deals]
+          properties:
+            role:
+              type: string
+            deals:
+              type: array
+              items:
+                $ref: "#/components/schemas/Deal"
+
+    PublicBusinessProfile:
+      allOf:
+        - $ref: "#/components/schemas/BusinessProfile"
+        - type: object
+          required: [deals]
+          properties:
+            deals:
+              type: array
+              items:
+                $ref: "#/components/schemas/Deal"
+
     HealthStatus:
       type: object
       properties:

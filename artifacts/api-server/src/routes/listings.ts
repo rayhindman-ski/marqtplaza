@@ -55,6 +55,19 @@ type Listing = {
   nextReviewAt?: string;
 };
 
+export type ClaimableBusinessListing = Pick<
+  Listing,
+  | "id"
+  | "locationId"
+  | "name"
+  | "address"
+  | "neighborhood"
+  | "lat"
+  | "lng"
+  | "sourceUrl"
+  | "source"
+>;
+
 function sourceNameFromUrl(sourceUrl?: string): string | undefined {
   if (!sourceUrl) return undefined;
   try {
@@ -506,6 +519,41 @@ async function fetchGooglePlaces(
   } finally {
     googlePlacesRequests.delete(cacheKey);
   }
+}
+
+export async function resolveClaimableBusinessListing(
+  cityId: string,
+  listingSource: string,
+  listingId: string,
+): Promise<ClaimableBusinessListing | null> {
+  if (cityId !== "dhg") return null;
+  const bounds = CITY_BOUNDS[cityId];
+  if (!bounds) return null;
+
+  if (listingSource === "google_maps") {
+    const results = await Promise.allSettled([
+      fetchGooglePlaces(bounds, "businesses"),
+      fetchGooglePlaces(bounds, "food-drink"),
+    ]);
+    const listings = results.flatMap((result) =>
+      result.status === "fulfilled" ? result.value : [],
+    );
+    if (listings.length === 0) {
+      throw new Error("Google Places did not return claimable business listings.");
+    }
+    return listings.find((listing) => listing.id === listingId) ?? null;
+  }
+
+  if (listingSource === "openstreetmap") {
+    const elements = await fetchCityListings(bounds);
+    const listings = [
+      ...fetchOpenStreetMapBusinesses(elements, "businesses", bounds),
+      ...fetchOpenStreetMapBusinesses(elements, "food-drink", bounds),
+    ];
+    return listings.find((listing) => listing.id === listingId) ?? null;
+  }
+
+  return null;
 }
 
 async function collectGooglePlaces(

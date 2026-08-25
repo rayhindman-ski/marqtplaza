@@ -7,6 +7,7 @@ import newsRouter from "./news";
 import socialMapReviewRouter from "./social-map-review";
 import weatherRouter from "./weather";
 import communityPostsRouter from "./community-posts";
+import businessesRouter from "./businesses";
 
 const router: IRouter = Router();
 
@@ -18,5 +19,6 @@ router.use(newsRouter);
 router.use(socialMapReviewRouter);
 router.use(weatherRouter);
 router.use(communityPostsRouter);
+router.use(businessesRouter);
 
 export default router;

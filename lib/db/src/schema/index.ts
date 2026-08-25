@@ -19,6 +19,7 @@
 
 export * from "./captureResults";
 export * from "./communityPosts";
+export * from "./businessDirectory";
 export * from "./discoveredEvents";
 export * from "./newsArticles";
 export * from "./newsSourceStatuses";
