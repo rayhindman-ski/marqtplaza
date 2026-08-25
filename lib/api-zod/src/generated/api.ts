@@ -335,7 +335,7 @@ export const GetListingsResponse = zod.object({
   "audience": zod.string().optional(),
   "recurrenceText": zod.string().optional(),
   "neighborhood": zod.string().optional().describe('Den Haag neighborhood context for a curated social-map location.'),
-  "socialCategory": zod.enum(['Geldzaken', 'Gezin en opvoeden', 'Gezondheid - Heilige plaatsen', 'Hobby\'s en interesses', 'Ondersteuning', 'Ontmoeten en samenleven', 'Sporten en bewegen', 'Taal en computer', 'Vervoer', 'Werk en opleiding', 'Wonen en huishouden', 'Zorg voor een naaste']).optional().describe('Curated support theme for the Den Haag social map.'),
+  "socialCategory": zod.enum(['Geldzaken', 'Gezin en opvoeden', 'Gezondheid', 'Heilige plaatsen', 'Hobby\'s en interesses', 'Ondersteuning', 'Ontmoeten en samenleven', 'Sporten en bewegen', 'Taal en computer', 'Vervoer', 'Werk en opleiding', 'Wonen en huishouden', 'Zorg voor een naaste']).optional().describe('Curated support theme for the Den Haag social map.'),
   "officialUrl": zod.string().optional().describe('Verified organization or service website for a social-map location.'),
   "sourcePageUrl": zod.string().optional().describe('Public source page used to verify a social-map location.'),
   "snapshotDate": zod.string().optional().describe('Date the curated social-map selection was last checked.'),
@@ -535,7 +535,11 @@ export const GetCommunityPostsResponseItem = zod.object({
   "expiresAt": zod.string(),
   "status": zod.enum(['pending', 'approved', 'rejected']),
   "reviewNote": zod.string().nullish(),
-  "createdAt": zod.string()
+  "createdAt": zod.string(),
+  "interestCount": zod.number(),
+  "attendanceCount": zod.number(),
+  "interestedByMe": zod.boolean(),
+  "attendingByMe": zod.boolean()
 })
 export const GetCommunityPostsResponse = zod.array(GetCommunityPostsResponseItem)
 
@@ -589,7 +593,11 @@ export const GetCommunityModerationPostsResponseItem = zod.object({
   "expiresAt": zod.string(),
   "status": zod.enum(['pending', 'approved', 'rejected']),
   "reviewNote": zod.string().nullish(),
-  "createdAt": zod.string()
+  "createdAt": zod.string(),
+  "interestCount": zod.number(),
+  "attendanceCount": zod.number(),
+  "interestedByMe": zod.boolean(),
+  "attendingByMe": zod.boolean()
 })
 export const GetCommunityModerationPostsResponse = zod.array(GetCommunityModerationPostsResponseItem)
 
@@ -621,7 +629,32 @@ export const DecideCommunityPostResponse = zod.object({
   "expiresAt": zod.string(),
   "status": zod.enum(['pending', 'approved', 'rejected']),
   "reviewNote": zod.string().nullish(),
-  "createdAt": zod.string()
+  "createdAt": zod.string(),
+  "interestCount": zod.number(),
+  "attendanceCount": zod.number(),
+  "interestedByMe": zod.boolean(),
+  "attendingByMe": zod.boolean()
 })
 
 
+/**
+ * @summary Add or remove the signed-in resident's interest or attendance
+ */
+export const ToggleCommunityPostParticipationParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const ToggleCommunityPostParticipationBody = zod.object({
+  "action": zod.enum(['interested', 'attending']),
+  "active": zod.boolean()
+})
+
+export const ToggleCommunityPostParticipationResponse = zod.object({
+  "postId": zod.number(),
+  "action": zod.enum(['interested', 'attending']),
+  "active": zod.boolean(),
+  "interestCount": zod.number(),
+  "attendanceCount": zod.number(),
+  "interestedByMe": zod.boolean(),
+  "attendingByMe": zod.boolean()
+})

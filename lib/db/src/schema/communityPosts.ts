@@ -1,4 +1,4 @@
-import { date, index, pgTable, serial, text, timestamp } from "drizzle-orm/pg-core";
+import { date, index, integer, pgTable, serial, text, timestamp, unique } from "drizzle-orm/pg-core";
 
 export const communityPostsTable = pgTable(
   "community_posts",
@@ -25,4 +25,22 @@ export const communityPostsTable = pgTable(
   ],
 );
 
+export const communityPostParticipationTable = pgTable(
+  "community_post_participation",
+  {
+    id: serial("id").primaryKey(),
+    postId: integer("post_id")
+      .notNull()
+      .references(() => communityPostsTable.id, { onDelete: "cascade" }),
+    userId: text("user_id").notNull(),
+    action: text("action").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    unique("community_post_participation_post_user_action").on(table.postId, table.userId, table.action),
+    index("community_post_participation_post_action_index").on(table.postId, table.action),
+  ],
+);
+
 export type CommunityPost = typeof communityPostsTable.$inferSelect;
+export type CommunityPostParticipation = typeof communityPostParticipationTable.$inferSelect;

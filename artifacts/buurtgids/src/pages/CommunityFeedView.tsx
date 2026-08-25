@@ -5,7 +5,7 @@ import { useAuth } from '@clerk/react';
 import { format, addDays, parseISO } from 'date-fns';
 import { enUS, nl as nlLocale } from 'date-fns/locale';
 import {
-  ArrowLeft, Calendar, MapPin, AlertCircle, LoaderCircle, MessageSquare, Megaphone, HelpCircle, Lightbulb, HandHeart, Plus
+  ArrowLeft, Calendar, MapPin, AlertCircle, LoaderCircle, MessageSquare, Megaphone, HelpCircle, Lightbulb, HandHeart, Plus, Heart, CircleCheck
 } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -16,6 +16,8 @@ import {
   useGetCommunityPosts,
   getGetCommunityPostsQueryKey,
   useCreateCommunityPost,
+  useToggleCommunityPostParticipation,
+  type CommunityPost,
   CommunityPostType,
 } from '@workspace/api-client-react';
 
@@ -67,6 +69,10 @@ const t = {
     city_utr: 'Utrecht',
     city_ein: 'Eindhoven',
     signInToPost: 'Sign in to post',
+    signInToParticipate: 'Sign in to show your interest',
+    interestAction: 'Interested',
+    attendanceAction: "I'm going",
+    participationError: 'Failed to update your response.',
     pendingApproval: 'Your post is pending review and will be visible shortly.',
     publishError: 'Failed to create post.',
     selectCity: 'Select a city',
@@ -109,6 +115,10 @@ const t = {
     city_utr: 'Utrecht',
     city_ein: 'Eindhoven',
     signInToPost: 'Log in om te plaatsen',
+    signInToParticipate: 'Log in om je interesse te tonen',
+    interestAction: 'Interesse',
+    attendanceAction: 'Ik ga',
+    participationError: 'Je reactie kon niet worden bijgewerkt.',
     pendingApproval: 'Je bericht wacht op goedkeuring en zal binnenkort zichtbaar zijn.',
     publishError: 'Bericht plaatsen mislukt.',
     selectCity: 'Kies een stad',
@@ -130,6 +140,7 @@ const CITIES = ['dhg', 'ams', 'rot', 'utr', 'ein'] as const;
 export default function CommunityFeedView() {
   const [_, setLocation] = useLocation();
   const { isSignedIn, isLoaded } = useAuth();
+  const queryClient = useQueryClient();
   
   const [language, setLanguage] = useState<Language>(() => {
     if (typeof window === 'undefined') return 'en';
@@ -158,6 +169,48 @@ export default function CommunityFeedView() {
       queryKey: getGetCommunityPostsQueryKey(queryParams)
     }
   });
+  const participationMutation = useToggleCommunityPostParticipation();
+
+  const handleParticipation = (post: CommunityPost, action: 'interested' | 'attending') => {
+    if (!isLoaded) return;
+    if (!isSignedIn) {
+      setLocation('/sign-in');
+      return;
+    }
+
+    const active = action === 'attending' ? post.attendingByMe : post.interestedByMe;
+    const nextActive = !active;
+    const queryKey = getGetCommunityPostsQueryKey(queryParams);
+    const patchPost = (current: CommunityPost[] | undefined, summary: {
+      interestCount: number;
+      attendanceCount: number;
+      interestedByMe: boolean;
+      attendingByMe: boolean;
+    }) => current?.map((item) => item.id === post.id ? { ...item, ...summary } : item);
+
+    queryClient.setQueryData<CommunityPost[]>(queryKey, (current) => patchPost(current, {
+      interestCount: post.interestCount + (action === 'interested' ? (nextActive ? 1 : -1) : 0),
+      attendanceCount: post.attendanceCount + (action === 'attending' ? (nextActive ? 1 : -1) : 0),
+      interestedByMe: action === 'interested' ? nextActive : post.interestedByMe,
+      attendingByMe: action === 'attending' ? nextActive : post.attendingByMe,
+    }));
+
+    participationMutation.mutate({
+      id: post.id,
+      data: { action, active: nextActive },
+    }, {
+      onSuccess: (summary) => {
+        queryClient.setQueryData<CommunityPost[]>(queryKey, (current) => patchPost(current, summary));
+      },
+      onError: () => {
+        queryClient.setQueryData<CommunityPost[]>(queryKey, (current) => patchPost(current, post));
+        toast.error(copy.participationError);
+      },
+      onSettled: () => {
+        queryClient.invalidateQueries({ queryKey });
+      },
+    });
+  };
 
   const handleNewPostClick = () => {
     if (!isLoaded) return;
@@ -308,6 +361,52 @@ export default function CommunityFeedView() {
                       <span className="uppercase tracking-wide">{copy.expires}:</span> 
                       <span className="text-stone-600">{format(parseISO(post.expiresAt), 'PP', { locale: dateLocale })}</span>
                     </div>
+                  </div>
+
+                  <div className="mt-6 flex flex-wrap items-center gap-2 border-t border-stone-100 pt-5">
+                    <button
+                      type="button"
+                      onClick={() => handleParticipation(post, 'interested')}
+                      disabled={participationMutation.isPending && participationMutation.variables?.id === post.id}
+                      aria-pressed={post.interestedByMe}
+                      aria-label={`${copy.interestAction} (${post.interestCount})`}
+                      className={cn(
+                        'inline-flex min-h-10 items-center gap-2 rounded-full border px-4 py-2 text-xs font-extrabold transition-colors disabled:cursor-wait disabled:opacity-60',
+                        post.interestedByMe
+                          ? 'border-stone-900 bg-stone-900 text-white'
+                          : 'border-stone-200 bg-stone-50 text-stone-600 hover:border-stone-400 hover:bg-white hover:text-stone-900'
+                      )}
+                    >
+                      {participationMutation.isPending && participationMutation.variables?.id === post.id && participationMutation.variables?.data.action === 'interested'
+                        ? <LoaderCircle className="h-4 w-4 animate-spin" />
+                        : <Heart className={cn('h-4 w-4', post.interestedByMe && 'fill-current')} />}
+                      <span>{copy.interestAction}</span>
+                      <span className={cn('tabular-nums', post.interestedByMe ? 'text-stone-300' : 'text-stone-400')}>{post.interestCount}</span>
+                    </button>
+                    {post.type === 'event' && (
+                      <button
+                        type="button"
+                        onClick={() => handleParticipation(post, 'attending')}
+                        disabled={participationMutation.isPending && participationMutation.variables?.id === post.id}
+                        aria-pressed={post.attendingByMe}
+                        aria-label={`${copy.attendanceAction} (${post.attendanceCount})`}
+                        className={cn(
+                          'inline-flex min-h-10 items-center gap-2 rounded-full border px-4 py-2 text-xs font-extrabold transition-colors disabled:cursor-wait disabled:opacity-60',
+                          post.attendingByMe
+                            ? 'border-emerald-700 bg-emerald-700 text-white'
+                            : 'border-stone-200 bg-stone-50 text-stone-600 hover:border-emerald-400 hover:bg-white hover:text-emerald-800'
+                        )}
+                      >
+                        {participationMutation.isPending && participationMutation.variables?.id === post.id && participationMutation.variables?.data.action === 'attending'
+                          ? <LoaderCircle className="h-4 w-4 animate-spin" />
+                          : <CircleCheck className="h-4 w-4" />}
+                        <span>{copy.attendanceAction}</span>
+                        <span className={cn('tabular-nums', post.attendingByMe ? 'text-emerald-100' : 'text-stone-400')}>{post.attendanceCount}</span>
+                      </button>
+                    )}
+                    {!isSignedIn && isLoaded && (
+                      <span className="ml-1 text-[11px] font-semibold text-stone-400">{copy.signInToParticipate}</span>
+                    )}
                   </div>
                 </article>
               )

@@ -469,6 +469,37 @@ paths:
         "404":
           description: Post not found
 
+  /community-posts/{id}/participation:
+    put:
+      operationId: toggleCommunityPostParticipation
+      tags: [community]
+      summary: Add or remove the signed-in resident's interest or attendance
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: number
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CommunityPostParticipationInput"
+      responses:
+        "200":
+          description: Updated privacy-safe participation summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CommunityPostParticipationResponse"
+        "400":
+          description: Invalid participation action or attendance requested for a non-event post
+        "401":
+          description: Authentication is required
+        "404":
+          description: Approved active post not found
+
 components:
   schemas:
     HealthStatus:
@@ -512,7 +543,15 @@ components:
           type: ["string", "null"]
         createdAt:
           type: string
-      required: [id, cityId, type, title, body, expiresAt, status, createdAt]
+        interestCount:
+          type: number
+        attendanceCount:
+          type: number
+        interestedByMe:
+          type: boolean
+        attendingByMe:
+          type: boolean
+      required: [id, cityId, type, title, body, expiresAt, status, createdAt, interestCount, attendanceCount, interestedByMe, attendingByMe]
 
     CommunityPostInput:
       type: object
@@ -564,6 +603,38 @@ components:
       type: array
       items:
         $ref: "#/components/schemas/CommunityPost"
+
+    CommunityPostParticipationAction:
+      type: string
+      enum: [interested, attending]
+
+    CommunityPostParticipationInput:
+      type: object
+      properties:
+        action:
+          $ref: "#/components/schemas/CommunityPostParticipationAction"
+        active:
+          type: boolean
+      required: [action, active]
+
+    CommunityPostParticipationResponse:
+      type: object
+      properties:
+        postId:
+          type: number
+        action:
+          $ref: "#/components/schemas/CommunityPostParticipationAction"
+        active:
+          type: boolean
+        interestCount:
+          type: number
+        attendanceCount:
+          type: number
+        interestedByMe:
+          type: boolean
+        attendingByMe:
+          type: boolean
+      required: [postId, action, active, interestCount, attendanceCount, interestedByMe, attendingByMe]
 
     WeatherResponse:
       type: object
@@ -1122,7 +1193,7 @@ components:
         - Geldzaken
         - Gezin en opvoeden
         - Gezondheid
-         - Heilige plaatsen
+        - Heilige plaatsen
         - Hobby's en interesses
         - Ondersteuning
         - Ontmoeten en samenleven

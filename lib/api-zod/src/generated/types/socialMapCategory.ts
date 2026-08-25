@@ -15,7 +15,8 @@ export type SocialMapCategory = typeof SocialMapCategory[keyof typeof SocialMapC
 export const SocialMapCategory = {
   Geldzaken: 'Geldzaken',
   Gezin_en_opvoeden: 'Gezin en opvoeden',
-  'Gezondheid_-_Heilige_plaatsen': 'Gezondheid - Heilige plaatsen',
+  Gezondheid: 'Gezondheid',
+  Heilige_plaatsen: 'Heilige plaatsen',
   'Hobby\'s_en_interesses': 'Hobby\'s en interesses',
   Ondersteuning: 'Ondersteuning',
   Ontmoeten_en_samenleven: 'Ontmoeten en samenleven',

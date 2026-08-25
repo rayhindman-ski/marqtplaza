@@ -23,4 +23,8 @@ export interface CommunityPost {
   /** @nullable */
   reviewNote?: string | null;
   createdAt: string;
+  interestCount: number;
+  attendanceCount: number;
+  interestedByMe: boolean;
+  attendingByMe: boolean;
 }

@@ -4,7 +4,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { format, parseISO } from 'date-fns';
 import { enUS, nl as nlLocale } from 'date-fns/locale';
 import { toast } from 'sonner';
-import { ArrowLeft, CheckCircle2, XCircle, AlertCircle, LoaderCircle, MapPin, Calendar, Search } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, XCircle, AlertCircle, LoaderCircle, MapPin, Calendar, Search, Heart, CircleCheck } from 'lucide-react';
 
 import {
   useGetCommunityModerationPosts,
@@ -50,6 +50,9 @@ const t = {
     city: 'City',
     neighborhood: 'Neighborhood',
     submittedAt: 'Submitted',
+    participation: 'Participation',
+    interestedCount: 'interested',
+    attendingCount: 'going',
   },
   nl: {
     back: 'Terug naar bronnen',
@@ -78,6 +81,9 @@ const t = {
     city: 'Stad',
     neighborhood: 'Buurt',
     submittedAt: 'Ingezonden',
+    participation: 'Deelname',
+    interestedCount: 'interesse',
+    attendingCount: 'gaan',
   }
 };
 
@@ -311,6 +317,20 @@ function ModerationCard({
             <span className="uppercase tracking-wide">{copy.submittedAt}:</span> 
             <span className="text-foreground">{format(parseISO(post.createdAt), 'PPp', { locale: dateLocale })}</span>
           </div>
+        </div>
+
+        <div className="mt-4 flex flex-wrap items-center gap-4 border-t border-border pt-4 text-xs font-bold text-muted-foreground">
+          <span className="uppercase tracking-wide">{copy.participation}:</span>
+          <span className="inline-flex items-center gap-1.5">
+            <Heart className="h-4 w-4 text-rose-500" />
+            <span className="text-foreground tabular-nums">{post.interestCount}</span>
+            {copy.interestedCount}
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <CircleCheck className="h-4 w-4 text-emerald-600" />
+            <span className="text-foreground tabular-nums">{post.attendanceCount}</span>
+            {copy.attendingCount}
+          </span>
         </div>
         
         {post.reviewNote && (

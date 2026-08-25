@@ -28,6 +28,8 @@ import type {
   CommunityPostDecision,
   CommunityPostInput,
   CommunityPostList,
+  CommunityPostParticipationInput,
+  CommunityPostParticipationResponse,
   CommunityPostSubmission,
   EventReviewDecision,
   EventReviewDecisionResult,
@@ -1536,5 +1538,77 @@ export const useDecideCommunityPost = <TError = ErrorType<void>,
         TContext
       > => {
       return useMutation(getDecideCommunityPostMutationOptions(options));
+    }
+
+export const getToggleCommunityPostParticipationUrl = (id: number,) => {
+
+
+
+
+  return `/api/community-posts/${id}/participation`
+}
+
+/**
+ * @summary Add or remove the signed-in resident's interest or attendance
+ */
+export const toggleCommunityPostParticipation = async (id: number,
+    communityPostParticipationInput: CommunityPostParticipationInput, options?: Parameters<typeof customFetch>[1]): Promise<CommunityPostParticipationResponse> => {
+
+  return customFetch<CommunityPostParticipationResponse>(getToggleCommunityPostParticipationUrl(id),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(communityPostParticipationInput)
+  }
+);}
+
+
+
+
+
+export const getToggleCommunityPostParticipationMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof toggleCommunityPostParticipation>>, TError,{id: number;data: BodyType<CommunityPostParticipationInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof toggleCommunityPostParticipation>>, TError,{id: number;data: BodyType<CommunityPostParticipationInput>}, TContext> => {
+
+const mutationKey = ['toggleCommunityPostParticipation'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof toggleCommunityPostParticipation>>, {id: number;data: BodyType<CommunityPostParticipationInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  toggleCommunityPostParticipation(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ToggleCommunityPostParticipationMutationResult = NonNullable<Awaited<ReturnType<typeof toggleCommunityPostParticipation>>>
+    export type ToggleCommunityPostParticipationMutationBody = BodyType<CommunityPostParticipationInput>
+    export type ToggleCommunityPostParticipationMutationError = ErrorType<void>
+
+    /**
+ * @summary Add or remove the signed-in resident's interest or attendance
+ */
+export const useToggleCommunityPostParticipation = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof toggleCommunityPostParticipation>>, TError,{id: number;data: BodyType<CommunityPostParticipationInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof toggleCommunityPostParticipation>>,
+        TError,
+        {id: number;data: BodyType<CommunityPostParticipationInput>},
+        TContext
+      > => {
+      return useMutation(getToggleCommunityPostParticipationMutationOptions(options));
     }
 

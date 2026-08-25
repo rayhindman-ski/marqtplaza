@@ -45,6 +45,10 @@ export interface CommunityPost {
   /** @nullable */
   reviewNote?: string | null;
   createdAt: string;
+  interestCount: number;
+  attendanceCount: number;
+  interestedByMe: boolean;
+  attendingByMe: boolean;
 }
 
 export interface CommunityPostInput {
@@ -89,6 +93,29 @@ export interface CommunityPostDecision {
 }
 
 export type CommunityPostList = CommunityPost[];
+
+export type CommunityPostParticipationAction = typeof CommunityPostParticipationAction[keyof typeof CommunityPostParticipationAction];
+
+
+export const CommunityPostParticipationAction = {
+  interested: 'interested',
+  attending: 'attending',
+} as const;
+
+export interface CommunityPostParticipationInput {
+  action: CommunityPostParticipationAction;
+  active: boolean;
+}
+
+export interface CommunityPostParticipationResponse {
+  postId: number;
+  action: CommunityPostParticipationAction;
+  active: boolean;
+  interestCount: number;
+  attendanceCount: number;
+  interestedByMe: boolean;
+  attendingByMe: boolean;
+}
 
 export type WeatherResponseProvider = typeof WeatherResponseProvider[keyof typeof WeatherResponseProvider];
 
@@ -610,7 +637,8 @@ export type SocialMapCategory = typeof SocialMapCategory[keyof typeof SocialMapC
 export const SocialMapCategory = {
   Geldzaken: 'Geldzaken',
   Gezin_en_opvoeden: 'Gezin en opvoeden',
-  'Gezondheid_-_Heilige_plaatsen': 'Gezondheid - Heilige plaatsen',
+  Gezondheid: 'Gezondheid',
+  Heilige_plaatsen: 'Heilige plaatsen',
   'Hobby\'s_en_interesses': 'Hobby\'s en interesses',
   Ondersteuning: 'Ondersteuning',
   Ontmoeten_en_samenleven: 'Ontmoeten en samenleven',

@@ -1,13 +1,19 @@
 import { getAuth } from "@clerk/express";
-import { and, asc, desc, eq, gte } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, sql } from "drizzle-orm";
 import { Router, type IRouter } from "express";
 
 import { db } from "@workspace/db";
-import { communityPostsTable, type CommunityPost } from "@workspace/db/schema";
+import {
+  communityPostParticipationTable,
+  communityPostsTable,
+  type CommunityPost,
+} from "@workspace/db/schema";
 import {
   CreateCommunityPostBody,
   DecideCommunityPostBody,
   GetCommunityPostsQueryParams,
+  ToggleCommunityPostParticipationBody,
+  ToggleCommunityPostParticipationParams,
 } from "@workspace/api-zod";
 import { requireEditor } from "../middlewares/requireEditor.js";
 
@@ -19,7 +25,74 @@ function activeDate() {
   return new Date().toISOString().slice(0, 10);
 }
 
-function publicPost(post: CommunityPost) {
+type ParticipationSummary = {
+  interestCount: number;
+  attendanceCount: number;
+  interestedByMe: boolean;
+  attendingByMe: boolean;
+};
+
+const emptyParticipation: ParticipationSummary = {
+  interestCount: 0,
+  attendanceCount: 0,
+  interestedByMe: false,
+  attendingByMe: false,
+};
+
+async function getParticipationSummaries(postIds: number[], userId?: string | null) {
+  const summaries = new Map<number, ParticipationSummary>();
+  for (const postId of postIds) summaries.set(postId, { ...emptyParticipation });
+  if (postIds.length === 0) return summaries;
+
+  const counts = await db
+    .select({
+      postId: communityPostParticipationTable.postId,
+      action: communityPostParticipationTable.action,
+      count: sql<number>`count(*)::int`,
+    })
+    .from(communityPostParticipationTable)
+    .where(inArray(communityPostParticipationTable.postId, postIds))
+    .groupBy(
+      communityPostParticipationTable.postId,
+      communityPostParticipationTable.action,
+    );
+
+  for (const count of counts) {
+    const summary = summaries.get(count.postId);
+    if (!summary) continue;
+    if (count.action === "interested") summary.interestCount = count.count;
+    if (count.action === "attending") summary.attendanceCount = count.count;
+  }
+
+  if (!userId) return summaries;
+
+  const ownActions = await db
+    .select({
+      postId: communityPostParticipationTable.postId,
+      action: communityPostParticipationTable.action,
+    })
+    .from(communityPostParticipationTable)
+    .where(
+      and(
+        inArray(communityPostParticipationTable.postId, postIds),
+        eq(communityPostParticipationTable.userId, userId),
+      ),
+    );
+
+  for (const ownAction of ownActions) {
+    const summary = summaries.get(ownAction.postId);
+    if (!summary) continue;
+    if (ownAction.action === "interested") summary.interestedByMe = true;
+    if (ownAction.action === "attending") summary.attendingByMe = true;
+  }
+
+  return summaries;
+}
+
+function publicPost(
+  post: CommunityPost,
+  participation: ParticipationSummary = emptyParticipation,
+) {
   return {
     id: post.id,
     cityId: post.cityId,
@@ -32,6 +105,7 @@ function publicPost(post: CommunityPost) {
     status: post.status,
     reviewNote: post.reviewNote,
     createdAt: post.createdAt.toISOString(),
+    ...participation,
   };
 }
 
@@ -66,7 +140,11 @@ router.get("/community-posts", async (req, res): Promise<void> => {
     .where(and(...conditions))
     .orderBy(asc(communityPostsTable.startsAt), desc(communityPostsTable.createdAt))
     .limit(100);
-  res.json(posts.map(publicPost));
+  const participation = await getParticipationSummaries(
+    posts.map((post) => post.id),
+    getAuth(req).userId,
+  );
+  res.json(posts.map((post) => publicPost(post, participation.get(post.id))));
 });
 
 router.post("/community-posts", async (req, res): Promise<void> => {
@@ -126,7 +204,8 @@ router.get("/community-posts/moderation", requireEditor, async (req, res): Promi
     .where(status === "all" ? undefined : eq(communityPostsTable.status, status))
     .orderBy(desc(communityPostsTable.createdAt))
     .limit(200);
-  res.json(posts.map(publicPost));
+  const participation = await getParticipationSummaries(posts.map((post) => post.id));
+  res.json(posts.map((post) => publicPost(post, participation.get(post.id))));
 });
 
 router.patch("/community-posts/moderation/:id", requireEditor, async (req, res): Promise<void> => {
@@ -155,7 +234,93 @@ router.patch("/community-posts/moderation/:id", requireEditor, async (req, res):
     return;
   }
   req.log.info({ postId: id, decision: parsed.data.decision }, "Community post moderation decision");
-  res.json(publicPost(post));
+  const participation = await getParticipationSummaries([post.id]);
+  res.json(publicPost(post, participation.get(post.id)));
+});
+
+router.put("/community-posts/:id/participation", async (req, res): Promise<void> => {
+  const auth = getAuth(req);
+  if (!auth.userId) {
+    res.status(401).json({ error: "Sign in to show your interest." });
+    return;
+  }
+
+  const params = ToggleCommunityPostParticipationParams.safeParse(req.params);
+  const parsed = ToggleCommunityPostParticipationBody.safeParse(req.body);
+  if (!params.success || !parsed.success) {
+    res.status(400).json({ error: "Choose a valid participation action." });
+    return;
+  }
+
+  const result = await db.transaction(async (tx) => {
+    const [post] = await tx
+      .select({ id: communityPostsTable.id, type: communityPostsTable.type })
+      .from(communityPostsTable)
+      .where(
+        and(
+          eq(communityPostsTable.id, params.data.id),
+          eq(communityPostsTable.status, "approved"),
+          gte(communityPostsTable.expiresAt, activeDate()),
+        ),
+      )
+      .limit(1)
+      .for("update");
+
+    if (!post) return { kind: "not-found" } as const;
+    if (parsed.data.action === "attending" && post.type !== "event") {
+      return { kind: "invalid-action" } as const;
+    }
+
+    if (parsed.data.active) {
+      await tx
+        .insert(communityPostParticipationTable)
+        .values({
+          postId: post.id,
+          userId: auth.userId,
+          action: parsed.data.action,
+        })
+        .onConflictDoNothing({
+          target: [
+            communityPostParticipationTable.postId,
+            communityPostParticipationTable.userId,
+            communityPostParticipationTable.action,
+          ],
+        });
+    } else {
+      await tx
+        .delete(communityPostParticipationTable)
+        .where(
+          and(
+            eq(communityPostParticipationTable.postId, post.id),
+            eq(communityPostParticipationTable.userId, auth.userId),
+            eq(communityPostParticipationTable.action, parsed.data.action),
+          ),
+        );
+    }
+    return { kind: "updated", postId: post.id } as const;
+  });
+
+  if (result.kind === "not-found") {
+    res.status(404).json({ error: "Approved active community post not found." });
+    return;
+  }
+  if (result.kind === "invalid-action") {
+    res.status(400).json({ error: "Attendance is available only for event posts." });
+    return;
+  }
+
+  const participation = await getParticipationSummaries([result.postId], auth.userId);
+  const summary = participation.get(result.postId) ?? emptyParticipation;
+  req.log.info(
+    { postId: result.postId, action: parsed.data.action, active: parsed.data.active },
+    "Community post participation updated",
+  );
+  res.json({
+    postId: result.postId,
+    action: parsed.data.action,
+    active: parsed.data.active,
+    ...summary,
+  });
 });
 
 export default router;
