@@ -44,6 +44,8 @@ import EventReviewView from './pages/EventReviewView';
 import SocialMapReviewView from './pages/SocialMapReviewView';
 import NewsFeedView from './pages/NewsFeedView';
 import NewsArticleView from './pages/NewsArticleView';
+import CommunityFeedView from './pages/CommunityFeedView';
+import CommunityModerationView from './pages/CommunityModerationView';
 import { useEditorAccess } from './lib/editorAccess';
 import {
   getLocationName,
@@ -439,6 +441,13 @@ function ReferenceCategoryNav({
         >
           <Radio className="h-4 w-4" />
           Sources
+        </Link>
+        <Link
+          href="/buurt"
+          className="inline-flex items-center gap-1.5 text-sm font-extrabold text-foreground transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+        >
+          <HandHeart className="h-4 w-4" />
+          {language === 'nl' ? 'Buurtplein' : 'Community'}
         </Link>
         <Search className="h-5 w-5 text-foreground" aria-label={t.explore} />
       </div>
@@ -2146,8 +2155,10 @@ export default function App() {
           </Route>
           <Route path="/capture" component={CaptureRoute} />
           <Route path="/bronnen" component={SourceDirectoryView} />
+          <Route path="/buurt" component={CommunityFeedView} />
           <Route path="/beoordelen" component={EventReviewRoute} />
           <Route path="/beoordelen/sociale-kaart" component={SocialMapReviewRoute} />
+          <Route path="/beoordelen/community" component={CommunityModerationView} />
           <Route path="/sign-in/*?" component={SignInPage} />
           <Route path="/sign-up/*?" component={SignUpPage} />
           <Route path="/nieuws" component={NewsFeedView} />

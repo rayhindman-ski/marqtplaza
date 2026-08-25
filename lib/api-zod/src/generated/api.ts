@@ -515,3 +515,113 @@ export const ScanNewsSourcesResponse = zod.object({
 })
 
 
+/**
+ * @summary Get approved active community posts
+ */
+export const GetCommunityPostsQueryParams = zod.object({
+  "cityId": zod.coerce.string(),
+  "neighborhood": zod.coerce.string().optional(),
+  "type": zod.enum(['event', 'question', 'help_offer', 'help_request', 'tip', 'announcement']).optional()
+})
+
+export const GetCommunityPostsResponseItem = zod.object({
+  "id": zod.number(),
+  "cityId": zod.string(),
+  "neighborhood": zod.string().nullish(),
+  "type": zod.enum(['event', 'question', 'help_offer', 'help_request', 'tip', 'announcement']),
+  "title": zod.string(),
+  "body": zod.string(),
+  "startsAt": zod.string().nullish(),
+  "expiresAt": zod.string(),
+  "status": zod.enum(['pending', 'approved', 'rejected']),
+  "reviewNote": zod.string().nullish(),
+  "createdAt": zod.string()
+})
+export const GetCommunityPostsResponse = zod.array(GetCommunityPostsResponseItem)
+
+
+/**
+ * @summary Submit a community post for review
+ */
+
+export const createCommunityPostBodyTitleMin = 3;
+export const createCommunityPostBodyTitleMax = 120;
+
+export const createCommunityPostBodyBodyMin = 10;
+export const createCommunityPostBodyBodyMax = 2000;
+
+
+
+export const CreateCommunityPostBody = zod.object({
+  "cityId": zod.string().min(1),
+  "neighborhood": zod.string().nullish(),
+  "type": zod.enum(['event', 'question', 'help_offer', 'help_request', 'tip', 'announcement']),
+  "title": zod.string().min(createCommunityPostBodyTitleMin).max(createCommunityPostBodyTitleMax),
+  "body": zod.string().min(createCommunityPostBodyBodyMin).max(createCommunityPostBodyBodyMax),
+  "startsAt": zod.string().nullish(),
+  "expiresAt": zod.string()
+})
+
+export const CreateCommunityPostResponse = zod.object({
+  "id": zod.number(),
+  "status": zod.enum(['pending', 'approved', 'rejected']),
+  "message": zod.string()
+})
+
+
+/**
+ * @summary Get the community moderation queue
+ */
+export const getCommunityModerationPostsQueryStatusDefault = `pending`;
+
+export const GetCommunityModerationPostsQueryParams = zod.object({
+  "status": zod.enum(['pending', 'approved', 'rejected', 'all']).default(getCommunityModerationPostsQueryStatusDefault)
+})
+
+export const GetCommunityModerationPostsResponseItem = zod.object({
+  "id": zod.number(),
+  "cityId": zod.string(),
+  "neighborhood": zod.string().nullish(),
+  "type": zod.enum(['event', 'question', 'help_offer', 'help_request', 'tip', 'announcement']),
+  "title": zod.string(),
+  "body": zod.string(),
+  "startsAt": zod.string().nullish(),
+  "expiresAt": zod.string(),
+  "status": zod.enum(['pending', 'approved', 'rejected']),
+  "reviewNote": zod.string().nullish(),
+  "createdAt": zod.string()
+})
+export const GetCommunityModerationPostsResponse = zod.array(GetCommunityModerationPostsResponseItem)
+
+
+/**
+ * @summary Approve or reject a community post
+ */
+export const DecideCommunityPostParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const decideCommunityPostBodyReviewNoteMax = 500;
+
+
+
+export const DecideCommunityPostBody = zod.object({
+  "decision": zod.enum(['approve', 'reject']),
+  "reviewNote": zod.string().max(decideCommunityPostBodyReviewNoteMax).optional()
+})
+
+export const DecideCommunityPostResponse = zod.object({
+  "id": zod.number(),
+  "cityId": zod.string(),
+  "neighborhood": zod.string().nullish(),
+  "type": zod.enum(['event', 'question', 'help_offer', 'help_request', 'tip', 'announcement']),
+  "title": zod.string(),
+  "body": zod.string(),
+  "startsAt": zod.string().nullish(),
+  "expiresAt": zod.string(),
+  "status": zod.enum(['pending', 'approved', 'rejected']),
+  "reviewNote": zod.string().nullish(),
+  "createdAt": zod.string()
+})
+
+

@@ -6,6 +6,7 @@ import sourcesRouter from "./sources";
 import newsRouter from "./news";
 import socialMapReviewRouter from "./social-map-review";
 import weatherRouter from "./weather";
+import communityPostsRouter from "./community-posts";
 
 const router: IRouter = Router();
 
@@ -16,5 +17,6 @@ router.use("/sources", sourcesRouter);
 router.use(newsRouter);
 router.use(socialMapReviewRouter);
 router.use(weatherRouter);
+router.use(communityPostsRouter);
 
 export default router;

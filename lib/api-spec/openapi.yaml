@@ -24,6 +24,8 @@ tags:
     description: Den Haag news aggregation
   - name: weather
     description: City weather forecast
+  - name: community
+    description: Resident and organisation community posts
 paths:
   /healthz:
     get:
@@ -357,6 +359,116 @@ paths:
               schema:
                 $ref: "#/components/schemas/NewsScanResponse"
 
+  /community-posts:
+    get:
+      operationId: getCommunityPosts
+      tags: [community]
+      summary: Get approved active community posts
+      parameters:
+        - name: cityId
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: neighborhood
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: type
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/CommunityPostType"
+      responses:
+        "200":
+          description: Active approved posts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CommunityPostList"
+        "400":
+          description: Invalid city or post type
+    post:
+      operationId: createCommunityPost
+      tags: [community]
+      summary: Submit a community post for review
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CommunityPostInput"
+      responses:
+        "201":
+          description: Submitted post
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CommunityPostSubmission"
+        "400":
+          description: Invalid community post
+        "401":
+          description: Authentication is required
+
+  /community-posts/moderation:
+    get:
+      operationId: getCommunityModerationPosts
+      tags: [community]
+      summary: Get the community moderation queue
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [pending, approved, rejected, all]
+            default: pending
+      responses:
+        "200":
+          description: Moderation queue
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CommunityPostList"
+        "401":
+          description: Authentication is required
+        "403":
+          description: An editor role is required
+
+  /community-posts/moderation/{id}:
+    patch:
+      operationId: decideCommunityPost
+      tags: [community]
+      summary: Approve or reject a community post
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: number
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CommunityPostDecision"
+      responses:
+        "200":
+          description: Updated moderation item
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CommunityPost"
+        "400":
+          description: Invalid moderation decision
+        "401":
+          description: Authentication is required
+        "403":
+          description: An editor role is required
+        "404":
+          description: Post not found
+
 components:
   schemas:
     HealthStatus:
@@ -366,6 +478,92 @@ components:
           type: string
       required:
         - status
+
+    CommunityPostType:
+      type: string
+      enum: [event, question, help_offer, help_request, tip, announcement]
+
+    CommunityPostStatus:
+      type: string
+      enum: [pending, approved, rejected]
+
+    CommunityPost:
+      type: object
+      properties:
+        id:
+          type: number
+        cityId:
+          type: string
+        neighborhood:
+          type: ["string", "null"]
+        type:
+          $ref: "#/components/schemas/CommunityPostType"
+        title:
+          type: string
+        body:
+          type: string
+        startsAt:
+          type: ["string", "null"]
+        expiresAt:
+          type: string
+        status:
+          $ref: "#/components/schemas/CommunityPostStatus"
+        reviewNote:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+      required: [id, cityId, type, title, body, expiresAt, status, createdAt]
+
+    CommunityPostInput:
+      type: object
+      properties:
+        cityId:
+          type: string
+          minLength: 1
+        neighborhood:
+          type: ["string", "null"]
+        type:
+          $ref: "#/components/schemas/CommunityPostType"
+        title:
+          type: string
+          minLength: 3
+          maxLength: 120
+        body:
+          type: string
+          minLength: 10
+          maxLength: 2000
+        startsAt:
+          type: ["string", "null"]
+        expiresAt:
+          type: string
+      required: [cityId, type, title, body, expiresAt]
+
+    CommunityPostSubmission:
+      type: object
+      properties:
+        id:
+          type: number
+        status:
+          $ref: "#/components/schemas/CommunityPostStatus"
+        message:
+          type: string
+      required: [id, status, message]
+
+    CommunityPostDecision:
+      type: object
+      properties:
+        decision:
+          type: string
+          enum: [approve, reject]
+        reviewNote:
+          type: string
+          maxLength: 500
+      required: [decision]
+
+    CommunityPostList:
+      type: array
+      items:
+        $ref: "#/components/schemas/CommunityPost"
 
     WeatherResponse:
       type: object

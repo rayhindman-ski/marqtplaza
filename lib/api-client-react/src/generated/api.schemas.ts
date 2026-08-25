@@ -9,6 +9,87 @@ export interface HealthStatus {
   status: string;
 }
 
+export type CommunityPostType = typeof CommunityPostType[keyof typeof CommunityPostType];
+
+
+export const CommunityPostType = {
+  event: 'event',
+  question: 'question',
+  help_offer: 'help_offer',
+  help_request: 'help_request',
+  tip: 'tip',
+  announcement: 'announcement',
+} as const;
+
+export type CommunityPostStatus = typeof CommunityPostStatus[keyof typeof CommunityPostStatus];
+
+
+export const CommunityPostStatus = {
+  pending: 'pending',
+  approved: 'approved',
+  rejected: 'rejected',
+} as const;
+
+export interface CommunityPost {
+  id: number;
+  cityId: string;
+  /** @nullable */
+  neighborhood?: string | null;
+  type: CommunityPostType;
+  title: string;
+  body: string;
+  /** @nullable */
+  startsAt?: string | null;
+  expiresAt: string;
+  status: CommunityPostStatus;
+  /** @nullable */
+  reviewNote?: string | null;
+  createdAt: string;
+}
+
+export interface CommunityPostInput {
+  /** @minLength 1 */
+  cityId: string;
+  /** @nullable */
+  neighborhood?: string | null;
+  type: CommunityPostType;
+  /**
+     * @minLength 3
+     * @maxLength 120
+     */
+  title: string;
+  /**
+     * @minLength 10
+     * @maxLength 2000
+     */
+  body: string;
+  /** @nullable */
+  startsAt?: string | null;
+  expiresAt: string;
+}
+
+export interface CommunityPostSubmission {
+  id: number;
+  status: CommunityPostStatus;
+  message: string;
+}
+
+export type CommunityPostDecisionDecision = typeof CommunityPostDecisionDecision[keyof typeof CommunityPostDecisionDecision];
+
+
+export const CommunityPostDecisionDecision = {
+  approve: 'approve',
+  reject: 'reject',
+} as const;
+
+export interface CommunityPostDecision {
+  decision: CommunityPostDecisionDecision;
+  /** @maxLength 500 */
+  reviewNote?: string;
+}
+
+export type CommunityPostList = CommunityPost[];
+
 export type WeatherResponseProvider = typeof WeatherResponseProvider[keyof typeof WeatherResponseProvider];
 
 
@@ -834,3 +915,23 @@ export type RunSocialMapReview502 = {
 export type GetNewsParams = {
 subcategory?: NewsSubcategory;
 };
+
+export type GetCommunityPostsParams = {
+cityId: string;
+neighborhood?: string;
+type?: CommunityPostType;
+};
+
+export type GetCommunityModerationPostsParams = {
+status?: GetCommunityModerationPostsStatus;
+};
+
+export type GetCommunityModerationPostsStatus = typeof GetCommunityModerationPostsStatus[keyof typeof GetCommunityModerationPostsStatus];
+
+
+export const GetCommunityModerationPostsStatus = {
+  pending: 'pending',
+  approved: 'approved',
+  rejected: 'rejected',
+  all: 'all',
+} as const;
