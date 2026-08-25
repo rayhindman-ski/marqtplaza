@@ -267,6 +267,7 @@ function WeatherIcon({ condition, isDay, className }: { condition: string; isDay
 }
 
 function WeatherCard({ cityId, language }: { cityId: string; language: Language }) {
+  const [isExpanded, setIsExpanded] = useState(true);
   const weatherQuery = useGetWeather(
     { cityId },
     {
@@ -291,6 +292,10 @@ function WeatherCard({ cityId, language }: { cityId: string; language: Language 
       minute: '2-digit',
     }).format(new Date(data.fetchedAt))
     : '';
+  const weatherLocation = LOCATIONS.find((location) => location.id === cityId);
+  const localizedLocationName = weatherLocation
+    ? getLocationName(weatherLocation, language)
+    : (data?.locationName ?? cityId);
 
   if (weatherQuery.isLoading) {
     return (
@@ -307,20 +312,29 @@ function WeatherCard({ cityId, language }: { cityId: string; language: Language 
   return (
     <section
       data-testid="weather-card"
-      aria-label={language === 'nl' ? `Weer in ${data.locationName}` : `Weather in ${data.locationName}`}
-      className="mt-5 overflow-hidden rounded-2xl border border-sky-200/70 bg-gradient-to-br from-sky-50 via-card to-orange-50/70 p-4 shadow-sm"
+      aria-label={language === 'nl' ? `Weer in ${localizedLocationName}` : `Weather in ${localizedLocationName}`}
+      className="mt-5 overflow-hidden rounded-2xl border border-sky-200/70 bg-gradient-to-br from-sky-50 via-card to-orange-50/70 shadow-sm"
     >
-      <div className="flex items-center justify-between gap-3">
+      <button
+        type="button"
+        onClick={() => setIsExpanded((current) => !current)}
+        aria-expanded={isExpanded}
+        className="flex w-full items-center justify-between gap-3 p-4 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
+      >
         <div>
           <p className="text-[10px] font-black uppercase tracking-[0.16em] text-sky-800/70">
             {language === 'nl' ? 'Vandaag buiten' : 'Outside today'}
           </p>
-          <p className="mt-1 text-sm font-extrabold text-foreground">{data.locationName}</p>
+          <p className="mt-1 text-sm font-extrabold text-foreground">{localizedLocationName}</p>
         </div>
-        <WeatherIcon condition={data.current.condition} isDay={data.current.isDay} className="h-8 w-8 text-sky-600" />
-      </div>
+        <span className="flex items-center gap-2">
+          <WeatherIcon condition={data.current.condition} isDay={data.current.isDay} className="h-8 w-8 text-sky-600" />
+          <ChevronDown className={cn("h-4 w-4 text-sky-800/70 transition-transform", isExpanded && "rotate-180")} />
+        </span>
+      </button>
 
-      <div className="mt-3 flex items-end justify-between gap-3">
+      {isExpanded && <div className="border-t border-sky-200/60 p-4 pt-3">
+      <div className="flex items-end justify-between gap-3">
         <div className="flex items-end gap-2">
           <span className="text-4xl font-black leading-none tracking-tight text-foreground">
             {Math.round(data.current.temperature)}°
@@ -361,6 +375,7 @@ function WeatherCard({ cityId, language }: { cityId: string; language: Language 
       <p className="mt-2 text-[10px] text-muted-foreground">
         {language === 'nl' ? `Bijgewerkt om ${updatedLabel}` : `Updated at ${updatedLabel}`} · Open-Meteo
       </p>
+      </div>}
     </section>
   );
 }
@@ -884,6 +899,7 @@ function MarkerCard({
   onClick: () => void;
   onSave: (e: React.MouseEvent) => void;
 }) {
+  const [isExpanded, setIsExpanded] = useState(true);
   const Icon = CATEGORY_ICONS[marker.category];
   const DetailIcon = DETAIL_ICONS[marker.category];
   const copy = getMarkerCopy(marker, language);
@@ -925,8 +941,25 @@ function MarkerCard({
               "font-bold text-base truncate transition-colors",
               isSelected ? "text-primary" : "text-foreground group-hover:text-primary"
             )}>{marker.name}</h3>
-            <SaveButton saved={isSaved} onToggle={onSave} />
+            <div className="flex shrink-0 items-center gap-1">
+              <SaveButton saved={isSaved} onToggle={onSave} />
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setIsExpanded((current) => !current);
+                }}
+                aria-expanded={isExpanded}
+                aria-label={language === 'nl'
+                  ? `${isExpanded ? 'Klap in' : 'Klap uit'}: ${marker.name}`
+                  : `${isExpanded ? 'Collapse' : 'Expand'}: ${marker.name}`}
+                className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              >
+                <ChevronDown className={cn("h-4 w-4 transition-transform", isExpanded && "rotate-180")} />
+              </button>
+            </div>
           </div>
+          {isExpanded && <>
            {(marker.businessCategory || marker.socialCategory || sourceLabel || marker.reviewStatus || (topLevelForMarker(marker) === 'events' && eventBadgeLabel(marker, language).length > 0)) && (
              <div className="mb-3 flex flex-wrap items-center gap-1.5">
                {marker.businessCategory && (
@@ -978,10 +1011,11 @@ function MarkerCard({
                 onClick={e => e.stopPropagation()}
                 className="flex items-center gap-0.5 text-[11px] font-semibold text-primary hover:underline shrink-0"
               >
-                {marker.officialUrl ? t.officialWebsite : 'Source'} <ExternalLink className="h-2.5 w-2.5" />
+                {marker.officialUrl ? t.officialWebsite : (language === 'nl' ? 'Bron' : 'Source')} <ExternalLink className="h-2.5 w-2.5" />
               </a>
             )}
           </div>
+          </>}
         </div>
       </div>
     </div>
@@ -1686,6 +1720,9 @@ function DiscoveryState({
         )}
 
         <div data-event-list className="shrink-0 p-4 scroll-smooth">
+          <FilterFrame
+            title={`${language === 'nl' ? 'Resultaten' : 'Results'} (${filteredMarkers.length})`}
+          >
           <div className="flex flex-col gap-4 pb-20 md:pb-0">
             {/* Loading skeleton */}
             {isLoading && (
@@ -1756,6 +1793,7 @@ function DiscoveryState({
               </div>
             )}
           </div>
+          </FilterFrame>
         </div>
         
         {/* Mobile close list button */}
