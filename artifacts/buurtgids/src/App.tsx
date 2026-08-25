@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Route, Switch, Router as WouterRouter, Link, Redirect, useLocation, useRoute } from 'wouter';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ClerkProvider, SignIn, SignUp, useAuth } from '@clerk/react';
@@ -681,18 +681,18 @@ function NeighborhoodActionButtons({
   const t = translations[language];
 
   return (
-    <div className="grid grid-cols-2 gap-2">
+    <div className="grid grid-cols-2 gap-1">
       <button
         type="button"
         onClick={onSelectAll}
-        className="min-h-9 rounded-xl border border-primary/40 bg-primary/10 px-2.5 py-2 text-[11px] font-extrabold text-primary transition-colors hover:bg-primary/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+        className="min-h-8 rounded-lg border border-primary/40 bg-primary/10 px-2 py-1.5 text-[10px] font-extrabold text-primary transition-colors hover:bg-primary/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
       >
         {t.selectAllNeighborhoods}
       </button>
       <button
         type="button"
         onClick={onDeselectAll}
-        className="min-h-9 rounded-xl border border-border/70 bg-card/70 px-2.5 py-2 text-[11px] font-extrabold text-muted-foreground transition-colors hover:border-primary/40 hover:bg-primary/5 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+        className="min-h-8 rounded-lg border border-border/70 bg-card/70 px-2 py-1.5 text-[10px] font-extrabold text-muted-foreground transition-colors hover:border-primary/40 hover:bg-primary/5 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
       >
         {t.clearNeighborhoodSelection}
       </button>
@@ -704,30 +704,60 @@ function CategoryActionButtons({
   language,
   onSelectAll,
   onDeselectAll,
+  selectLabel,
+  deselectLabel,
 }: {
   language: Language;
   onSelectAll: () => void;
   onDeselectAll: () => void;
+  selectLabel?: string;
+  deselectLabel?: string;
 }) {
   const t = translations[language];
 
   return (
-    <div className="grid grid-cols-2 gap-2">
+    <div className="grid grid-cols-2 gap-1">
       <button
         type="button"
         onClick={onSelectAll}
-        className="min-h-9 rounded-xl border border-primary/40 bg-primary/10 px-2.5 py-2 text-[11px] font-extrabold text-primary transition-colors hover:bg-primary/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+        className="min-h-8 rounded-lg border border-primary/40 bg-primary/10 px-2 py-1.5 text-[10px] font-extrabold text-primary transition-colors hover:bg-primary/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
       >
-        {t.selectAllCategories}
+        {selectLabel ?? t.selectAllCategories}
       </button>
       <button
         type="button"
         onClick={onDeselectAll}
-        className="min-h-9 rounded-xl border border-border/70 bg-card/70 px-2.5 py-2 text-[11px] font-extrabold text-muted-foreground transition-colors hover:border-primary/40 hover:bg-primary/5 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+        className="min-h-8 rounded-lg border border-border/70 bg-card/70 px-2 py-1.5 text-[10px] font-extrabold text-muted-foreground transition-colors hover:border-primary/40 hover:bg-primary/5 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
       >
-        {t.clearCategorySelection}
+        {deselectLabel ?? t.clearCategorySelection}
       </button>
     </div>
+  );
+}
+
+function FilterFrame({
+  title,
+  children,
+  defaultOpen = true,
+}: {
+  title: string;
+  children: React.ReactNode;
+  defaultOpen?: boolean;
+}) {
+  const [isOpen, setIsOpen] = useState(defaultOpen);
+  return (
+    <section className="overflow-hidden rounded-xl border border-border/70 bg-card/70">
+      <button
+        type="button"
+        onClick={() => setIsOpen((current) => !current)}
+        aria-expanded={isOpen}
+        className="flex min-h-9 w-full items-center justify-between gap-2 px-3 py-2 text-left text-[10px] font-black uppercase tracking-[0.14em] text-muted-foreground hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
+      >
+        <span>{title}</span>
+        <ChevronDown className={cn("h-4 w-4 shrink-0 transition-transform", isOpen && "rotate-180")} />
+      </button>
+      {isOpen && <div className="border-t border-border/60 p-2">{children}</div>}
+    </section>
   );
 }
 
@@ -1079,6 +1109,8 @@ function DiscoveryState({
   const [agendaTime, setAgendaTime] = useState<AgendaTimeFilter>('all');
   const [agendaPrice, setAgendaPrice] = useState<AgendaPriceFilter>('all');
   const [mealOnly, setMealOnly] = useState(false);
+  const [sidebarWidth, setSidebarWidth] = useState(420);
+  const sidebarResizeRef = useRef<{ pointerId: number; startX: number; startWidth: number } | null>(null);
 
   // Fetch selected top-level sections only; each query keeps its generated cache key.
   const eventsQuery = useGetListings(
@@ -1144,6 +1176,22 @@ function DiscoveryState({
     setSubcategories((previous) => ({
       ...previous,
       [subcategory]: !previous[subcategory],
+    }));
+    setSelectedMarker(null);
+  };
+
+  const selectAllSubcategories = () => {
+    setSubcategories((previous) => ({
+      ...previous,
+      ...Object.fromEntries(visibleSubcategories.map((subcategory) => [subcategory, true])),
+    }));
+    setSelectedMarker(null);
+  };
+
+  const deselectAllSubcategories = () => {
+    setSubcategories((previous) => ({
+      ...previous,
+      ...Object.fromEntries(visibleSubcategories.map((subcategory) => [subcategory, false])),
     }));
     setSelectedMarker(null);
   };
@@ -1329,11 +1377,13 @@ function DiscoveryState({
 
       {/* Sidebar List */}
       <div className={cn(
-        "w-full md:w-[420px] h-full flex flex-col bg-card/95 backdrop-blur-xl md:bg-card border-r border-border shadow-2xl z-20 absolute md:relative transition-transform duration-500 ease-[cubic-bezier(0.32,0.72,0,1)]",
+        "w-full md:w-[var(--sidebar-width)] h-full flex flex-col overflow-y-auto bg-card/95 backdrop-blur-xl md:bg-card border-r border-border shadow-2xl z-20 absolute md:relative transition-transform duration-500 ease-[cubic-bezier(0.32,0.72,0,1)]",
         view === 'list' ? "translate-y-0" : "translate-y-full md:translate-y-0"
-      )}>
-        <div className="max-h-[48vh] shrink-0 overflow-y-auto border-b border-border bg-card p-6 md:max-h-none md:overflow-visible">
-          <div className="flex items-center gap-4 mb-6">
+      )}
+      style={{ '--sidebar-width': `${sidebarWidth}px` } as React.CSSProperties}
+      >
+        <div className="shrink-0 border-b border-border bg-card p-4">
+          <div className="mb-4 flex items-center gap-3">
             <button 
               onClick={onBack} 
               className="p-2 hover:bg-muted rounded-full transition-colors text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
@@ -1364,11 +1414,8 @@ function DiscoveryState({
             </button>
           </div>
           <WeatherCard cityId={locationId} language={language} />
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
-                {t.topLevelCategories}
-              </p>
+          <div className="mt-3 space-y-2">
+            <FilterFrame title={t.topLevelCategories}>
               <div className="mb-2">
                 <CategoryActionButtons
                   language={language}
@@ -1379,7 +1426,7 @@ function DiscoveryState({
               <div
                 role="group"
                 aria-label={t.topLevelCategories}
-                className="space-y-1"
+                className="grid grid-cols-2 gap-1"
               >
                 {TOP_LEVEL_SECTIONS.map((section) => {
                   const isChecked = topLevelCategories[section];
@@ -1394,7 +1441,7 @@ function DiscoveryState({
                     <label
                       key={section}
                       className={cn(
-                        "flex min-h-9 cursor-pointer items-center gap-2 rounded-xl border px-2.5 py-2 text-[11px] font-semibold transition-all",
+                        "flex min-h-8 cursor-pointer items-center gap-1.5 rounded-lg border px-2 py-1.5 text-[10px] font-semibold transition-all",
                         isChecked
                           ? "border-primary/50 bg-primary/10 text-foreground shadow-[0_3px_10px_-6px_rgba(243,108,33,0.8)]"
                           : "border-border/70 bg-card/70 text-muted-foreground hover:border-primary/40 hover:bg-primary/5 hover:text-foreground",
@@ -1411,16 +1458,22 @@ function DiscoveryState({
                   );
                 })}
               </div>
-            </div>
+            </FilterFrame>
             {visibleSubcategories.length > 0 && (
-              <div>
-                <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
-                  {t.subcategories}
-                </p>
+              <FilterFrame title={t.subcategories}>
+                <div className="mb-2">
+                  <CategoryActionButtons
+                    language={language}
+                    onSelectAll={selectAllSubcategories}
+                    onDeselectAll={deselectAllSubcategories}
+                    selectLabel={language === 'nl' ? 'Alle subcategorieën' : 'All subcategories'}
+                    deselectLabel={language === 'nl' ? 'Geen subcategorieën' : 'No subcategories'}
+                  />
+                </div>
                 <div
                   role="group"
                   aria-label={t.subcategories}
-                  className="max-h-48 space-y-1 overflow-y-auto pr-1"
+                  className="grid grid-cols-2 gap-1"
                 >
                   {visibleSubcategories.map((subcategory) => {
                     const isChecked = subcategories[subcategory];
@@ -1428,7 +1481,7 @@ function DiscoveryState({
                       <label
                         key={subcategory}
                         className={cn(
-                          "flex min-h-9 cursor-pointer items-center gap-2 rounded-xl border px-2.5 py-2 text-[11px] font-semibold transition-all",
+                          "flex min-h-8 cursor-pointer items-center gap-1.5 rounded-lg border px-2 py-1.5 text-[10px] font-semibold transition-all",
                           isChecked
                             ? "border-primary/50 bg-primary/10 text-foreground shadow-[0_3px_10px_-6px_rgba(243,108,33,0.8)]"
                             : "border-border/70 bg-card/70 text-muted-foreground hover:border-primary/40 hover:bg-primary/5 hover:text-foreground",
@@ -1445,14 +1498,11 @@ function DiscoveryState({
                     );
                   })}
                 </div>
-              </div>
+              </FilterFrame>
             )}
-          </div>
+
           {topLevelCategories.events && (
-            <div className="mt-4 border-t border-border/70 pt-4">
-              <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
-                {language === 'nl' ? 'Activiteitenkalender' : 'Activity calendar'}
-              </p>
+            <FilterFrame title={language === 'nl' ? 'Activiteitenkalender' : 'Activity calendar'}>
               <div className="flex flex-wrap gap-1.5" role="group" aria-label={language === 'nl' ? 'Agenda filters' : 'Calendar filters'}>
                 {([
                   ['all', language === 'nl' ? 'Alle data' : 'All dates'],
@@ -1505,31 +1555,26 @@ function DiscoveryState({
                   ? 'Gratis, laag tarief en maaltijd worden alleen getoond als de bron dit expliciet vermeldt.'
                   : 'Free, low-cost, and meal labels appear only when the source states them explicitly.'}
               </p>
-            </div>
+            </FilterFrame>
           )}
-          <div className="mt-5 border-t border-border/70 pt-4">
+          <FilterFrame title={`${t.neighborhoods} / ${t.postcodeFilterLabel}`}>
             <div className="mb-2">
-              <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
-                {t.neighborhoods}
-              </p>
-              <div className="mt-2">
                 <NeighborhoodActionButtons
                   language={language}
                   onSelectAll={selectAllNeighborhoods}
                   onDeselectAll={deselectAllNeighborhoods}
                 />
-              </div>
             </div>
             <div
               role="group"
               aria-label={t.neighborhoods}
               data-neighborhood-list
-              className="max-h-48 overflow-x-hidden overflow-y-auto rounded-xl border border-border/50 bg-muted/20 p-2 pr-1"
+              className="overflow-x-hidden rounded-lg bg-muted/20 p-1"
             >
-              <div className="grid min-w-0 grid-cols-2 gap-1.5 sm:grid-cols-3">
+              <div className="grid min-w-0 grid-cols-2 gap-1">
                 <label
                   className={cn(
-                      "flex min-h-11 min-w-0 cursor-pointer items-center gap-2 rounded-xl border px-2.5 py-2 text-[11px] font-bold transition-all",
+                      "flex min-h-8 min-w-0 cursor-pointer items-center gap-1.5 rounded-lg border px-2 py-1.5 text-[10px] font-bold transition-all",
                     selectedNeighborhoods.length === 0
                        ? "border-primary/50 bg-primary/10 text-foreground shadow-[0_3px_10px_-6px_rgba(243,108,33,0.8)]"
                        : "border-border/60 bg-card/70 text-muted-foreground hover:border-primary/40 hover:bg-primary/5 hover:text-foreground",
@@ -1552,7 +1597,7 @@ function DiscoveryState({
                     <label
                       key={neighborhood}
                       className={cn(
-                        "flex min-h-11 min-w-0 cursor-pointer items-center gap-2 rounded-xl border px-2.5 py-2 text-[11px] font-semibold transition-all",
+                        "flex min-h-8 min-w-0 cursor-pointer items-center gap-1.5 rounded-lg border px-2 py-1.5 text-[10px] font-semibold transition-all",
                         isChecked
                           ? "border-primary/50 bg-primary/10 text-foreground shadow-[0_3px_10px_-6px_rgba(243,108,33,0.8)]"
                           : "border-border/60 bg-card/70 text-muted-foreground hover:border-primary/40 hover:bg-primary/5 hover:text-foreground",
@@ -1570,12 +1615,12 @@ function DiscoveryState({
                 })}
               </div>
             </div>
-            <p className="mt-2 text-xs font-medium text-muted-foreground">
+            <p className="mt-2 text-[10px] font-medium text-muted-foreground">
               {selectedNeighborhoods.length > 0
                 ? t.neighborhoodsSelected(selectedNeighborhoods.length)
                 : t.allNeighborhoods}
             </p>
-            <label className="mt-3 block">
+            <label className="mt-2 block">
               <span className="mb-1 block text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
                 {t.postcodeFilterLabel}
               </span>
@@ -1584,15 +1629,16 @@ function DiscoveryState({
                 value={postcodeFilter}
                 onChange={(event) => setPostcodeFilter(event.target.value)}
                 placeholder={t.postcodeFilterPlaceholder}
-                className="h-10 w-full rounded-xl border border-border/70 bg-card px-3 text-sm font-medium text-foreground outline-none placeholder:text-muted-foreground/70 focus:border-primary focus:ring-2 focus:ring-primary/20"
+                className="h-9 w-full rounded-lg border border-border/70 bg-card px-2.5 text-xs font-medium text-foreground outline-none placeholder:text-muted-foreground/70 focus:border-primary focus:ring-2 focus:ring-primary/20"
               />
             </label>
+          </FilterFrame>
           </div>
         </div>
 
         {/* Data source badge */}
         {!isLoading && (
-          <div className="flex flex-wrap items-center gap-2 px-6 pb-2">
+          <div className="flex flex-wrap items-center gap-2 px-4 py-3">
             {isLive ? (
               <span className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-full">
                 <Radio className="w-3 h-3" />
@@ -1639,7 +1685,7 @@ function DiscoveryState({
           </div>
         )}
 
-        <div data-event-list className="flex-1 overflow-y-auto p-6 scroll-smooth">
+        <div data-event-list className="shrink-0 p-4 scroll-smooth">
           <div className="flex flex-col gap-4 pb-20 md:pb-0">
             {/* Loading skeleton */}
             {isLoading && (
@@ -1713,7 +1759,7 @@ function DiscoveryState({
         </div>
         
         {/* Mobile close list button */}
-        <div className="md:hidden p-4 border-t border-border bg-card/95 backdrop-blur-xl mt-auto shrink-0 pb-safe">
+        <div className="sticky bottom-0 md:hidden p-4 border-t border-border bg-card/95 backdrop-blur-xl mt-auto shrink-0 pb-safe">
           <button 
             onClick={() => setView('map')} 
             className="w-full py-3.5 bg-muted hover:bg-muted/80 text-foreground rounded-xl font-bold transition-colors"
@@ -1721,6 +1767,36 @@ function DiscoveryState({
             {t.backToMap}
           </button>
         </div>
+        <div
+          role="separator"
+          aria-orientation="vertical"
+          aria-label={language === 'nl' ? 'Breedte van filterpaneel aanpassen' : 'Resize filter panel'}
+          tabIndex={0}
+          className="absolute -right-1 top-0 z-30 hidden h-full w-2 cursor-col-resize touch-none items-center justify-center bg-transparent after:h-14 after:w-1 after:rounded-full after:bg-border hover:after:bg-primary focus-visible:outline-none focus-visible:after:bg-primary md:flex"
+          onPointerDown={(event) => {
+            sidebarResizeRef.current = {
+              pointerId: event.pointerId,
+              startX: event.clientX,
+              startWidth: sidebarWidth,
+            };
+            event.currentTarget.setPointerCapture(event.pointerId);
+          }}
+          onPointerMove={(event) => {
+            const resize = sidebarResizeRef.current;
+            if (!resize || resize.pointerId !== event.pointerId) return;
+            setSidebarWidth(Math.min(640, Math.max(320, resize.startWidth + event.clientX - resize.startX)));
+          }}
+          onPointerUp={(event) => {
+            if (sidebarResizeRef.current?.pointerId === event.pointerId) {
+              sidebarResizeRef.current = null;
+              event.currentTarget.releasePointerCapture(event.pointerId);
+            }
+          }}
+          onKeyDown={(event) => {
+            if (event.key === 'ArrowLeft') setSidebarWidth((width) => Math.max(320, width - 16));
+            if (event.key === 'ArrowRight') setSidebarWidth((width) => Math.min(640, width + 16));
+          }}
+        />
       </div>
 
       {/* Map Area */}

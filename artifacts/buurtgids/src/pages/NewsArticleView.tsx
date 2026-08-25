@@ -1,14 +1,19 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, useLocation, useParams } from 'wouter';
 import { useGetNewsArticle } from '@workspace/api-client-react';
 import { format, parseISO } from 'date-fns';
-import { nl } from 'date-fns/locale';
+import { enUS, nl } from 'date-fns/locale';
 import {
   ArrowLeft, Clock, ExternalLink, Home, Newspaper,
   MapPin, ShieldAlert, Briefcase, Landmark, Trophy, Users
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import BrandLogo from '../components/BrandLogo';
+import {
+  getNewsCategoryName,
+  newsTranslations,
+  type Language,
+} from '../lib/i18n';
 
 const SUBCATEGORY_ICONS: Record<string, React.ElementType> = {
   city: MapPin,
@@ -18,16 +23,6 @@ const SUBCATEGORY_ICONS: Record<string, React.ElementType> = {
   sport: Trophy,
   business: Briefcase,
   community: Users,
-};
-
-const SUBCATEGORY_LABELS: Record<string, string> = {
-  city: 'Stadsnieuws',
-  politics: 'Politiek',
-  safety: 'Veiligheid',
-  culture: 'Cultuur',
-  sport: 'Sport',
-  business: 'Zakelijk',
-  community: 'Samenleving',
 };
 
 const decodeHtml = (str: string) => {
@@ -45,34 +40,71 @@ export default function NewsArticleView() {
   const [, setLocation] = useLocation();
   const params = useParams<{ id: string }>();
   const articleId = params.id ? parseInt(params.id, 10) : 0;
+  const [language, setLanguage] = useState<Language>(() => {
+    if (typeof window === 'undefined') return 'en';
+    return window.localStorage.getItem('buurtplaza-language') === 'nl' ? 'nl' : 'en';
+  });
 
   const { data: article, isLoading, isError } = useGetNewsArticle(articleId);
+  const copy = newsTranslations[language];
+  const dateLocale = language === 'nl' ? nl : enUS;
+
+  useEffect(() => {
+    window.localStorage.setItem('buurtplaza-language', language);
+    document.documentElement.lang = language;
+  }, [language]);
+
+  const languagePill = (
+    <div
+      className="inline-flex rounded-full border border-[#072C1E]/20 bg-white/70 p-0.5"
+      aria-label={language === 'nl' ? 'Taal kiezen' : 'Choose language'}
+    >
+      {(['nl', 'en'] as const).map(option => (
+        <button
+          key={option}
+          type="button"
+          onClick={() => setLanguage(option)}
+          aria-pressed={language === option}
+          className={cn(
+            'rounded-full px-2 py-1 text-[10px] font-black uppercase tracking-wider transition-colors',
+            language === option
+              ? 'bg-[#072C1E] text-white'
+              : 'text-[#072C1E]/50 hover:text-[#072C1E]',
+          )}
+        >
+          {option}
+        </button>
+      ))}
+    </div>
+  );
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-[#F2F0EA] flex items-center justify-center flex-col">
+      <div className="relative min-h-screen overflow-x-hidden bg-[#F2F0EA] flex items-center justify-center flex-col">
+        <div className="absolute right-4 top-4">{languagePill}</div>
         <div className="w-12 h-12 border-4 border-[#072C1E]/20 border-t-[#F36C21] rounded-full animate-spin mb-6" />
-        <p className="text-[#072C1E]/60 font-bold tracking-widest uppercase text-sm">Artikel laden...</p>
+        <p className="text-[#072C1E]/60 font-bold tracking-widest uppercase text-sm">{copy.loadingArticle}</p>
       </div>
     );
   }
 
   if (isError || !article) {
     return (
-      <div className="min-h-screen bg-[#F2F0EA] flex items-center justify-center p-6 text-center">
+      <div className="relative min-h-screen overflow-x-hidden bg-[#F2F0EA] flex items-center justify-center p-6 text-center">
+        <div className="absolute right-4 top-4">{languagePill}</div>
         <div className="max-w-md">
           <div className="w-20 h-20 bg-white rounded-full flex items-center justify-center shadow-sm border border-[#072C1E]/10 mx-auto mb-8">
             <Newspaper className="w-8 h-8 text-[#072C1E]/30" />
           </div>
-          <h1 className="font-serif text-3xl font-black text-[#072C1E] mb-4">Artikel niet gevonden</h1>
+          <h1 className="font-serif text-3xl font-black text-[#072C1E] mb-4">{copy.notFoundTitle}</h1>
           <p className="text-[#072C1E]/60 mb-8">
-            Het artikel dat je zoekt bestaat niet meer of de link is onjuist.
+            {copy.notFoundDescription}
           </p>
           <button 
             onClick={() => setLocation('/nieuws')}
             className="px-8 py-3 bg-[#072C1E] text-[#F2F0EA] font-bold rounded-full hover:bg-[#F36C21] transition-colors uppercase tracking-widest text-sm"
           >
-            Terug naar nieuws
+            {copy.backToNews}
           </button>
         </div>
       </div>
@@ -82,38 +114,42 @@ export default function NewsArticleView() {
   const Icon = SUBCATEGORY_ICONS[article.subcategory] || Newspaper;
 
   return (
-    <div className="min-h-screen bg-[#F2F0EA] text-[#1A1C1B] font-sans selection:bg-[#F36C21] selection:text-white flex flex-col">
+    <div className="min-h-screen overflow-x-hidden bg-[#F2F0EA] text-[#1A1C1B] font-sans selection:bg-[#F36C21] selection:text-white flex flex-col">
       {/* Top Nav */}
       <header className="bg-[#F2F0EA] border-b border-[#072C1E]/10 sticky top-0 z-40">
-        <div className="max-w-4xl mx-auto px-6 h-16 flex items-center justify-between">
+        <div className="max-w-4xl mx-auto px-3 sm:px-6 h-16 flex items-center justify-between gap-2">
           <button 
             onClick={() => setLocation('/nieuws')}
-            className="group flex items-center gap-2 text-xs font-bold text-[#072C1E]/60 hover:text-[#072C1E] transition-colors uppercase tracking-wider"
+            className="group flex shrink-0 items-center gap-2 text-xs font-bold text-[#072C1E]/60 hover:text-[#072C1E] transition-colors uppercase tracking-wider"
           >
             <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
-            Terug naar overzicht
+            <span className="hidden md:inline">{copy.overview}</span>
           </button>
 
-          <div className="flex items-center gap-4">
-            <Link href="/" aria-label="Naar de homepage" className="hidden sm:block">
+          <div className="flex min-w-0 items-center justify-end gap-2 sm:gap-4">
+            <Link href="/" aria-label={copy.homeAria} className="hidden md:block">
               <BrandLogo className="h-10 w-40" alt="marqtplaza.com" />
             </Link>
             <Link
               href="/"
-              aria-label="Naar de homepage"
+              aria-label={copy.homeAria}
               className="inline-flex items-center gap-2 text-xs font-bold text-[#072C1E]/60 hover:text-[#F36C21] transition-colors uppercase tracking-widest"
             >
               <Home className="w-4 h-4" />
-              <span className="hidden sm:inline">Homepage</span>
+              <span className="hidden lg:inline">{copy.homepage}</span>
             </Link>
             <a
               href={article.sourceUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-2 text-[#072C1E]/50 hover:text-[#F36C21] transition-colors text-xs font-bold uppercase tracking-widest"
+              aria-label={`${copy.originalAt} ${article.sourceName}`}
+              className="flex min-w-0 items-center gap-2 text-[#072C1E]/50 hover:text-[#F36C21] transition-colors text-xs font-bold uppercase tracking-widest"
             >
-              <span className="hidden sm:inline">Origineel op</span> {article.sourceName} <ExternalLink className="w-3.5 h-3.5" />
+              <span className="hidden lg:inline">{copy.originalAt}</span>
+              <span className="hidden md:block max-w-32 truncate">{article.sourceName}</span>
+              <ExternalLink className="w-3.5 h-3.5 shrink-0" />
             </a>
+            {languagePill}
           </div>
         </div>
       </header>
@@ -123,14 +159,14 @@ export default function NewsArticleView() {
         <div className="flex flex-wrap items-center gap-3 mb-8">
           <span className="text-xs font-bold uppercase tracking-wider text-[#F36C21] flex items-center gap-1.5">
             <Icon className="w-4 h-4" />
-            {SUBCATEGORY_LABELS[article.subcategory] || article.subcategory}
+             {getNewsCategoryName(article.subcategory, language)}
           </span>
           <span className="w-1.5 h-1.5 rounded-full bg-[#072C1E]/20" />
           <span className="text-xs font-bold text-[#072C1E]/50 uppercase tracking-widest flex items-center gap-2">
             <Clock className="w-3.5 h-3.5" />
             {article.publishedAt
-              ? format(parseISO(article.publishedAt), 'd MMMM yyyy, HH:mm', { locale: nl })
-              : 'Recent'}
+              ? format(parseISO(article.publishedAt), 'd MMMM yyyy, HH:mm', { locale: dateLocale })
+              : copy.recent}
           </span>
           <span className="w-1.5 h-1.5 rounded-full bg-[#072C1E]/20" />
           <span className="text-xs font-bold text-[#072C1E]/50 uppercase tracking-widest">
@@ -138,7 +174,7 @@ export default function NewsArticleView() {
           </span>
         </div>
 
-        <h1 className="font-serif text-4xl md:text-5xl lg:text-6xl font-black text-[#072C1E] leading-[1.1] tracking-tight mb-10">
+        <h1 className="break-words font-serif text-4xl md:text-5xl lg:text-6xl font-black text-[#072C1E] leading-[1.1] tracking-tight mb-10">
           {decodeHtml(article.title)}
         </h1>
 
@@ -153,18 +189,18 @@ export default function NewsArticleView() {
           <div className="w-16 h-16 bg-[#072C1E]/5 rounded-full flex items-center justify-center mb-6">
             <Newspaper className="w-8 h-8 text-[#072C1E]/40" />
           </div>
-          <h2 className="font-serif text-3xl font-bold text-[#072C1E] mb-4">Lees het volledige artikel</h2>
+          <h2 className="font-serif text-3xl font-bold text-[#072C1E] mb-4">{copy.fullArticle}</h2>
           <p className="text-[#072C1E]/70 mb-8 max-w-md font-medium">
-            Dit nieuwsbericht is afkomstig van <strong className="text-[#072C1E]">{article.sourceName}</strong>. Om het hele verhaal te lezen, inclusief eventuele foto's en details, ga je naar hun website.
+            {copy.sourceExplanation(article.sourceName)}
           </p>
           
           <a 
             href={article.sourceUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-3 px-8 py-4 bg-[#072C1E] text-[#F2F0EA] font-bold text-sm md:text-base uppercase tracking-wider rounded-none hover:bg-[#F36C21] hover:-translate-y-1 transition-all duration-300 shadow-xl shadow-[#072C1E]/10"
+            className="inline-flex max-w-full items-center justify-center gap-3 break-words px-6 sm:px-8 py-4 bg-[#072C1E] text-[#F2F0EA] font-bold text-sm md:text-base uppercase tracking-wider rounded-none hover:bg-[#F36C21] hover:-translate-y-1 transition-all duration-300 shadow-xl shadow-[#072C1E]/10"
           >
-            Lees verder op {article.sourceName}
+            {copy.continueAt(article.sourceName)}
             <ExternalLink className="w-5 h-5" />
           </a>
         </div>
@@ -173,7 +209,7 @@ export default function NewsArticleView() {
       {/* Footer */}
       <footer className="bg-[#072C1E] border-t border-[#072C1E]/10 mt-auto">
         <div className="max-w-7xl mx-auto px-4 md:px-8 py-12 flex flex-col items-center text-center">
-          <p className="text-[#F2F0EA]/50 text-xs font-bold tracking-widest uppercase mb-6">Onderdeel van</p>
+          <p className="text-[#F2F0EA]/50 text-xs font-bold tracking-widest uppercase mb-6">{copy.partOf}</p>
           <BrandLogo
             className="h-14 w-56 opacity-70 hover:opacity-100 transition-opacity"
             alt="marqtplaza.com"

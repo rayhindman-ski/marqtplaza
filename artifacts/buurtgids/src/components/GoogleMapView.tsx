@@ -66,17 +66,19 @@ interface TileViewport {
 
 type HtmlMarkerOverlay = google.maps.OverlayView & {
   setContent: (content: HTMLElement) => void;
+  setPosition: (position: google.maps.LatLngLiteral) => void;
   setZIndex: (zIndex: number) => void;
 };
 
 function createHtmlMarkerOverlay(
   map: google.maps.Map,
-  position: google.maps.LatLngLiteral,
+  initialPosition: google.maps.LatLngLiteral,
   initialContent: HTMLElement,
   initialZIndex: number,
 ): HtmlMarkerOverlay {
   class MarkerOverlay extends google.maps.OverlayView {
     private content = initialContent;
+    private position = initialPosition;
     private zIndex = initialZIndex;
 
     onAdd() {
@@ -88,7 +90,7 @@ function createHtmlMarkerOverlay(
     draw() {
       const projection = this.getProjection();
       if (!projection) return;
-      const point = projection.fromLatLngToDivPixel(position);
+      const point = projection.fromLatLngToDivPixel(this.position);
       if (!point) return;
       this.content.style.left = `${point.x}px`;
       this.content.style.top = `${point.y}px`;
@@ -107,6 +109,11 @@ function createHtmlMarkerOverlay(
       this.draw();
     }
 
+    setPosition(position: google.maps.LatLngLiteral) {
+      this.position = position;
+      this.draw();
+    }
+
     setZIndex(zIndex: number) {
       this.zIndex = zIndex;
       this.content.style.zIndex = String(zIndex);
@@ -117,6 +124,29 @@ function createHtmlMarkerOverlay(
   overlay.setMap(map);
   return overlay;
 }
+
+const MAP_COPY = {
+  nl: {
+    unavailableNoResults: 'Kaarttegels zijn niet beschikbaar en er zijn geen ontdekkingen om te tonen.',
+    coordinateMap: 'Kaart met activiteitlocaties',
+    coordinateMapDescription: 'Kaarttegels zijn niet beschikbaar. De locaties zijn geplaatst met hun lengte- en breedtegraad.',
+    interactiveMap: 'Interactieve activiteitenkaart',
+    googleMap: 'Google-kaart met activiteiten',
+    zoomIn: 'Inzoomen',
+    zoomOut: 'Uitzoomen',
+    contributors: '© OpenStreetMap-bijdragers',
+  },
+  en: {
+    unavailableNoResults: 'Map tiles are unavailable and there are no discoveries to show.',
+    coordinateMap: 'Activity coordinate map',
+    coordinateMapDescription: 'Map tiles are unavailable. Locations are positioned using their latitude and longitude.',
+    interactiveMap: 'Interactive activity map',
+    googleMap: 'Google activity map',
+    zoomIn: 'Zoom in',
+    zoomOut: 'Zoom out',
+    contributors: '© OpenStreetMap contributors',
+  },
+} as const;
 
 type MapPoint = Pick<MarkerData, 'id' | 'name' | 'category' | 'description' | 'details' | 'lat' | 'lng'> & {
   category: MapCategory;
@@ -175,21 +205,8 @@ function getLocation(locationId: string) {
   return LOCATIONS.find((item) => item.id === locationId);
 }
 
-function getMapPoints(locationId: string, markers: MarkerData[]): MapPoint[] {
-  if (markers.length > 0) return markers;
-
-  const location = getLocation(locationId);
-  return location
-    ? [{
-        id: 'city-centre',
-        name: location.name,
-        category: 'Businesses',
-        description: `Central map view for ${location.name}`,
-        details: 'Explore nearby places',
-        lat: location.lat,
-        lng: location.lng,
-      }]
-    : [];
+function getMapPoints(markers: MarkerData[]): MapPoint[] {
+  return markers;
 }
 
 function latLngToWorld({ lat, lng }: LatLng, zoom: number) {
@@ -260,9 +277,39 @@ function getNeighborhoodViewport(
   };
 }
 
+function getMarkerViewport(
+  locationId: string,
+  markers: MarkerData[],
+  mapSize: { width: number; height: number },
+): TileViewport {
+  if (markers.length === 0) return getInitialViewport(locationId);
+  if (markers.length === 1) {
+    return {
+      center: { lat: markers[0].lat, lng: markers[0].lng },
+      zoom: 15,
+    };
+  }
+
+  const latitudes = markers.map((marker) => marker.lat);
+  const longitudes = markers.map((marker) => marker.lng);
+  const latitudeSpan = Math.max(...latitudes) - Math.min(...latitudes);
+  const longitudeSpan = Math.max(...longitudes) - Math.min(...longitudes);
+  const availableWidth = Math.max(240, mapSize.width - 96);
+  const availableHeight = Math.max(220, mapSize.height - 128);
+  const widthZoom = Math.log2((availableWidth * 360) / (TILE_SIZE * Math.max(longitudeSpan, 0.002)));
+  const heightZoom = Math.log2((availableHeight * 170) / (TILE_SIZE * Math.max(latitudeSpan, 0.002)));
+
+  return {
+    center: {
+      lat: (Math.min(...latitudes) + Math.max(...latitudes)) / 2,
+      lng: (Math.min(...longitudes) + Math.max(...longitudes)) / 2,
+    },
+    zoom: Math.max(MIN_TILE_ZOOM, Math.min(MAX_TILE_ZOOM, Math.floor(Math.min(widthZoom, heightZoom)))),
+  };
+}
+
 function CoordinateMapFallback({
   language,
-  locationId,
   markers,
   selectedMarkerId,
   onMarkerClick,
@@ -270,17 +317,18 @@ function CoordinateMapFallback({
   GoogleMapViewProps,
   'language' | 'locationId' | 'markers' | 'selectedMarkerId' | 'onMarkerClick'
 >) {
-  const points = getMapPoints(locationId, markers);
+  const points = getMapPoints(markers);
+  const mapCopy = MAP_COPY[language];
   const [hoveredMarkerId, setHoveredMarkerId] = useState<string | null>(null);
 
   if (points.length === 0) {
     return (
       <div
         className="absolute inset-0 grid place-items-center bg-[linear-gradient(135deg,_#e8f0e9_0%,_#f7f4ed_46%,_#dceaf0_100%)] p-6 text-center"
-        aria-label="Activity coordinate map"
+        aria-label={mapCopy.coordinateMap}
       >
         <p className="max-w-xs text-sm font-semibold text-muted-foreground">
-          Live map tiles are unavailable and there are no activity coordinates to display.
+          {mapCopy.unavailableNoResults}
         </p>
       </div>
     );
@@ -298,13 +346,13 @@ function CoordinateMapFallback({
   return (
     <div
       className="absolute inset-0 overflow-hidden bg-[linear-gradient(135deg,_#e8f0e9_0%,_#f7f4ed_46%,_#dceaf0_100%)]"
-      aria-label="Activity coordinate map"
+      aria-label={mapCopy.coordinateMap}
     >
       <div className="absolute inset-0 opacity-40 [background-image:linear-gradient(rgba(72,105,93,0.14)_1px,transparent_1px),linear-gradient(90deg,rgba(72,105,93,0.14)_1px,transparent_1px)] [background-size:36px_36px]" />
       <div className="absolute left-5 top-5 z-10 max-w-xs rounded-xl border border-border/70 bg-card/90 px-3 py-2 shadow-sm backdrop-blur">
-        <p className="text-xs font-extrabold text-foreground">Activity coordinate map</p>
+        <p className="text-xs font-extrabold text-foreground">{mapCopy.coordinateMap}</p>
         <p className="mt-0.5 text-[11px] text-muted-foreground">
-          Live map tiles are unavailable. Activity pins use their latitude and longitude.
+          {mapCopy.coordinateMapDescription}
         </p>
       </div>
       {points.map((point) => {
@@ -326,7 +374,6 @@ function CoordinateMapFallback({
           overflow: 'hidden',
           boxShadow: isSelected ? `0 0 0 5px ${color}44, 0 8px 18px -6px rgba(23,34,53,0.5)` : undefined,
         };
-        const ariaLabel = `Show ${point.name} at ${point.lat.toFixed(5)}, ${point.lng.toFixed(5)}`;
         const icon = <Icon className="h-5 w-5 text-white" strokeWidth={2.5} aria-hidden="true" />;
 
         const previewId = `marker-preview-${point.id}`;
@@ -394,6 +441,7 @@ function TileMapView({
   const fallbackStartedRef = useRef(false);
   const [size, setSize] = useState({ width: 0, height: 0 });
   const [viewport, setViewport] = useState<TileViewport>(() => getInitialViewport(locationId));
+  const mapCopy = MAP_COPY[language];
 
   const reportUnavailable = useCallback(() => {
     if (!fallbackStartedRef.current) {
@@ -423,12 +471,15 @@ function TileMapView({
   }, [locationId]);
 
   useEffect(() => {
-    const location = getLocation(locationId);
-    if (!location) return;
-    setViewport(getNeighborhoodViewport(locationId, selectedNeighborhoods, size));
-  }, [locationId, selectedNeighborhoods, size.height, size.width]);
+    setViewport(
+      selectedNeighborhoods.length > 0
+        ? getNeighborhoodViewport(locationId, selectedNeighborhoods, size)
+        : getMarkerViewport(locationId, markers, size),
+    );
+  }, [locationId, markers, selectedNeighborhoods, size.height, size.width]);
 
   useEffect(() => {
+    if (selectedNeighborhoods.length > 0) return;
     const marker = markers.find((item) => item.id === selectedMarkerId);
     if (marker?.lat != null && marker.lng != null) {
       setViewport((current) => ({
@@ -436,7 +487,7 @@ function TileMapView({
         center: { lat: marker.lat, lng: marker.lng },
       }));
     }
-  }, [markers, selectedMarkerId]);
+  }, [selectedMarkerId, selectedNeighborhoods.length]);
 
   const tiles = useMemo(() => {
     if (size.width === 0 || size.height === 0) return [];
@@ -509,7 +560,7 @@ function TileMapView({
     }
   }, [reportUnavailable, tileSetKey]);
 
-  const points = getMapPoints(locationId, markers);
+  const points = getMapPoints(markers);
   const [hoveredMarkerId, setHoveredMarkerId] = useState<string | null>(null);
   const center = latLngToWorld(viewport.center, viewport.zoom);
   const mapLeft = center.x - size.width / 2;
@@ -557,7 +608,7 @@ function TileMapView({
     <div
       ref={containerRef}
       className="absolute inset-0 z-0 cursor-grab overflow-hidden bg-[#e9efea] select-none active:cursor-grabbing"
-      aria-label="Interactive activity map"
+      aria-label={mapCopy.interactiveMap}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
@@ -600,7 +651,6 @@ function TileMapView({
           overflow: 'hidden',
           boxShadow: isSelected ? `0 0 0 5px ${color}44, 0 8px 18px -6px rgba(23,34,53,0.5)` : undefined,
         };
-        const ariaLabel = `Open ${point.name} at ${point.lat.toFixed(5)}, ${point.lng.toFixed(5)}${savedIds.has(point.id) ? ', saved' : ''}`;
         const icon = (
           <>
             <Icon className="h-5 w-5 text-white" strokeWidth={2.5} aria-hidden="true" />
@@ -654,7 +704,7 @@ function TileMapView({
       <div className="absolute bottom-3 left-3 z-20 flex overflow-hidden rounded-lg border border-border/80 bg-card shadow-md">
         <button
           type="button"
-          aria-label="Zoom in"
+          aria-label={mapCopy.zoomIn}
           className="grid h-9 w-9 place-items-center border-r border-border text-lg font-bold text-foreground hover:bg-muted"
           onPointerDown={(event) => event.stopPropagation()}
           onClick={() => changeZoom(1)}
@@ -663,7 +713,7 @@ function TileMapView({
         </button>
         <button
           type="button"
-          aria-label="Zoom out"
+          aria-label={mapCopy.zoomOut}
           className="grid h-9 w-9 place-items-center text-lg font-bold text-foreground hover:bg-muted"
           onPointerDown={(event) => event.stopPropagation()}
           onClick={() => changeZoom(-1)}
@@ -678,7 +728,7 @@ function TileMapView({
         rel="noreferrer"
         onPointerDown={(event) => event.stopPropagation()}
       >
-        © OpenStreetMap contributors
+        {mapCopy.contributors}
       </a>
     </div>
   );
@@ -882,7 +932,14 @@ function GoogleMapCanvas({
     const neighborhoods = selectedNeighborhoods
       .map((name) => location.neighborhoodCoords[name])
       .filter((area): area is { lat: number; lng: number; zoom: number } => Boolean(area));
-    if (neighborhoods.length === 0) {
+    if (neighborhoods.length === 0 && markers.length === 1) {
+      mapRef.current.panTo({ lat: markers[0].lat, lng: markers[0].lng });
+      mapRef.current.setZoom(15);
+    } else if (neighborhoods.length === 0 && markers.length > 1) {
+      const bounds = new google.maps.LatLngBounds();
+      markers.forEach((marker) => bounds.extend({ lat: marker.lat, lng: marker.lng }));
+      mapRef.current.fitBounds(bounds, 64);
+    } else if (neighborhoods.length === 0) {
       mapRef.current.panTo({ lat: location.lat, lng: location.lng });
       mapRef.current.setZoom(location.zoom);
     } else if (neighborhoods.length === 1) {
@@ -893,7 +950,7 @@ function GoogleMapCanvas({
       neighborhoods.forEach((area) => bounds.extend(area));
       mapRef.current.fitBounds(bounds, 64);
     }
-  }, [location, mapReady, selectedNeighborhoods]);
+  }, [location, mapReady, markers, selectedNeighborhoods]);
 
   useEffect(() => {
     if (!mapReady || !mapRef.current) return;
@@ -925,6 +982,7 @@ function GoogleMapCanvas({
       if (existing) {
         const content = buildMarkerEl(marker, isSelected, savedIds.has(marker.id));
         attachPreviewPriority(existing, content, isSelected);
+        existing.setPosition({ lat: marker.lat, lng: marker.lng });
         existing.setContent(content);
         existing.setZIndex(isSelected ? 100 : 1);
         continue;
@@ -943,12 +1001,12 @@ function GoogleMapCanvas({
   }, [buildMarkerEl, mapReady, markers, onMarkerClick, savedIds, selectedMarkerId]);
 
   useEffect(() => {
-    if (!mapReady || !mapRef.current || !selectedMarkerId) return;
+    if (!mapReady || !mapRef.current || !selectedMarkerId || selectedNeighborhoods.length > 0) return;
     const marker = markers.find((item) => item.id === selectedMarkerId);
     if (marker?.lat != null && marker.lng != null) {
       mapRef.current.panTo({ lat: marker.lat, lng: marker.lng });
     }
-  }, [mapReady, markers, selectedMarkerId]);
+  }, [mapReady, selectedMarkerId, selectedNeighborhoods.length]);
 
   useEffect(() => () => {
     for (const mapMarker of markersRef.current.values()) {
@@ -957,7 +1015,7 @@ function GoogleMapCanvas({
     markersRef.current.clear();
   }, []);
 
-  return <div ref={containerRef} className="absolute inset-0 z-0" aria-label="Google Map" />;
+  return <div ref={containerRef} className="absolute inset-0 z-0" aria-label={MAP_COPY[language].googleMap} />;
 }
 
 type MapProvider = 'google' | 'tiles' | 'fallback';
@@ -968,6 +1026,25 @@ export function GoogleMapView(props: GoogleMapViewProps) {
   );
   const useTileMap = useCallback(() => setProvider('tiles'), []);
   const useCoordinateFallback = useCallback(() => setProvider('fallback'), []);
+
+  if (props.markers.length === 0) {
+    return (
+      <div
+        className="absolute inset-0 grid place-items-center bg-muted/40 p-6 text-center"
+        role="status"
+        aria-label={MAP_COPY[props.language].interactiveMap}
+      >
+        <div className="max-w-xs">
+          <p className="text-sm font-extrabold text-foreground">
+            {translations[props.language].noDiscoveries}
+          </p>
+          <p className="mt-1 text-sm font-semibold text-muted-foreground">
+            {translations[props.language].noDiscoveriesDescription}
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   if (provider === 'fallback') {
     return <CoordinateMapFallback {...props} />;

@@ -1,4 +1,5 @@
 import type { BusinessCategory, Category, ListingSource, Location, Marker, SocialMapCategory } from './data';
+import type { NewsSubcategory } from '@workspace/api-client-react';
 
 export type Language = 'nl' | 'en';
 
@@ -6,6 +7,104 @@ export const LANGUAGE_OPTIONS: Array<{ value: Language; label: string }> = [
   { value: 'nl', label: 'Nederlands' },
   { value: 'en', label: 'English' },
 ];
+
+export const NEWS_CATEGORY_LABELS: Record<Language, Record<NewsSubcategory, string>> = {
+  nl: {
+    city: 'Stadsnieuws',
+    politics: 'Politiek',
+    safety: 'Veiligheid',
+    culture: 'Cultuur',
+    sport: 'Sport',
+    business: 'Zakelijk',
+    community: 'Samenleving',
+  },
+  en: {
+    city: 'City news',
+    politics: 'Politics',
+    safety: 'Safety',
+    culture: 'Culture',
+    sport: 'Sport',
+    business: 'Business',
+    community: 'Community',
+  },
+};
+
+export const newsTranslations = {
+  nl: {
+    back: 'Terug',
+    city: 'Den Haag',
+    titleLead: 'Haags',
+    titleAccent: 'Nieuws',
+    intro: 'Lokaal geverifieerd nieuws. Zonder ruis, zonder algoritmes. Gewoon wat er speelt in de stad.',
+    filters: 'Nieuwsfilter',
+    filterDescription: 'Kies één categorie',
+    showFilters: 'Toon filters',
+    hideFilters: 'Verberg filters',
+    allNews: 'Alle nieuws',
+    loadingArticle: 'Artikel laden...',
+    loadErrorTitle: 'Nieuws kon niet geladen worden',
+    loadErrorDescription: 'Er was een probleem met het ophalen van de laatste updates. Probeer het later nog eens.',
+    retry: 'Opnieuw proberen',
+    emptyTitle: 'Geen artikelen gevonden',
+    emptyDescription: 'Er is momenteel geen nieuws in deze categorie. Controleer later opnieuw of kies een andere categorie.',
+    recent: 'Recent',
+    readArticle: 'Lees artikel',
+    read: 'Lees',
+    partOf: 'Onderdeel van',
+    footer: 'Lokale informatie, verbonden door marqtplaza.com.',
+    rights: 'Alle rechten voorbehouden.',
+    overview: 'Terug naar overzicht',
+    homeAria: 'Naar de homepage',
+    homepage: 'Homepage',
+    originalAt: 'Origineel op',
+    notFoundTitle: 'Artikel niet gevonden',
+    notFoundDescription: 'Het artikel dat je zoekt bestaat niet meer of de link is onjuist.',
+    backToNews: 'Terug naar nieuws',
+    fullArticle: 'Lees het volledige artikel',
+    sourceExplanation: (source: string) =>
+      `Dit nieuwsbericht is afkomstig van ${source}. Om het hele verhaal te lezen, inclusief eventuele foto's en details, ga je naar hun website.`,
+    continueAt: (source: string) => `Lees verder op ${source}`,
+  },
+  en: {
+    back: 'Back',
+    city: 'The Hague',
+    titleLead: 'The Hague',
+    titleAccent: 'News',
+    intro: 'Locally verified news. No noise, no algorithms. Just what is happening across the city.',
+    filters: 'News filter',
+    filterDescription: 'Choose one category',
+    showFilters: 'Show filters',
+    hideFilters: 'Hide filters',
+    allNews: 'All news',
+    loadingArticle: 'Loading article...',
+    loadErrorTitle: 'News could not be loaded',
+    loadErrorDescription: 'There was a problem fetching the latest updates. Please try again later.',
+    retry: 'Try again',
+    emptyTitle: 'No articles found',
+    emptyDescription: 'There is currently no news in this category. Check back later or choose another category.',
+    recent: 'Recent',
+    readArticle: 'Read article',
+    read: 'Read',
+    partOf: 'Part of',
+    footer: 'Local information, connected by marqtplaza.com.',
+    rights: 'All rights reserved.',
+    overview: 'Back to overview',
+    homeAria: 'Go to the homepage',
+    homepage: 'Homepage',
+    originalAt: 'Original at',
+    notFoundTitle: 'Article not found',
+    notFoundDescription: 'The article you are looking for no longer exists or the link is incorrect.',
+    backToNews: 'Back to news',
+    fullArticle: 'Read the full article',
+    sourceExplanation: (source: string) =>
+      `This news story comes from ${source}. To read the full story, including any photos and details, visit their website.`,
+    continueAt: (source: string) => `Continue reading at ${source}`,
+  },
+} as const;
+
+export function getNewsCategoryName(category: NewsSubcategory, language: Language): string {
+  return NEWS_CATEGORY_LABELS[language][category];
+}
 
 export const translations = {
   nl: {
