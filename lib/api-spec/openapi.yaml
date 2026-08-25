@@ -22,6 +22,8 @@ tags:
     description: Periodic source review of curated Den Haag support locations
   - name: news
     description: Den Haag news aggregation
+  - name: weather
+    description: City weather forecast
 paths:
   /healthz:
     get:
@@ -36,6 +38,30 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /weather:
+    get:
+      operationId: getWeather
+      tags: [weather]
+      summary: Get a short city weather forecast
+      parameters:
+        - name: cityId
+          in: query
+          required: true
+          schema:
+            type: string
+          description: The city identifier (ams, rot, utr, dhg, ein)
+      responses:
+        "200":
+          description: Current conditions and a three-day forecast
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WeatherResponse"
+        "400":
+          description: Unknown city
+        "503":
+          description: Weather provider temporarily unavailable
 
   /capture/search:
     post:
@@ -340,6 +366,66 @@ components:
           type: string
       required:
         - status
+
+    WeatherResponse:
+      type: object
+      properties:
+        cityId:
+          type: string
+        locationName:
+          type: string
+        fetchedAt:
+          type: string
+        current:
+          $ref: "#/components/schemas/WeatherCurrent"
+        forecast:
+          type: array
+          items:
+            $ref: "#/components/schemas/WeatherDay"
+        provider:
+          type: string
+          enum: [open-meteo]
+      required: [cityId, locationName, fetchedAt, current, forecast, provider]
+
+    WeatherCurrent:
+      type: object
+      properties:
+        temperature:
+          type: number
+        apparentTemperature:
+          type: number
+        precipitation:
+          type: number
+        windSpeed:
+          type: number
+        weatherCode:
+          type: number
+        condition:
+          $ref: "#/components/schemas/WeatherCondition"
+        isDay:
+          type: boolean
+      required: [temperature, apparentTemperature, precipitation, windSpeed, weatherCode, condition, isDay]
+
+    WeatherDay:
+      type: object
+      properties:
+        date:
+          type: string
+        high:
+          type: number
+        low:
+          type: number
+        precipitationProbability:
+          type: number
+        weatherCode:
+          type: number
+        condition:
+          $ref: "#/components/schemas/WeatherCondition"
+      required: [date, high, low, precipitationProbability, weatherCode, condition]
+
+    WeatherCondition:
+      type: string
+      enum: [clear, partly_cloudy, cloudy, fog, drizzle, rain, snow, showers, thunderstorm, unknown]
 
     CaptureSearchRequest:
       type: object

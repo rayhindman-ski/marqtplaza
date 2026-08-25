@@ -30,6 +30,7 @@ import type {
   GetEventReviewCandidatesParams,
   GetListingsParams,
   GetNewsParams,
+  GetWeatherParams,
   HealthStatus,
   ListingsResponse,
   NewsArticle,
@@ -42,7 +43,8 @@ import type {
   ScanResultList,
   SocialMapReviewResponse,
   SourceScanRequest,
-  SourceScanResponse
+  SourceScanResponse,
+  WeatherResponse
 } from './api.schemas';
 
 import { customFetch } from '../custom-fetch';
@@ -138,6 +140,90 @@ export function useHealthCheck<TData = Awaited<ReturnType<typeof healthCheck>>, 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getHealthCheckQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetWeatherUrl = (params: GetWeatherParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/weather?${stringifiedParams}` : `/api/weather`
+}
+
+/**
+ * @summary Get a short city weather forecast
+ */
+export const getWeather = async (params: GetWeatherParams, options?: Parameters<typeof customFetch>[1]): Promise<WeatherResponse> => {
+
+  return customFetch<WeatherResponse>(getGetWeatherUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetWeatherQueryKey = (params?: GetWeatherParams,) => {
+    return [
+    `/api/weather`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetWeatherQueryOptions = <TData = Awaited<ReturnType<typeof getWeather>>, TError = ErrorType<void>>(params: GetWeatherParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getWeather>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetWeatherQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getWeather>>> = ({ signal }) => getWeather(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getWeather>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetWeatherQueryResult = NonNullable<Awaited<ReturnType<typeof getWeather>>>
+export type GetWeatherQueryError = ErrorType<void>
+
+
+/**
+ * @summary Get a short city weather forecast
+ */
+
+export function useGetWeather<TData = Awaited<ReturnType<typeof getWeather>>, TError = ErrorType<void>>(
+ params: GetWeatherParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getWeather>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetWeatherQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

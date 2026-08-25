@@ -9,12 +9,19 @@ import {
   Map as MapIcon, List, Clock, Newspaper,
   Globe2, Bookmark, BookmarkCheck, X, ChevronDown, ChevronUp,
   ScanSearch, RefreshCw, WifiOff, Radio, MapPinned,
-  Landmark, Route as RouteIcon, Baby, Building2, Coffee, Gamepad2, HandHeart, Waves, ShoppingBag, ExternalLink, AlertCircle
+  Landmark, Route as RouteIcon, Baby, Building2, Coffee, Gamepad2, HandHeart, Waves, ShoppingBag, ExternalLink, AlertCircle,
+  CloudSun, Cloud, CloudFog, CloudRain, CloudSnow, Sun, Wind, Droplets
 } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { Toaster } from '@/components/ui/sonner';
-import { getGetListingsQueryKey, setAuthTokenGetter, useGetListings } from '@workspace/api-client-react';
+import {
+  getGetListingsQueryKey,
+  getGetWeatherQueryKey,
+  setAuthTokenGetter,
+  useGetListings,
+  useGetWeather,
+} from '@workspace/api-client-react';
 import {
   LOCATIONS,
   MARKERS,
@@ -224,6 +231,137 @@ function LanguageSelector({
         ))}
       </select>
     </label>
+  );
+}
+
+const weatherConditionLabels: Record<string, { nl: string; en: string }> = {
+  clear: { nl: 'Helder', en: 'Clear' },
+  partly_cloudy: { nl: 'Licht bewolkt', en: 'Partly cloudy' },
+  cloudy: { nl: 'Bewolkt', en: 'Cloudy' },
+  fog: { nl: 'Mistig', en: 'Foggy' },
+  drizzle: { nl: 'Motregen', en: 'Drizzle' },
+  rain: { nl: 'Regen', en: 'Rain' },
+  snow: { nl: 'Sneeuw', en: 'Snow' },
+  showers: { nl: 'Buien', en: 'Showers' },
+  thunderstorm: { nl: 'Onweer', en: 'Thunderstorm' },
+  unknown: { nl: 'Wisselend', en: 'Mixed' },
+};
+
+function WeatherIcon({ condition, isDay, className }: { condition: string; isDay?: boolean; className?: string }) {
+  const Icon = condition === 'clear'
+    ? (isDay === false ? Cloud : Sun)
+    : condition === 'partly_cloudy'
+      ? CloudSun
+      : condition === 'cloudy'
+        ? Cloud
+        : condition === 'fog'
+          ? CloudFog
+          : condition === 'snow'
+            ? CloudSnow
+            : condition === 'rain' || condition === 'showers' || condition === 'drizzle'
+              ? CloudRain
+              : condition === 'thunderstorm'
+                ? CloudRain
+                : CloudSun;
+  return <Icon className={className} aria-hidden="true" />;
+}
+
+function WeatherCard({ cityId, language }: { cityId: string; language: Language }) {
+  const weatherQuery = useGetWeather(
+    { cityId },
+    {
+      query: {
+        staleTime: 10 * 60 * 1000,
+        retry: 1,
+        queryKey: getGetWeatherQueryKey({ cityId }),
+      },
+    },
+  );
+  const data = weatherQuery.data;
+  const currentLabel = data
+    ? (weatherConditionLabels[data.current.condition]?.[language] ?? weatherConditionLabels.unknown[language])
+    : '';
+  const formatDay = (date: string) => new Intl.DateTimeFormat(
+    language === 'nl' ? 'nl-NL' : 'en-GB',
+    { weekday: 'short' },
+  ).format(new Date(`${date}T12:00:00`));
+  const updatedLabel = data
+    ? new Intl.DateTimeFormat(language === 'nl' ? 'nl-NL' : 'en-GB', {
+      hour: '2-digit',
+      minute: '2-digit',
+    }).format(new Date(data.fetchedAt))
+    : '';
+
+  if (weatherQuery.isLoading) {
+    return (
+      <div className="mt-5 animate-pulse rounded-2xl border border-border/70 bg-muted/50 p-4" aria-label={language === 'nl' ? 'Weer laden' : 'Loading weather'}>
+        <div className="h-3 w-28 rounded bg-muted" />
+        <div className="mt-3 h-10 w-32 rounded bg-muted" />
+        <div className="mt-3 h-3 w-full rounded bg-muted" />
+      </div>
+    );
+  }
+
+  if (weatherQuery.isError || !data) return null;
+
+  return (
+    <section
+      data-testid="weather-card"
+      aria-label={language === 'nl' ? `Weer in ${data.locationName}` : `Weather in ${data.locationName}`}
+      className="mt-5 overflow-hidden rounded-2xl border border-sky-200/70 bg-gradient-to-br from-sky-50 via-card to-orange-50/70 p-4 shadow-sm"
+    >
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="text-[10px] font-black uppercase tracking-[0.16em] text-sky-800/70">
+            {language === 'nl' ? 'Vandaag buiten' : 'Outside today'}
+          </p>
+          <p className="mt-1 text-sm font-extrabold text-foreground">{data.locationName}</p>
+        </div>
+        <WeatherIcon condition={data.current.condition} isDay={data.current.isDay} className="h-8 w-8 text-sky-600" />
+      </div>
+
+      <div className="mt-3 flex items-end justify-between gap-3">
+        <div className="flex items-end gap-2">
+          <span className="text-4xl font-black leading-none tracking-tight text-foreground">
+            {Math.round(data.current.temperature)}°
+          </span>
+          <div className="pb-0.5">
+            <p className="text-sm font-bold text-foreground">{currentLabel}</p>
+            <p className="mt-0.5 text-[11px] text-muted-foreground">
+              {language === 'nl' ? 'voelt als' : 'feels like'} {Math.round(data.current.apparentTemperature)}°
+            </p>
+          </div>
+        </div>
+        <div className="space-y-1 text-right text-[11px] font-semibold text-muted-foreground">
+          <p className="inline-flex items-center gap-1">
+            <Droplets className="h-3 w-3 text-sky-600" />
+            {data.forecast[0]?.precipitationProbability ?? 0}%
+          </p>
+          <p className="inline-flex items-center gap-1">
+            <Wind className="h-3 w-3 text-sky-600" />
+            {Math.round(data.current.windSpeed)} km/u
+          </p>
+        </div>
+      </div>
+
+      <div className="mt-4 grid grid-cols-3 divide-x divide-sky-200/70 rounded-xl border border-sky-200/60 bg-card/60 py-2">
+        {data.forecast.map((day) => (
+          <div key={day.date} className="flex flex-col items-center gap-1 px-1 text-center">
+            <span className="text-[10px] font-black uppercase text-muted-foreground">
+              {formatDay(day.date)}
+            </span>
+            <WeatherIcon condition={day.condition} className="h-4 w-4 text-sky-600" />
+            <span className="text-[11px] font-bold text-foreground">
+              {Math.round(day.high)}° <span className="font-medium text-muted-foreground">{Math.round(day.low)}°</span>
+            </span>
+            <span className="text-[10px] font-semibold text-sky-700">{day.precipitationProbability}%</span>
+          </div>
+        ))}
+      </div>
+      <p className="mt-2 text-[10px] text-muted-foreground">
+        {language === 'nl' ? `Bijgewerkt om ${updatedLabel}` : `Updated at ${updatedLabel}`} · Open-Meteo
+      </p>
+    </section>
   );
 }
 
@@ -1225,6 +1363,7 @@ function DiscoveryState({
               )}
             </button>
           </div>
+          <WeatherCard cityId={locationId} language={language} />
           <div className="grid grid-cols-2 gap-4">
             <div>
               <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">

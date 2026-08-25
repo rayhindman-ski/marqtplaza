@@ -9,6 +9,57 @@ export interface HealthStatus {
   status: string;
 }
 
+export type WeatherResponseProvider = typeof WeatherResponseProvider[keyof typeof WeatherResponseProvider];
+
+
+export const WeatherResponseProvider = {
+  'open-meteo': 'open-meteo',
+} as const;
+
+export type WeatherCondition = typeof WeatherCondition[keyof typeof WeatherCondition];
+
+
+export const WeatherCondition = {
+  clear: 'clear',
+  partly_cloudy: 'partly_cloudy',
+  cloudy: 'cloudy',
+  fog: 'fog',
+  drizzle: 'drizzle',
+  rain: 'rain',
+  snow: 'snow',
+  showers: 'showers',
+  thunderstorm: 'thunderstorm',
+  unknown: 'unknown',
+} as const;
+
+export interface WeatherCurrent {
+  temperature: number;
+  apparentTemperature: number;
+  precipitation: number;
+  windSpeed: number;
+  weatherCode: number;
+  condition: WeatherCondition;
+  isDay: boolean;
+}
+
+export interface WeatherDay {
+  date: string;
+  high: number;
+  low: number;
+  precipitationProbability: number;
+  weatherCode: number;
+  condition: WeatherCondition;
+}
+
+export interface WeatherResponse {
+  cityId: string;
+  locationName: string;
+  fetchedAt: string;
+  current: WeatherCurrent;
+  forecast: WeatherDay[];
+  provider: WeatherResponseProvider;
+}
+
 export interface CaptureSearchRequest {
   url?: string;
   businessName?: string;
@@ -731,6 +782,13 @@ export interface NewsScanResponse {
   scans: NewsSourceScan[];
   error?: string;
 }
+
+export type GetWeatherParams = {
+/**
+ * The city identifier (ams, rot, utr, dhg, ein)
+ */
+cityId: string;
+};
 
 export type GetEventReviewCandidatesParams = {
 /**

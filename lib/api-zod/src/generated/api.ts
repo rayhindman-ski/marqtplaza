@@ -18,6 +18,38 @@ export const HealthCheckResponse = zod.object({
 
 
 /**
+ * @summary Get a short city weather forecast
+ */
+export const GetWeatherQueryParams = zod.object({
+  "cityId": zod.coerce.string().describe('The city identifier (ams, rot, utr, dhg, ein)')
+})
+
+export const GetWeatherResponse = zod.object({
+  "cityId": zod.string(),
+  "locationName": zod.string(),
+  "fetchedAt": zod.string(),
+  "current": zod.object({
+  "temperature": zod.number(),
+  "apparentTemperature": zod.number(),
+  "precipitation": zod.number(),
+  "windSpeed": zod.number(),
+  "weatherCode": zod.number(),
+  "condition": zod.enum(['clear', 'partly_cloudy', 'cloudy', 'fog', 'drizzle', 'rain', 'snow', 'showers', 'thunderstorm', 'unknown']),
+  "isDay": zod.boolean()
+}),
+  "forecast": zod.array(zod.object({
+  "date": zod.string(),
+  "high": zod.number(),
+  "low": zod.number(),
+  "precipitationProbability": zod.number(),
+  "weatherCode": zod.number(),
+  "condition": zod.enum(['clear', 'partly_cloudy', 'cloudy', 'fog', 'drizzle', 'rain', 'snow', 'showers', 'thunderstorm', 'unknown'])
+})),
+  "provider": zod.enum(['open-meteo'])
+})
+
+
+/**
  * @summary Search for businesses
  */
 export const CaptureSearchBody = zod.object({
