@@ -334,8 +334,13 @@ function CoordinateMapFallback({
     );
   }
 
-  const latitudes = points.map((point) => point.lat);
-  const longitudes = points.map((point) => point.lng);
+  const selectedPoint = points.find((point) => point.id === selectedMarkerId);
+  const latitudes = selectedPoint
+    ? [selectedPoint.lat - 0.012, selectedPoint.lat + 0.012]
+    : points.map((point) => point.lat);
+  const longitudes = selectedPoint
+    ? [selectedPoint.lng - 0.018, selectedPoint.lng + 0.018]
+    : points.map((point) => point.lng);
   const latitudePadding = Math.max(0.006, (Math.max(...latitudes) - Math.min(...latitudes)) * 0.25);
   const longitudePadding = Math.max(0.009, (Math.max(...longitudes) - Math.min(...longitudes)) * 0.25);
   const minLat = Math.min(...latitudes) - latitudePadding;
@@ -359,20 +364,23 @@ function CoordinateMapFallback({
         const left = ((point.lng - minLng) / (maxLng - minLng)) * 100;
         const top = ((maxLat - point.lat) / (maxLat - minLat)) * 100;
         const isSelected = point.id === selectedMarkerId;
+        const isMuted = Boolean(selectedMarkerId) && !isSelected;
         const color = getCategoryColor(point.category);
         const Icon = getCategoryIcon(point.category);
 
         const className = "marqtplaza-map-marker relative flex items-center justify-center rounded-full transition-transform hover:scale-110 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/35";
         const style: React.CSSProperties = {
-          width: isSelected ? 48 : 38,
-          height: isSelected ? 48 : 38,
-          minWidth: isSelected ? 48 : 38,
-          minHeight: isSelected ? 48 : 38,
+          width: isSelected ? 48 : isMuted ? 28 : 38,
+          height: isSelected ? 48 : isMuted ? 28 : 38,
+          minWidth: isSelected ? 48 : isMuted ? 28 : 38,
+          minHeight: isSelected ? 48 : isMuted ? 28 : 38,
           aspectRatio: '1 / 1',
           boxSizing: 'border-box',
           flex: '0 0 auto',
           overflow: 'hidden',
           boxShadow: isSelected ? `0 0 0 5px ${color}44, 0 8px 18px -6px rgba(23,34,53,0.5)` : undefined,
+          opacity: isMuted ? 0.28 : 1,
+          filter: isMuted ? 'saturate(0.35)' : undefined,
         };
         const icon = <Icon className="h-5 w-5 text-white" strokeWidth={2.5} aria-hidden="true" />;
 
@@ -479,7 +487,6 @@ function TileMapView({
   }, [locationId, markers, selectedNeighborhoods, size.height, size.width]);
 
   useEffect(() => {
-    if (selectedNeighborhoods.length > 0) return;
     const marker = markers.find((item) => item.id === selectedMarkerId);
     if (marker?.lat != null && marker.lng != null) {
       setViewport((current) => ({
@@ -487,7 +494,7 @@ function TileMapView({
         center: { lat: marker.lat, lng: marker.lng },
       }));
     }
-  }, [selectedMarkerId, selectedNeighborhoods.length]);
+  }, [markers, selectedMarkerId]);
 
   const tiles = useMemo(() => {
     if (size.width === 0 || size.height === 0) return [];
@@ -636,20 +643,23 @@ function TileMapView({
         const left = world.x - mapLeft;
         const top = world.y - mapTop;
         const isSelected = point.id === selectedMarkerId;
+        const isMuted = Boolean(selectedMarkerId) && !isSelected;
         const color = getCategoryColor(point.category);
         const Icon = getCategoryIcon(point.category);
 
         const className = "marqtplaza-map-marker relative flex items-center justify-center rounded-full font-black text-white transition-transform hover:scale-110 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/35";
         const style: React.CSSProperties = {
-          width: isSelected ? 50 : 43,
-          height: isSelected ? 50 : 43,
-          minWidth: isSelected ? 50 : 43,
-          minHeight: isSelected ? 50 : 43,
+          width: isSelected ? 50 : isMuted ? 30 : 43,
+          height: isSelected ? 50 : isMuted ? 30 : 43,
+          minWidth: isSelected ? 50 : isMuted ? 30 : 43,
+          minHeight: isSelected ? 50 : isMuted ? 30 : 43,
           aspectRatio: '1 / 1',
           boxSizing: 'border-box',
           flex: '0 0 auto',
           overflow: 'hidden',
           boxShadow: isSelected ? `0 0 0 5px ${color}44, 0 8px 18px -6px rgba(23,34,53,0.5)` : undefined,
+          opacity: isMuted ? 0.28 : 1,
+          filter: isMuted ? 'saturate(0.35)' : undefined,
         };
         const icon = (
           <>
@@ -758,6 +768,7 @@ function GoogleMapCanvas({
       const copy = getMarkerCopy(marker, language);
       const t = translations[language];
       const wrapper = document.createElement('div');
+      const isMuted = Boolean(selectedMarkerId) && !isSelected;
       wrapper.style.cssText = [
         'position:relative',
         'display:flex',
@@ -769,7 +780,7 @@ function GoogleMapCanvas({
         `z-index:${isSelected ? 100 : 1}`,
       ].join(';');
       const element = document.createElement('button');
-      const size = isSelected ? 54 : 46;
+      const size = isSelected ? 54 : isMuted ? 32 : 46;
       element.className = 'marqtplaza-map-marker';
       element.style.cssText = [
         'position:relative',
@@ -789,6 +800,9 @@ function GoogleMapCanvas({
         `background:${MARQTPLAZA_MARKER_GRADIENT}`,
         'border:3px solid rgba(255,255,255,0.96)',
          `box-shadow:${isSelected ? `0 0 0 5px ${color}44, 0 8px 18px -6px rgba(23,34,53,0.5)` : '0 7px 16px -5px rgba(23,34,53,0.42), 0 0 0 2px rgba(243,108,33,0.28), inset 0 1px 0 rgba(255,255,255,0.48)'}`,
+        `opacity:${isMuted ? 0.28 : 1}`,
+        `filter:${isMuted ? 'saturate(0.35)' : 'none'}`,
+        'transition:width 180ms ease,height 180ms ease,opacity 180ms ease,filter 180ms ease',
         'color:#fff',
         'cursor:pointer',
         'text-decoration:none',
@@ -886,7 +900,7 @@ function GoogleMapCanvas({
 
       return wrapper;
     },
-    [language, onMarkerClick],
+    [language, onMarkerClick, selectedMarkerId],
   );
 
   useEffect(() => {
@@ -1001,12 +1015,12 @@ function GoogleMapCanvas({
   }, [buildMarkerEl, mapReady, markers, onMarkerClick, savedIds, selectedMarkerId]);
 
   useEffect(() => {
-    if (!mapReady || !mapRef.current || !selectedMarkerId || selectedNeighborhoods.length > 0) return;
+    if (!mapReady || !mapRef.current || !selectedMarkerId) return;
     const marker = markers.find((item) => item.id === selectedMarkerId);
     if (marker?.lat != null && marker.lng != null) {
       mapRef.current.panTo({ lat: marker.lat, lng: marker.lng });
     }
-  }, [mapReady, selectedMarkerId, selectedNeighborhoods.length]);
+  }, [mapReady, markers, selectedMarkerId]);
 
   useEffect(() => () => {
     for (const mapMarker of markersRef.current.values()) {
