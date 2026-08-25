@@ -1725,28 +1725,6 @@ function DiscoveryState({
 
       {/* Map Area */}
       <div className="flex-1 relative h-full w-full overflow-hidden bg-background">
-        {view === 'map' && (
-          <div className="absolute left-4 right-4 top-4 z-20 md:hidden">
-            <div className="rounded-2xl border border-border/70 bg-card/95 p-3 shadow-xl backdrop-blur-xl">
-              <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
-                {t.topLevelCategories}
-              </p>
-              <CategoryActionButtons
-                language={language}
-                onSelectAll={selectAllCategories}
-                onDeselectAll={deselectAllCategories}
-              />
-              <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
-                {t.neighborhoods}
-              </p>
-              <NeighborhoodActionButtons
-                language={language}
-                onSelectAll={selectAllNeighborhoods}
-                onDeselectAll={deselectAllNeighborhoods}
-              />
-            </div>
-          </div>
-        )}
         <GoogleMapView
           language={language}
           locationId={location.id}

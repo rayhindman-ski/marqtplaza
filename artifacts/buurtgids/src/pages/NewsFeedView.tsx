@@ -8,6 +8,7 @@ import {
   MapPin, ShieldAlert, Briefcase, Landmark, Trophy, Users, ArrowRight
 } from 'lucide-react';
 import { cn } from '../lib/utils';
+import BrandLogo from '../components/BrandLogo';
 
 const SUBCATEGORY_ICONS: Record<NewsSubcategory, React.ElementType> = {
   city: MapPin,
@@ -66,10 +67,9 @@ export default function NewsFeedView() {
 
           <div className="flex-1 flex justify-center">
             <Link href="/">
-              <img
-                src="/marqtplaza-logo-nl.svg"
-                alt="Marqtplaza - De digitale dorpskern"
-                className="h-12 md:h-16 w-auto"
+              <BrandLogo
+                className="h-14 w-56 md:h-16 md:w-72"
+                alt="marqtplaza.com — De digitale dorpskern"
               />
             </Link>
           </div>
@@ -90,7 +90,8 @@ export default function NewsFeedView() {
             Den Haag
           </div>
           <h1 className="news-title text-6xl md:text-8xl lg:text-9xl font-extrabold text-[#072C1E] tracking-tight mb-6 leading-[0.88]">
-            Haags<span className="text-[#F36C21] ml-1 md:ml-2">Nieuws</span>
+            <span className="block sm:inline">Haags</span>
+            <span className="text-[#F36C21] ml-0 sm:ml-1 md:ml-2">Nieuws</span>
           </h1>
           <p className="text-lg md:text-xl text-[#072C1E]/70 max-w-2xl font-medium leading-relaxed">
             Lokaal geverifieerd nieuws. Zonder ruis, zonder algoritmes. Gewoon wat er speelt in de stad.
@@ -291,10 +292,9 @@ export default function NewsFeedView() {
       <footer className="bg-[#072C1E] border-t border-[#072C1E]/10 mt-auto">
         <div className="max-w-7xl mx-auto px-4 md:px-8 py-16 flex flex-col items-center text-center">
           <p className="text-[#F2F0EA]/50 text-xs font-bold tracking-widest uppercase mb-8">Onderdeel van</p>
-          <img
-            src="/marqtplaza-logo.png"
+          <BrandLogo
+            className="mb-8 h-16 w-64 opacity-80 hover:opacity-100 transition-opacity drop-shadow-md"
             alt="marqtplaza.com"
-            className="h-12 w-auto mb-8 opacity-80 hover:opacity-100 transition-opacity drop-shadow-md"
           />
           <div className="w-12 h-0.5 bg-[#F36C21]/50 mb-8" />
           <p className="text-[#F2F0EA]/60 text-sm max-w-md leading-relaxed font-medium">

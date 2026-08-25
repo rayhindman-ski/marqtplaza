@@ -10,3 +10,4 @@
 - [OpenAPI client regeneration](openapi-client-regeneration.md) — regenerate the shared client after merged endpoint changes before judging downstream typecheck failures.
 - [Homepage postcode routing](homepage-postcode-routing.md) — valid Haagse postcodes belong on the search homepage and must navigate to a refreshable discovery URL.
 - [Events-only first map](events-first-map.md) — event discovery must never fall back to generic attractions; show verified upcoming events or an explicit empty state.
+- [Brand logo asset](brand-logo-asset.md) — the primary PNG has transparent padding; compact headers need a shared cropped wrapper rather than raw image sizing.

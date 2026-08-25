@@ -8,6 +8,7 @@ import {
   MapPin, ShieldAlert, Briefcase, Landmark, Trophy, Users
 } from 'lucide-react';
 import { cn } from '../lib/utils';
+import BrandLogo from '../components/BrandLogo';
 
 const SUBCATEGORY_ICONS: Record<string, React.ElementType> = {
   city: MapPin,
@@ -94,6 +95,9 @@ export default function NewsArticleView() {
           </button>
 
           <div className="flex items-center gap-4">
+            <Link href="/" aria-label="Naar de homepage" className="hidden sm:block">
+              <BrandLogo className="h-10 w-40" alt="marqtplaza.com" />
+            </Link>
             <Link
               href="/"
               aria-label="Naar de homepage"
@@ -170,10 +174,9 @@ export default function NewsArticleView() {
       <footer className="bg-[#072C1E] border-t border-[#072C1E]/10 mt-auto">
         <div className="max-w-7xl mx-auto px-4 md:px-8 py-12 flex flex-col items-center text-center">
           <p className="text-[#F2F0EA]/50 text-xs font-bold tracking-widest uppercase mb-6">Onderdeel van</p>
-          <img
-            src="/marqtplaza-logo.png"
+          <BrandLogo
+            className="h-14 w-56 opacity-70 hover:opacity-100 transition-opacity"
             alt="marqtplaza.com"
-            className="h-10 w-auto opacity-70 hover:opacity-100 transition-opacity"
           />
         </div>
       </footer>
