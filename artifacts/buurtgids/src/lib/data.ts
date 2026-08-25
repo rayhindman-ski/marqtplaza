@@ -6,6 +6,7 @@ export type SocialMapCategory =
   | 'Geldzaken'
   | 'Gezin en opvoeden'
   | 'Gezondheid'
+  | 'Heilige plaatsen'
   | "Hobby's en interesses"
   | 'Ondersteuning'
   | 'Ontmoeten en samenleven'
@@ -20,6 +21,7 @@ export const SOCIAL_MAP_CATEGORIES: SocialMapCategory[] = [
   'Geldzaken',
   'Gezin en opvoeden',
   'Gezondheid',
+  'Heilige plaatsen',
   "Hobby's en interesses",
   'Ondersteuning',
   'Ontmoeten en samenleven',

@@ -7,6 +7,7 @@ export type SocialMapCategory =
   | "Geldzaken"
   | "Gezin en opvoeden"
   | "Gezondheid"
+  | "Heilige plaatsen"
   | "Hobby's en interesses"
   | "Ondersteuning"
   | "Ontmoeten en samenleven"
@@ -40,6 +41,71 @@ const HAAGS_STEUNSYSTEEM = "https://haagssteunsysteem.nl/praktische-informatie/s
  * not assembled from an open-ended crawler.
  */
 export const SOCIAL_MAP_LISTINGS: readonly SocialMapListing[] = [
+  {
+    id: "social-grote-kerk-den-haag",
+    name: "Grote Kerk Den Haag",
+    socialCategory: "Heilige plaatsen",
+    description: "Historische kerk in het centrum van Den Haag, met ruimte voor kerkdiensten, bezinning en culturele bijeenkomsten.",
+    address: "Rond de Grote Kerk 12, 2513 AM Den Haag",
+    neighborhood: "Centrum",
+    lat: 52.07586,
+    lng: 4.30678,
+    officialUrl: "https://grote-kerk.nl/",
+    sourcePageUrl: "https://takethehague.nl/en/location/de-grote-kerk",
+    sourceName: "Geverifieerde organisatiepagina",
+  },
+  {
+    id: "social-nieuwe-kerk-den-haag",
+    name: "Nieuwe Kerk Den Haag",
+    socialCategory: "Heilige plaatsen",
+    description: "Monumentale kerk aan het Spuiplein voor religieuze, culturele en muzikale bijeenkomsten.",
+    address: "Spui 175, 2511 BM Den Haag",
+    neighborhood: "Centrum",
+    lat: 52.07688,
+    lng: 4.31742,
+    officialUrl: "https://www.nieuwekerkdenhaag.nl/",
+    sourcePageUrl: "https://www.nieuwekerkdenhaag.nl/gebouw/bereikbaarheid",
+    sourceName: "Geverifieerde organisatiepagina",
+  },
+  {
+    id: "social-waalse-kerk-den-haag",
+    name: "Waalse Kerk Den Haag",
+    socialCategory: "Heilige plaatsen",
+    description: "Open Franstalige protestantse gemeenschap in het hart van het Noordeinde, met diensten en culturele activiteiten.",
+    address: "Noordeinde 25, 2514 GB Den Haag",
+    neighborhood: "Centrum",
+    lat: 52.07845,
+    lng: 4.30558,
+    officialUrl: "https://waalsekerkdenhaag.nl/",
+    sourcePageUrl: "https://waalsekerkdenhaag.nl/contact/",
+    sourceName: "Geverifieerde organisatiepagina",
+  },
+  {
+    id: "social-sri-sri-radhe-shyam-mandir",
+    name: "Sri Sri Radhe Shyam Mandir",
+    socialCategory: "Heilige plaatsen",
+    description: "Hindoestaanse mandir met religieuze diensten, bijeenkomsten en momenten van samenzijn.",
+    address: "Loosduinseweg 715, 2572 AM Den Haag",
+    neighborhood: "Rustenburg en Oostbroek",
+    lat: 52.06435,
+    lng: 4.26746,
+    officialUrl: "https://srisriradheshyammandir.nl/",
+    sourcePageUrl: "https://srisriradheshyammandir.nl/",
+    sourceName: "Geverifieerde organisatiepagina",
+  },
+  {
+    id: "social-sakya-thegchen-ling",
+    name: "Sakya Thegchen Ling",
+    socialCategory: "Heilige plaatsen",
+    description: "Tibetaans-boeddhistisch instituut met meditatie, onderricht en gemeenschappelijke activiteiten.",
+    address: "Laan van Meerdervoort 200 A, 2517 BJ Den Haag",
+    neighborhood: "Zeeheldenkwartier",
+    lat: 52.08054,
+    lng: 4.28694,
+    officialUrl: "https://sakya.nl/",
+    sourcePageUrl: "https://sakya.nl/",
+    sourceName: "Geverifieerde organisatiepagina",
+  },
   {
     id: "social-taalhuis-den-haag",
     name: "Taalhuis Den Haag",
