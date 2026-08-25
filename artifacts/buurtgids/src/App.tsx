@@ -502,7 +502,6 @@ function SearchState({
   const [query, setQuery] = useState('');
   const [error, setError] = useState('');
   const [selectedCityId, setSelectedCityId] = useState<string | null>(null);
-  const [activityChooserOpen, setActivityChooserOpen] = useState(false);
   const t = translations[language];
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -533,16 +532,7 @@ function SearchState({
       <ReferenceCategoryNav
         language={language}
         onSectionSelect={(section) => onSearch('dhg', undefined, section)}
-        onThingsToDo={() => {
-          setActivityChooserOpen(true);
-          setSelectedCityId(null);
-          requestAnimationFrame(() => {
-            document.getElementById('activity-area-picker')?.scrollIntoView({
-              behavior: 'smooth',
-              block: 'center',
-            });
-          });
-        }}
+        onThingsToDo={() => onSearch('dhg', undefined, 'events')}
       />
       <LanguageSelector language={language} onLanguageChange={onLanguageChange} />
 
@@ -607,19 +597,7 @@ function SearchState({
           )}
         </form>
 
-        <div id="activity-area-picker" className="w-full pt-6" tabIndex={-1}>
-          {activityChooserOpen && (
-            <div
-              role="dialog"
-              aria-label="Choose an area for activities"
-              className="mb-5 rounded-2xl border border-primary/25 bg-primary/5 px-4 py-3 text-left shadow-sm animate-in fade-in slide-in-from-top-2 duration-300"
-            >
-              <p className="text-sm font-extrabold text-foreground">Choose an area for things to do</p>
-              <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                Select a city, then choose a neighbourhood or explore the whole city.
-              </p>
-            </div>
-          )}
+        <div className="w-full pt-6">
           <p className="text-xs text-muted-foreground mb-4 uppercase tracking-widest font-bold">{t.popularDestinations}</p>
           <div className="flex flex-wrap justify-center gap-2.5">
             {LOCATIONS.map(loc => {
