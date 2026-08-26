@@ -388,7 +388,7 @@ function businessCategoryForGooglePlace(
 
 const GOOGLE_PLACES_URL = "https://places.googleapis.com/v1/places:searchText";
 const GOOGLE_PLACES_TIMEOUT_MS = 12_000;
-const GOOGLE_PLACES_MAX_RESULTS = 1000;
+const GOOGLE_PLACES_MAX_RESULTS = 200;
 const GOOGLE_PLACES_MAX_PAGES_PER_SEARCH = 3;
 const GOOGLE_PLACES_CONCURRENCY = 6;
 const GOOGLE_PLACES_CACHE_TTL_MS = 15 * 60 * 1000;
