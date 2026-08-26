@@ -13,3 +13,4 @@
 - [Brand logo asset](brand-logo-asset.md) — the primary PNG has transparent padding; compact headers need a shared cropped wrapper rather than raw image sizing.
 - [Community contribution privacy](community-privacy.md) — the village-square layer uses moderated local messages, not public profiles or private messaging.
 - [Business claim integrity](business-claim-integrity.md) — claims must resolve current listings server-side and preserve one pending/approved owner path transactionally.
+- [Google Places lifetime cap](google-places-lifetime-cap.md) — all billable Places calls share a permanent 100-call allowance that only an editor can reset manually.

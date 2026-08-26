@@ -6,7 +6,7 @@ import { requireEditor } from "../middlewares/requireEditor";
 
 const router = Router();
 
-type SourceDefinition = {
+export type SourceDefinition = {
   id: string;
   name: string;
   activityUrl: string;
@@ -19,7 +19,7 @@ type PriceType = "free" | "low-cost" | "paid" | "unknown";
 type MealType = "community-meal" | "food-support";
 type PublicationReason = "missing_date" | "out_of_window" | "missing_locality" | "foreign_location";
 
-type SourceScanEvent = {
+export type SourceScanEvent = {
   title: string;
   url: string;
   sourceEventId?: string;
@@ -292,32 +292,63 @@ function organizerName(value: unknown): string | undefined {
   return organizerName(record.name);
 }
 
-function eventMetadata(
+export function eventMetadata(
   evidence: string,
   source: SourceDefinition,
   offerValue?: unknown,
 ): Pick<SourceScanEvent, "sourceGroup" | "activityKind" | "priceType" | "priceText" | "mealType" | "audience" | "neighborhood" | "recurrenceText"> {
   const clean = stripMarkup(evidence).replace(/\s+/g, " ").trim();
   const text = clean.toLowerCase();
-  const offer = Array.isArray(offerValue) ? offerValue[0] : offerValue;
-  const rawOfferPrice = offer && typeof offer === "object"
-    ? (offer as Record<string, unknown>).price
-    : undefined;
-  const offerPrice = typeof rawOfferPrice === "number" && Number.isFinite(rawOfferPrice)
-    ? rawOfferPrice
-    : typeof rawOfferPrice === "string" && rawOfferPrice.trim() !== "" && Number.isFinite(Number(rawOfferPrice))
-      ? Number(rawOfferPrice)
-      : Number.NaN;
-  const explicitPrice = clean.match(/(?:€\s?\d+(?:[,.]\d{1,2})?|(?:gratis|free)\b|laag(?:e)?\s+(?:prijs|tarief|bijdrage)|low[- ]cost|betaalbare?\s+(?:prijs|bijdrage)|eigen bijdrage\s+van\s+€?\s?\d+(?:[,.]\d{1,2})?)/i)?.[0];
+  const offers = (Array.isArray(offerValue) ? offerValue : [offerValue])
+    .filter((offer): offer is Record<string, unknown> => Boolean(offer) && typeof offer === "object");
+  const parseAmount = (value: unknown): number | undefined => {
+    const amount = typeof value === "number"
+      ? value
+      : typeof value === "string" && value.trim() !== ""
+        ? Number(value.replace(",", "."))
+        : Number.NaN;
+    return Number.isFinite(amount) ? amount : undefined;
+  };
+  const firstCurrency = offers
+    .map((offer) => typeof offer.priceCurrency === "string" ? offer.priceCurrency.trim().toUpperCase() : "")
+    .find(Boolean) ?? "";
+  const compatibleOffers = offers.filter((offer) => {
+    const currency = typeof offer.priceCurrency === "string" ? offer.priceCurrency.trim().toUpperCase() : "";
+    return currency === firstCurrency;
+  });
+  const structuredAmounts = compatibleOffers.flatMap((offer) => {
+    const exact = parseAmount(offer.price);
+    if (exact !== undefined) return [exact];
+    return [parseAmount(offer.lowPrice), parseAmount(offer.highPrice)]
+      .filter((amount): amount is number => amount !== undefined);
+  });
+  const explicitPrice = clean.match(/(?:(?:vanaf|from)\s+€\s?\d+(?:[,.]\d{1,2})?|€\s?\d+(?:[,.]\d{1,2})?\s*(?:-|–|—|tot|to)\s*€?\s?\d+(?:[,.]\d{1,2})?|€\s?\d+(?:[,.]\d{1,2})?|(?:gratis|free)\b|laag(?:e)?\s+(?:prijs|tarief|bijdrage)|low[- ]cost|betaalbare?\s+(?:prijs|bijdrage)|eigen bijdrage\s+van\s+€?\s?\d+(?:[,.]\d{1,2})?)/i)?.[0];
+  const currencyLabel = firstCurrency === "EUR" ? "€" : firstCurrency ? `${firstCurrency} ` : "";
+  const formatAmount = (amount: number): string => {
+    return `${currencyLabel}${amount.toLocaleString("nl-NL", { maximumFractionDigits: 2 })}`;
+  };
+  const structuredMin = structuredAmounts.length > 0 ? Math.min(...structuredAmounts) : undefined;
+  const structuredMax = structuredAmounts.length > 0 ? Math.max(...structuredAmounts) : undefined;
+  const structuredPrice = structuredMin === undefined || structuredMax === undefined
+    ? undefined
+    : structuredMin === structuredMax
+      ? formatAmount(structuredMin)
+      : `${formatAmount(structuredMin)}–${formatAmount(structuredMax)}`;
   const hasMeal = /\b(samen eten|maaltijd|diner|lunch|ontbijt|buurtmaaltijd|eet(?:-|\s)?café|food support|voedselhulp)\b/i.test(clean);
   const mealType: MealType | undefined = hasMeal
     ? /\b(voedselhulp|voedselbank|food support|uitgifte)\b/i.test(clean) ? "food-support" : "community-meal"
     : undefined;
-  const priceType: PriceType = /\b(gratis|free)\b/i.test(clean) || offerPrice === 0
+  const priceType: PriceType = structuredMax === 0
     ? "free"
     : /\b(laag(?:e)?\s+(?:prijs|tarief|bijdrage)|low[- ]cost|betaalbare?\s+(?:prijs|bijdrage)|eigen bijdrage)\b/i.test(clean)
       ? "low-cost"
-      : "unknown";
+      : structuredMax !== undefined && structuredMax > 0
+        ? "paid"
+        : /\b(gratis|free)\b/i.test(clean)
+          ? "free"
+          : explicitPrice
+            ? "paid"
+            : "unknown";
   const activityKind: ActivityKind | undefined = mealType
     ? "meal"
     : /\b(workshop|cursus|lezing|taalcafé|training|learning|learn)\b/i.test(text)
@@ -354,7 +385,7 @@ function eventMetadata(
     sourceGroup: source.sourceGroup,
     activityKind,
     priceType,
-    priceText: priceType === "unknown" ? undefined : explicitPrice ? shorten(explicitPrice, 80) : offerPrice === 0 ? "€0" : undefined,
+    priceText: structuredPrice ?? (explicitPrice ? shorten(explicitPrice, 80) : undefined),
     mealType,
     audience,
     neighborhood,

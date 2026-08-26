@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
-import { and, asc, desc, eq, gte } from "drizzle-orm";
+import { and, asc, desc, eq, gte, sql } from "drizzle-orm";
 import { db } from "@workspace/db";
-import { discoveredEventsTable } from "@workspace/db/schema";
+import { discoveredEventsTable, providerUsageTable } from "@workspace/db/schema";
 import { MARKERS } from "../lib/static-listings.js";
 import {
   SOCIAL_MAP_LISTINGS,
@@ -10,6 +10,7 @@ import {
   type SocialMapCategory,
 } from "../lib/social-map-listings.js";
 import { getSocialMapReviewReport } from "../lib/social-map-review.js";
+import { requireEditor } from "../middlewares/requireEditor.js";
 
 const router: IRouter = Router();
 type ListingSection = "events" | "businesses" | "food-drink" | "social-map";
@@ -392,6 +393,8 @@ const GOOGLE_PLACES_MAX_RESULTS = 200;
 const GOOGLE_PLACES_MAX_PAGES_PER_SEARCH = 3;
 const GOOGLE_PLACES_CONCURRENCY = 6;
 const GOOGLE_PLACES_CACHE_TTL_MS = 15 * 60 * 1000;
+const GOOGLE_PLACES_LIFETIME_REQUEST_LIMIT = 100;
+const GOOGLE_PLACES_PROVIDER_KEY = "google_places";
 const OPEN_STREET_MAP_RESULT_RESERVE = 0.25;
 const googlePlacesCache = new Map<string, { expiresAt: number; listings: Listing[] }>();
 const googlePlacesRequests = new Map<string, Promise<Listing[]>>();
@@ -500,6 +503,60 @@ async function withGoogleRequestSlot<T>(operation: () => Promise<T>): Promise<T>
   }
 }
 
+export async function reserveProviderRequest(
+  provider: string,
+  limit: number,
+): Promise<number | null> {
+  const result = await db.execute(sql`
+    INSERT INTO ${providerUsageTable} (provider, request_count, updated_at)
+    VALUES (${provider}, 1, NOW())
+    ON CONFLICT (provider) DO UPDATE
+      SET request_count = ${providerUsageTable.requestCount} + 1,
+          updated_at = NOW()
+      WHERE ${providerUsageTable.requestCount} < ${limit}
+    RETURNING request_count
+  `);
+  const row = result.rows[0] as { request_count?: number } | undefined;
+  return typeof row?.request_count === "number" ? row.request_count : null;
+}
+
+async function reserveGooglePlacesRequest(): Promise<number | null> {
+  return reserveProviderRequest(
+    GOOGLE_PLACES_PROVIDER_KEY,
+    GOOGLE_PLACES_LIFETIME_REQUEST_LIMIT,
+  );
+}
+
+async function googlePlacesUsage() {
+  const [usage] = await db
+    .select()
+    .from(providerUsageTable)
+    .where(eq(providerUsageTable.provider, GOOGLE_PLACES_PROVIDER_KEY));
+  return {
+    used: usage?.requestCount ?? 0,
+    limit: GOOGLE_PLACES_LIFETIME_REQUEST_LIMIT,
+    exhausted: (usage?.requestCount ?? 0) >= GOOGLE_PLACES_LIFETIME_REQUEST_LIMIT,
+    updatedAt: usage?.updatedAt?.toISOString() ?? null,
+    lastResetAt: usage?.lastResetAt?.toISOString() ?? null,
+  };
+}
+
+export async function resetProviderUsage(provider: string): Promise<void> {
+  const now = new Date();
+  await db
+    .insert(providerUsageTable)
+    .values({
+      provider,
+      requestCount: 0,
+      updatedAt: now,
+      lastResetAt: now,
+    })
+    .onConflictDoUpdate({
+      target: providerUsageTable.provider,
+      set: { requestCount: 0, updatedAt: now, lastResetAt: now },
+    });
+}
+
 async function fetchGooglePlaces(
   bounds: { s: number; w: number; n: number; e: number },
   section: Exclude<ListingSection, "events" | "social-map">,
@@ -575,6 +632,11 @@ async function collectGooglePlaces(
       const searchResults = resultsBySearch[searchIndex];
       let pageToken: string | undefined;
       for (let page = 0; page < GOOGLE_PLACES_MAX_PAGES_PER_SEARCH; page += 1) {
+        const requestNumber = await reserveGooglePlacesRequest();
+        if (requestNumber === null) {
+          console.warn(`[listings] Google Places lifetime request limit (${GOOGLE_PLACES_LIFETIME_REQUEST_LIMIT}) exhausted; skipping further Google requests.`);
+          return;
+        }
         const response = await withGoogleRequestSlot(() => fetch(GOOGLE_PLACES_URL, {
           method: "POST",
           headers: {
@@ -929,6 +991,16 @@ async function fetchCityListingsFromOverpass(
   const data = (await res.json()) as OsmResponse;
   return data.elements ?? [];
 }
+
+router.get("/listings/google-places-usage", requireEditor, async (_req, res) => {
+  res.json(await googlePlacesUsage());
+});
+
+router.post("/listings/google-places-usage/reset", requireEditor, async (_req, res) => {
+  await resetProviderUsage(GOOGLE_PLACES_PROVIDER_KEY);
+  googlePlacesCache.clear();
+  res.json(await googlePlacesUsage());
+});
 
 router.get("/listings", async (req, res) => {
   const cityId = String(req.query["cityId"] ?? "").trim();

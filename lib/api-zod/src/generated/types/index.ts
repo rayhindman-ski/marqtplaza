@@ -60,6 +60,7 @@ export * from './getListingsParams';
 export * from './getListingsSection';
 export * from './getNewsParams';
 export * from './getWeatherParams';
+export * from './googlePlacesUsage';
 export * from './healthStatus';
 export * from './listing';
 export * from './listingActivityKind';

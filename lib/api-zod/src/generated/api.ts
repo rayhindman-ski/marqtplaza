@@ -350,6 +350,40 @@ export const GetListingsResponse = zod.object({
 
 
 /**
+ * @summary Get the permanent Google Places request allowance status
+ */
+export const getGooglePlacesUsageResponseUsedMin = 0;
+
+
+
+
+export const GetGooglePlacesUsageResponse = zod.object({
+  "used": zod.number().min(getGooglePlacesUsageResponseUsedMin),
+  "limit": zod.number().min(1),
+  "exhausted": zod.boolean(),
+  "updatedAt": zod.string().nullable(),
+  "lastResetAt": zod.string().nullable()
+})
+
+
+/**
+ * @summary Manually reset the permanent Google Places request allowance
+ */
+export const resetGooglePlacesUsageResponseUsedMin = 0;
+
+
+
+
+export const ResetGooglePlacesUsageResponse = zod.object({
+  "used": zod.number().min(resetGooglePlacesUsageResponseUsedMin),
+  "limit": zod.number().min(1),
+  "exhausted": zod.boolean(),
+  "updatedAt": zod.string().nullable(),
+  "lastResetAt": zod.string().nullable()
+})
+
+
+/**
  * Returns source status for every curated support location and the last successful public snapshot date.
  * @summary Get the curated Den Haag social-map review queue
  */
@@ -1273,4 +1307,3 @@ export const DecideBusinessDealResponse = zod.object({
   "createdAt": zod.string(),
   "updatedAt": zod.string()
 })
-// End of generated contract schemas.

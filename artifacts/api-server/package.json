@@ -8,6 +8,7 @@
     "build": "node ./build.mjs",
     "test": "DATABASE_URL=postgres://localhost/news_test tsx --test src/routes/news.test.ts",
     "test:integration": "DATABASE_URL=\"${NEWS_TEST_DATABASE_URL:-$DATABASE_URL}\" NEWS_SOURCE_STATUS_INTEGRATION=1 tsx --test src/routes/news.test.ts",
+    "test:events-quota": "tsx --test src/routes/sources.test.ts src/routes/listings-quota.test.ts",
     "start": "node --enable-source-maps ./dist/index.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "validate:social-map-links": "tsx ./scripts/validate-social-map-links.ts",

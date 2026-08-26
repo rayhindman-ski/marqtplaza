@@ -912,18 +912,20 @@ function MarkerCard({
   const t = translations[language];
   const sourceLabel = marker.sourceName
     ?? (marker.source ? getListingSourceName(marker.source, language) : undefined);
+  const isEvent = topLevelForMarker(marker) === 'events';
+  const eventPrice = marker.priceText?.trim()
+    || (marker.priceType === 'free'
+      ? (language === 'nl' ? 'Gratis' : 'Free')
+      : marker.priceType === 'low-cost'
+        ? (language === 'nl' ? 'Laag tarief' : 'Low cost')
+        : marker.priceType === 'paid'
+          ? (language === 'nl' ? 'Betaald' : 'Paid')
+          : (language === 'nl' ? 'Prijs onbekend' : 'Price unknown'));
 
   return (
     <div
-      role="button"
-      tabIndex={0}
+      role="group"
       onClick={onClick}
-      onKeyDown={(event) => {
-        if (event.key === 'Enter' || event.key === ' ') {
-          event.preventDefault();
-          onClick();
-        }
-      }}
       className={cn(
         "w-full text-left p-4 rounded-2xl border transition-all duration-300 relative group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:border-transparent",
         isSelected
@@ -943,10 +945,21 @@ function MarkerCard({
         </div>
         <div className="flex-1 min-w-0 py-0.5">
           <div className="flex items-start justify-between mb-1 gap-2">
-            <h3 className={cn(
-              "font-bold text-base truncate transition-colors",
-              isSelected ? "text-primary" : "text-foreground group-hover:text-primary"
-            )}>{marker.name}</h3>
+            <h3 className="min-w-0">
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onClick();
+                }}
+                className={cn(
+                  "max-w-full truncate text-left font-bold text-base transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+                  isSelected ? "text-primary" : "text-foreground group-hover:text-primary",
+                )}
+              >
+                {marker.name}
+              </button>
+            </h3>
             <div className="flex shrink-0 items-center gap-1">
               <SaveButton saved={isSaved} onToggle={onSave} />
               <button
@@ -965,6 +978,25 @@ function MarkerCard({
               </button>
             </div>
           </div>
+          {isEvent && (
+            <div className="mb-3 flex flex-wrap items-center gap-3 text-xs font-bold">
+              <span data-testid={`event-price-${marker.id}`} className="rounded-md bg-emerald-700/10 px-2 py-1 text-emerald-800">
+                {language === 'nl' ? 'Prijs' : 'Price'}: {eventPrice}
+              </span>
+              {marker.sourceUrl && (
+                <a
+                  href={marker.sourceUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={(event) => event.stopPropagation()}
+                  className="inline-flex items-center gap-1 text-primary hover:underline"
+                >
+                  {language === 'nl' ? 'Bekijk evenement' : 'View event'}
+                  <ExternalLink className="h-3 w-3" />
+                </a>
+              )}
+            </div>
+          )}
           {isExpanded && <>
            {(marker.businessCategory || marker.socialCategory || sourceLabel || marker.reviewStatus || (topLevelForMarker(marker) === 'events' && eventBadgeLabel(marker, language).length > 0)) && (
              <div className="mb-3 flex flex-wrap items-center gap-1.5">
@@ -1019,7 +1051,7 @@ function MarkerCard({
                   <Store className="h-3 w-3" /> Eigenaar?
                 </Link>
               )}
-              {marker.sourceUrl && (
+              {marker.sourceUrl && !isEvent && (
                 <a
                   href={marker.sourceUrl}
                   target="_blank"

@@ -237,6 +237,40 @@ paths:
               schema:
                 $ref: "#/components/schemas/ListingsResponse"
 
+  /listings/google-places-usage:
+    get:
+      operationId: getGooglePlacesUsage
+      tags: [listings]
+      summary: Get the permanent Google Places request allowance status
+      responses:
+        "200":
+          description: Current request allowance status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GooglePlacesUsage"
+        "401":
+          description: Authentication is required
+        "403":
+          description: An editor role is required
+
+  /listings/google-places-usage/reset:
+    post:
+      operationId: resetGooglePlacesUsage
+      tags: [listings]
+      summary: Manually reset the permanent Google Places request allowance
+      responses:
+        "200":
+          description: Reset request allowance status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GooglePlacesUsage"
+        "401":
+          description: Authentication is required
+        "403":
+          description: An editor role is required
+
   /social-map/review:
     get:
       operationId: getSocialMapReview
@@ -1961,6 +1995,23 @@ components:
       required:
         - listings
         - source
+
+    GooglePlacesUsage:
+      type: object
+      properties:
+        used:
+          type: number
+          minimum: 0
+        limit:
+          type: number
+          minimum: 1
+        exhausted:
+          type: boolean
+        updatedAt:
+          type: ["string", "null"]
+        lastResetAt:
+          type: ["string", "null"]
+      required: [used, limit, exhausted, updatedAt, lastResetAt]
 
     NewsSubcategory:
       type: string
