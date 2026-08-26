@@ -1191,6 +1191,10 @@ cityId: string;
  * Which Den Haag discovery stream to return.
  */
 section?: GetListingsSection;
+/**
+ * Language selected by the user for all human-readable listing copy.
+ */
+language: GetListingsLanguage;
 };
 
 export type GetListingsSection = typeof GetListingsSection[keyof typeof GetListingsSection];
@@ -1201,6 +1205,14 @@ export const GetListingsSection = {
   businesses: 'businesses',
   'food-drink': 'food-drink',
   'social-map': 'social-map',
+} as const;
+
+export type GetListingsLanguage = typeof GetListingsLanguage[keyof typeof GetListingsLanguage];
+
+
+export const GetListingsLanguage = {
+  nl: 'nl',
+  en: 'en',
 } as const;
 
 export type RunSocialMapReview502 = {

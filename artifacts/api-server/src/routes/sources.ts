@@ -18,6 +18,7 @@ type ActivityKind = "community" | "culture" | "learning" | "movement" | "meal" |
 type PriceType = "free" | "low-cost" | "paid" | "unknown";
 type MealType = "community-meal" | "food-support";
 type PublicationReason = "missing_date" | "out_of_window" | "missing_locality" | "foreign_location";
+export type EventContentLanguage = "nl" | "en" | "de" | "unknown";
 
 export type SourceScanEvent = {
   title: string;
@@ -25,6 +26,11 @@ export type SourceScanEvent = {
   sourceEventId?: string;
   context?: string;
   description?: string;
+  sourceLanguage?: EventContentLanguage;
+  titleNl?: string;
+  descriptionNl?: string;
+  titleEn?: string;
+  descriptionEn?: string;
   startsAt?: string;
   openingTimes?: string;
   venue?: string;
@@ -190,6 +196,31 @@ function shorten(value: string | undefined, maxLength = 440): string | undefined
   const clean = stripMarkup(value).replace(/\s+/g, " ").trim();
   if (!clean) return undefined;
   return clean.length > maxLength ? `${clean.slice(0, maxLength - 1).trimEnd()}…` : clean;
+}
+
+export function detectEventContentLanguage(html: string, url: string): EventContentLanguage {
+  const path = new URL(url).pathname.toLowerCase();
+  if (/\/(?:nl|nederlands)(?:\/|$)/.test(path)) return "nl";
+  if (/\/(?:en|en-gb|english)(?:\/|$)/.test(path)) return "en";
+  if (/\/(?:de|de-de|deutsch)(?:\/|$)/.test(path)) return "de";
+  const htmlLanguage = html.match(/<html\b[^>]*\blang=["']?([a-z]{2})(?:-[a-z]{2})?["'\s>]/i)?.[1]?.toLowerCase();
+  return htmlLanguage === "nl" || htmlLanguage === "en" || htmlLanguage === "de"
+    ? htmlLanguage
+    : "unknown";
+}
+
+function withLocalizedEventCopy(
+  event: SourceScanEvent,
+  language: EventContentLanguage,
+): SourceScanEvent {
+  return {
+    ...event,
+    sourceLanguage: language,
+    titleNl: language === "nl" ? event.title : event.titleNl,
+    descriptionNl: language === "nl" ? event.description : event.descriptionNl,
+    titleEn: language === "en" ? event.title : event.titleEn,
+    descriptionEn: language === "en" ? event.description : event.descriptionEn,
+  };
 }
 
 function canonicalizeUrl(value: string, baseUrl: string): string | null {
@@ -697,7 +728,7 @@ function calendarEventFromText(
   const description = shorten(value("DESCRIPTION"));
   const venue = shorten(value("LOCATION"), 180);
   const metadata = eventMetadata(`${title} ${description ?? ""}`, source);
-  return {
+  return withLocalizedEventCopy({
     title,
     url: pageUrl,
     sourceEventId: value("UID"),
@@ -707,7 +738,7 @@ function calendarEventFromText(
     venue,
     category: classifyEvent(`${title} ${description ?? ""}`),
     ...metadata,
-  };
+  }, detectEventContentLanguage(calendar, pageUrl));
 }
 
 function pageVenue(html: string): string | undefined {
@@ -852,7 +883,7 @@ function htmlEventFromPage(
     `${title} ${description ?? ""}`,
     source,
   );
-  return {
+  return withLocalizedEventCopy({
     title,
     url: pageUrl,
     sourceEventId: pageCalendarField(html, "UID"),
@@ -862,10 +893,10 @@ function htmlEventFromPage(
     venue: pageVenue(html),
     category: classifyEvent(`${title} ${description ?? ""}`),
     ...metadata,
-  };
+  }, detectEventContentLanguage(html, pageUrl));
 }
 
-function deduplicateSourceEvents(events: SourceScanEvent[]): SourceScanEvent[] {
+export function deduplicateSourceEvents(events: SourceScanEvent[]): SourceScanEvent[] {
   const winners = new Map<string, SourceScanEvent>();
   const withoutCalendarId: SourceScanEvent[] = [];
   const preference = (event: SourceScanEvent) => {
@@ -879,7 +910,19 @@ function deduplicateSourceEvents(events: SourceScanEvent[]): SourceScanEvent[] {
       continue;
     }
     const existing = winners.get(event.sourceEventId);
-    if (!existing || preference(event) > preference(existing)) winners.set(event.sourceEventId, event);
+    if (!existing) {
+      winners.set(event.sourceEventId, event);
+      continue;
+    }
+    const preferred = preference(event) > preference(existing) ? event : existing;
+    const alternate = preferred === event ? existing : event;
+    winners.set(event.sourceEventId, {
+      ...preferred,
+      titleNl: preferred.titleNl ?? alternate.titleNl,
+      descriptionNl: preferred.descriptionNl ?? alternate.descriptionNl,
+      titleEn: preferred.titleEn ?? alternate.titleEn,
+      descriptionEn: preferred.descriptionEn ?? alternate.descriptionEn,
+    });
   }
   return [...withoutCalendarId, ...winners.values()];
 }
@@ -1061,6 +1104,11 @@ async function persistEvents(source: SourceDefinition, events: SourceScanEvent[]
       canonicalUrl: event.url,
       title: event.title,
       description: event.description ?? `${source.name} activity listing.`,
+      sourceLanguage: event.sourceLanguage ?? "unknown",
+      titleNl: event.titleNl ?? null,
+      descriptionNl: event.descriptionNl ?? null,
+      titleEn: event.titleEn ?? null,
+      descriptionEn: event.descriptionEn ?? null,
       startsAt: event.startsAt ?? null,
       openingTimes: event.openingTimes ?? null,
       venue: event.venue ?? null,
@@ -1086,6 +1134,11 @@ async function persistEvents(source: SourceDefinition, events: SourceScanEvent[]
         sourceName: source.name,
         title: event.title,
         description: event.description ? sql`excluded.description` : sql`${discoveredEventsTable.description}`,
+        sourceLanguage: event.sourceLanguage ?? "unknown",
+        titleNl: event.titleNl ? sql`excluded.title_nl` : sql`${discoveredEventsTable.titleNl}`,
+        descriptionNl: event.descriptionNl ? sql`excluded.description_nl` : sql`${discoveredEventsTable.descriptionNl}`,
+        titleEn: event.titleEn ? sql`excluded.title_en` : sql`${discoveredEventsTable.titleEn}`,
+        descriptionEn: event.descriptionEn ? sql`excluded.description_en` : sql`${discoveredEventsTable.descriptionEn}`,
         startsAt: event.startsAt
           ? sql`CASE WHEN ${discoveredEventsTable.reviewedAt} IS NULL THEN excluded.starts_at ELSE ${discoveredEventsTable.startsAt} END`
           : sql`${discoveredEventsTable.startsAt}`,
@@ -1221,7 +1274,9 @@ async function scanSource(source: SourceDefinition) {
     if (next.type === "detail") metrics.detailPagesRead += 1;
     if (next.type === "sitemap") metrics.sitemapsRead += 1;
 
-    const structured = structuredEventsFromPage(page.html, page.url, source);
+    const pageLanguage = detectEventContentLanguage(page.html, page.url);
+    const structured = structuredEventsFromPage(page.html, page.url, source)
+      .map((event) => withLocalizedEventCopy(event, pageLanguage));
     const linked = linkCandidatesFromPage(page.html, page.url, source);
     metrics.eventLinksRead += linked.linksExamined;
 

@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { GetListingsLanguage } from './getListingsLanguage';
 import type { GetListingsSection } from './getListingsSection';
 
 export type GetListingsParams = {
@@ -16,4 +17,8 @@ cityId: string;
  * Which Den Haag discovery stream to return.
  */
 section?: GetListingsSection;
+/**
+ * Language selected by the user for all human-readable listing copy.
+ */
+language: GetListingsLanguage;
 };

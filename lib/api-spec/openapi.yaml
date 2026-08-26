@@ -223,6 +223,13 @@ paths:
             enum: [events, businesses, food-drink, social-map]
             default: events
           description: Which Den Haag discovery stream to return.
+        - name: language
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [nl, en]
+          description: Language selected by the user for all human-readable listing copy.
       responses:
         "200":
           description: Listings result (live or fallback)

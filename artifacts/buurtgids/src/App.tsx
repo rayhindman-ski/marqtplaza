@@ -1197,20 +1197,20 @@ function DiscoveryState({
 
   // Fetch selected top-level sections only; each query keeps its generated cache key.
   const eventsQuery = useGetListings(
-    { cityId: locationId, section: 'events' },
-    { query: { enabled: topLevelCategories.events, queryKey: getGetListingsQueryKey({ cityId: locationId, section: 'events' }) } },
+    { cityId: locationId, section: 'events', language },
+    { query: { enabled: topLevelCategories.events, queryKey: getGetListingsQueryKey({ cityId: locationId, section: 'events', language }) } },
   );
   const businessesQuery = useGetListings(
-    { cityId: locationId, section: 'businesses' },
-    { query: { enabled: topLevelCategories.businesses, queryKey: getGetListingsQueryKey({ cityId: locationId, section: 'businesses' }) } },
+    { cityId: locationId, section: 'businesses', language },
+    { query: { enabled: topLevelCategories.businesses, queryKey: getGetListingsQueryKey({ cityId: locationId, section: 'businesses', language }) } },
   );
   const foodDrinkQuery = useGetListings(
-    { cityId: locationId, section: 'food-drink' },
-    { query: { enabled: topLevelCategories['food-drink'], queryKey: getGetListingsQueryKey({ cityId: locationId, section: 'food-drink' }) } },
+    { cityId: locationId, section: 'food-drink', language },
+    { query: { enabled: topLevelCategories['food-drink'], queryKey: getGetListingsQueryKey({ cityId: locationId, section: 'food-drink', language }) } },
   );
   const socialMapQuery = useGetListings(
-    { cityId: locationId, section: 'social-map' },
-    { query: { enabled: topLevelCategories['social-map'], queryKey: getGetListingsQueryKey({ cityId: locationId, section: 'social-map' }) } },
+    { cityId: locationId, section: 'social-map', language },
+    { query: { enabled: topLevelCategories['social-map'], queryKey: getGetListingsQueryKey({ cityId: locationId, section: 'social-map', language }) } },
   );
   const listingQueries = {
     events: eventsQuery,
@@ -1915,11 +1915,11 @@ function DiscoveryState({
 
 function EventDetailView({ eventId, listingSection = 'events' }: { eventId: string; listingSection?: ListingSection }) {
   const [, navigate] = useLocation();
-  const { data, isLoading, isError } = useGetListings({ cityId: 'dhg', section: listingSection });
-  const listing = data?.listings.find((item) => item.id === decodeURIComponent(eventId));
   const language: Language = typeof window !== 'undefined' && window.localStorage.getItem('buurtplaza-language') === 'nl'
     ? 'nl'
     : 'en';
+  const { data, isLoading, isError } = useGetListings({ cityId: 'dhg', section: listingSection, language });
+  const listing = data?.listings.find((item) => item.id === decodeURIComponent(eventId));
 
   if (isLoading) {
     return (

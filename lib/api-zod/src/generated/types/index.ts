@@ -56,6 +56,7 @@ export * from './getDealModerationStatus';
 export * from './getDealsParams';
 export * from './getEventReviewCandidatesParams';
 export * from './getEventReviewCandidatesStatus';
+export * from './getListingsLanguage';
 export * from './getListingsParams';
 export * from './getListingsSection';
 export * from './getNewsParams';

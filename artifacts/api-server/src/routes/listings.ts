@@ -10,6 +10,11 @@ import {
   type SocialMapCategory,
 } from "../lib/social-map-listings.js";
 import { getSocialMapReviewReport } from "../lib/social-map-review.js";
+import {
+  ensureLocalizedEventCopy,
+  eventCopyForLanguage,
+  type EventLanguage,
+} from "../lib/event-localization.js";
 import { requireEditor } from "../middlewares/requireEditor.js";
 
 const router: IRouter = Router();
@@ -246,6 +251,37 @@ function parseListingSection(value: unknown): ListingSection {
   const section = String(value ?? "events").trim();
   if (section === "businesses" || section === "food-drink" || section === "social-map") return section;
   return "events";
+}
+
+export function parseEventLanguage(value: unknown): EventLanguage | null {
+  return value === "nl" || value === "en" ? value : null;
+}
+
+export function localizedEventDetails(
+  event: typeof discoveredEventsTable.$inferSelect,
+  language: EventLanguage,
+): string {
+  const locale = language === "nl" ? "nl-NL" : "en-GB";
+  const parsedDate = event.startsAt ? new Date(event.startsAt) : null;
+  const date = parsedDate && !Number.isNaN(parsedDate.getTime())
+    ? new Intl.DateTimeFormat(locale, {
+        dateStyle: "medium",
+        timeStyle: event.startsAt?.includes("T") ? "short" : undefined,
+        timeZone: "Europe/Amsterdam",
+      }).format(parsedDate)
+    : (language === "nl" ? "Datum niet beschikbaar" : "Date not provided");
+  return [
+    date,
+    event.openingTimes
+      ? `${language === "nl" ? "Openingstijden" : "Opening times"}: ${event.openingTimes}`
+      : "",
+    event.venue ?? (language === "nl" ? "Locatie niet beschikbaar" : "Venue not provided"),
+    event.isApproximateLocation
+      ? (language === "nl"
+          ? "Kaartpunt: centrum van Den Haag (exacte coördinaten niet beschikbaar)"
+          : "Map pin: The Hague city centre (exact coordinates unavailable)")
+      : "",
+  ].filter(Boolean).join(" · ");
 }
 
 function isInHagueBounds(lat: number, lng: number): boolean {
@@ -1005,9 +1041,14 @@ router.post("/listings/google-places-usage/reset", requireEditor, async (_req, r
 router.get("/listings", async (req, res) => {
   const cityId = String(req.query["cityId"] ?? "").trim();
   const listingSection = parseListingSection(req.query["section"]);
+  const language = parseEventLanguage(req.query["language"]);
 
-  if (!cityId) {
-    res.status(400).json({ listings: [], source: "fallback", message: "cityId is required" });
+  if (!cityId || !language) {
+    res.status(400).json({
+      listings: [],
+      source: "fallback",
+      message: !cityId ? "cityId is required" : "language must be nl or en",
+    });
     return;
   }
 
@@ -1136,22 +1177,20 @@ router.get("/listings", async (req, res) => {
           gte(discoveredEventsTable.startsAt, today),
         ))
         .orderBy(asc(discoveredEventsTable.startsAt), desc(discoveredEventsTable.lastSeenAt));
-      const discoveredListings = discovered
-        .map((event) => ({
+      const localizedEvents = await ensureLocalizedEventCopy(discovered, language);
+      const discoveredListings = localizedEvents
+        .map((event) => {
+        const copy = eventCopyForLanguage(event, language);
+        return {
         id: `source-${event.id}`,
         locationId: event.locationId,
         category: event.category,
-        name: event.title,
-        description: event.description,
+        name: copy.title,
+        description: copy.description,
           startsAt: event.startsAt,
         x: event.x,
         y: event.y,
-        details: [
-          event.startsAt ? event.startsAt.replace("T", " ").slice(0, 16) : "Date not provided",
-          event.openingTimes ? `Opening times: ${event.openingTimes}` : "",
-          event.venue ?? "Venue not provided",
-          event.isApproximateLocation ? "Map pin: Den Haag city centre (exact coordinates unavailable)" : "",
-        ].filter(Boolean).join(" · "),
+        details: localizedEventDetails(event, language),
         lat: event.lat,
         lng: event.lng,
         sourceUrl: event.canonicalUrl,
@@ -1167,13 +1206,17 @@ router.get("/listings", async (req, res) => {
           audience: event.audience,
           neighborhood: event.neighborhood,
           recurrenceText: event.recurrenceText,
-      }));
+      }});
       res.json({
         listings: discoveredListings,
         source: discoveredListings.length > 0 ? "live" : "fallback",
         message: discoveredListings.length > 0
-          ? `${discoveredListings.length} verified upcoming event${discoveredListings.length === 1 ? "" : "s"} found in Den Haag.`
-          : "Er zijn momenteel geen gecontroleerde aankomende evenementen beschikbaar.",
+          ? language === "nl"
+            ? `${discoveredListings.length} gecontroleerde aankomende evenement${discoveredListings.length === 1 ? "" : "en"} gevonden in Den Haag.`
+            : `${discoveredListings.length} verified upcoming event${discoveredListings.length === 1 ? "" : "s"} found in The Hague.`
+          : language === "nl"
+            ? "Er zijn momenteel geen gecontroleerde aankomende evenementen beschikbaar."
+            : "No verified upcoming events are currently available.",
       });
     } catch {
       res.json({

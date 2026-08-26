@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { eventMetadata, type SourceDefinition } from "./sources";
+import {
+  deduplicateSourceEvents,
+  detectEventContentLanguage,
+  eventMetadata,
+  type SourceDefinition,
+} from "./sources";
 
 const source: SourceDefinition = {
   id: "test-events",
@@ -88,5 +93,51 @@ describe("event price capture", () => {
       eventMetadata("Tickets €10 - €20", source).priceText,
       "€10 - €20",
     );
+  });
+});
+
+describe("event language capture", () => {
+  it("detects language paths before generic page metadata", () => {
+    assert.equal(
+      detectEventContentLanguage('<html lang="en">', "https://denhaag.com/de/kalender/bauernmarkt"),
+      "de",
+    );
+    assert.equal(
+      detectEventContentLanguage('<html lang="nl-NL">', "https://example.test/agenda"),
+      "nl",
+    );
+  });
+
+  it("keeps verified English and Dutch variants when deduplicating", () => {
+    const [event] = deduplicateSourceEvents([
+      {
+        title: "Bauernmarkt",
+        description: "Deutsche Beschreibung",
+        url: "https://denhaag.com/de/kalender/bauernmarkt",
+        sourceEventId: "market-1",
+        sourceLanguage: "de",
+      },
+      {
+        title: "Farmers' market",
+        description: "Fresh produce from local market traders.",
+        url: "https://denhaag.com/en/calendar/farmers-market",
+        sourceEventId: "market-1",
+        sourceLanguage: "en",
+        titleEn: "Farmers' market",
+        descriptionEn: "Fresh produce from local market traders.",
+      },
+      {
+        title: "Boerenmarkt",
+        description: "Verse producten van lokale marktkooplieden.",
+        url: "https://denhaag.com/nl/agenda/boerenmarkt",
+        sourceEventId: "market-1",
+        sourceLanguage: "nl",
+        titleNl: "Boerenmarkt",
+        descriptionNl: "Verse producten van lokale marktkooplieden.",
+      },
+    ]);
+    assert.equal(event.title, "Farmers' market");
+    assert.equal(event.titleEn, "Farmers' market");
+    assert.equal(event.titleNl, "Boerenmarkt");
   });
 });
