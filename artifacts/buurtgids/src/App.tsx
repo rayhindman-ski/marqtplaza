@@ -9,7 +9,7 @@ import {
   Map as MapIcon, List, Clock, Newspaper,
   Globe2, Bookmark, BookmarkCheck, X, ChevronDown, ChevronUp,
   ScanSearch, RefreshCw, WifiOff, Radio, MapPinned,
-  Landmark, Route as RouteIcon, Baby, Building2, Coffee, Gamepad2, HandHeart, Waves, ShoppingBag, ExternalLink, AlertCircle,
+  Landmark, Route as RouteIcon, Baby, Building2, Coffee, Gamepad2, HandHeart, Waves, ShoppingBag, ExternalLink, AlertCircle, CalendarPlus,
   CloudSun, Cloud, CloudFog, CloudRain, CloudSnow, Sun, Wind, Droplets, Tag, Store
 } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
@@ -65,6 +65,170 @@ import {
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
+}
+
+type CalendarEventData = {
+  name: string;
+  description?: string | null;
+  startsAt?: string | null;
+  venue?: string | null;
+  address?: string | null;
+  sourceUrl?: string | null;
+};
+
+function icsEscape(value: string): string {
+  return value
+    .replace(/\\/g, '\\\\')
+    .replace(/\r?\n/g, '\\n')
+    .replace(/([,;])/g, '\\$1');
+}
+
+type CalendarDateParts = {
+  date: string;
+  time?: string;
+  timestamp: number;
+  isDateOnly: boolean;
+  isAmsterdamLocal: boolean;
+};
+
+function calendarDateParts(value: string): CalendarDateParts | null {
+  const pad = (part: number) => String(part).padStart(2, '0');
+  const naive = value.match(/^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2})(?::(\d{2}))?)?$/);
+  const hasExplicitZone = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(value);
+  const hasTime = /T\d{2}:\d{2}/.test(value);
+  const parsed = naive && !hasExplicitZone
+    ? new Date(Date.UTC(
+        Number(naive[1]),
+        Number(naive[2]) - 1,
+        Number(naive[3]),
+        Number(naive[4] ?? 0),
+        Number(naive[5] ?? 0),
+        Number(naive[6] ?? 0),
+      ))
+    : new Date(value);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return {
+    date: `${parsed.getUTCFullYear()}${pad(parsed.getUTCMonth() + 1)}${pad(parsed.getUTCDate())}`,
+    time: hasTime
+      ? `${pad(parsed.getUTCHours())}${pad(parsed.getUTCMinutes())}${pad(parsed.getUTCSeconds())}`
+      : undefined,
+    timestamp: parsed.getTime(),
+    isDateOnly: !hasTime,
+    isAmsterdamLocal: Boolean(naive && !hasExplicitZone && hasTime),
+  };
+}
+
+function downloadCalendarFile(event: CalendarEventData, language: Language): boolean {
+  if (!event.startsAt) return false;
+  const start = calendarDateParts(event.startsAt);
+  if (!start) return false;
+  const endParts = calendarDateParts(new Date(
+    start.timestamp + (start.isDateOnly ? 24 : 2) * 60 * 60 * 1000,
+  ).toISOString());
+  const location = event.venue || event.address || '';
+  const description = [
+    event.description,
+    event.sourceUrl ? `${language === 'nl' ? 'Bron' : 'Source'}: ${event.sourceUrl}` : '',
+  ].filter(Boolean).join('\n\n');
+  const lines = [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//buurtplaza.nl//Events//EN',
+    'CALSCALE:GREGORIAN',
+    'BEGIN:VEVENT',
+    `UID:buurtplaza-${encodeURIComponent(`${event.name}-${event.startsAt}`)}@buurtplaza.nl`,
+    `DTSTAMP:${calendarDateParts(new Date().toISOString())?.date}${calendarDateParts(new Date().toISOString())?.time ?? ''}`,
+    start.isDateOnly ? `DTSTART;VALUE=DATE:${start.date}` : (
+      start.isAmsterdamLocal
+        ? `DTSTART;TZID=Europe/Amsterdam:${start.date}T${start.time}`
+        : `DTSTART:${start.date}T${start.time}Z`
+    ),
+    start.isDateOnly && endParts ? `DTEND;VALUE=DATE:${endParts.date}` : (endParts ? (
+      start.isAmsterdamLocal
+        ? `DTEND;TZID=Europe/Amsterdam:${endParts.date}T${endParts.time}`
+        : `DTEND:${endParts.date}T${endParts.time}Z`
+    ) : ''),
+    `SUMMARY:${icsEscape(event.name)}`,
+    location ? `LOCATION:${icsEscape(location)}` : '',
+    description ? `DESCRIPTION:${icsEscape(description)}` : '',
+    event.sourceUrl ? `URL:${event.sourceUrl}` : '',
+    'END:VEVENT',
+    'END:VCALENDAR',
+  ].filter(Boolean).join('\r\n');
+  const blob = new Blob([`${lines}\r\n`], { type: 'text/calendar;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = `${event.name.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').toLowerCase() || 'event'}.ics`;
+  anchor.click();
+  URL.revokeObjectURL(url);
+  return true;
+}
+
+function googleCalendarUrl(event: CalendarEventData): string | null {
+  if (!event.startsAt) return null;
+  const start = calendarDateParts(event.startsAt);
+  if (!start) return null;
+  const end = calendarDateParts(new Date(
+    start.timestamp + (start.isDateOnly ? 24 : 2) * 60 * 60 * 1000,
+  ).toISOString());
+  if (!end) return null;
+  const dates = start.isDateOnly
+    ? `${start.date}/${end.date}`
+    : `${start.date}T${start.time}${start.isAmsterdamLocal ? '' : 'Z'}/${end.date}T${end.time}${start.isAmsterdamLocal ? '' : 'Z'}`;
+  const params = new URLSearchParams({
+    action: 'TEMPLATE',
+    text: event.name,
+    dates,
+    details: [event.description, event.sourceUrl].filter(Boolean).join('\n\n'),
+    location: event.venue || event.address || '',
+  });
+  if (start.isAmsterdamLocal) params.set('ctz', 'Europe/Amsterdam');
+  return `https://calendar.google.com/calendar/render?${params.toString()}`;
+}
+
+function EventCalendarActions({
+  language,
+  event,
+}: {
+  language: Language;
+  event: CalendarEventData;
+}) {
+  const [message, setMessage] = useState<string | null>(null);
+  if (!event.startsAt) return null;
+  const googleUrl = googleCalendarUrl(event);
+  const labels = language === 'nl'
+    ? { title: 'In je agenda zetten', google: 'Google Agenda', file: 'Download .ics', unavailable: 'Agenda-informatie niet beschikbaar' }
+    : { title: 'Add to your calendar', google: 'Google Calendar', file: 'Download .ics', unavailable: 'Calendar information unavailable' };
+  return (
+    <div className="mt-3 rounded-xl border border-primary/15 bg-primary/5 p-3" onClick={(click) => click.stopPropagation()}>
+      <p className="mb-2 flex items-center gap-2 text-xs font-extrabold uppercase tracking-wide text-primary">
+        <CalendarPlus className="h-4 w-4" aria-hidden="true" /> {labels.title}
+      </p>
+      <div className="flex flex-wrap gap-2">
+        {googleUrl && (
+          <a
+            href={googleUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center rounded-lg bg-primary px-3 py-2 text-xs font-bold text-primary-foreground transition-colors hover:bg-primary/90"
+          >
+            {labels.google}
+          </a>
+        )}
+        <button
+          type="button"
+          onClick={() => {
+            if (downloadCalendarFile(event, language)) setMessage(labels.file);
+          }}
+          className="inline-flex items-center rounded-lg border border-primary/25 bg-background px-3 py-2 text-xs font-bold text-primary transition-colors hover:bg-primary/10"
+        >
+          {labels.file}
+        </button>
+      </div>
+      {message && <p className="mt-2 text-[11px] font-semibold text-muted-foreground" role="status">{message}</p>}
+    </div>
+  );
 }
 
 function getDistanceKm(latA: number, lngA: number, latB: number, lngB: number) {
@@ -979,22 +1143,34 @@ function MarkerCard({
             </div>
           </div>
           {isEvent && (
-            <div className="mb-3 flex flex-wrap items-center gap-3 text-xs font-bold">
-              <span data-testid={`event-price-${marker.id}`} className="rounded-md bg-emerald-700/10 px-2 py-1 text-emerald-800">
-                {language === 'nl' ? 'Prijs' : 'Price'}: {eventPrice}
-              </span>
-              {marker.sourceUrl && (
-                <a
-                  href={marker.sourceUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={(event) => event.stopPropagation()}
-                  className="inline-flex items-center gap-1 text-primary hover:underline"
-                >
-                  {language === 'nl' ? 'Bekijk evenement' : 'View event'}
-                  <ExternalLink className="h-3 w-3" />
-                </a>
-              )}
+            <div className="mb-3">
+              <div className="flex flex-wrap items-center gap-3 text-xs font-bold">
+                <span data-testid={`event-price-${marker.id}`} className="rounded-md bg-emerald-700/10 px-2 py-1 text-emerald-800">
+                  {language === 'nl' ? 'Prijs' : 'Price'}: {eventPrice}
+                </span>
+                {marker.sourceUrl && (
+                  <a
+                    href={marker.sourceUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(event) => event.stopPropagation()}
+                    className="inline-flex items-center gap-1 text-primary hover:underline"
+                  >
+                    {language === 'nl' ? 'Bekijk evenement' : 'View event'}
+                    <ExternalLink className="h-3 w-3" />
+                  </a>
+                )}
+              </div>
+              <EventCalendarActions
+                language={language}
+                event={{
+                  name: marker.name,
+                  description: copy.description,
+                  startsAt: marker.startsAt,
+                  venue: marker.address,
+                  sourceUrl: marker.sourceUrl,
+                }}
+              />
             </div>
           )}
           {isExpanded && <>
@@ -2031,6 +2207,19 @@ function EventDetailView({ eventId, listingSection = 'events' }: { eventId: stri
               </div>
             )}
           </div>
+
+          {listingSection === 'events' && (
+            <EventCalendarActions
+              language={language}
+              event={{
+                name: listing.name,
+                description: listing.description,
+                startsAt: listing.startsAt,
+                address: listing.address,
+                sourceUrl,
+              }}
+            />
+          )}
 
           {sourceUrl && (
             <div className="mt-8 flex flex-wrap gap-3">

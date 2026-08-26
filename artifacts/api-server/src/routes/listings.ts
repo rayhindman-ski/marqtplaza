@@ -270,12 +270,25 @@ export function localizedEventDetails(
         timeZone: "Europe/Amsterdam",
       }).format(parsedDate)
     : (language === "nl" ? "Datum niet beschikbaar" : "Date not provided");
+  const openingTimeRanges = event.openingTimes?.match(/\b\d{1,2}[:.]\d{2}\s*[-–]\s*\d{1,2}[:.]\d{2}\b/g);
+  const openingTimes = event.openingTimes
+    ? openingTimeRanges?.join(", ")
+      ?? (language === "nl" ? "Zie evenementpagina" : "See event page")
+    : "";
+  const genericVenue = event.venue?.trim().toLowerCase();
+  const venue = !event.venue || genericVenue === "walking" || genericVenue === "route" || genericVenue === "directions"
+    ? (language === "nl" ? "Locatie niet beschikbaar" : "Venue not provided")
+    : language === "en" && /\b(exacte locatie|locatie volgt)\b/i.test(event.venue)
+      ? "The Hague, exact venue to be confirmed"
+      : language === "nl" && /\b(exact location|venue to be confirmed)\b/i.test(event.venue)
+        ? "Den Haag, exacte locatie volgt"
+        : event.venue;
   return [
     date,
-    event.openingTimes
-      ? `${language === "nl" ? "Openingstijden" : "Opening times"}: ${event.openingTimes}`
+    openingTimes
+      ? `${language === "nl" ? "Openingstijden" : "Opening times"}: ${openingTimes}`
       : "",
-    event.venue ?? (language === "nl" ? "Locatie niet beschikbaar" : "Venue not provided"),
+    venue,
     event.isApproximateLocation
       ? (language === "nl"
           ? "Kaartpunt: centrum van Den Haag (exacte coördinaten niet beschikbaar)"
@@ -1222,7 +1235,9 @@ router.get("/listings", async (req, res) => {
       res.json({
         listings: [],
         source: "fallback",
-        message: "Actuele evenementen zijn tijdelijk niet beschikbaar.",
+        message: language === "nl"
+          ? "Actuele evenementen zijn tijdelijk niet beschikbaar."
+          : "Current events are temporarily unavailable.",
       });
     }
     return;

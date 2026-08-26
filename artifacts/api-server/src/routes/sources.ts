@@ -3,6 +3,7 @@ import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@workspace/db";
 import { discoveredEventsTable } from "@workspace/db/schema";
 import { requireEditor } from "../middlewares/requireEditor";
+import { queueMissingEventTranslations } from "../lib/event-localization.js";
 
 const router = Router();
 
@@ -1180,6 +1181,13 @@ async function persistEvents(source: SourceDefinition, events: SourceScanEvent[]
       },
     });
   }
+
+  const persistedEvents = await db
+    .select()
+    .from(discoveredEventsTable)
+    .where(inArray(discoveredEventsTable.canonicalUrl, urls));
+  queueMissingEventTranslations(persistedEvents, "nl");
+  queueMissingEventTranslations(persistedEvents, "en");
 
   return {
     eventsAdded: events.filter((event) => !existingUrls.has(event.url)).length,
