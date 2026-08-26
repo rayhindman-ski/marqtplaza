@@ -1,10 +1,14 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 
 import {
   deduplicateSourceEvents,
   detectEventContentLanguage,
+  eventPriceEvidenceFromHtml,
   eventMetadata,
+  parseVisibleEventPrice,
   type SourceDefinition,
 } from "./sources";
 
@@ -32,7 +36,7 @@ describe("event price capture", () => {
       priceCurrency: "EUR",
     });
     assert.equal(metadata.priceType, "paid");
-    assert.equal(metadata.priceText, "€10–€25");
+    assert.equal(metadata.priceText, "€10–25");
   });
 
   it("combines compatible offer tiers and prefers them over prose", () => {
@@ -41,7 +45,7 @@ describe("event price capture", () => {
       { price: 30, priceCurrency: "EUR" },
     ]);
     assert.equal(metadata.priceType, "paid");
-    assert.equal(metadata.priceText, "€15–€30");
+    assert.equal(metadata.priceText, "€15–30");
   });
 
   it("does not invent EUR when structured currency is absent or different", () => {
@@ -87,11 +91,65 @@ describe("event price capture", () => {
     );
     assert.equal(
       eventMetadata("Kaarten vanaf € 7,50", source).priceText,
-      "vanaf € 7,50",
+      "Vanaf €7,50",
     );
     assert.equal(
       eventMetadata("Tickets €10 - €20", source).priceText,
-      "€10 - €20",
+      "€10–20",
+    );
+  });
+
+  it("normalizes exact, from, one-symbol and two-symbol ranges", () => {
+    assert.deepEqual(parseVisibleEventPrice("Prijs: € 12.50"), { priceType: "paid", priceText: "€12,50" });
+    assert.deepEqual(parseVisibleEventPrice("from: €7,00"), { priceType: "paid", priceText: "From €7,00" });
+    assert.equal(parseVisibleEventPrice("€60,00 — 165,00").priceText, "€60,00–165,00");
+    assert.equal(parseVisibleEventPrice("€60.00 - €165.00").priceText, "€60,00–165,00");
+    assert.deepEqual(parseVisibleEventPrice("Free admission"), { priceType: "free", priceText: "Free" });
+  });
+
+  it("extracts the workshop price without navigation or recommendations contaminating it", () => {
+    const fixture = readFileSync(
+      fileURLToPath(new URL("./fixtures/summer-writing-workshops.html", import.meta.url)),
+      "utf8",
+    );
+    const evidence = eventPriceEvidenceFromHtml(fixture);
+    assert.equal(parseVisibleEventPrice(evidence.dedicated ?? "").priceText, "€60,00–165,00");
+    assert.doesNotMatch(evidence.bounded ?? "", /Another workshop|€5|€19\.50|Membership/);
+  });
+
+  it("does not scan prices outside bounded event content", () => {
+    const evidence = eventPriceEvidenceFromHtml(`
+      <nav>Tickets €9</nav>
+      <main><article><h1>Event without a published price</h1></article></main>
+      <aside class="recommended-events">Related event €4</aside>
+      <footer>Support us for €20</footer>
+    `);
+    assert.deepEqual(parseVisibleEventPrice(evidence.bounded ?? ""), { priceType: "unknown" });
+  });
+
+  it("prefers paid tickets over incidental free extras in bounded content", () => {
+    const evidence = eventPriceEvidenceFromHtml(`
+      <main><article>
+        <h1>Evening concert</h1>
+        <p>Tickets €25. A free drink is included.</p>
+      </article></main>
+    `);
+    assert.deepEqual(
+      parseVisibleEventPrice(evidence.bounded ?? ""),
+      { priceType: "paid", priceText: "€25" },
+    );
+  });
+
+  it("prefers a dedicated paid amount over free ancillary wording", () => {
+    const evidence = eventPriceEvidenceFromHtml(`
+      <main><article>
+        <h1>Evening concert</h1>
+        <div class="event-price">€25 · free cloakroom</div>
+      </article></main>
+    `);
+    assert.deepEqual(
+      parseVisibleEventPrice(evidence.dedicated ?? ""),
+      { priceType: "paid", priceText: "€25" },
     );
   });
 });

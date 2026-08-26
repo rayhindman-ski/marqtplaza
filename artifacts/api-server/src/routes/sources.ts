@@ -50,6 +50,7 @@ export type SourceScanEvent = {
   reviewReason?: PublicationReason;
 };
 
+type ParsedPrice = Pick<SourceScanEvent, "priceType" | "priceText">;
 type CrawlPageType = "index" | "detail" | "sitemap" | "robots";
 
 type CrawlPage = {
@@ -192,6 +193,10 @@ function stripMarkup(value: string): string {
   return decodeEntities(value.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim());
 }
 
+function formatPriceAmount(raw: string, currency = "€"): string {
+  const normalized = raw.trim().replace(/\s+/g, "").replace(".", ",");
+  return `${currency}${normalized}`;
+}
 function shorten(value: string | undefined, maxLength = 440): string | undefined {
   if (!value) return undefined;
   const clean = stripMarkup(value).replace(/\s+/g, " ").trim();
@@ -354,7 +359,7 @@ export function eventMetadata(
     return [parseAmount(offer.lowPrice), parseAmount(offer.highPrice)]
       .filter((amount): amount is number => amount !== undefined);
   });
-  const explicitPrice = clean.match(/(?:(?:vanaf|from)\s+€\s?\d+(?:[,.]\d{1,2})?|€\s?\d+(?:[,.]\d{1,2})?\s*(?:-|–|—|tot|to)\s*€?\s?\d+(?:[,.]\d{1,2})?|€\s?\d+(?:[,.]\d{1,2})?|(?:gratis|free)\b|laag(?:e)?\s+(?:prijs|tarief|bijdrage)|low[- ]cost|betaalbare?\s+(?:prijs|bijdrage)|eigen bijdrage\s+van\s+€?\s?\d+(?:[,.]\d{1,2})?)/i)?.[0];
+  const visiblePrice = parseVisibleEventPrice(clean);
   const currencyLabel = firstCurrency === "EUR" ? "€" : firstCurrency ? `${firstCurrency} ` : "";
   const formatAmount = (amount: number): string => {
     return `${currencyLabel}${amount.toLocaleString("nl-NL", { maximumFractionDigits: 2 })}`;
@@ -365,7 +370,7 @@ export function eventMetadata(
     ? undefined
     : structuredMin === structuredMax
       ? formatAmount(structuredMin)
-      : `${formatAmount(structuredMin)}–${formatAmount(structuredMax)}`;
+      : `${formatAmount(structuredMin)}–${formatAmount(structuredMax).replace(currencyLabel, "")}`;
   const hasMeal = /\b(samen eten|maaltijd|diner|lunch|ontbijt|buurtmaaltijd|eet(?:-|\s)?café|food support|voedselhulp)\b/i.test(clean);
   const mealType: MealType | undefined = hasMeal
     ? /\b(voedselhulp|voedselbank|food support|uitgifte)\b/i.test(clean) ? "food-support" : "community-meal"
@@ -376,11 +381,7 @@ export function eventMetadata(
       ? "low-cost"
       : structuredMax !== undefined && structuredMax > 0
         ? "paid"
-        : /\b(gratis|free)\b/i.test(clean)
-          ? "free"
-          : explicitPrice
-            ? "paid"
-            : "unknown";
+          : visiblePrice.priceType ?? "unknown";
   const activityKind: ActivityKind | undefined = mealType
     ? "meal"
     : /\b(workshop|cursus|lezing|taalcafé|training|learning|learn)\b/i.test(text)
@@ -417,7 +418,7 @@ export function eventMetadata(
     sourceGroup: source.sourceGroup,
     activityKind,
     priceType,
-    priceText: structuredPrice ?? (explicitPrice ? shorten(explicitPrice, 80) : undefined),
+    priceText: structuredPrice ?? visiblePrice.priceText,
     mealType,
     audience,
     neighborhood,
@@ -880,10 +881,24 @@ function htmlEventFromPage(
   const title = pageTitle(html) ?? fallbackTitle;
   if (!title) return null;
   const description = pageDescription(html);
-  const metadata = eventMetadata(
-    `${title} ${description ?? ""}`,
-    source,
-  );
+  const priceEvidence = eventPriceEvidenceFromHtml(html);
+  const baseMetadata = eventMetadata(`${title} ${description ?? ""}`, source);
+  const dedicatedPrice = priceEvidence.dedicated
+    ? parseVisibleEventPrice(priceEvidence.dedicated)
+    : { priceType: "unknown" as const };
+  const boundedPrice = priceEvidence.bounded
+    ? parseVisibleEventPrice(priceEvidence.bounded)
+    : { priceType: "unknown" as const };
+  const reliablePrice = dedicatedPrice.priceType !== "unknown"
+    ? dedicatedPrice
+    : boundedPrice.priceType !== "unknown"
+      ? boundedPrice
+      : baseMetadata;
+  const metadata = {
+    ...baseMetadata,
+    priceType: reliablePrice.priceType,
+    priceText: reliablePrice.priceText,
+  };
   return withLocalizedEventCopy({
     title,
     url: pageUrl,
@@ -1354,7 +1369,7 @@ async function scanSource(source: SourceDefinition) {
       const structured = structuredEventsFromPage(detail.html, detail.url, source)
         .find((candidate) => candidate.url === event.url);
       const extracted = htmlEventFromPage(detail.html, detail.url, source, event.title);
-      const enriched = structured ?? extracted;
+       const enriched = structured ?? extracted;
       if (!enriched) return;
       events[index] = {
         ...event,
@@ -1369,8 +1384,12 @@ async function scanSource(source: SourceDefinition) {
         organizer: enriched.organizer ?? event.organizer,
         sourceGroup: enriched.sourceGroup ?? event.sourceGroup,
         activityKind: enriched.activityKind ?? event.activityKind,
-        priceType: enriched.priceType ?? event.priceType,
-        priceText: enriched.priceText ?? event.priceText,
+         priceType: structured?.priceType !== "unknown"
+           ? structured?.priceType
+           : extracted?.priceType !== "unknown"
+             ? extracted?.priceType
+             : event.priceType,
+         priceText: structured?.priceText ?? extracted?.priceText ?? event.priceText,
         mealType: enriched.mealType ?? event.mealType,
         audience: enriched.audience ?? event.audience,
         neighborhood: enriched.neighborhood ?? event.neighborhood,
@@ -1614,7 +1633,7 @@ router.patch("/review/:id", requireEditor, async (req, res) => {
       .set({
         reviewStatus: "rejected",
         reviewReason: "manual_rejection",
-        reviewEvidenceUrl: evidenceUrl && isValidHttpUrl(evidenceUrl) ? evidenceUrl : existing.reviewEvidenceUrl,
+        reviewEvidenceUrl: isValidHttpUrl(evidenceUrl) ? evidenceUrl : null,
         reviewedAt: new Date(),
         updatedAt: new Date(),
       })
@@ -1682,3 +1701,67 @@ router.patch("/review/:id", requireEditor, async (req, res) => {
 });
 
 export default router;
+
+function removeHtmlSections(html: string, tagNames: string): string {
+  return html.replace(new RegExp(`<(${tagNames})\\b[^>]*>[\\s\\S]*?<\\/\\1>`, "gi"), " ");
+}
+
+export function eventPriceEvidenceFromHtml(html: string): { dedicated?: string; bounded?: string } {
+  const safe = removeHtmlSections(html, "script|style|noscript|template|svg|nav|footer|aside");
+  const withoutRecommendations = safe.replace(
+    /<(section|div)\b[^>]*(?:id|class)=["'][^"']*(?:recommend|related|suggest|also-like|other-events|more-events)[^"']*["'][^>]*>[\s\S]*?<\/\1>/gi,
+    " ",
+  );
+  const eventContent = withoutRecommendations.match(/<article\b[^>]*>([\s\S]*?)<\/article>/i)?.[1]
+    ?? withoutRecommendations.match(/<main\b[^>]*>([\s\S]*?)<\/main>/i)?.[1]
+    ?? "";
+  const dedicated: string[] = [];
+  for (const match of eventContent.matchAll(
+    /<(?:div|span|p|li|dd)\b[^>]*(?:itemprop=["']price["']|(?:id|class)=["'][^"']*(?:price|pricing|ticket-price|admission)[^"']*["'])[^>]*>([\s\S]*?)<\/(?:div|span|p|li|dd)>/gi,
+  )) {
+    const value = stripMarkup(match[1]);
+    if (value) dedicated.push(value);
+    if (dedicated.length >= 8) break;
+  }
+  for (const match of eventContent.matchAll(
+    /<(?:dt|th|strong|b)\b[^>]*>\s*(?:price|prijs|cost|kosten|admission|toegang)\s*:?\s*<\/(?:dt|th|strong|b)>\s*<(?:dd|td|span|p|div)\b[^>]*>([\s\S]*?)<\/(?:dd|td|span|p|div)>/gi,
+  )) {
+    const value = stripMarkup(match[1]);
+    if (value) dedicated.push(value);
+    if (dedicated.length >= 8) break;
+  }
+  return {
+    dedicated: dedicated.length > 0 ? dedicated.join(" · ").slice(0, 1_200) : undefined,
+    bounded: eventContent ? stripMarkup(eventContent).slice(0, 8_000) : undefined,
+  };
+}
+
+export function parseVisibleEventPrice(evidence: string): ParsedPrice {
+  const clean = stripMarkup(evidence).replace(/\s+/g, " ").trim();
+  if (!clean) return { priceType: "unknown" };
+
+  const amount = String.raw`\d+(?:[,.]\d{1,2})?`;
+  const range = clean.match(new RegExp(
+    String.raw`€\s*(${amount})\s*(?:-|–|—|−|tot|to)\s*(?:€\s*)?(${amount})`,
+    "i",
+  ));
+  if (range) {
+    return {
+      priceType: "paid",
+      priceText: `${formatPriceAmount(range[1])}–${formatPriceAmount(range[2], "")}`,
+    };
+  }
+
+  const from = clean.match(new RegExp(String.raw`\b(vanaf|from)\s*:?\s*€\s*(${amount})`, "i"));
+  if (from) {
+    const label = from[1].toLowerCase() === "vanaf" ? "Vanaf" : "From";
+    return { priceType: "paid", priceText: `${label} ${formatPriceAmount(from[2])}` };
+  }
+
+  const exact = clean.match(new RegExp(String.raw`€\s*(${amount})`, "i"));
+  if (exact) return { priceType: "paid", priceText: formatPriceAmount(exact[1]) };
+  if (/\b(?:gratis|free(?:\s+admission|\s+entry)?)\b/i.test(clean)) {
+    return { priceType: "free", priceText: /\bgratis\b/i.test(clean) ? "Gratis" : "Free" };
+  }
+  return { priceType: "unknown" };
+}
