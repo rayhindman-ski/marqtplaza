@@ -27,6 +27,7 @@ export const discoveredEventsTable = pgTable(
     titleEn: text("title_en"),
     descriptionEn: text("description_en"),
     startsAt: text("starts_at"),
+    isCancelled: boolean("is_cancelled").notNull().default(false),
     openingTimes: text("opening_times"),
     venue: text("venue"),
     category: text("category").notNull(),

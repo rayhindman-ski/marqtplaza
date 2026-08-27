@@ -33,6 +33,7 @@ export type SourceScanEvent = {
   titleEn?: string;
   descriptionEn?: string;
   startsAt?: string;
+  isCancelled?: boolean;
   openingTimes?: string;
   venue?: string;
   category?: EventCategory;
@@ -228,6 +229,20 @@ function withLocalizedEventCopy(
     titleEn: language === "en" ? event.title : event.titleEn,
     descriptionEn: language === "en" ? event.description : event.descriptionEn,
   };
+}
+
+function isCancellationText(value: string | undefined): boolean {
+  const text = value?.trim() ?? "";
+  const cancellation = "(?:cancelled|canceled|geannuleerd|afgelast|abgesagt|annulé)";
+  const eventNoun = "(?:event|evenement|activiteit|concert|voorstelling|workshop|bijeenkomst)";
+  return new RegExp(`^${cancellation}(?:\\s*[:\\-–—]|$)`, "i").test(text)
+    || new RegExp(`\\b(?:this|the|dit|deze|het)\\s+${eventNoun}\\s+(?:is|has\\s+been|wordt)\\s+${cancellation}\\b`, "i").test(text)
+    || new RegExp(`\\b${eventNoun}\\s+(?:is\\s+)?${cancellation}\\b`, "i").test(text)
+    || /\b(?:gaat\s+niet(?:\s+meer)?\s+door|will\s+not\s+take\s+place)\b/i.test(text);
+}
+
+function isCancelledEvent(...values: Array<string | undefined>): boolean {
+  return values.some((value) => isCancellationText(value));
 }
 
 function canonicalizeUrl(value: string, baseUrl: string): string | null {
@@ -613,6 +628,11 @@ function eventFromStructuredNode(
   const locationRecord = location && typeof location === "object" ? location as Record<string, unknown> : null;
   const coordinates = parseCoordinates(locationRecord?.geo ?? node.geo);
   const description = shorten(typeof node.description === "string" ? node.description : undefined);
+  const status = typeof node.eventStatus === "string"
+    ? node.eventStatus
+    : typeof node.status === "string"
+      ? node.status
+      : undefined;
   const schedule = node.eventSchedule && typeof node.eventSchedule === "object"
     ? node.eventSchedule as Record<string, unknown>
     : undefined;
@@ -628,6 +648,7 @@ function eventFromStructuredNode(
     url,
     description,
     startsAt,
+    isCancelled: isCancelledEvent(title, description, status) || status?.toLowerCase().endsWith("eventcancelled") === true,
     openingTimes: openingTimesFromStructuredNode(node, schedule),
     venue: venueFromLocation(location),
     category: classifyEvent(`${title} ${description ?? ""}`),
@@ -773,6 +794,7 @@ function calendarEventFromText(
     : undefined;
   const description = shorten(value("DESCRIPTION"));
   const venue = shorten(value("LOCATION"), 180);
+  const status = value("STATUS");
   const metadata = eventMetadata(`${title} ${description ?? ""}`, source);
   return withLocalizedEventCopy({
     title,
@@ -780,6 +802,7 @@ function calendarEventFromText(
     sourceEventId: value("UID"),
     description,
     startsAt,
+    isCancelled: isCancelledEvent(title, description, status) || status?.toLowerCase() === "cancelled",
     openingTimes,
     venue,
     category: classifyEvent(`${title} ${description ?? ""}`),
@@ -886,7 +909,12 @@ function linkCandidatesFromPage(
       || /\b(?:event|event-item|calendar-item|activity-card)\b/i.test(match[0]);
     if (!likelyDetail || title.length < 4 || NAVIGATION_LINK_TITLES.has(title.toLowerCase()) || seen.has(url)) continue;
     seen.add(url);
-    candidates.push({ title, url, category: classifyEvent(title) });
+    candidates.push({
+      title,
+      url,
+      isCancelled: isCancellationText(title),
+      category: classifyEvent(title),
+    });
     if (candidates.length >= MAX_EVENTS_PER_SOURCE) break;
   }
   return { candidates, indexLinks, sitemapLinks, calendarLinks, linksExamined };
@@ -949,6 +977,7 @@ function htmlEventFromPage(
     sourceEventId: pageCalendarField(html, "UID"),
     description,
     startsAt: pageDate(html),
+    isCancelled: isCancelledEvent(title, description),
     openingTimes: pageOpeningTimes(html),
     venue: pageVenue(html),
     category: classifyEvent(`${title} ${description ?? ""}`),
@@ -978,6 +1007,7 @@ export function deduplicateSourceEvents(events: SourceScanEvent[]): SourceScanEv
     const alternate = preferred === event ? existing : event;
     winners.set(event.sourceEventId, {
       ...preferred,
+      isCancelled: Boolean(preferred.isCancelled || alternate.isCancelled),
       titleNl: preferred.titleNl ?? alternate.titleNl,
       descriptionNl: preferred.descriptionNl ?? alternate.descriptionNl,
       titleEn: preferred.titleEn ?? alternate.titleEn,
@@ -1170,6 +1200,7 @@ async function persistEvents(source: SourceDefinition, events: SourceScanEvent[]
       titleEn: event.titleEn ?? null,
       descriptionEn: event.descriptionEn ?? null,
       startsAt: event.startsAt ?? null,
+      isCancelled: event.isCancelled ?? false,
       openingTimes: event.openingTimes ?? null,
       venue: event.venue ?? null,
       category: event.category ?? "Entertainment",
@@ -1200,13 +1231,12 @@ async function persistEvents(source: SourceDefinition, events: SourceScanEvent[]
         descriptionNl: event.descriptionNl ? sql`excluded.description_nl` : sql`${discoveredEventsTable.descriptionNl}`,
         titleEn: event.titleEn ? sql`excluded.title_en` : sql`${discoveredEventsTable.titleEn}`,
         descriptionEn: event.descriptionEn ? sql`excluded.description_en` : sql`${discoveredEventsTable.descriptionEn}`,
-        startsAt: event.startsAt
-          ? sql`CASE WHEN ${discoveredEventsTable.reviewedAt} IS NULL THEN excluded.starts_at ELSE ${discoveredEventsTable.startsAt} END`
-          : sql`${discoveredEventsTable.startsAt}`,
+        startsAt: event.startsAt ? sql`excluded.starts_at` : sql`${discoveredEventsTable.startsAt}`,
+        isCancelled: event.isCancelled !== undefined
+          ? sql`excluded.is_cancelled`
+          : sql`${discoveredEventsTable.isCancelled}`,
         openingTimes: event.openingTimes ? sql`excluded.opening_times` : sql`${discoveredEventsTable.openingTimes}`,
-        venue: event.venue
-          ? sql`CASE WHEN ${discoveredEventsTable.reviewedAt} IS NULL THEN excluded.venue ELSE ${discoveredEventsTable.venue} END`
-          : sql`${discoveredEventsTable.venue}`,
+        venue: event.venue ? sql`excluded.venue` : sql`${discoveredEventsTable.venue}`,
         category: event.category ?? "Entertainment",
         sourceGroup: event.sourceGroup ?? source.sourceGroup,
         organizer: event.organizer ? sql`excluded.organizer` : sql`${discoveredEventsTable.organizer}`,
@@ -1355,6 +1385,7 @@ async function scanSource(source: SourceDefinition) {
         ...existing,
         ...event,
         startsAt: event.startsAt ?? existing?.startsAt,
+        isCancelled: Boolean(event.isCancelled || existing?.isCancelled),
         openingTimes: event.openingTimes ?? existing?.openingTimes,
         venue: event.venue ?? existing?.venue,
         description: event.description ?? existing?.description,
@@ -1369,6 +1400,7 @@ async function scanSource(source: SourceDefinition) {
           ...extracted,
           ...existing,
           startsAt: extracted.startsAt ?? existing?.startsAt,
+          isCancelled: Boolean(extracted.isCancelled || existing?.isCancelled),
           openingTimes: extracted.openingTimes ?? existing?.openingTimes,
           venue: preferredVenue(extracted.venue, existing?.venue),
           description: existing?.description ?? extracted.description,
@@ -1424,6 +1456,7 @@ async function scanSource(source: SourceDefinition) {
         url: event.url,
         sourceEventId: extracted?.sourceEventId ?? structured?.sourceEventId ?? event.sourceEventId,
         startsAt: extracted?.startsAt ?? structured?.startsAt ?? event.startsAt,
+        isCancelled: Boolean(extracted?.isCancelled || structured?.isCancelled || event.isCancelled),
         openingTimes: extracted?.openingTimes ?? structured?.openingTimes ?? event.openingTimes,
         venue: preferredVenue(extracted?.venue, structured?.venue, event.venue),
         description: enriched.description ?? event.description,

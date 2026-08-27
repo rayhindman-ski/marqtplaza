@@ -260,4 +260,94 @@ describe("event language capture", () => {
     assert.equal(event.titleEn, "Farmers' market");
     assert.equal(event.titleNl, "Boerenmarkt");
   });
+
+  it("keeps cancellation evidence from a non-preferred localized variant", () => {
+    const [event] = deduplicateSourceEvents([
+      {
+        title: "Community concert",
+        url: "https://events.example.test/en/concert",
+        sourceEventId: "concert-1",
+        sourceLanguage: "en",
+        startsAt: "2026-09-10T20:00:00+02:00",
+        venue: "Theater aan het Spui",
+        isCancelled: false,
+      },
+      {
+        title: "Buurtconcert",
+        url: "https://events.example.test/nl/concert",
+        sourceEventId: "concert-1",
+        sourceLanguage: "nl",
+        isCancelled: true,
+      },
+    ]);
+
+    assert.equal(event.title, "Community concert");
+    assert.equal(event.isCancelled, true);
+  });
+});
+
+describe("event cancellation capture", () => {
+  it("uses structured event status as authoritative cancellation evidence", () => {
+    const [event] = structuredEventsFromPage(`
+      <script type="application/ld+json">
+        {
+          "@type": "Event",
+          "name": "Community concert",
+          "url": "https://events.example.test/concert",
+          "startDate": "2026-09-06T20:00:00+02:00",
+          "eventStatus": "https://schema.org/EventCancelled"
+        }
+      </script>
+    `, "https://events.example.test/concert", source);
+
+    assert.equal(event?.isCancelled, true);
+  });
+
+  it("detects an explicit Dutch cancellation notice in event copy", () => {
+    const [event] = structuredEventsFromPage(`
+      <script type="application/ld+json">
+        {
+          "@type": "Event",
+          "name": "Buurtmaaltijd",
+          "url": "https://events.example.test/maaltijd",
+          "startDate": "2026-09-07T18:00:00+02:00",
+          "description": "Deze activiteit is afgelast."
+        }
+      </script>
+    `, "https://events.example.test/maaltijd", source);
+
+    assert.equal(event?.isCancelled, true);
+  });
+
+  it("does not mark an ordinary event as cancelled", () => {
+    const [event] = structuredEventsFromPage(`
+      <script type="application/ld+json">
+        {
+          "@type": "Event",
+          "name": "Outdoor film",
+          "url": "https://events.example.test/film",
+          "startDate": "2026-09-08T20:00:00+02:00",
+          "eventStatus": "https://schema.org/EventScheduled"
+        }
+      </script>
+    `, "https://events.example.test/film", source);
+
+    assert.equal(event?.isCancelled, false);
+  });
+
+  it("does not confuse a ticket cancellation policy with an event cancellation", () => {
+    const [event] = structuredEventsFromPage(`
+      <script type="application/ld+json">
+        {
+          "@type": "Event",
+          "name": "Evening concert",
+          "url": "https://events.example.test/evening-concert",
+          "startDate": "2026-09-09T20:00:00+02:00",
+          "description": "Ticket cancellation is available until 48 hours before the event."
+        }
+      </script>
+    `, "https://events.example.test/evening-concert", source);
+
+    assert.equal(event?.isCancelled, false);
+  });
 });

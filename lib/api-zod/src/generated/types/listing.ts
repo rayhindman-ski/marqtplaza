@@ -25,6 +25,8 @@ export interface Listing {
   description: string;
   /** Verified upcoming event start date and time when this listing is an event. */
   startsAt?: string;
+  /** Whether the current approved event source explicitly marks the event as cancelled. */
+  isCancelled?: boolean;
   /** Source-provided opening or event time range when available. */
   openingTimes?: string;
   /** Event venue when the source provides one. */

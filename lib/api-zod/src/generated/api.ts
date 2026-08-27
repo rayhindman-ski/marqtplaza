@@ -7,6 +7,7 @@
  */
 import * as zod from 'zod';
 
+
 /**
  * Returns server health status
  * @summary Health check
@@ -14,8 +15,6 @@ import * as zod from 'zod';
 export const HealthCheckResponse = zod.object({
   "status": zod.string()
 })
-
-
 /**
  * @summary Get a short city weather forecast
  */
@@ -46,8 +45,6 @@ export const GetWeatherResponse = zod.object({
 })),
   "provider": zod.enum(['open-meteo'])
 })
-
-
 /**
  * @summary Search for businesses
  */
@@ -66,8 +63,6 @@ export const CaptureSearchResponse = zod.object({
   "address": zod.string()
 }))
 })
-
-
 /**
  * @summary Scan a business for events, news, and ads
  */
@@ -167,6 +162,7 @@ export const ScanActivitySourcesResponse = zod.object({
   "context": zod.string().optional(),
   "description": zod.string().optional(),
   "startsAt": zod.string().optional(),
+  "isCancelled": zod.boolean().optional().describe('Whether the source explicitly marks this event as cancelled.'),
   "venue": zod.string().optional(),
   "category": zod.enum(['Museums', 'Tours', 'Family', 'Entertainment', 'Outdoors', 'Markets']).optional(),
   "sourceGroup": zod.enum(['city-agenda', 'culture', 'community', 'meals']).optional(),
@@ -316,6 +312,7 @@ export const GetListingsResponse = zod.object({
   "address": zod.string().optional().describe('Provider-supplied or curated visitor address when one is available.'),
   "description": zod.string(),
   "startsAt": zod.string().optional().describe('Verified upcoming event start date and time when this listing is an event.'),
+  "isCancelled": zod.boolean().optional().describe('Whether the current approved event source explicitly marks the event as cancelled.'),
   "openingTimes": zod.string().optional().describe('Source-provided opening or event time range when available.'),
   "venue": zod.string().optional().describe('Event venue when the source provides one.'),
   "x": zod.number(),
@@ -1038,8 +1035,6 @@ export const UpdateBusinessProfileResponse = zod.object({
   "createdAt": zod.string(),
   "updatedAt": zod.string()
 })
-
-
 /**
  * @summary Submit a deal for the owner's approved business
  */

@@ -206,6 +206,15 @@ export const translations = {
     noSavedPlacesDescription:
       'Tik op het bladwijzerpictogram bij een bedrijf, evenement of aanbieding om het hier op te slaan.',
     exploreNeighbourhoods: 'Ontdek buurten',
+    savedEventAlerts: 'Updates voor opgeslagen evenementen',
+    savedEventChanged: (name: string) => `${name} is gewijzigd`,
+    savedEventCancelled: (name: string) => `${name} is afgelast`,
+    savedEventAlertDescription: 'Controleer de actuele gegevens voordat je vertrekt.',
+    viewCurrentEvent: 'Bekijk actuele evenementgegevens',
+    viewEventSource: 'Bekijk bron',
+    eventAlertTime: 'tijd',
+    eventAlertVenue: 'locatie',
+    eventAlertPrice: 'prijs',
     // Live data
     loadingListings: 'Live gegevens ophalen…',
     listingsError: 'Kon live gegevens niet laden',
@@ -348,6 +357,15 @@ export const translations = {
     noSavedPlacesDescription:
       'Tap the bookmark icon on any business, event, or special to save it here for later.',
     exploreNeighbourhoods: 'Explore Neighbourhoods',
+    savedEventAlerts: 'Updates to saved events',
+    savedEventChanged: (name: string) => `${name} has changed`,
+    savedEventCancelled: (name: string) => `${name} has been cancelled`,
+    savedEventAlertDescription: 'Check the current details before you leave.',
+    viewCurrentEvent: 'View current event details',
+    viewEventSource: 'View source',
+    eventAlertTime: 'time',
+    eventAlertVenue: 'venue',
+    eventAlertPrice: 'price',
     // Live data
     loadingListings: 'Fetching live data…',
     listingsError: 'Could not load live listings',

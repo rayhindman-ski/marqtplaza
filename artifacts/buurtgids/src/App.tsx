@@ -317,6 +317,58 @@ function getDistanceKm(latA: number, lngA: number, latB: number, lngB: number) {
 }
 
 const STORAGE_KEY = 'buurtgids_saved_places';
+const EVENT_ALERTS_STORAGE_KEY = 'buurtgids_saved_event_alerts';
+
+type EventAlertField = 'time' | 'venue' | 'price';
+
+type SavedEventAlert = {
+  fingerprint: string;
+  eventId: string;
+  kind: 'changed' | 'cancelled';
+  changedFields: EventAlertField[];
+  eventName: string;
+  sourceName?: string;
+  sourceUrl?: string;
+  startsAt?: string | null;
+  openingTimes?: string | null;
+  venue?: string | null;
+  priceType?: Marker['priceType'];
+  priceText?: string | null;
+  detectedAt: string;
+};
+
+const EVENT_ALERT_FIELDS: Array<{
+  alertField: EventAlertField;
+  markerFields: Array<keyof Marker>;
+}> = [
+  { alertField: 'time', markerFields: ['startsAt', 'openingTimes'] },
+  { alertField: 'venue', markerFields: ['venue', 'address'] },
+  { alertField: 'price', markerFields: ['priceType', 'priceText'] },
+];
+
+function normalizedPlanningValue(value: unknown): string {
+  return typeof value === 'string' ? value.trim().toLowerCase() : String(value ?? '');
+}
+
+function changedPlanningFields(saved: Marker, current: Marker): EventAlertField[] {
+  return EVENT_ALERT_FIELDS
+    .filter(({ markerFields }) => markerFields.some((field) =>
+      normalizedPlanningValue(saved[field]) !== normalizedPlanningValue(current[field])))
+    .map(({ alertField }) => alertField);
+}
+
+function eventAlertFingerprint(current: Marker, kind: SavedEventAlert['kind']): string {
+  const currentPlanningState = [
+    current.startsAt,
+    current.openingTimes,
+    current.venue,
+    current.address,
+    current.priceType,
+    current.priceText,
+    current.isCancelled,
+  ].map(normalizedPlanningValue).join('|');
+  return `${current.id}:${kind}:${currentPlanningState}`;
+}
 type ListingSection = 'events' | 'businesses' | 'food-drink' | 'social-map';
 type FilterSubcategory = Exclude<Category, 'Businesses' | 'Social map'> | BusinessCategory | SocialMapCategory;
 const TOP_LEVEL_SECTIONS: ListingSection[] = ['events', 'food-drink', 'social-map', 'businesses'];
@@ -1432,6 +1484,7 @@ function DiscoveryState({
   onLanguageChange,
   savedIds,
   onToggle,
+  onEventRefresh,
   onViewSaved,
 }: {
   language: Language;
@@ -1443,6 +1496,7 @@ function DiscoveryState({
   onLanguageChange: (language: Language) => void;
   savedIds: Set<string>;
   onToggle: (marker: Marker) => void;
+  onEventRefresh: (markers: Marker[]) => void;
   onViewSaved: () => void;
 }) {
   const location = LOCATIONS.find(l => l.id === locationId);
@@ -1491,6 +1545,13 @@ function DiscoveryState({
     'food-drink': foodDrinkQuery,
     'social-map': socialMapQuery,
   };
+
+  useEffect(() => {
+    if (!eventsQuery.data) return;
+    const refreshedEvents = eventsQuery.data.listings
+      .filter(listing => listing.source === 'source_scan') as unknown as Marker[];
+    onEventRefresh(refreshedEvents);
+  }, [eventsQuery.data, onEventRefresh]);
 
   if (!location) return null;
 
@@ -1668,6 +1729,7 @@ function DiscoveryState({
       y: l.y,
       details: l.details,
       startsAt: l.startsAt,
+      isCancelled: l.isCancelled,
       openingTimes: l.openingTimes,
       venue: l.venue,
       lat: l.lat,
@@ -2365,6 +2427,21 @@ function EventDetailView({ eventId, listingSection = 'events' }: { eventId: stri
             </span>
           </div>
           <h1 className="max-w-3xl text-3xl font-extrabold tracking-tight text-foreground sm:text-5xl">{listing.name}</h1>
+          {listing.isCancelled && (
+            <div role="alert" className="mt-5 flex items-start gap-3 rounded-2xl border border-destructive/35 bg-destructive/10 p-4 text-destructive">
+              <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
+              <div>
+                <p className="font-extrabold">
+                  {language === 'nl' ? 'Dit evenement is afgelast' : 'This event has been cancelled'}
+                </p>
+                <p className="mt-1 text-sm">
+                  {language === 'nl'
+                    ? 'Controleer de bron voor de laatste informatie.'
+                    : 'Check the source for the latest information.'}
+                </p>
+              </div>
+            </div>
+          )}
           <p className="mt-5 max-w-2xl text-base leading-8 text-muted-foreground">{listing.description}</p>
 
           <div className="mt-8 grid gap-3 sm:grid-cols-2">
@@ -2492,7 +2569,14 @@ function MainApp({ initialLocationId }: { initialLocationId?: string } = {}) {
     if (typeof window === 'undefined') return 'en';
     return window.localStorage.getItem('buurtplaza-language') === 'nl' ? 'nl' : 'en';
   });
-  const { savedIds, savedMarkers, toggle, savedCount } = useSavedPlaces();
+  const {
+    savedIds,
+    savedMarkers,
+    savedEventAlerts,
+    recordEventRefresh,
+    toggle,
+    savedCount,
+  } = useSavedPlaces();
 
   useEffect(() => {
     window.localStorage.setItem('buurtplaza-language', language);
@@ -2504,6 +2588,8 @@ function MainApp({ initialLocationId }: { initialLocationId?: string } = {}) {
       <SavedView
         language={language}
         savedMarkers={savedMarkers}
+        eventAlerts={savedEventAlerts}
+        onEventRefresh={recordEventRefresh}
         onToggle={toggle}
         onBack={() => setScreen({ kind: 'search' })}
       />
@@ -2525,6 +2611,7 @@ function MainApp({ initialLocationId }: { initialLocationId?: string } = {}) {
         onLanguageChange={setLanguage}
         savedIds={savedIds}
         onToggle={toggle}
+        onEventRefresh={recordEventRefresh}
         onViewSaved={() => setScreen({ kind: 'saved' })}
       />
     );
@@ -2633,6 +2720,14 @@ function useSavedPlaces() {
       return new Map();
     }
   });
+  const [savedEventAlerts, setSavedEventAlerts] = useState<SavedEventAlert[]>(() => {
+    try {
+      const stored = localStorage.getItem(EVENT_ALERTS_STORAGE_KEY);
+      return stored ? JSON.parse(stored) as SavedEventAlert[] : [];
+    } catch {
+      return [];
+    }
+  });
 
   useEffect(() => {
     try {
@@ -2642,34 +2737,111 @@ function useSavedPlaces() {
     }
   }, [savedMarkers]);
 
+  useEffect(() => {
+    try {
+      localStorage.setItem(EVENT_ALERTS_STORAGE_KEY, JSON.stringify(savedEventAlerts));
+    } catch {
+      // localStorage unavailable; state still works in-memory
+    }
+  }, [savedEventAlerts]);
+
   const toggle = useCallback((marker: Marker) => {
     setSavedMarkers(prev => {
       const next = new Map(prev);
-      if (next.has(marker.id)) next.delete(marker.id);
-      else next.set(marker.id, marker);
+      if (next.has(marker.id)) {
+        next.delete(marker.id);
+        setSavedEventAlerts(alerts => alerts.filter(alert => alert.eventId !== marker.id));
+      } else {
+        next.set(marker.id, marker);
+      }
       return next;
     });
   }, []);
 
+  const recordEventRefresh = useCallback((currentEvents: Marker[]) => {
+    setSavedEventAlerts(previousAlerts => {
+      const nextAlerts = [...previousAlerts];
+      let addedAlert = false;
+
+      for (const current of currentEvents) {
+        const saved = savedMarkers.get(current.id);
+        if (!saved || current.source !== 'source_scan') continue;
+
+        const changedFields = changedPlanningFields(saved, current);
+        const kind: SavedEventAlert['kind'] | null = current.isCancelled && saved.isCancelled !== true
+          ? 'cancelled'
+          : changedFields.length > 0
+            ? 'changed'
+            : null;
+        if (!kind) continue;
+
+        const fingerprint = eventAlertFingerprint(current, kind);
+        if (nextAlerts.some(alert => alert.fingerprint === fingerprint)) continue;
+
+        nextAlerts.unshift({
+          fingerprint,
+          eventId: current.id,
+          kind,
+          changedFields,
+          eventName: current.name,
+          sourceName: current.sourceName,
+          sourceUrl: current.sourceUrl,
+          startsAt: current.startsAt,
+          openingTimes: current.openingTimes,
+          venue: current.venue ?? current.address,
+          priceType: current.priceType,
+          priceText: current.priceText,
+          detectedAt: new Date().toISOString(),
+        });
+        addedAlert = true;
+      }
+
+      return addedAlert ? nextAlerts.slice(0, 50) : previousAlerts;
+    });
+  }, [savedMarkers]);
+
   const savedIds = useMemo(() => new Set(savedMarkers.keys()), [savedMarkers]);
   const savedCount = savedMarkers.size;
 
-  return { savedIds, savedMarkers, toggle, savedCount };
+  return { savedIds, savedMarkers, savedEventAlerts, recordEventRefresh, toggle, savedCount };
 }
 
 function SavedView({
   language,
   savedMarkers,
+  eventAlerts,
+  onEventRefresh,
   onToggle,
   onBack,
 }: {
   language: Language;
   savedMarkers: Map<string, Marker>;
+  eventAlerts: SavedEventAlert[];
+  onEventRefresh: (markers: Marker[]) => void;
   onToggle: (marker: Marker) => void;
   onBack: () => void;
 }) {
   const t = translations[language];
   const savedList = [...savedMarkers.values()];
+  const activeEventAlerts = eventAlerts.filter(alert => savedMarkers.has(alert.eventId));
+  const hasSavedSourceEvents = savedList.some(marker => marker.source === 'source_scan');
+  const currentEventsQuery = useGetListings(
+    { cityId: 'dhg', section: 'events', language },
+    {
+      query: {
+        enabled: hasSavedSourceEvents,
+        queryKey: getGetListingsQueryKey({ cityId: 'dhg', section: 'events', language }),
+      },
+    },
+  );
+
+  useEffect(() => {
+    if (!currentEventsQuery.data) return;
+    const refreshedEvents = currentEventsQuery.data.listings
+      .filter(listing => listing.source === 'source_scan') as unknown as Marker[];
+    onEventRefresh(refreshedEvents);
+  }, [currentEventsQuery.data, onEventRefresh]);
+
   const byCategory: Record<Category, Marker[]> = {
     Museums:       savedList.filter(m => m.category === 'Museums'),
     Tours:         savedList.filter(m => m.category === 'Tours'),
@@ -2724,6 +2896,70 @@ function SavedView({
           </div>
         ) : (
           <div>
+            {activeEventAlerts.length > 0 && (
+              <section
+                aria-labelledby="saved-event-alerts-title"
+                className="mb-8 rounded-2xl border border-amber-500/40 bg-amber-500/5 p-5 shadow-sm"
+              >
+                <div className="mb-4 flex items-center gap-2">
+                  <AlertCircle className="h-5 w-5 text-amber-700" aria-hidden="true" />
+                  <h2 id="saved-event-alerts-title" className="font-extrabold text-foreground">
+                    {t.savedEventAlerts}
+                  </h2>
+                  <span className="ml-auto rounded-full bg-amber-600 px-2 py-0.5 text-xs font-bold text-white">
+                    {activeEventAlerts.length}
+                  </span>
+                </div>
+                <div className="space-y-3">
+                  {activeEventAlerts.map(alert => {
+                    const changedLabels = alert.changedFields.map(field => ({
+                      time: t.eventAlertTime,
+                      venue: t.eventAlertVenue,
+                      price: t.eventAlertPrice,
+                    })[field]);
+                    return (
+                      <article
+                        key={alert.fingerprint}
+                        role="alert"
+                        data-testid="saved-event-alert"
+                        className="rounded-xl border border-amber-500/30 bg-card p-4"
+                      >
+                        <h3 className="font-bold text-foreground">
+                          {alert.kind === 'cancelled'
+                            ? t.savedEventCancelled(alert.eventName)
+                            : t.savedEventChanged(alert.eventName)}
+                        </h3>
+                        {alert.kind === 'changed' && changedLabels.length > 0 && (
+                          <p className="mt-1 text-sm font-semibold text-amber-800">
+                            {changedLabels.join(' · ')}
+                          </p>
+                        )}
+                        <p className="mt-1 text-sm text-muted-foreground">{t.savedEventAlertDescription}</p>
+                        <div className="mt-3 flex flex-wrap gap-3 text-sm font-bold">
+                          <Link
+                            href={`/activiteiten/den-haag/${encodeURIComponent(alert.eventId)}?section=events`}
+                            className="text-primary hover:underline"
+                          >
+                            {t.viewCurrentEvent}
+                          </Link>
+                          {alert.sourceUrl && (
+                            <a
+                              href={alert.sourceUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 text-secondary hover:underline"
+                            >
+                              {t.viewEventSource}
+                              <ExternalLink className="h-3 w-3" aria-hidden="true" />
+                            </a>
+                          )}
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+              </section>
+            )}
             {ALL_CATEGORIES.map(cat => (
               <SavedCategorySection
                 key={cat}

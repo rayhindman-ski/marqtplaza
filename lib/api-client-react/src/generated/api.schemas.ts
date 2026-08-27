@@ -7,6 +7,7 @@
  */
 export type ClaimStatus = typeof ClaimStatus[keyof typeof ClaimStatus];
 
+
 export const ClaimStatus = {
   pending: 'pending',
   approved: 'approved',
@@ -563,6 +564,8 @@ export interface SourceScanEvent {
   context?: string;
   description?: string;
   startsAt?: string;
+  /** Whether the source explicitly marks this event as cancelled. */
+  isCancelled?: boolean;
   venue?: string;
   category?: SourceScanEventCategory;
   sourceGroup?: SourceScanEventSourceGroup;
@@ -927,6 +930,8 @@ export interface Listing {
   description: string;
   /** Verified upcoming event start date and time when this listing is an event. */
   startsAt?: string;
+  /** Whether the current approved event source explicitly marks the event as cancelled. */
+  isCancelled?: boolean;
   /** Source-provided opening or event time range when available. */
   openingTimes?: string;
   /** Event venue when the source provides one. */

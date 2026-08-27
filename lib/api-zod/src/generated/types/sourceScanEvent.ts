@@ -18,6 +18,8 @@ export interface SourceScanEvent {
   context?: string;
   description?: string;
   startsAt?: string;
+  /** Whether the source explicitly marks this event as cancelled. */
+  isCancelled?: boolean;
   venue?: string;
   category?: SourceScanEventCategory;
   sourceGroup?: SourceScanEventSourceGroup;

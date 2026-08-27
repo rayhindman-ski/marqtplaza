@@ -60,6 +60,7 @@ type Listing = {
   lastCheckedAt?: string;
   nextReviewAt?: string;
   startsAt?: string | null;
+  isCancelled?: boolean;
   openingTimes?: string | null;
   venue?: string | null;
   sourceGroup?: "city-agenda" | "culture" | "community" | "meals";
@@ -1220,7 +1221,8 @@ router.get("/listings", async (req, res) => {
         category: event.category,
         name: copy.title,
         description: copy.description,
-          startsAt: event.startsAt,
+        startsAt: event.startsAt,
+        isCancelled: event.isCancelled,
         x: event.x,
         y: event.y,
         details: localizedEventDetails(event, language),

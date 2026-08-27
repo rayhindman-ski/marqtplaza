@@ -114,6 +114,7 @@ export interface Marker {
   reviewReason?: string | null;
   lastCheckedAt?: string;
   nextReviewAt?: string;
+  isCancelled?: boolean;
   sourceGroup?: 'city-agenda' | 'culture' | 'community' | 'meals';
   organizer?: string | null;
   activityKind?: EventActivityKind | null;
