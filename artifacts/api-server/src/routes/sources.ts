@@ -45,6 +45,7 @@ export type SourceScanEvent = {
   audience?: string;
   neighborhood?: string;
   recurrenceText?: string;
+  isIndoor?: boolean;
   lat?: number;
   lng?: number;
   reviewReason?: PublicationReason;
@@ -545,6 +546,48 @@ function firstDateValue(value: unknown): string | undefined {
   return undefined;
 }
 
+function booleanValue(value: unknown): boolean | undefined {
+  if (typeof value === "boolean") return value;
+  if (value === 1 || value === "1" || value === "true") return true;
+  if (value === 0 || value === "0" || value === "false") return false;
+  return undefined;
+}
+
+export function structuredIndoorStatus(
+  eventNode: Record<string, unknown>,
+  locationNode?: Record<string, unknown> | null,
+): boolean | undefined {
+  for (const value of [
+    eventNode.isIndoor,
+    eventNode.indoor,
+    locationNode?.isIndoor,
+    locationNode?.indoor,
+  ]) {
+    const explicit = booleanValue(value);
+    if (explicit !== undefined) return explicit;
+  }
+
+  const rawLocationTypes = locationNode?.["@type"];
+  const locationTypes = Array.isArray(rawLocationTypes) ? rawLocationTypes : [rawLocationTypes];
+  if (locationTypes.some((value) => /(?:^|[/#:])IndoorVenue$/i.test(String(value)))) return true;
+
+  const additionalTypes = Array.isArray(locationNode?.additionalType)
+    ? locationNode.additionalType
+    : [locationNode?.additionalType];
+  if (additionalTypes.some((value) => /(?:^|[/#:])IndoorVenue$/i.test(String(value)))) return true;
+
+  const rawFeatures = locationNode?.amenityFeature;
+  const features = Array.isArray(rawFeatures) ? rawFeatures : [rawFeatures];
+  for (const feature of features) {
+    if (!feature || typeof feature !== "object") continue;
+    const record = feature as Record<string, unknown>;
+    if (!/^(?:indoor|indoors|binnen)$/i.test(String(record.name ?? "").trim())) continue;
+    const explicit = booleanValue(record.value);
+    if (explicit !== undefined) return explicit;
+  }
+  return undefined;
+}
+
 function eventFromStructuredNode(
   value: unknown,
   pageUrl: string,
@@ -589,12 +632,13 @@ function eventFromStructuredNode(
     venue: venueFromLocation(location),
     category: classifyEvent(`${title} ${description ?? ""}`),
     organizer: organizerName(node.organizer ?? node.publisher),
+    isIndoor: structuredIndoorStatus(node, locationRecord),
     ...metadata,
     ...coordinates,
   };
 }
 
-function structuredEventsFromPage(html: string, pageUrl: string, source: SourceDefinition): SourceScanEvent[] {
+export function structuredEventsFromPage(html: string, pageUrl: string, source: SourceDefinition): SourceScanEvent[] {
   const events: SourceScanEvent[] = [];
   const scripts = html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi);
   const visited = new Set<unknown>();
@@ -1138,6 +1182,7 @@ async function persistEvents(source: SourceDefinition, events: SourceScanEvent[]
       audience: event.audience ?? null,
       neighborhood: event.neighborhood ?? null,
       recurrenceText: event.recurrenceText ?? null,
+      isIndoor: event.isIndoor ?? null,
       ...coordinates,
       reviewStatus,
       reviewReason: publicationStatusForEvent === "eligible" ? null : publicationStatusForEvent,
@@ -1174,6 +1219,7 @@ async function persistEvents(source: SourceDefinition, events: SourceScanEvent[]
         audience: event.audience ? sql`excluded.audience` : sql`${discoveredEventsTable.audience}`,
         neighborhood: event.neighborhood ? sql`excluded.neighborhood` : sql`${discoveredEventsTable.neighborhood}`,
         recurrenceText: event.recurrenceText ? sql`excluded.recurrence_text` : sql`${discoveredEventsTable.recurrenceText}`,
+        isIndoor: event.isIndoor !== undefined ? sql`excluded.is_indoor` : sql`${discoveredEventsTable.isIndoor}`,
         lat: coordinates.isApproximateLocation
           ? sql`${discoveredEventsTable.lat}`
           : sql`CASE WHEN ${discoveredEventsTable.reviewedAt} IS NULL THEN excluded.lat ELSE ${discoveredEventsTable.lat} END`,

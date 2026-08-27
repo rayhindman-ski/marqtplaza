@@ -39,6 +39,7 @@ export const discoveredEventsTable = pgTable(
     audience: text("audience"),
     neighborhood: text("neighborhood"),
     recurrenceText: text("recurrence_text"),
+    isIndoor: boolean("is_indoor"),
     lat: doublePrecision("lat").notNull(),
     lng: doublePrecision("lng").notNull(),
     x: doublePrecision("x").notNull(),

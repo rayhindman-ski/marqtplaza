@@ -10,7 +10,8 @@ import {
   Globe2, Bookmark, BookmarkCheck, X, ChevronDown, ChevronUp,
   ScanSearch, RefreshCw, WifiOff, Radio, MapPinned,
   Landmark, Route as RouteIcon, Baby, Building2, Coffee, Gamepad2, HandHeart, Waves, ShoppingBag, ExternalLink, AlertCircle, CalendarPlus,
-  CloudSun, Cloud, CloudFog, CloudRain, CloudSnow, Sun, Wind, Droplets, Tag, Store
+  CloudSun, Cloud, CloudFog, CloudRain, CloudSnow, Sun, Wind, Droplets, Tag, Store,
+  Bike, Car, Footprints, TrainFront, ShieldCheck, Sparkles, Navigation
 } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -62,6 +63,15 @@ import {
   translations,
   type Language,
 } from './lib/i18n';
+import {
+  formatEventTiming,
+  freshnessBadge,
+  matchesDiscoveryQuickFilters,
+  routeUrl,
+  trustBadge,
+  type DiscoveryQuickFilter,
+  type RouteMode,
+} from './lib/listingPresentation';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -227,6 +237,68 @@ function EventCalendarActions({
         </button>
       </div>
       {message && <p className="mt-2 text-[11px] font-semibold text-muted-foreground" role="status">{message}</p>}
+    </div>
+  );
+}
+
+const routeOptions: Array<{
+  mode: RouteMode;
+  icon: typeof Car;
+  nl: string;
+  en: string;
+}> = [
+  { mode: 'driving', icon: Car, nl: 'Auto', en: 'Car' },
+  { mode: 'bicycling', icon: Bike, nl: 'Fiets', en: 'Bike' },
+  { mode: 'walking', icon: Footprints, nl: 'Lopen', en: 'Walk' },
+  { mode: 'transit', icon: TrainFront, nl: 'OV', en: 'Transit' },
+];
+
+function RouteLinks({
+  language,
+  marker,
+  className,
+}: {
+  language: Language;
+  marker: Pick<Marker, 'name' | 'lat' | 'lng' | 'isApproximateLocation'>;
+  className?: string;
+}) {
+  if (marker.isApproximateLocation) {
+    return (
+      <p className={cn('mt-3 flex items-start gap-2 rounded-lg bg-amber-500/10 px-3 py-2 text-[11px] font-semibold leading-relaxed text-amber-900', className)}>
+        <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+        {language === 'nl'
+          ? 'Route niet beschikbaar: dit kaartpunt is een benadering.'
+          : 'Directions unavailable: this map point is approximate.'}
+      </p>
+    );
+  }
+
+  return (
+    <div className={cn('mt-3', className)} onClick={(event) => event.stopPropagation()}>
+      <p className="mb-2 flex items-center gap-1.5 text-[10px] font-extrabold uppercase tracking-[0.14em] text-muted-foreground">
+        <Navigation className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
+        {language === 'nl' ? 'Plan je route' : 'Plan your route'}
+      </p>
+      <div className="flex flex-wrap gap-1.5">
+        {routeOptions.map(({ mode, icon: Icon, nl, en }) => {
+          const href = routeUrl(marker, mode);
+          if (!href) return null;
+          const label = language === 'nl' ? nl : en;
+          return (
+            <a
+              key={mode}
+              href={href}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label={`${language === 'nl' ? 'Route via' : 'Directions by'} ${label}: ${marker.name}`}
+              className="inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-border/70 bg-card px-2.5 py-1.5 text-[11px] font-bold text-foreground transition-colors hover:border-primary/40 hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            >
+              <Icon className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
+              {label}
+            </a>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -1077,6 +1149,9 @@ function MarkerCard({
   const sourceLabel = marker.sourceName
     ?? (marker.source ? getListingSourceName(marker.source, language) : undefined);
   const isEvent = topLevelForMarker(marker) === 'events';
+  const timing = isEvent ? formatEventTiming(marker.startsAt, language) : null;
+  const freshness = freshnessBadge(marker, language);
+  const trust = trustBadge(marker, language);
   const eventPrice = marker.priceText?.trim()
     || (marker.priceType === 'free'
       ? (language === 'nl' ? 'Gratis' : 'Free')
@@ -1145,6 +1220,12 @@ function MarkerCard({
           {isEvent && (
             <div className="mb-3">
               <div className="flex flex-wrap items-center gap-3 text-xs font-bold">
+                {timing && (
+                  <span data-testid={`event-timing-${marker.id}`} className="inline-flex items-center gap-1.5 rounded-md bg-primary/10 px-2 py-1 text-primary">
+                    <Clock className="h-3.5 w-3.5" aria-hidden="true" />
+                    {timing}
+                  </span>
+                )}
                 <span data-testid={`event-price-${marker.id}`} className="rounded-md bg-emerald-700/10 px-2 py-1 text-emerald-800">
                   {language === 'nl' ? 'Prijs' : 'Price'}: {eventPrice}
                 </span>
@@ -1167,14 +1248,14 @@ function MarkerCard({
                   name: marker.name,
                   description: copy.description,
                   startsAt: marker.startsAt,
-                  venue: marker.address,
+                  venue: marker.venue ?? marker.address,
                   sourceUrl: marker.sourceUrl,
                 }}
               />
             </div>
           )}
           {isExpanded && <>
-           {(marker.businessCategory || marker.socialCategory || sourceLabel || marker.reviewStatus || (topLevelForMarker(marker) === 'events' && eventBadgeLabel(marker, language).length > 0)) && (
+           {(marker.businessCategory || marker.socialCategory || sourceLabel || trust || freshness || marker.reviewStatus || (topLevelForMarker(marker) === 'events' && eventBadgeLabel(marker, language).length > 0)) && (
              <div className="mb-3 flex flex-wrap items-center gap-1.5">
                {marker.businessCategory && (
                  <span className="rounded-md bg-primary/10 px-2 py-1 text-[11px] font-bold text-primary">
@@ -1198,6 +1279,18 @@ function MarkerCard({
                   >
                     <AlertCircle className="h-3 w-3" aria-hidden="true" />
                     {socialMapReviewLabel(marker.reviewStatus, language)}
+                  </span>
+                )}
+                {trust && (
+                  <span data-testid={`trust-badge-${marker.id}`} className="inline-flex items-center gap-1 rounded-md bg-sky-600/10 px-2 py-1 text-[11px] font-bold text-sky-800">
+                    <ShieldCheck className="h-3 w-3" aria-hidden="true" />
+                    {trust}
+                  </span>
+                )}
+                {freshness && (
+                  <span data-testid={`freshness-badge-${marker.id}`} className="inline-flex items-center gap-1 rounded-md bg-violet-600/10 px-2 py-1 text-[11px] font-bold text-violet-800">
+                    <Sparkles className="h-3 w-3" aria-hidden="true" />
+                    {freshness}
                   </span>
                 )}
                 {topLevelForMarker(marker) === 'events' && eventBadgeLabel(marker, language).map((badge) => (
@@ -1240,6 +1333,7 @@ function MarkerCard({
               )}
             </div>
           </div>
+          <RouteLinks language={language} marker={marker} />
           </>}
         </div>
       </div>
@@ -1368,6 +1462,9 @@ function DiscoveryState({
   const [agendaTime, setAgendaTime] = useState<AgendaTimeFilter>('all');
   const [agendaPrice, setAgendaPrice] = useState<AgendaPriceFilter>('all');
   const [mealOnly, setMealOnly] = useState(false);
+  const [quickFilters, setQuickFilters] = useState<Set<DiscoveryQuickFilter>>(() => new Set());
+  const [nearbyPosition, setNearbyPosition] = useState<{ lat: number; lng: number } | null>(null);
+  const [nearbyStatus, setNearbyStatus] = useState<'idle' | 'locating' | 'ready' | 'fallback'>('idle');
   const [sidebarWidth, setSidebarWidth] = useState(420);
   const sidebarResizeRef = useRef<{ pointerId: number; startX: number; startWidth: number } | null>(null);
 
@@ -1484,11 +1581,44 @@ function DiscoveryState({
     setSelectedMarker(null);
   };
 
+  const toggleQuickFilter = (filter: DiscoveryQuickFilter) => {
+    const isActivating = !quickFilters.has(filter);
+    setQuickFilters((previous) => {
+      const next = new Set(previous);
+      if (next.has(filter)) next.delete(filter);
+      else next.add(filter);
+      return next;
+    });
+    setSelectedMarker(null);
+    if (filter !== 'nearby' || !isActivating || nearbyPosition) return;
+    if (!navigator.geolocation) {
+      setNearbyStatus('fallback');
+      return;
+    }
+    setNearbyStatus('locating');
+    navigator.geolocation.getCurrentPosition(
+      ({ coords }) => {
+        setNearbyPosition({ lat: coords.latitude, lng: coords.longitude });
+        setNearbyStatus('ready');
+      },
+      () => setNearbyStatus('fallback'),
+      { enableHighAccuracy: false, timeout: 8000, maximumAge: 5 * 60 * 1000 },
+    );
+  };
+
   useEffect(() => {
     setTopLevelCategories(initialPostcode ? allTopLevelState() : topLevelStateFor(listingSection));
     setSubcategories(initialPostcode ? allSubcategoryState() : subcategoryStateFor(listingSection));
     setSelectedMarker(null);
   }, [initialPostcode, listingSection]);
+
+  useEffect(() => {
+    if (nearbyStatus !== 'locating') return;
+    const fallbackTimer = window.setTimeout(() => {
+      setNearbyStatus((current) => current === 'locating' ? 'fallback' : current);
+    }, 4_000);
+    return () => window.clearTimeout(fallbackTimer);
+  }, [nearbyStatus]);
 
   useEffect(() => {
     if (!selectedMarker) return;
@@ -1538,6 +1668,8 @@ function DiscoveryState({
       y: l.y,
       details: l.details,
       startsAt: l.startsAt,
+      openingTimes: l.openingTimes,
+      venue: l.venue,
       lat: l.lat,
       lng: l.lng,
       sourceUrl: (l as { sourceUrl?: string }).sourceUrl,
@@ -1562,12 +1694,24 @@ function DiscoveryState({
         mealType: l.mealType,
         audience: l.audience,
         recurrenceText: l.recurrenceText,
+        isApproximateLocation: l.isApproximateLocation,
+        isIndoor: l.isIndoor,
+        openNow: l.openNow,
+        firstSeenAt: l.firstSeenAt,
+        lastSeenAt: l.lastSeenAt,
+        updatedAt: l.updatedAt,
     };
   });
 
   const selectedAreas = selectedNeighborhoods
     .map((neighborhood) => location.neighborhoodCoords[neighborhood])
     .filter((area): area is { lat: number; lng: number; zoom: number } => Boolean(area));
+  const activeQuickFilters = new Set(quickFilters);
+  if (agendaTime !== 'all') activeQuickFilters.add(agendaTime);
+  if (agendaPrice === 'free') activeQuickFilters.add('free');
+  const nearbyOrigin = nearbyPosition
+    ?? selectedAreas[0]
+    ?? { lat: location.lat, lng: location.lng };
   const filteredMarkers = allMarkers.filter((marker) => {
     const markerTopLevel = topLevelForMarker(marker);
     if (!topLevelCategories[markerTopLevel]) return false;
@@ -1585,18 +1729,10 @@ function DiscoveryState({
       return false;
     }
     if (markerTopLevel === 'events') {
-      if (agendaPrice !== 'all' && marker.priceType !== agendaPrice) return false;
+      if (agendaPrice === 'low-cost' && marker.priceType !== 'low-cost') return false;
       if (mealOnly && !marker.mealType) return false;
-      if (agendaTime !== 'all') {
-        const startsAt = marker.startsAt ? new Date(marker.startsAt) : null;
-        if (!startsAt || Number.isNaN(startsAt.getTime())) return false;
-        const today = new Date();
-        const dayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-        const dayEnd = new Date(dayStart);
-        dayEnd.setDate(dayEnd.getDate() + (agendaTime === 'today' ? 1 : 7));
-        if (startsAt < dayStart || startsAt >= dayEnd) return false;
-      }
     }
+    if (!matchesDiscoveryQuickFilters(marker, activeQuickFilters, { nearbyOrigin, nearbyRadiusKm: 2.5 })) return false;
     const normalizedPostcode = postcodeFilter.trim().toUpperCase().replace(/\s/g, '');
     if (
       normalizedPostcode
@@ -1674,6 +1810,56 @@ function DiscoveryState({
           </div>
           <WeatherCard cityId={locationId} language={language} />
           <div className="mt-3 space-y-2">
+            <FilterFrame title={language === 'nl' ? 'Snel kiezen' : 'Quick choices'}>
+              <div className="flex flex-wrap gap-1.5" role="group" aria-label={language === 'nl' ? 'Snelle filters' : 'Quick filters'}>
+                {([
+                  ['nearby', language === 'nl' ? 'Dichtbij' : 'Nearby'],
+                  ...(topLevelCategories.events
+                    ? [
+                      ['family', language === 'nl' ? 'Gezin' : 'Family'],
+                      ['indoor', language === 'nl' ? 'Binnen' : 'Indoor'],
+                    ] as Array<[DiscoveryQuickFilter, string]>
+                    : []),
+                  ...(topLevelCategories.businesses || topLevelCategories['food-drink']
+                    ? [['open-now', language === 'nl' ? 'Nu open' : 'Open now'] as [DiscoveryQuickFilter, string]]
+                    : []),
+                ] as Array<[DiscoveryQuickFilter, string]>).map(([value, label]) => (
+                  <button
+                    type="button"
+                    key={value}
+                    onClick={() => toggleQuickFilter(value)}
+                    aria-pressed={quickFilters.has(value)}
+                    className={cn(
+                      'inline-flex min-h-8 items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-bold transition-colors',
+                      quickFilters.has(value)
+                        ? 'border-primary/50 bg-primary/10 text-foreground'
+                        : 'border-border/70 bg-card text-muted-foreground hover:border-primary/40',
+                    )}
+                  >
+                    {value === 'nearby' && <Navigation className="h-3.5 w-3.5" aria-hidden="true" />}
+                    {label}
+                  </button>
+                ))}
+              </div>
+              {quickFilters.has('nearby') && (
+                <p className="mt-2 text-[10px] leading-relaxed text-muted-foreground" role="status">
+                  {nearbyStatus === 'locating'
+                    ? (language === 'nl' ? 'Je locatie bepalen…' : 'Finding your location…')
+                    : nearbyStatus === 'ready'
+                      ? (language === 'nl' ? 'Binnen 2,5 km van je huidige locatie.' : 'Within 2.5 km of your current location.')
+                      : (language === 'nl'
+                        ? 'Binnen 2,5 km van de gekozen buurt of het stadscentrum.'
+                        : 'Within 2.5 km of the selected neighborhood or city centre.')}
+                </p>
+              )}
+              {(quickFilters.has('indoor') || quickFilters.has('open-now')) && (
+                <p className="mt-2 text-[10px] leading-relaxed text-muted-foreground">
+                  {language === 'nl'
+                    ? 'Binnen en nu open worden alleen getoond bij expliciete, gestructureerde broninformatie.'
+                    : 'Indoor and open-now results only appear with explicit, structured source information.'}
+                </p>
+              )}
+            </FilterFrame>
             <FilterFrame title={t.topLevelCategories}>
               <div className="mb-2">
                 <CategoryActionButtons
@@ -2220,6 +2406,17 @@ function EventDetailView({ eventId, listingSection = 'events' }: { eventId: stri
               }}
             />
           )}
+
+          <RouteLinks
+            language={language}
+            marker={{
+              name: listing.name,
+              lat: listing.lat,
+              lng: listing.lng,
+              isApproximateLocation: listing.isApproximateLocation,
+            }}
+            className="mt-6 rounded-2xl border border-border bg-muted/30 p-4"
+          />
 
           {sourceUrl && (
             <div className="mt-8 flex flex-wrap gap-3">

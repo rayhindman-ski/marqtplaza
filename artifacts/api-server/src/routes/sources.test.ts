@@ -9,6 +9,8 @@ import {
   eventPriceEvidenceFromHtml,
   eventMetadata,
   parseVisibleEventPrice,
+  structuredEventsFromPage,
+  structuredIndoorStatus,
   type SourceDefinition,
 } from "./sources";
 
@@ -97,6 +99,66 @@ describe("event price capture", () => {
       eventMetadata("Tickets €10 - €20", source).priceText,
       "€10–20",
     );
+  });
+
+  it("does not infer indoor status from unstructured venue words", () => {
+    assert.equal(
+      "isIndoor" in eventMetadata("Workshop in een overdekte museumzaal", source),
+      false,
+    );
+  });
+
+  it("captures explicit structured indoor evidence without guessing from venue names", () => {
+    assert.equal(
+      structuredIndoorStatus({}, {
+        "@type": "Place",
+        amenityFeature: { name: "Indoor", value: true },
+      }),
+      true,
+    );
+    assert.equal(
+      structuredIndoorStatus({}, {
+        "@type": "Place",
+        name: "Museumzaal",
+      }),
+      undefined,
+    );
+    assert.equal(
+      structuredIndoorStatus({ isIndoor: false }, { "@type": "IndoorVenue" }),
+      false,
+    );
+  });
+
+  it("carries structured indoor status through JSON-LD event extraction", () => {
+    const [event] = structuredEventsFromPage(`
+      <script type="application/ld+json">
+        {
+          "@type": "Event",
+          "name": "Indoor community workshop",
+          "url": "https://events.example.test/workshop",
+          "startDate": "2026-09-05T14:00:00+02:00",
+          "location": {
+            "@type": "Place",
+            "name": "Community centre",
+            "amenityFeature": {"name": "Indoor", "value": true}
+          }
+        }
+      </script>
+    `, "https://events.example.test/workshop", source);
+    assert.equal(event?.isIndoor, true);
+
+    const [unknown] = structuredEventsFromPage(`
+      <script type="application/ld+json">
+        {
+          "@type": "Event",
+          "name": "Museum activity",
+          "url": "https://events.example.test/museum",
+          "startDate": "2026-09-06",
+          "location": {"@type": "Place", "name": "Museumzaal"}
+        }
+      </script>
+    `, "https://events.example.test/museum", source);
+    assert.equal(unknown?.isIndoor, undefined);
   });
 
   it("normalizes exact, from, one-symbol and two-symbol ranges", () => {

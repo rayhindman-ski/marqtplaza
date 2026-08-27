@@ -7,7 +7,6 @@
  */
 export type ClaimStatus = typeof ClaimStatus[keyof typeof ClaimStatus];
 
-
 export const ClaimStatus = {
   pending: 'pending',
   approved: 'approved',
@@ -928,6 +927,10 @@ export interface Listing {
   description: string;
   /** Verified upcoming event start date and time when this listing is an event. */
   startsAt?: string;
+  /** Source-provided opening or event time range when available. */
+  openingTimes?: string;
+  /** Event venue when the source provides one. */
+  venue?: string;
   x: number;
   y: number;
   details: string;
@@ -941,8 +944,6 @@ export interface Listing {
   source?: ListingSource;
   /** Human-readable publisher or provider that listed this item, distinct from its destination URL. */
   sourceName?: string;
-  /** Whether the map pin uses the Den Haag city centre because no exact venue coordinates were supplied. */
-  isApproximateLocation?: boolean;
   /** The approved source stream that supplied this event. */
   sourceGroup?: ListingSourceGroup;
   /** The organizer explicitly named by the source. */
@@ -954,6 +955,15 @@ export interface Listing {
   mealType?: ListingMealType;
   audience?: string;
   recurrenceText?: string;
+  /** Whether the map pin is an approximate fallback rather than an exact destination. */
+  isApproximateLocation?: boolean;
+  /** Indoor classification only when explicit source evidence supports it. */
+  isIndoor?: boolean | null;
+  /** Current opening status from a provider that supplies structured opening status. */
+  openNow?: boolean | null;
+  firstSeenAt?: string;
+  lastSeenAt?: string;
+  updatedAt?: string;
   /** Den Haag neighborhood context for a curated social-map location. */
   neighborhood?: string;
   socialCategory?: SocialMapCategory;

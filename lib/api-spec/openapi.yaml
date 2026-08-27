@@ -1772,6 +1772,12 @@ components:
         startsAt:
           type: string
           description: Verified upcoming event start date and time when this listing is an event.
+        openingTimes:
+          type: string
+          description: Source-provided opening or event time range when available.
+        venue:
+          type: string
+          description: Event venue when the source provides one.
         x:
           type: number
         y:
@@ -1794,9 +1800,6 @@ components:
         sourceName:
           type: string
           description: Human-readable publisher or provider that listed this item, distinct from its destination URL.
-        isApproximateLocation:
-          type: boolean
-          description: Whether the map pin uses the Den Haag city centre because no exact venue coordinates were supplied.
         sourceGroup:
           type: string
           enum: [city-agenda, culture, community, meals]
@@ -1820,6 +1823,26 @@ components:
           type: string
         recurrenceText:
           type: string
+        isApproximateLocation:
+          type: boolean
+          description: Whether the map pin is an approximate fallback rather than an exact destination.
+        isIndoor:
+          type: boolean
+          nullable: true
+          description: Indoor classification only when explicit source evidence supports it.
+        openNow:
+          type: boolean
+          nullable: true
+          description: Current opening status from a provider that supplies structured opening status.
+        firstSeenAt:
+          type: string
+          format: date-time
+        lastSeenAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
         neighborhood:
           type: string
           description: Den Haag neighborhood context for a curated social-map location.

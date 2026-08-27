@@ -90,6 +90,8 @@ export interface Marker {
   address?: string;
   description: string;
   startsAt?: string | null;
+  openingTimes?: string | null;
+  venue?: string | null;
   x: number;
   y: number;
   details: string;
@@ -120,6 +122,12 @@ export interface Marker {
   mealType?: EventMealType | null;
   audience?: string | null;
   recurrenceText?: string | null;
+  isApproximateLocation?: boolean;
+  isIndoor?: boolean | null;
+  openNow?: boolean | null;
+  firstSeenAt?: string;
+  lastSeenAt?: string;
+  updatedAt?: string;
 }
 
 // Active cities — add more Location entries here when expanding beyond Den Haag.

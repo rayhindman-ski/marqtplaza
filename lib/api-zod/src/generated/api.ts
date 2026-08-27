@@ -7,7 +7,6 @@
  */
 import * as zod from 'zod';
 
-
 /**
  * Returns server health status
  * @summary Health check
@@ -317,6 +316,8 @@ export const GetListingsResponse = zod.object({
   "address": zod.string().optional().describe('Provider-supplied or curated visitor address when one is available.'),
   "description": zod.string(),
   "startsAt": zod.string().optional().describe('Verified upcoming event start date and time when this listing is an event.'),
+  "openingTimes": zod.string().optional().describe('Source-provided opening or event time range when available.'),
+  "venue": zod.string().optional().describe('Event venue when the source provides one.'),
   "x": zod.number(),
   "y": zod.number(),
   "details": zod.string(),
@@ -326,7 +327,6 @@ export const GetListingsResponse = zod.object({
   "businessCategory": zod.enum(['Retail & Shopping', 'Food & Drink', 'Health & Wellness', 'Beauty & Personal Care', 'Professional Services', 'Finance & Legal', 'Home & Repair', 'Automotive & Mobility', 'Education & Childcare', 'Hospitality & Travel', 'Arts, Culture & Entertainment', 'Fitness & Sports']).optional().describe('Normalized category for business and food-and-drink listings.'),
   "source": zod.enum(['google_maps', 'openstreetmap', 'curated', 'source_scan']).optional().describe('Provider or editorial source for an individual listing.'),
   "sourceName": zod.string().optional().describe('Human-readable publisher or provider that listed this item, distinct from its destination URL.'),
-  "isApproximateLocation": zod.boolean().optional().describe('Whether the map pin uses the Den Haag city centre because no exact venue coordinates were supplied.'),
   "sourceGroup": zod.enum(['city-agenda', 'culture', 'community', 'meals']).optional().describe('The approved source stream that supplied this event.'),
   "organizer": zod.string().optional().describe('The organizer explicitly named by the source.'),
   "activityKind": zod.enum(['community', 'culture', 'learning', 'movement', 'meal', 'family', 'market', 'outdoor', 'entertainment']).optional(),
@@ -335,6 +335,12 @@ export const GetListingsResponse = zod.object({
   "mealType": zod.enum(['community-meal', 'food-support']).optional(),
   "audience": zod.string().optional(),
   "recurrenceText": zod.string().optional(),
+  "isApproximateLocation": zod.boolean().optional().describe('Whether the map pin is an approximate fallback rather than an exact destination.'),
+  "isIndoor": zod.boolean().nullish().describe('Indoor classification only when explicit source evidence supports it.'),
+  "openNow": zod.boolean().nullish().describe('Current opening status from a provider that supplies structured opening status.'),
+  "firstSeenAt": zod.coerce.date().optional(),
+  "lastSeenAt": zod.coerce.date().optional(),
+  "updatedAt": zod.coerce.date().optional(),
   "neighborhood": zod.string().optional().describe('Den Haag neighborhood context for a curated social-map location.'),
   "socialCategory": zod.enum(['Geldzaken', 'Gezin en opvoeden', 'Gezondheid', 'Heilige plaatsen', 'Hobby\'s en interesses', 'Ondersteuning', 'Ontmoeten en samenleven', 'Sporten en bewegen', 'Taal en computer', 'Vervoer', 'Werk en opleiding', 'Wonen en huishouden', 'Zorg voor een naaste']).optional().describe('Curated support theme for the Den Haag social map.'),
   "officialUrl": zod.string().optional().describe('Verified organization or service website for a social-map location.'),

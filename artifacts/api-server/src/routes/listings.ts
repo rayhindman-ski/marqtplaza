@@ -59,6 +59,23 @@ type Listing = {
   reviewReason?: string | null;
   lastCheckedAt?: string;
   nextReviewAt?: string;
+  startsAt?: string | null;
+  openingTimes?: string | null;
+  venue?: string | null;
+  sourceGroup?: "city-agenda" | "culture" | "community" | "meals";
+  organizer?: string | null;
+  activityKind?: string | null;
+  priceType?: "free" | "low-cost" | "paid" | "unknown";
+  priceText?: string | null;
+  mealType?: "community-meal" | "food-support" | null;
+  audience?: string | null;
+  recurrenceText?: string | null;
+  isApproximateLocation?: boolean;
+  isIndoor?: boolean | null;
+  openNow?: boolean | null;
+  firstSeenAt?: string;
+  lastSeenAt?: string;
+  updatedAt?: string;
 };
 
 export type ClaimableBusinessListing = Pick<
@@ -321,6 +338,7 @@ type GooglePlace = {
   rating?: number;
   userRatingCount?: number;
   regularOpeningHours?: { weekdayDescriptions?: string[] };
+  currentOpeningHours?: { openNow?: boolean };
 };
 
 type GooglePlacesResponse = { places?: GooglePlace[]; nextPageToken?: string };
@@ -703,6 +721,7 @@ async function collectGooglePlaces(
               "places.rating",
               "places.userRatingCount",
               "places.regularOpeningHours.weekdayDescriptions",
+              "places.currentOpeningHours.openNow",
               "nextPageToken",
             ].join(","),
           },
@@ -759,6 +778,7 @@ async function collectGooglePlaces(
             sourceUrl: googlePlaceUrl(place),
             source: "google_maps",
             sourceName: "Google Maps",
+             openNow: place.currentOpeningHours?.openNow ?? null,
           });
         }
         if (!data.nextPageToken) break;
@@ -1219,6 +1239,12 @@ router.get("/listings", async (req, res) => {
           audience: event.audience,
           neighborhood: event.neighborhood,
           recurrenceText: event.recurrenceText,
+          openingTimes: event.openingTimes,
+          venue: event.venue,
+          isIndoor: event.isIndoor,
+          firstSeenAt: event.firstSeenAt?.toISOString(),
+          lastSeenAt: event.lastSeenAt?.toISOString(),
+          updatedAt: event.updatedAt?.toISOString(),
       }});
       res.json({
         listings: discoveredListings,
