@@ -81,6 +81,9 @@ function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+type UserRole = 'designer' | 'user';
+const USER_ROLE_STORAGE_KEY = 'buurtplaza-user-role';
+
 type CalendarEventData = {
   name: string;
   description?: string | null;
@@ -578,6 +581,32 @@ function LanguageSelector({
   );
 }
 
+function UserRoleSelector({
+  userRole,
+  onUserRoleChange,
+}: {
+  userRole: UserRole;
+  onUserRoleChange: (userRole: UserRole) => void;
+}) {
+  return (
+    <label
+      className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border border-border/70 bg-card/90 px-3 text-[11px] font-extrabold text-foreground shadow-sm backdrop-blur-md"
+      title="UserRole"
+    >
+      <span aria-hidden="true">UserRole</span>
+      <select
+        value={userRole}
+        onChange={(event) => onUserRoleChange(event.target.value as UserRole)}
+        aria-label="UserRole"
+        className="cursor-pointer appearance-none bg-transparent text-[11px] font-extrabold lowercase outline-none"
+      >
+        <option value="designer">designer</option>
+        <option value="user">user</option>
+      </select>
+    </label>
+  );
+}
+
 const weatherConditionLabels: Record<string, { nl: string; en: string }> = {
   clear: { nl: 'Helder', en: 'Clear' },
   partly_cloudy: { nl: 'Licht bewolkt', en: 'Partly cloudy' },
@@ -691,11 +720,15 @@ function WeatherCard({ cityId, language }: { cityId: string; language: Language 
 
 function ReferenceCategoryNav({
   language,
+  userRole,
+  onUserRoleChange,
   onThingsToDo,
   onSectionSelect,
   embedded = false,
 }: {
   language: Language;
+  userRole: UserRole;
+  onUserRoleChange: (userRole: UserRole) => void;
   onThingsToDo: () => void;
   onSectionSelect: (section: ListingSection) => void;
   embedded?: boolean;
@@ -764,7 +797,8 @@ function ReferenceCategoryNav({
           { href: '/buurt', label: language === 'nl' ? 'Buurtplein' : 'Community', Icon: HandHeart },
           { href: '/deals', label: language === 'nl' ? 'Deals' : 'Deals', Icon: Tag },
           { href: '/mijn-bedrijf', label: language === 'nl' ? 'Mijn bedrijf' : 'My business', Icon: Store },
-        ].map(({ href, label, Icon }) => (
+        ].filter(({ href }) => userRole === 'designer' || !['/capture', '/bronnen'].includes(href))
+          .map(({ href, label, Icon }) => (
           <span key={href} className="group relative">
             <Link
               href={href}
@@ -777,6 +811,7 @@ function ReferenceCategoryNav({
             <span className={tooltipClass}>{label}</span>
           </span>
         ))}
+        <UserRoleSelector userRole={userRole} onUserRoleChange={onUserRoleChange} />
         <span className="group relative">
           <Search className="h-5 w-5 text-foreground" aria-label={t.explore} />
           <span className={tooltipClass}>{t.explore}</span>
@@ -807,12 +842,16 @@ function SaveButton({ saved, onToggle }: { saved: boolean; onToggle: (e: React.M
 }
 function SearchState({
   language,
+  userRole,
+  onUserRoleChange,
   onLanguageChange,
   onSearch,
   savedCount,
   onViewSaved,
 }: {
   language: Language;
+  userRole: UserRole;
+  onUserRoleChange: (userRole: UserRole) => void;
   onLanguageChange: (language: Language) => void;
   onSearch: (locId: string, neighborhood?: string, section?: ListingSection, postcode?: string) => void;
   savedCount: number;
@@ -862,6 +901,8 @@ function SearchState({
     <div className="flex-1 flex flex-col items-center justify-center min-h-screen p-6 relative overflow-hidden bg-background">
       <ReferenceCategoryNav
         language={language}
+        userRole={userRole}
+        onUserRoleChange={onUserRoleChange}
         onSectionSelect={(section) => onSearch('dhg', undefined, section)}
         onThingsToDo={() => onSearch('dhg', undefined, 'events')}
       />
@@ -1500,6 +1541,8 @@ function SavedCategorySection({
 }
 function DiscoveryState({
   language,
+  userRole,
+  onUserRoleChange,
   locationId,
   listingSection,
   initialNeighborhood,
@@ -1512,6 +1555,8 @@ function DiscoveryState({
   onViewSaved,
 }: {
   language: Language;
+  userRole: UserRole;
+  onUserRoleChange: (userRole: UserRole) => void;
   locationId: string;
   listingSection: ListingSection;
   initialNeighborhood?: string;
@@ -2399,6 +2444,8 @@ function DiscoveryState({
         <ReferenceCategoryNav
           embedded
           language={language}
+          userRole={userRole}
+          onUserRoleChange={onUserRoleChange}
           onThingsToDo={() => selectTopLevelSection('events')}
           onSectionSelect={selectTopLevelSection}
         />
@@ -2662,6 +2709,10 @@ function MainApp({ initialLocationId }: { initialLocationId?: string } = {}) {
     if (typeof window === 'undefined') return 'en';
     return window.localStorage.getItem('buurtplaza-language') === 'nl' ? 'nl' : 'en';
   });
+  const [userRole, setUserRole] = useState<UserRole>(() => {
+    if (typeof window === 'undefined') return 'user';
+    return window.localStorage.getItem(USER_ROLE_STORAGE_KEY) === 'designer' ? 'designer' : 'user';
+  });
   const {
     savedIds,
     savedMarkers,
@@ -2675,6 +2726,10 @@ function MainApp({ initialLocationId }: { initialLocationId?: string } = {}) {
     window.localStorage.setItem('buurtplaza-language', language);
     document.documentElement.lang = language;
   }, [language]);
+
+  useEffect(() => {
+    window.localStorage.setItem(USER_ROLE_STORAGE_KEY, userRole);
+  }, [userRole]);
 
   if (screen.kind === 'saved') {
     return (
@@ -2702,6 +2757,8 @@ function MainApp({ initialLocationId }: { initialLocationId?: string } = {}) {
           navigate('/');
         }}
         onLanguageChange={setLanguage}
+        userRole={userRole}
+        onUserRoleChange={setUserRole}
         savedIds={savedIds}
         onToggle={toggle}
         onEventRefresh={recordEventRefresh}
@@ -2713,6 +2770,8 @@ function MainApp({ initialLocationId }: { initialLocationId?: string } = {}) {
   return (
     <SearchState
       language={language}
+      userRole={userRole}
+      onUserRoleChange={setUserRole}
       onLanguageChange={setLanguage}
       onSearch={(locId, neighborhood, listingSection = DEFAULT_START_SECTION, postcode) => {
         setScreen({
