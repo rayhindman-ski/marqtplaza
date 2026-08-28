@@ -15,3 +15,4 @@
 - [Business claim integrity](business-claim-integrity.md) — claims must resolve current listings server-side and preserve one pending/approved owner path transactionally.
 - [Google Places lifetime cap](google-places-lifetime-cap.md) — all billable Places calls share a permanent 100-call allowance that only an editor can reset manually.
 - [Saved-event sync ownership](saved-event-sync-ownership.md) — keep anonymous staging separate; use operation sync plus deletion tombstones for account-backed events.
+- [Weather response caching](weather-response-caching.md) — browser weather requests must bypass HTTP cache so a bodyless 304 cannot hide the map weather strip.

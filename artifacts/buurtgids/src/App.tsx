@@ -619,6 +619,9 @@ function WeatherCard({ cityId, language }: { cityId: string; language: Language 
         retry: 1,
         queryKey: getGetWeatherQueryKey({ cityId }),
       },
+      request: {
+        cache: 'no-store',
+      },
     },
   );
   const data = weatherQuery.data;
@@ -644,7 +647,13 @@ function WeatherCard({ cityId, language }: { cityId: string; language: Language 
     );
   }
 
-  if (weatherQuery.isError || !data) return null;
+  if (weatherQuery.isError || !data) {
+    return (
+      <div className="w-full border-t border-white/40 bg-slate-950/55 px-4 py-2 text-xs font-bold text-sky-50 backdrop-blur-md">
+        {localizedLocationName} · {language === 'nl' ? 'Weer tijdelijk niet beschikbaar' : 'Weather temporarily unavailable'}
+      </div>
+    );
+  }
 
   return (
     <section
@@ -684,10 +693,12 @@ function ReferenceCategoryNav({
   language,
   onThingsToDo,
   onSectionSelect,
+  embedded = false,
 }: {
   language: Language;
   onThingsToDo: () => void;
   onSectionSelect: (section: ListingSection) => void;
+  embedded?: boolean;
 }) {
   const t = translations[language];
   const iconForCategory = (id: string) => {
@@ -703,7 +714,10 @@ function ReferenceCategoryNav({
   return (
     <nav
       aria-label="Categories"
-      className="absolute left-0 top-0 z-30 flex w-full overflow-x-auto border-b border-border/70 bg-card/85 px-4 py-3 pr-24 backdrop-blur-md sm:px-6 sm:pr-6"
+      className={cn(
+        "z-30 flex w-full overflow-x-auto border-b border-border/70 bg-card/85 px-4 py-2.5 pr-24 backdrop-blur-md sm:px-6 sm:pr-28",
+        embedded ? "relative shrink-0" : "absolute left-0 top-0",
+      )}
     >
       <div className="mx-auto flex min-w-max max-w-6xl items-center justify-center gap-4 sm:gap-7">
         {t.navCategories.map((category) => {
@@ -1841,11 +1855,6 @@ function DiscoveryState({
 
   return (
     <div className="flex h-screen w-full overflow-hidden bg-background">
-      <ReferenceCategoryNav
-        language={language}
-        onThingsToDo={() => selectTopLevelSection('events')}
-        onSectionSelect={selectTopLevelSection}
-      />
       <LanguageSelector language={language} onLanguageChange={onLanguageChange} />
 
       {/* Sidebar List */}
@@ -2339,29 +2348,35 @@ function DiscoveryState({
       </div>
 
       {/* Map Area */}
-      <div className="flex-1 relative h-full w-full overflow-hidden bg-background">
-        <GoogleMapView
+      <div className="flex h-full w-full flex-1 flex-col overflow-hidden bg-background">
+        <ReferenceCategoryNav
+          embedded
           language={language}
-          locationId={location.id}
-          selectedNeighborhoods={selectedNeighborhoods}
-          markers={filteredMarkers}
-          selectedMarkerId={selectedMarker}
-          savedIds={savedIds}
-          onMarkerClick={handleMarkerClick}
+          onThingsToDo={() => selectTopLevelSection('events')}
+          onSectionSelect={selectTopLevelSection}
         />
-        <div className="pointer-events-none absolute inset-x-0 top-0 z-20">
-          <WeatherCard cityId={locationId} language={language} />
-        </div>
+        <WeatherCard cityId={locationId} language={language} />
+        <div className="relative min-h-0 flex-1">
+          <GoogleMapView
+            language={language}
+            locationId={location.id}
+            selectedNeighborhoods={selectedNeighborhoods}
+            markers={filteredMarkers}
+            selectedMarkerId={selectedMarker}
+            savedIds={savedIds}
+            onMarkerClick={handleMarkerClick}
+          />
 
-        {/* Mobile Toggle Overlay */}
-        <div className="md:hidden absolute bottom-8 left-1/2 -translate-x-1/2 z-30">
-          <button
-            onClick={() => setView(v => v === 'map' ? 'list' : 'map')}
-            className="bg-foreground text-background px-6 py-3.5 rounded-full shadow-2xl font-bold flex items-center gap-2.5 hover:scale-105 active:scale-95 transition-transform"
-          >
-            {view === 'map' ? <List className="w-5 h-5" /> : <MapIcon className="w-5 h-5" />}
-            <span>{view === 'map' ? t.showList : t.showMap}</span>
-          </button>
+          {/* Mobile Toggle Overlay */}
+          <div className="md:hidden absolute bottom-8 left-1/2 -translate-x-1/2 z-30">
+            <button
+              onClick={() => setView(v => v === 'map' ? 'list' : 'map')}
+              className="bg-foreground text-background px-6 py-3.5 rounded-full shadow-2xl font-bold flex items-center gap-2.5 hover:scale-105 active:scale-95 transition-transform"
+            >
+              {view === 'map' ? <List className="w-5 h-5" /> : <MapIcon className="w-5 h-5" />}
+              <span>{view === 'map' ? t.showList : t.showMap}</span>
+            </button>
+          </div>
         </div>
       </div>
     </div>
