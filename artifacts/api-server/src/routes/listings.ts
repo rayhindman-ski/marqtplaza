@@ -514,9 +514,17 @@ const GOOGLE_SEARCH_TERMS: Record<Exclude<ListingSection, "events" | "social-map
   ],
 };
 
-function googleSearchSpecs(section: Exclude<ListingSection, "events" | "social-map">): GoogleSearchSpec[] {
+function googleSearchSpecs(
+  section: Exclude<ListingSection, "events" | "social-map">,
+  neighborhoods: string[] = [],
+): GoogleSearchSpec[] {
+  const terms = neighborhoods.length > 0
+    ? neighborhoods.flatMap((neighborhood) =>
+      GOOGLE_SEARCH_TERMS[section].map((term) => `${term} nabij ${neighborhood}`),
+    )
+    : GOOGLE_SEARCH_TERMS[section];
   return HAGUE_DISCOVERY_AREAS.flatMap((area) =>
-    GOOGLE_SEARCH_TERMS[section].map((term) => ({
+    terms.map((term) => ({
       textQuery: term,
       bounds: area,
     })),
@@ -571,14 +579,15 @@ async function withGoogleRequestSlot<T>(operation: () => Promise<T>): Promise<T>
 async function fetchGooglePlaces(
   bounds: { s: number; w: number; n: number; e: number },
   section: Exclude<ListingSection, "events" | "social-map">,
+  neighborhoods: string[] = [],
 ): Promise<Listing[]> {
-  const cacheKey = section;
+  const cacheKey = `${section}:${neighborhoods.slice().sort().join("|")}`;
   const cached = googlePlacesCache.get(cacheKey);
   if (cached && cached.expiresAt > Date.now()) return cached.listings;
   const inFlight = googlePlacesRequests.get(cacheKey);
   if (inFlight) return inFlight;
 
-  const request = collectGooglePlaces(bounds, section);
+  const request = collectGooglePlaces(bounds, section, neighborhoods);
   googlePlacesRequests.set(cacheKey, request);
   try {
     const listings = await request;
@@ -627,12 +636,13 @@ export async function resolveClaimableBusinessListing(
 async function collectGooglePlaces(
   bounds: { s: number; w: number; n: number; e: number },
   section: Exclude<ListingSection, "events" | "social-map">,
+  neighborhoods: string[] = [],
 ): Promise<Listing[]> {
   const apiKey = process.env.GOOGLE_MAPS_API_KEY;
   if (!apiKey) return [];
 
   const seen = new Set<string>();
-  const searches = googleSearchSpecs(section);
+  const searches = googleSearchSpecs(section, neighborhoods);
   const resultsBySearch = searches.map((): Listing[] => []);
   let nextSearchIndex = 0;
   const worker = async () => {
@@ -1004,6 +1014,11 @@ router.get("/listings", async (req, res) => {
   const cityId = String(req.query["cityId"] ?? "").trim();
   const listingSection = parseListingSection(req.query["section"]);
   const language = parseEventLanguage(req.query["language"]);
+  const requestedNeighborhoods = String(req.query["neighborhoods"] ?? "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean)
+    .slice(0, 12);
 
   if (!cityId || !language) {
     res.status(400).json({
@@ -1084,7 +1099,7 @@ router.get("/listings", async (req, res) => {
 
     if (listingSection !== "events") {
       try {
-        const googleListings = await fetchGooglePlaces(bounds, listingSection);
+        const googleListings = await fetchGooglePlaces(bounds, listingSection, requestedNeighborhoods);
         if (googleListings.length > 0) {
           let mergedListings = googleListings;
           let osmAdded = 0;

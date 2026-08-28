@@ -21,4 +21,8 @@ section?: GetListingsSection;
  * Language selected by the user for all human-readable listing copy.
  */
 language: GetListingsLanguage;
+/**
+ * Comma-separated neighborhood names used to target local business discovery.
+ */
+neighborhoods?: string;
 };

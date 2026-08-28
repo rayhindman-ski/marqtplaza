@@ -232,6 +232,12 @@ paths:
             type: string
             enum: [nl, en]
           description: Language selected by the user for all human-readable listing copy.
+        - name: neighborhoods
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Comma-separated neighborhood names used to target local business discovery.
       responses:
         "200":
           description: Listings result (live or fallback)

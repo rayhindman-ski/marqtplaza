@@ -1552,23 +1552,28 @@ function DiscoveryState({
     || selectedNeighborhoods.length > 0
     || postcodeFilter.trim().length >= 4,
   );
+  const requestedNeighborhoods = location
+    && selectedNeighborhoods.length > 0
+    && selectedNeighborhoods.length < location.neighborhoods.length
+    ? selectedNeighborhoods.join(',')
+    : undefined;
 
   // Fetch selected top-level sections only; each query keeps its generated cache key.
   const eventsQuery = useGetListings(
-    { cityId: locationId, section: 'events', language },
-    { query: { enabled: topLevelCategories.events, queryKey: getGetListingsQueryKey({ cityId: locationId, section: 'events', language }) } },
+    { cityId: locationId, section: 'events', language, neighborhoods: requestedNeighborhoods },
+    { query: { enabled: topLevelCategories.events, queryKey: getGetListingsQueryKey({ cityId: locationId, section: 'events', language, neighborhoods: requestedNeighborhoods }) } },
   );
   const businessesQuery = useGetListings(
-    { cityId: locationId, section: 'businesses', language },
-    { query: { enabled: topLevelCategories.businesses && hasSearchArea, queryKey: getGetListingsQueryKey({ cityId: locationId, section: 'businesses', language }) } },
+    { cityId: locationId, section: 'businesses', language, neighborhoods: requestedNeighborhoods },
+    { query: { enabled: topLevelCategories.businesses && hasSearchArea, queryKey: getGetListingsQueryKey({ cityId: locationId, section: 'businesses', language, neighborhoods: requestedNeighborhoods }) } },
   );
   const foodDrinkQuery = useGetListings(
-    { cityId: locationId, section: 'food-drink', language },
-    { query: { enabled: topLevelCategories['food-drink'] && hasSearchArea, queryKey: getGetListingsQueryKey({ cityId: locationId, section: 'food-drink', language }) } },
+    { cityId: locationId, section: 'food-drink', language, neighborhoods: requestedNeighborhoods },
+    { query: { enabled: topLevelCategories['food-drink'] && hasSearchArea, queryKey: getGetListingsQueryKey({ cityId: locationId, section: 'food-drink', language, neighborhoods: requestedNeighborhoods }) } },
   );
   const socialMapQuery = useGetListings(
-    { cityId: locationId, section: 'social-map', language },
-    { query: { enabled: topLevelCategories['social-map'], queryKey: getGetListingsQueryKey({ cityId: locationId, section: 'social-map', language }) } },
+    { cityId: locationId, section: 'social-map', language, neighborhoods: requestedNeighborhoods },
+    { query: { enabled: topLevelCategories['social-map'], queryKey: getGetListingsQueryKey({ cityId: locationId, section: 'social-map', language, neighborhoods: requestedNeighborhoods }) } },
   );
   const listingQueries = {
     events: eventsQuery,

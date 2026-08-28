@@ -306,7 +306,8 @@ export const getListingsQuerySectionDefault = `events`;
 export const GetListingsQueryParams = zod.object({
   "cityId": zod.coerce.string().describe('The city identifier (ams, rot, utr, dhg, ein)'),
   "section": zod.enum(['events', 'businesses', 'food-drink', 'social-map']).default(getListingsQuerySectionDefault).describe('Which Den Haag discovery stream to return.'),
-  "language": zod.enum(['nl', 'en']).describe('Language selected by the user for all human-readable listing copy.')
+  "language": zod.enum(['nl', 'en']).describe('Language selected by the user for all human-readable listing copy.'),
+  "neighborhoods": zod.coerce.string().optional().describe('Comma-separated neighborhood names used to target local business discovery.')
 })
 
 export const GetListingsResponse = zod.object({
