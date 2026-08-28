@@ -641,7 +641,7 @@ function WeatherCard({ cityId, language }: { cityId: string; language: Language 
 
   if (weatherQuery.isLoading) {
     return (
-      <div className="w-full animate-pulse border-t border-white/40 bg-slate-950/55 px-4 py-3 backdrop-blur-md" aria-label={language === 'nl' ? 'Weer laden' : 'Loading weather'}>
+      <div className="w-full animate-pulse border-t border-white/40 bg-gradient-to-r from-primary/75 via-orange-500/65 to-secondary/75 px-4 py-3 backdrop-blur-md" aria-label={language === 'nl' ? 'Weer laden' : 'Loading weather'}>
         <div className="mx-auto h-4 max-w-6xl rounded bg-white/15" />
       </div>
     );
@@ -649,7 +649,7 @@ function WeatherCard({ cityId, language }: { cityId: string; language: Language 
 
   if (weatherQuery.isError || !data) {
     return (
-      <div className="w-full border-t border-white/40 bg-slate-950/55 px-4 py-2 text-xs font-bold text-sky-50 backdrop-blur-md">
+      <div className="w-full border-t border-white/40 bg-gradient-to-r from-primary/75 via-orange-500/65 to-secondary/75 px-4 py-2 text-xs font-bold text-white backdrop-blur-md">
         {localizedLocationName} · {language === 'nl' ? 'Weer tijdelijk niet beschikbaar' : 'Weather temporarily unavailable'}
       </div>
     );
@@ -659,7 +659,7 @@ function WeatherCard({ cityId, language }: { cityId: string; language: Language 
     <section
       data-testid="weather-card"
       aria-label={language === 'nl' ? `Weer in ${localizedLocationName}` : `Weather in ${localizedLocationName}`}
-      className="w-full border-t border-white/40 bg-slate-950/55 text-white shadow-lg backdrop-blur-md"
+      className="w-full border-t border-white/40 bg-gradient-to-r from-primary/75 via-orange-500/65 to-secondary/75 text-white shadow-lg backdrop-blur-md"
     >
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-2 sm:px-6">
         <div className="flex min-w-0 items-center gap-2.5">
