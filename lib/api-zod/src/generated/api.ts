@@ -15,6 +15,8 @@ import * as zod from 'zod';
 export const HealthCheckResponse = zod.object({
   "status": zod.string()
 })
+
+
 /**
  * @summary Get a short city weather forecast
  */
@@ -45,6 +47,8 @@ export const GetWeatherResponse = zod.object({
 })),
   "provider": zod.enum(['open-meteo'])
 })
+
+
 /**
  * @summary Search for businesses
  */
@@ -63,6 +67,8 @@ export const CaptureSearchResponse = zod.object({
   "address": zod.string()
 }))
 })
+
+
 /**
  * @summary Scan a business for events, news, and ads
  */
@@ -350,40 +356,6 @@ export const GetListingsResponse = zod.object({
 })),
   "source": zod.enum(['live', 'google_places', 'fallback', 'curated']),
   "message": zod.string().optional()
-})
-
-
-/**
- * @summary Get the permanent Google Places request allowance status
- */
-export const getGooglePlacesUsageResponseUsedMin = 0;
-
-
-
-
-export const GetGooglePlacesUsageResponse = zod.object({
-  "used": zod.number().min(getGooglePlacesUsageResponseUsedMin),
-  "limit": zod.number().min(1),
-  "exhausted": zod.boolean(),
-  "updatedAt": zod.string().nullable(),
-  "lastResetAt": zod.string().nullable()
-})
-
-
-/**
- * @summary Manually reset the permanent Google Places request allowance
- */
-export const resetGooglePlacesUsageResponseUsedMin = 0;
-
-
-
-
-export const ResetGooglePlacesUsageResponse = zod.object({
-  "used": zod.number().min(resetGooglePlacesUsageResponseUsedMin),
-  "limit": zod.number().min(1),
-  "exhausted": zod.boolean(),
-  "updatedAt": zod.string().nullable(),
-  "lastResetAt": zod.string().nullable()
 })
 
 
@@ -1035,6 +1007,8 @@ export const UpdateBusinessProfileResponse = zod.object({
   "createdAt": zod.string(),
   "updatedAt": zod.string()
 })
+
+
 /**
  * @summary Submit a deal for the owner's approved business
  */

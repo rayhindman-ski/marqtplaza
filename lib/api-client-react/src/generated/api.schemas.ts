@@ -1060,18 +1060,6 @@ export interface ListingsResponse {
   message?: string;
 }
 
-export interface GooglePlacesUsage {
-  /** @minimum 0 */
-  used: number;
-  /** @minimum 1 */
-  limit: number;
-  exhausted: boolean;
-  /** @nullable */
-  updatedAt: string | null;
-  /** @nullable */
-  lastResetAt: string | null;
-}
-
 export type NewsSubcategory = typeof NewsSubcategory[keyof typeof NewsSubcategory];
 
 
