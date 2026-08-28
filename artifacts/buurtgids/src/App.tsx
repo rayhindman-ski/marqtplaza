@@ -10,6 +10,7 @@ import {
   Globe2, Bookmark, BookmarkCheck, X, ChevronDown, ChevronUp,
   ScanSearch, RefreshCw, WifiOff, Radio, MapPinned,
   Landmark, Route as RouteIcon, Baby, Building2, Coffee, Gamepad2, HandHeart, Waves, ShoppingBag, ExternalLink, AlertCircle, CalendarPlus,
+  CalendarDays, UsersRound, Utensils,
   CloudSun, Cloud, CloudFog, CloudRain, CloudSnow, Sun, Wind, Droplets, Tag, Store,
   Bike, Car, Footprints, TrainFront, ShieldCheck, Sparkles, Navigation
 } from 'lucide-react';
@@ -610,7 +611,6 @@ function WeatherIcon({ condition, isDay, className }: { condition: string; isDay
 }
 
 function WeatherCard({ cityId, language }: { cityId: string; language: Language }) {
-  const [isExpanded, setIsExpanded] = useState(true);
   const weatherQuery = useGetWeather(
     { cityId },
     {
@@ -625,10 +625,6 @@ function WeatherCard({ cityId, language }: { cityId: string; language: Language 
   const currentLabel = data
     ? (weatherConditionLabels[data.current.condition]?.[language] ?? weatherConditionLabels.unknown[language])
     : '';
-  const formatDay = (date: string) => new Intl.DateTimeFormat(
-    language === 'nl' ? 'nl-NL' : 'en-GB',
-    { weekday: 'short' },
-  ).format(new Date(`${date}T12:00:00`));
   const updatedLabel = data
     ? new Intl.DateTimeFormat(language === 'nl' ? 'nl-NL' : 'en-GB', {
       hour: '2-digit',
@@ -642,10 +638,8 @@ function WeatherCard({ cityId, language }: { cityId: string; language: Language 
 
   if (weatherQuery.isLoading) {
     return (
-      <div className="mt-5 animate-pulse rounded-2xl border border-border/70 bg-muted/50 p-4" aria-label={language === 'nl' ? 'Weer laden' : 'Loading weather'}>
-        <div className="h-3 w-28 rounded bg-muted" />
-        <div className="mt-3 h-10 w-32 rounded bg-muted" />
-        <div className="mt-3 h-3 w-full rounded bg-muted" />
+      <div className="w-full animate-pulse border-t border-white/40 bg-slate-950/55 px-4 py-3 backdrop-blur-md" aria-label={language === 'nl' ? 'Weer laden' : 'Loading weather'}>
+        <div className="mx-auto h-4 max-w-6xl rounded bg-white/15" />
       </div>
     );
   }
@@ -656,69 +650,32 @@ function WeatherCard({ cityId, language }: { cityId: string; language: Language 
     <section
       data-testid="weather-card"
       aria-label={language === 'nl' ? `Weer in ${localizedLocationName}` : `Weather in ${localizedLocationName}`}
-      className="mt-5 overflow-hidden rounded-2xl border border-sky-200/70 bg-gradient-to-br from-sky-50 via-card to-orange-50/70 shadow-sm"
+      className="w-full border-t border-white/40 bg-slate-950/55 text-white shadow-lg backdrop-blur-md"
     >
-      <button
-        type="button"
-        onClick={() => setIsExpanded((current) => !current)}
-        aria-expanded={isExpanded}
-        className="flex w-full items-center justify-between gap-3 p-4 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
-      >
-        <div>
-          <p className="text-[10px] font-black uppercase tracking-[0.16em] text-sky-800/70">
-            {language === 'nl' ? 'Vandaag buiten' : 'Outside today'}
-          </p>
-          <p className="mt-1 text-sm font-extrabold text-foreground">{localizedLocationName}</p>
-        </div>
-        <span className="flex items-center gap-2">
-          <WeatherIcon condition={data.current.condition} isDay={data.current.isDay} className="h-8 w-8 text-sky-600" />
-          <ChevronDown className={cn("h-4 w-4 text-sky-800/70 transition-transform", isExpanded && "rotate-180")} />
-        </span>
-      </button>
-
-      {isExpanded && <div className="border-t border-sky-200/60 p-4 pt-3">
-      <div className="flex items-end justify-between gap-3">
-        <div className="flex items-end gap-2">
-          <span className="text-4xl font-black leading-none tracking-tight text-foreground">
-            {Math.round(data.current.temperature)}°
-          </span>
-          <div className="pb-0.5">
-            <p className="text-sm font-bold text-foreground">{currentLabel}</p>
-            <p className="mt-0.5 text-[11px] text-muted-foreground">
-              {language === 'nl' ? 'voelt als' : 'feels like'} {Math.round(data.current.apparentTemperature)}°
+      <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-2 sm:px-6">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <WeatherIcon condition={data.current.condition} isDay={data.current.isDay} className="h-6 w-6 shrink-0 text-sky-200" />
+          <div className="min-w-0">
+            <p className="truncate text-[10px] font-black uppercase tracking-[0.14em] text-sky-100/75">{localizedLocationName}</p>
+            <p className="truncate text-xs font-bold text-white">
+              {currentLabel} · {Math.round(data.current.temperature)}° · {language === 'nl' ? 'voelt als' : 'feels like'} {Math.round(data.current.apparentTemperature)}°
             </p>
           </div>
         </div>
-        <div className="space-y-1 text-right text-[11px] font-semibold text-muted-foreground">
-          <p className="inline-flex items-center gap-1">
-            <Droplets className="h-3 w-3 text-sky-600" />
+        <div className="flex shrink-0 items-center gap-3 text-[10px] font-bold text-sky-50 sm:gap-4 sm:text-[11px]">
+          <span className="inline-flex items-center gap-1" title={language === 'nl' ? 'Kans op neerslag' : 'Chance of precipitation'}>
+            <Droplets className="h-3.5 w-3.5 text-sky-200" aria-hidden="true" />
             {data.forecast[0]?.precipitationProbability ?? 0}%
-          </p>
-          <p className="inline-flex items-center gap-1">
-            <Wind className="h-3 w-3 text-sky-600" />
+          </span>
+          <span className="hidden items-center gap-1 sm:inline-flex" title={language === 'nl' ? 'Wind' : 'Wind'}>
+            <Wind className="h-3.5 w-3.5 text-sky-200" aria-hidden="true" />
             {Math.round(data.current.windSpeed)} km/u
-          </p>
+          </span>
+          <span className="hidden text-sky-100/70 md:inline">
+            {language === 'nl' ? `Bijgewerkt ${updatedLabel}` : `Updated ${updatedLabel}`}
+          </span>
         </div>
       </div>
-
-      <div className="mt-4 grid grid-cols-3 divide-x divide-sky-200/70 rounded-xl border border-sky-200/60 bg-card/60 py-2">
-        {data.forecast.map((day) => (
-          <div key={day.date} className="flex flex-col items-center gap-1 px-1 text-center">
-            <span className="text-[10px] font-black uppercase text-muted-foreground">
-              {formatDay(day.date)}
-            </span>
-            <WeatherIcon condition={day.condition} className="h-4 w-4 text-sky-600" />
-            <span className="text-[11px] font-bold text-foreground">
-              {Math.round(day.high)}° <span className="font-medium text-muted-foreground">{Math.round(day.low)}°</span>
-            </span>
-            <span className="text-[10px] font-semibold text-sky-700">{day.precipitationProbability}%</span>
-          </div>
-        ))}
-      </div>
-      <p className="mt-2 text-[10px] text-muted-foreground">
-        {language === 'nl' ? `Bijgewerkt om ${updatedLabel}` : `Updated at ${updatedLabel}`} · Open-Meteo
-      </p>
-      </div>}
     </section>
   );
 }
@@ -733,6 +690,15 @@ function ReferenceCategoryNav({
   onSectionSelect: (section: ListingSection) => void;
 }) {
   const t = translations[language];
+  const iconForCategory = (id: string) => {
+    if (id === 'things-to-do') return CalendarDays;
+    if (id === 'locals') return UsersRound;
+    if (id === 'shopping') return ShoppingBag;
+    if (id === 'food-drink') return Utensils;
+    if (id === 'social-map') return HandHeart;
+    return Newspaper;
+  };
+  const tooltipClass = 'pointer-events-none absolute left-1/2 top-full z-50 mt-2 -translate-x-1/2 whitespace-nowrap rounded-md bg-foreground px-2 py-1 text-[10px] font-bold text-background opacity-0 shadow-lg transition-opacity group-hover:opacity-100 group-focus-within:opacity-100';
 
   return (
     <nav
@@ -741,70 +707,66 @@ function ReferenceCategoryNav({
     >
       <div className="mx-auto flex min-w-max max-w-6xl items-center justify-center gap-4 sm:gap-7">
         {t.navCategories.map((category) => {
+          const Icon = iconForCategory(category.id);
           if (category.id === 'news') {
             return (
-              <Link
-                href="/nieuws"
-                key={category.id}
-                className="text-sm font-extrabold text-foreground transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-              >
-                {category.label}
-              </Link>
+              <span key={category.id} className="group relative">
+                <Link
+                  href="/nieuws"
+                  aria-label={category.label}
+                  title={category.label}
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-foreground transition-colors hover:bg-primary/10 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                >
+                  <Icon className="h-5 w-5" aria-hidden="true" />
+                </Link>
+                <span className={tooltipClass}>{category.label}</span>
+              </span>
             );
           }
           return (
-            <button
-              type="button"
-              key={category.id}
-              onClick={() => {
-                if (category.id === 'things-to-do') onThingsToDo();
-                if (category.id === 'locals' || category.id === 'shopping') onSectionSelect('businesses');
-                if (category.id === 'food-drink') onSectionSelect('food-drink');
-                if (category.id === 'social-map') onSectionSelect('social-map');
-              }}
-              aria-haspopup={category.id === 'things-to-do' ? 'dialog' : undefined}
-              className="text-sm font-extrabold text-foreground transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-            >
-              {category.label}
-            </button>
+            <span key={category.id} className="group relative">
+              <button
+                type="button"
+                onClick={() => {
+                  if (category.id === 'things-to-do') onThingsToDo();
+                  if (category.id === 'locals' || category.id === 'shopping') onSectionSelect('businesses');
+                  if (category.id === 'food-drink') onSectionSelect('food-drink');
+                  if (category.id === 'social-map') onSectionSelect('social-map');
+                }}
+                aria-label={category.label}
+                aria-haspopup={category.id === 'things-to-do' ? 'dialog' : undefined}
+                title={category.label}
+                className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-foreground transition-colors hover:bg-primary/10 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              >
+                <Icon className="h-5 w-5" aria-hidden="true" />
+              </button>
+              <span className={tooltipClass}>{category.label}</span>
+            </span>
           );
         })}
-        <Link
-          href="/capture"
-          className="inline-flex items-center gap-1.5 text-sm font-extrabold text-foreground transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-        >
-          <ScanSearch className="h-4 w-4" />
-          {t.capture}
-        </Link>
-        <Link
-          href="/bronnen"
-          className="inline-flex items-center gap-1.5 text-sm font-extrabold text-foreground transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-        >
-          <Radio className="h-4 w-4" />
-          Sources
-        </Link>
-        <Link
-          href="/buurt"
-          className="inline-flex items-center gap-1.5 text-sm font-extrabold text-foreground transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-        >
-          <HandHeart className="h-4 w-4" />
-          {language === 'nl' ? 'Buurtplein' : 'Community'}
-        </Link>
-        <Link
-          href="/deals"
-          className="inline-flex items-center gap-1.5 text-sm font-extrabold text-foreground transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-        >
-          <Tag className="h-4 w-4" />
-          Deals
-        </Link>
-        <Link
-          href="/mijn-bedrijf"
-          className="inline-flex items-center gap-1.5 text-sm font-extrabold text-foreground transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-        >
-          <Store className="h-4 w-4" />
-          Mijn Bedrijf
-        </Link>
-        <Search className="h-5 w-5 text-foreground" aria-label={t.explore} />
+        {[
+          { href: '/capture', label: t.capture, Icon: ScanSearch },
+          { href: '/bronnen', label: language === 'nl' ? 'Bronnen' : 'Sources', Icon: Radio },
+          { href: '/buurt', label: language === 'nl' ? 'Buurtplein' : 'Community', Icon: HandHeart },
+          { href: '/deals', label: language === 'nl' ? 'Deals' : 'Deals', Icon: Tag },
+          { href: '/mijn-bedrijf', label: language === 'nl' ? 'Mijn bedrijf' : 'My business', Icon: Store },
+        ].map(({ href, label, Icon }) => (
+          <span key={href} className="group relative">
+            <Link
+              href={href}
+              aria-label={label}
+              title={label}
+              className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-foreground transition-colors hover:bg-primary/10 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            >
+              <Icon className="h-5 w-5" aria-hidden="true" />
+            </Link>
+            <span className={tooltipClass}>{label}</span>
+          </span>
+        ))}
+        <span className="group relative">
+          <Search className="h-5 w-5 text-foreground" aria-label={t.explore} />
+          <span className={tooltipClass}>{t.explore}</span>
+        </span>
       </div>
     </nav>
   );
@@ -1569,6 +1531,12 @@ function DiscoveryState({
   const [nearbyStatus, setNearbyStatus] = useState<'idle' | 'locating' | 'ready' | 'fallback'>('idle');
   const [sidebarWidth, setSidebarWidth] = useState(420);
   const sidebarResizeRef = useRef<{ pointerId: number; startX: number; startWidth: number } | null>(null);
+  const hasSearchArea = Boolean(
+    initialPostcode?.trim()
+    || initialNeighborhood?.trim()
+    || selectedNeighborhoods.length > 0
+    || postcodeFilter.trim().length >= 4,
+  );
 
   // Fetch selected top-level sections only; each query keeps its generated cache key.
   const eventsQuery = useGetListings(
@@ -1577,11 +1545,11 @@ function DiscoveryState({
   );
   const businessesQuery = useGetListings(
     { cityId: locationId, section: 'businesses', language },
-    { query: { enabled: topLevelCategories.businesses, queryKey: getGetListingsQueryKey({ cityId: locationId, section: 'businesses', language }) } },
+    { query: { enabled: topLevelCategories.businesses && hasSearchArea, queryKey: getGetListingsQueryKey({ cityId: locationId, section: 'businesses', language }) } },
   );
   const foodDrinkQuery = useGetListings(
     { cityId: locationId, section: 'food-drink', language },
-    { query: { enabled: topLevelCategories['food-drink'], queryKey: getGetListingsQueryKey({ cityId: locationId, section: 'food-drink', language }) } },
+    { query: { enabled: topLevelCategories['food-drink'] && hasSearchArea, queryKey: getGetListingsQueryKey({ cityId: locationId, section: 'food-drink', language }) } },
   );
   const socialMapQuery = useGetListings(
     { cityId: locationId, section: 'social-map', language },
@@ -1918,7 +1886,6 @@ function DiscoveryState({
               )}
             </button>
           </div>
-          <WeatherCard cityId={locationId} language={language} />
           <div className="mt-3 space-y-2">
             <FilterFrame title={language === 'nl' ? 'Snel kiezen' : 'Quick choices'}>
               <div className="flex flex-wrap gap-1.5" role="group" aria-label={language === 'nl' ? 'Snelle filters' : 'Quick filters'}>
@@ -2245,6 +2212,19 @@ function DiscoveryState({
             title={`${language === 'nl' ? 'Resultaten' : 'Results'} (${filteredMarkers.length})`}
           >
           <div className="flex flex-col gap-4 pb-20 md:pb-0">
+            {!hasSearchArea && (topLevelCategories.businesses || topLevelCategories['food-drink']) && (
+              <div className="rounded-2xl border border-primary/20 bg-primary/5 p-5 text-center">
+                <MapPinOff className="mx-auto h-7 w-7 text-primary" aria-hidden="true" />
+                <p className="mt-3 text-sm font-extrabold text-foreground">
+                  {language === 'nl' ? 'Kies eerst een zoekgebied' : 'Choose a search area first'}
+                </p>
+                <p className="mx-auto mt-1 max-w-xs text-xs leading-relaxed text-muted-foreground">
+                  {language === 'nl'
+                    ? 'Voer hierboven een postcode in of selecteer een buurt om lokale bedrijven te zoeken.'
+                    : 'Enter a postcode above or select a neighborhood to search local businesses.'}
+                </p>
+              </div>
+            )}
             {/* Loading skeleton */}
             {isLoading && (
               <div className="flex flex-col gap-4 animate-in fade-in duration-300">
@@ -2369,6 +2349,9 @@ function DiscoveryState({
           savedIds={savedIds}
           onMarkerClick={handleMarkerClick}
         />
+        <div className="pointer-events-none absolute inset-x-0 top-0 z-20">
+          <WeatherCard cityId={locationId} language={language} />
+        </div>
 
         {/* Mobile Toggle Overlay */}
         <div className="md:hidden absolute bottom-8 left-1/2 -translate-x-1/2 z-30">
