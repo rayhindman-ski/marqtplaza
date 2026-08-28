@@ -114,7 +114,6 @@ export const CapturePersistResponse = zod.object({
 export const scanActivitySourcesBodySourceIdsMax = 29;
 
 
-
 export const ScanActivitySourcesBody = zod.object({
   "sourceIds": zod.array(zod.string()).min(1).max(scanActivitySourcesBodySourceIdsMax)
 })
@@ -152,7 +151,6 @@ export const scanActivitySourcesResponseScansItemEventsAddedMin = 0;
 export const scanActivitySourcesResponseScansItemEventsUpdatedMin = 0;
 
 export const scanActivitySourcesResponseScansItemEventsSkippedMin = 0;
-
 
 
 export const ScanActivitySourcesResponse = zod.object({
@@ -358,12 +356,16 @@ export const GetListingsResponse = zod.object({
   "message": zod.string().optional()
 })
 
+/**
+ * @summary Get the signed-in resident's saved events and alerts
+ */
+export const getSavedEventsResponseEventsItemEventIdMax = 240;
+
 
 /**
  * Returns source status for every curated support location and the last successful public snapshot date.
  * @summary Get the curated Den Haag social-map review queue
  */
-
 
 
 export const GetSocialMapReviewResponse = zod.object({
@@ -401,7 +403,6 @@ export const GetSocialMapReviewResponse = zod.object({
  * Checks official and verification pages. The public snapshot date changes only when every source check succeeds.
  * @summary Run the periodic source review for curated support locations
  */
-
 
 
 export const RunSocialMapReviewResponse = zod.object({
@@ -500,7 +501,6 @@ export const GetNewsSourceStatusesResponse = zod.object({
 export const scanNewsSourcesBodySourceIdsMax = 23;
 
 
-
 export const ScanNewsSourcesBody = zod.object({
   "sourceIds": zod.array(zod.string()).min(1).max(scanNewsSourcesBodySourceIdsMax)
 })
@@ -565,7 +565,6 @@ export const createCommunityPostBodyBodyMin = 10;
 export const createCommunityPostBodyBodyMax = 2000;
 
 
-
 export const CreateCommunityPostBody = zod.object({
   "cityId": zod.string().min(1),
   "neighborhood": zod.string().nullish(),
@@ -620,7 +619,6 @@ export const DecideCommunityPostParams = zod.object({
 })
 
 export const decideCommunityPostBodyReviewNoteMax = 500;
-
 
 
 export const DecideCommunityPostBody = zod.object({
@@ -719,7 +717,6 @@ export const GetMyBusinessClaimsResponse = zod.array(GetMyBusinessClaimsResponse
  */
 
 
-
 export const createBusinessClaimBodyListingNameMax = 160;
 
 export const createBusinessClaimBodyListingAddressMax = 240;
@@ -733,7 +730,6 @@ export const createBusinessClaimBodyRelationshipMin = 2;
 export const createBusinessClaimBodyRelationshipMax = 120;
 
 export const createBusinessClaimBodyMessageMax = 1200;
-
 
 
 export const CreateBusinessClaimBody = zod.object({
@@ -855,7 +851,6 @@ export const DecideBusinessClaimParams = zod.object({
 export const decideBusinessClaimBodyReviewNoteMax = 500;
 
 
-
 export const DecideBusinessClaimBody = zod.object({
   "decision": zod.enum(['approve', 'reject']),
   "reviewNote": zod.string().max(decideBusinessClaimBodyReviewNoteMax).optional()
@@ -971,7 +966,6 @@ export const updateBusinessProfileBodyPhoneMax = 50;
 export const updateBusinessProfileBodyOpeningHoursMax = 600;
 
 
-
 export const UpdateBusinessProfileBody = zod.object({
   "name": zod.string().min(1).max(updateBusinessProfileBodyNameMax).optional(),
   "tagline": zod.string().max(updateBusinessProfileBodyTaglineMax).optional(),
@@ -1031,7 +1025,6 @@ export const createBusinessDealBodyOfferTextMax = 140;
 export const createBusinessDealBodyCouponCodeMax = 80;
 
 
-
 export const CreateBusinessDealBody = zod.object({
   "title": zod.string().min(createBusinessDealBodyTitleMin).max(createBusinessDealBodyTitleMax),
   "description": zod.string().min(createBusinessDealBodyDescriptionMin).max(createBusinessDealBodyDescriptionMax),
@@ -1088,7 +1081,6 @@ export const updateBusinessDealBodyOfferTextMin = 2;
 export const updateBusinessDealBodyOfferTextMax = 140;
 
 export const updateBusinessDealBodyCouponCodeMax = 80;
-
 
 
 export const UpdateBusinessDealBody = zod.object({
@@ -1256,7 +1248,6 @@ export const DecideBusinessDealParams = zod.object({
 export const decideBusinessDealBodyReviewNoteMax = 500;
 
 
-
 export const DecideBusinessDealBody = zod.object({
   "decision": zod.enum(['approve', 'reject']),
   "reviewNote": zod.string().max(decideBusinessDealBodyReviewNoteMax).optional()
@@ -1283,3 +1274,88 @@ export const DecideBusinessDealResponse = zod.object({
   "createdAt": zod.string(),
   "updatedAt": zod.string()
 })
+
+export const syncSavedEventsResponseEventsMax = 100;
+
+export const syncSavedEventsResponseAlertsItemEventIdMax = 240;
+
+export const syncSavedEventsBodyMigrationEventsMax = 100;
+
+export const getSavedEventsResponseAlertsMax = 100;
+
+export const syncSavedEventsBodyAlertsItemEventIdMax = 240;
+
+export const GetSavedEventsResponse = zod.object({
+  "events": zod.array(zod.object({
+  "eventId": zod.string().min(1).max(getSavedEventsResponseEventsItemEventIdMax),
+  "snapshot": zod.record(zod.string(), zod.unknown())
+})).max(getSavedEventsResponseEventsMax),
+  "alerts": zod.array(zod.object({
+  "eventId": zod.string().min(1).max(getSavedEventsResponseAlertsItemEventIdMax),
+  "fingerprint": zod.string().min(1).max(getSavedEventsResponseAlertsItemFingerprintMax),
+  "alert": zod.record(zod.string(), zod.unknown())
+})).max(getSavedEventsResponseAlertsMax)
+})
+
+export const syncSavedEventsBodyAlertsMax = 100;
+
+export const syncSavedEventsBodyRemoveAlertFingerprintsMax = 100;
+
+export const SyncSavedEventsBody = zod.object({
+  "events": zod.array(zod.object({
+  "eventId": zod.string().min(1).max(syncSavedEventsBodyEventsItemEventIdMax),
+  "snapshot": zod.record(zod.string(), zod.unknown())
+})).max(syncSavedEventsBodyEventsMax).optional(),
+  "migrationEvents": zod.array(zod.object({
+  "eventId": zod.string().min(1).max(syncSavedEventsBodyMigrationEventsItemEventIdMax),
+  "snapshot": zod.record(zod.string(), zod.unknown())
+})).max(syncSavedEventsBodyMigrationEventsMax).optional().describe('Legacy browser snapshots to import only when no account deletion tombstone exists.'),
+  "alerts": zod.array(zod.object({
+  "eventId": zod.string().min(1).max(syncSavedEventsBodyAlertsItemEventIdMax),
+  "fingerprint": zod.string().min(1).max(syncSavedEventsBodyAlertsItemFingerprintMax),
+  "alert": zod.record(zod.string(), zod.unknown())
+})).max(syncSavedEventsBodyAlertsMax).optional(),
+  "removeEventIds": zod.array(zod.string().min(1).max(syncSavedEventsBodyRemoveEventIdsItemMax)).max(syncSavedEventsBodyRemoveEventIdsMax).optional(),
+  "removeAlertFingerprints": zod.array(zod.string().min(1).max(syncSavedEventsBodyRemoveAlertFingerprintsItemMax)).max(syncSavedEventsBodyRemoveAlertFingerprintsMax).optional()
+})
+
+export const syncSavedEventsBodyEventsMax = 100;
+
+export const syncSavedEventsBodyRemoveAlertFingerprintsItemMax = 240;
+
+export const syncSavedEventsResponseEventsItemEventIdMax = 240;
+
+export const getSavedEventsResponseAlertsItemEventIdMax = 240;
+
+export const syncSavedEventsBodyMigrationEventsItemEventIdMax = 240;
+
+export const syncSavedEventsBodyRemoveEventIdsMax = 100;
+
+export const syncSavedEventsResponseAlertsMax = 100;
+
+/**
+ * @summary Merge saved event snapshots and alerts for the signed-in resident
+ */
+export const syncSavedEventsBodyEventsItemEventIdMax = 240;
+
+export const syncSavedEventsResponseAlertsItemFingerprintMax = 240;
+
+export const SyncSavedEventsResponse = zod.object({
+  "events": zod.array(zod.object({
+  "eventId": zod.string().min(1).max(syncSavedEventsResponseEventsItemEventIdMax),
+  "snapshot": zod.record(zod.string(), zod.unknown())
+})).max(syncSavedEventsResponseEventsMax),
+  "alerts": zod.array(zod.object({
+  "eventId": zod.string().min(1).max(syncSavedEventsResponseAlertsItemEventIdMax),
+  "fingerprint": zod.string().min(1).max(syncSavedEventsResponseAlertsItemFingerprintMax),
+  "alert": zod.record(zod.string(), zod.unknown())
+})).max(syncSavedEventsResponseAlertsMax)
+})
+
+export const getSavedEventsResponseAlertsItemFingerprintMax = 240;
+
+export const syncSavedEventsBodyRemoveEventIdsItemMax = 240;
+
+export const getSavedEventsResponseEventsMax = 100;
+
+export const syncSavedEventsBodyAlertsItemFingerprintMax = 240;

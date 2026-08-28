@@ -264,6 +264,7 @@ export interface HealthStatus {
   status: string;
 }
 
+export type SavedEventSnapshotSnapshot = { [key: string]: unknown };
 export type CommunityPostType = typeof CommunityPostType[keyof typeof CommunityPostType];
 
 
@@ -1279,3 +1280,59 @@ export const GetDealModerationStatus = {
   withdrawn: 'withdrawn',
   all: 'all',
 } as const;
+
+export interface SavedEventsSyncRequest {
+  /** @maxItems 100 */
+  events?: SavedEventSnapshot[];
+  /**
+     * Legacy browser snapshots to import only when no account deletion tombstone exists.
+     * @maxItems 100
+     */
+  migrationEvents?: SavedEventSnapshot[];
+  /** @maxItems 100 */
+  alerts?: SavedEventAlert[];
+  /**
+     * @maxItems 100
+     * @items.minLength 1
+     * @items.maxLength 240
+     */
+  removeEventIds?: string[];
+  /**
+     * @maxItems 100
+     * @items.minLength 1
+     * @items.maxLength 240
+     */
+  removeAlertFingerprints?: string[];
+}
+
+export type SavedEventAlertAlert = { [key: string]: unknown };
+
+export interface SavedEventSnapshot {
+  /**
+     * @minLength 1
+     * @maxLength 240
+     */
+  eventId: string;
+  snapshot: SavedEventSnapshotSnapshot;
+}
+
+export interface SavedEventAlert {
+  /**
+     * @minLength 1
+     * @maxLength 240
+     */
+  eventId: string;
+  /**
+     * @minLength 1
+     * @maxLength 240
+     */
+  fingerprint: string;
+  alert: SavedEventAlertAlert;
+}
+
+export interface SavedEventsResponse {
+  /** @maxItems 100 */
+  events: SavedEventSnapshot[];
+  /** @maxItems 100 */
+  alerts: SavedEventAlert[];
+}

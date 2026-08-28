@@ -28,6 +28,8 @@ tags:
     description: Resident and organisation community posts
   - name: businesses
     description: Business claims, profiles, and local deals
+  - name: saved-events
+    description: Account-backed saved event snapshots and alerts
 paths:
   /healthz:
     get:
@@ -243,6 +245,78 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ListingsResponse"
+
+  /saved-events:
+    get:
+      operationId: getSavedEvents
+      tags: [saved-events]
+      summary: Get the signed-in resident's saved events and alerts
+      responses:
+        "200":
+          description: Saved event snapshots and change alerts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SavedEventsResponse"
+        "401":
+          description: Authentication is required
+
+  /saved-events/sync:
+    post:
+      operationId: syncSavedEvents
+      tags: [saved-events]
+      summary: Merge saved event snapshots and alerts for the signed-in resident
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SavedEventsSyncRequest"
+      responses:
+        "200":
+          description: Updated saved event snapshots and alerts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SavedEventsResponse"
+        "400":
+          description: Invalid saved event sync payload
+        "401":
+          description: Authentication is required
+
+  /listings/google-places-usage:
+    get:
+      operationId: getGooglePlacesUsage
+      tags: [listings]
+      summary: Get the permanent Google Places request allowance status
+      responses:
+        "200":
+          description: Current request allowance status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GooglePlacesUsage"
+        "401":
+          description: Authentication is required
+        "403":
+          description: An editor role is required
+
+  /listings/google-places-usage/reset:
+    post:
+      operationId: resetGooglePlacesUsage
+      tags: [listings]
+      summary: Manually reset the permanent Google Places request allowance
+      responses:
+        "200":
+          description: Reset request allowance status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GooglePlacesUsage"
+        "401":
+          description: Authentication is required
+        "403":
+          description: An editor role is required
 
   /social-map/review:
     get:
@@ -1170,6 +1244,83 @@ components:
       required:
         - status
 
+    SavedEventSnapshot:
+      type: object
+      required: [eventId, snapshot]
+      properties:
+        eventId:
+          type: string
+          minLength: 1
+          maxLength: 240
+        snapshot:
+          type: object
+          additionalProperties: true
+
+    SavedEventAlert:
+      type: object
+      required: [eventId, fingerprint, alert]
+      properties:
+        eventId:
+          type: string
+          minLength: 1
+          maxLength: 240
+        fingerprint:
+          type: string
+          minLength: 1
+          maxLength: 240
+        alert:
+          type: object
+          additionalProperties: true
+
+    SavedEventsResponse:
+      type: object
+      required: [events, alerts]
+      properties:
+        events:
+          type: array
+          maxItems: 100
+          items:
+            $ref: "#/components/schemas/SavedEventSnapshot"
+        alerts:
+          type: array
+          maxItems: 100
+          items:
+            $ref: "#/components/schemas/SavedEventAlert"
+
+    SavedEventsSyncRequest:
+      type: object
+      properties:
+        events:
+          type: array
+          maxItems: 100
+          items:
+            $ref: "#/components/schemas/SavedEventSnapshot"
+        migrationEvents:
+          type: array
+          maxItems: 100
+          description: Legacy browser snapshots to import only when no account deletion tombstone exists.
+          items:
+            $ref: "#/components/schemas/SavedEventSnapshot"
+        alerts:
+          type: array
+          maxItems: 100
+          items:
+            $ref: "#/components/schemas/SavedEventAlert"
+        removeEventIds:
+          type: array
+          maxItems: 100
+          items:
+            type: string
+            minLength: 1
+            maxLength: 240
+        removeAlertFingerprints:
+          type: array
+          maxItems: 100
+          items:
+            type: string
+            minLength: 1
+            maxLength: 240
+
     CommunityPostType:
       type: string
       enum: [event, question, help_offer, help_request, tip, announcement]
@@ -1997,6 +2148,23 @@ components:
       required:
         - listings
         - source
+
+    GooglePlacesUsage:
+      type: object
+      properties:
+        used:
+          type: number
+          minimum: 0
+        limit:
+          type: number
+          minimum: 1
+        exhausted:
+          type: boolean
+        updatedAt:
+          type: ["string", "null"]
+        lastResetAt:
+          type: ["string", "null"]
+      required: [used, limit, exhausted, updatedAt, lastResetAt]
 
     NewsSubcategory:
       type: string

@@ -20,6 +20,9 @@ import {
   getGetListingsQueryKey,
   getGetWeatherQueryKey,
   setAuthTokenGetter,
+  syncSavedEvents,
+  type SavedEventsResponse,
+  type SavedEventsSyncRequest,
   useGetListings,
   useGetWeather,
 } from '@workspace/api-client-react';
@@ -369,6 +372,39 @@ function eventAlertFingerprint(current: Marker, kind: SavedEventAlert['kind']): 
   ].map(normalizedPlanningValue).join('|');
   return `${current.id}:${kind}:${currentPlanningState}`;
 }
+
+function isEventMarker(marker: Marker): boolean {
+  return marker.source === 'source_scan' || EVENT_CATEGORIES.includes(marker.category);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function markerFromAccountSnapshot(eventId: string, snapshot: Record<string, unknown>): Marker | null {
+  if (typeof snapshot.id !== 'string'
+    || snapshot.id !== eventId
+    || typeof snapshot.name !== 'string'
+    || typeof snapshot.category !== 'string'
+    || typeof snapshot.locationId !== 'string') {
+    return null;
+  }
+  return snapshot as unknown as Marker;
+}
+
+function alertFromAccountSnapshot(value: Record<string, unknown>): SavedEventAlert | null {
+  if (typeof value.fingerprint !== 'string'
+    || typeof value.eventId !== 'string'
+    || (value.kind !== 'changed' && value.kind !== 'cancelled')
+    || !Array.isArray(value.changedFields)
+    || !value.changedFields.every((field) => field === 'time' || field === 'venue' || field === 'price')
+    || typeof value.eventName !== 'string'
+    || typeof value.detectedAt !== 'string') {
+    return null;
+  }
+  return value as unknown as SavedEventAlert;
+}
+
 type ListingSection = 'events' | 'businesses' | 'food-drink' | 'social-map';
 type FilterSubcategory = Exclude<Category, 'Businesses' | 'Social map'> | BusinessCategory | SocialMapCategory;
 const TOP_LEVEL_SECTIONS: ListingSection[] = ['events', 'food-drink', 'social-map', 'businesses'];
@@ -2697,66 +2733,278 @@ export default function App() {
   );
 }
 
+function readBrowserSavedMarkers(): Map<string, Marker> {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (!stored) return new Map();
+    const parsed = JSON.parse(stored) as unknown[];
+    if (parsed.length === 0) return new Map();
+    if (typeof parsed[0] === 'string') {
+      const ids = new Set(parsed as string[]);
+      return new Map(MARKERS.filter(marker => ids.has(marker.id)).map(marker => [marker.id, marker]));
+    }
+    return new Map((parsed as Marker[]).map(marker => [marker.id, marker]));
+  } catch {
+    return new Map();
+  }
+}
+
+function readBrowserEventAlerts(): SavedEventAlert[] {
+  try {
+    const stored = localStorage.getItem(EVENT_ALERTS_STORAGE_KEY);
+    if (!stored) return [];
+    const parsed = JSON.parse(stored) as unknown[];
+    return parsed
+      .filter(isRecord)
+      .map(alertFromAccountSnapshot)
+      .filter((alert): alert is SavedEventAlert => alert !== null);
+  } catch {
+    return [];
+  }
+}
+
 function useSavedPlaces() {
-  const [savedMarkers, setSavedMarkers] = useState<Map<string, Marker>>(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (!stored) return new Map();
-      // Support both the old format (string[]) and the new format (Marker[])
-      const parsed = JSON.parse(stored) as unknown[];
-      if (parsed.length === 0) return new Map();
-      if (typeof parsed[0] === 'string') {
-        // Legacy: IDs only – look up in static MARKERS
-        const ids = new Set(parsed as string[]);
-        const map = new Map<string, Marker>();
-        MARKERS.filter(m => ids.has(m.id)).forEach(m => map.set(m.id, m));
-        return map;
+  const [savedMarkers, setSavedMarkers] = useState<Map<string, Marker>>(readBrowserSavedMarkers);
+  const [savedEventAlerts, setSavedEventAlerts] = useState<SavedEventAlert[]>(readBrowserEventAlerts);
+  const [syncRetry, setSyncRetry] = useState(0);
+  const [hydrationRetry, setHydrationRetry] = useState(0);
+  const { getToken, isSignedIn, userId } = useAuth();
+  const activeAccountUserRef = useRef<string | null>(null);
+  const accountHydratedRef = useRef(false);
+  const syncInFlightUserRef = useRef<string | null>(null);
+  const pendingEventUpsertsRef = useRef<Map<string, Marker>>(new Map());
+  const pendingAlertUpsertsRef = useRef<Map<string, SavedEventAlert>>(new Map());
+  const pendingRemovedEventIdsRef = useRef<Set<string>>(new Set());
+  const pendingRemovedAlertFingerprintsRef = useRef<Set<string>>(new Set());
+
+  const clearPendingOperations = useCallback(() => {
+    pendingEventUpsertsRef.current.clear();
+    pendingAlertUpsertsRef.current.clear();
+    pendingRemovedEventIdsRef.current.clear();
+    pendingRemovedAlertFingerprintsRef.current.clear();
+  }, []);
+
+  const syncForAccount = useCallback(async (payload: SavedEventsSyncRequest) => {
+    const token = await getToken();
+    if (!token) throw new Error('A Clerk session token is required to sync saved events.');
+    return syncSavedEvents(payload, { headers: { Authorization: `Bearer ${token}` } });
+  }, [getToken]);
+
+  const applyAccountState = useCallback((accountUserId: string, accountState: SavedEventsResponse) => {
+    if (activeAccountUserRef.current !== accountUserId) return;
+    setSavedMarkers((previous) => {
+      const next = new Map([...previous].filter(([, marker]) => !isEventMarker(marker)));
+      for (const event of accountState.events) {
+        const marker = markerFromAccountSnapshot(event.eventId, event.snapshot);
+        if (marker) next.set(marker.id, marker);
       }
-      // New format: full marker objects
-      const map = new Map<string, Marker>();
-      (parsed as Marker[]).forEach(m => map.set(m.id, m));
-      return map;
-    } catch {
-      return new Map();
-    }
-  });
-  const [savedEventAlerts, setSavedEventAlerts] = useState<SavedEventAlert[]>(() => {
-    try {
-      const stored = localStorage.getItem(EVENT_ALERTS_STORAGE_KEY);
-      return stored ? JSON.parse(stored) as SavedEventAlert[] : [];
-    } catch {
-      return [];
-    }
-  });
+      for (const [eventId, marker] of pendingEventUpsertsRef.current) next.set(eventId, marker);
+      for (const eventId of pendingRemovedEventIdsRef.current) next.delete(eventId);
+      return next;
+    });
+    setSavedEventAlerts(() => {
+      const next = new Map<string, SavedEventAlert>();
+      for (const item of accountState.alerts) {
+        const alert = alertFromAccountSnapshot(item.alert);
+        if (alert) next.set(alert.fingerprint, alert);
+      }
+      for (const [fingerprint, alert] of pendingAlertUpsertsRef.current) next.set(fingerprint, alert);
+      for (const fingerprint of pendingRemovedAlertFingerprintsRef.current) next.delete(fingerprint);
+      for (const eventId of pendingRemovedEventIdsRef.current) {
+        for (const [fingerprint, alert] of next) {
+          if (alert.eventId === eventId) next.delete(fingerprint);
+        }
+      }
+      return [...next.values()].sort((a, b) => b.detectedAt.localeCompare(a.detectedAt));
+    });
+  }, []);
 
   useEffect(() => {
+    if (!isSignedIn || !userId) {
+      if (activeAccountUserRef.current !== null) {
+        activeAccountUserRef.current = null;
+        accountHydratedRef.current = false;
+        syncInFlightUserRef.current = null;
+        clearPendingOperations();
+        setSavedMarkers(readBrowserSavedMarkers());
+        setSavedEventAlerts(readBrowserEventAlerts());
+      }
+      return;
+    }
+    if (activeAccountUserRef.current === userId && accountHydratedRef.current) return;
+
+    const accountChanged = activeAccountUserRef.current !== userId;
+    activeAccountUserRef.current = userId;
+    accountHydratedRef.current = false;
+    syncInFlightUserRef.current = null;
+
+    const browserMarkers = readBrowserSavedMarkers();
+    const browserAlerts = readBrowserEventAlerts();
+    const migrationEvents = [...browserMarkers.values()].filter(isEventMarker);
+    const migrationEventIds = new Set(migrationEvents.map(event => event.id));
+    if (accountChanged) {
+      clearPendingOperations();
+      setSavedMarkers(browserMarkers);
+      setSavedEventAlerts(browserAlerts.filter(alert => migrationEventIds.has(alert.eventId)));
+    }
+
+    let cancelled = false;
+    syncForAccount({
+      migrationEvents: migrationEvents.map(marker => ({
+        eventId: marker.id,
+        snapshot: marker as unknown as Record<string, unknown>,
+      })),
+      alerts: browserAlerts
+        .filter(alert => migrationEventIds.has(alert.eventId))
+        .map(alert => ({
+          eventId: alert.eventId,
+          fingerprint: alert.fingerprint,
+          alert: alert as unknown as Record<string, unknown>,
+        })),
+    }).then((accountState) => {
+      if (cancelled || activeAccountUserRef.current !== userId) return;
+      applyAccountState(userId, accountState);
+      const anonymousOnly = [...browserMarkers.values()].filter(marker => !isEventMarker(marker));
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(anonymousOnly));
+        localStorage.setItem(EVENT_ALERTS_STORAGE_KEY, '[]');
+      } catch {
+        // Account data is already safe on the server even if browser cleanup is unavailable.
+      }
+      accountHydratedRef.current = true;
+      setSyncRetry(value => value + 1);
+    }).catch(() => {
+      if (!cancelled) {
+        window.setTimeout(() => setHydrationRetry(value => value + 1), 1500);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    applyAccountState,
+    clearPendingOperations,
+    hydrationRetry,
+    isSignedIn,
+    syncForAccount,
+    userId,
+  ]);
+
+  useEffect(() => {
+    if (isSignedIn) return;
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify([...savedMarkers.values()]));
-    } catch {
-      // localStorage unavailable; state still works in-memory
-    }
-  }, [savedMarkers]);
-
-  useEffect(() => {
-    try {
       localStorage.setItem(EVENT_ALERTS_STORAGE_KEY, JSON.stringify(savedEventAlerts));
     } catch {
-      // localStorage unavailable; state still works in-memory
+      // localStorage unavailable; anonymous state still works in-memory.
     }
-  }, [savedEventAlerts]);
+  }, [isSignedIn, savedEventAlerts, savedMarkers]);
+
+  useEffect(() => {
+    if (!isSignedIn
+      || !userId
+      || activeAccountUserRef.current !== userId
+      || !accountHydratedRef.current
+      || syncInFlightUserRef.current === userId) {
+      return;
+    }
+    const eventEntries = [...pendingEventUpsertsRef.current.entries()];
+    const alertEntries = [...pendingAlertUpsertsRef.current.entries()];
+    const removedEventIds = [...pendingRemovedEventIdsRef.current];
+    const removedAlertFingerprints = [...pendingRemovedAlertFingerprintsRef.current];
+    if (eventEntries.length === 0
+      && alertEntries.length === 0
+      && removedEventIds.length === 0
+      && removedAlertFingerprints.length === 0) {
+      return;
+    }
+
+    syncInFlightUserRef.current = userId;
+    let syncSucceeded = false;
+    syncForAccount({
+      events: eventEntries.map(([eventId, marker]) => ({
+        eventId,
+        snapshot: marker as unknown as Record<string, unknown>,
+      })),
+      alerts: alertEntries.map(([fingerprint, alert]) => ({
+        eventId: alert.eventId,
+        fingerprint,
+        alert: alert as unknown as Record<string, unknown>,
+      })),
+      removeEventIds: removedEventIds,
+      removeAlertFingerprints: removedAlertFingerprints,
+    }).then((accountState) => {
+      if (activeAccountUserRef.current !== userId) return;
+      syncSucceeded = true;
+      for (const [eventId, marker] of eventEntries) {
+        if (pendingEventUpsertsRef.current.get(eventId) === marker) {
+          pendingEventUpsertsRef.current.delete(eventId);
+        }
+      }
+      for (const [fingerprint, alert] of alertEntries) {
+        if (pendingAlertUpsertsRef.current.get(fingerprint) === alert) {
+          pendingAlertUpsertsRef.current.delete(fingerprint);
+        }
+      }
+      for (const eventId of removedEventIds) pendingRemovedEventIdsRef.current.delete(eventId);
+      for (const fingerprint of removedAlertFingerprints) {
+        pendingRemovedAlertFingerprintsRef.current.delete(fingerprint);
+      }
+      applyAccountState(userId, accountState);
+    }).catch(() => {
+      window.setTimeout(() => setSyncRetry(value => value + 1), 1500);
+    }).finally(() => {
+      if (syncInFlightUserRef.current === userId) syncInFlightUserRef.current = null;
+      if (syncSucceeded && activeAccountUserRef.current === userId) {
+        setSyncRetry(value => value + 1);
+      }
+    });
+  }, [
+    applyAccountState,
+    isSignedIn,
+    savedEventAlerts,
+    savedMarkers,
+    syncForAccount,
+    syncRetry,
+    userId,
+  ]);
 
   const toggle = useCallback((marker: Marker) => {
     setSavedMarkers(prev => {
       const next = new Map(prev);
-      if (next.has(marker.id)) {
+      const removing = next.has(marker.id);
+      if (removing) {
         next.delete(marker.id);
-        setSavedEventAlerts(alerts => alerts.filter(alert => alert.eventId !== marker.id));
       } else {
         next.set(marker.id, marker);
       }
+
+      if (isEventMarker(marker) && isSignedIn && userId === activeAccountUserRef.current) {
+        if (removing) {
+          pendingEventUpsertsRef.current.delete(marker.id);
+          pendingRemovedEventIdsRef.current.add(marker.id);
+        } else {
+          pendingRemovedEventIdsRef.current.delete(marker.id);
+          pendingEventUpsertsRef.current.set(marker.id, marker);
+        }
+      }
+
+      if (removing) {
+        setSavedEventAlerts(alerts => {
+          const removedAlerts = alerts.filter(alert => alert.eventId === marker.id);
+          if (isSignedIn && userId === activeAccountUserRef.current) {
+            for (const alert of removedAlerts) {
+              pendingAlertUpsertsRef.current.delete(alert.fingerprint);
+              pendingRemovedAlertFingerprintsRef.current.add(alert.fingerprint);
+            }
+          }
+          return alerts.filter(alert => alert.eventId !== marker.id);
+        });
+      }
       return next;
     });
-  }, []);
+  }, [isSignedIn, userId]);
 
   const recordEventRefresh = useCallback((currentEvents: Marker[]) => {
     setSavedEventAlerts(previousAlerts => {
@@ -2778,7 +3026,7 @@ function useSavedPlaces() {
         const fingerprint = eventAlertFingerprint(current, kind);
         if (nextAlerts.some(alert => alert.fingerprint === fingerprint)) continue;
 
-        nextAlerts.unshift({
+        const alert: SavedEventAlert = {
           fingerprint,
           eventId: current.id,
           kind,
@@ -2792,13 +3040,18 @@ function useSavedPlaces() {
           priceType: current.priceType,
           priceText: current.priceText,
           detectedAt: new Date().toISOString(),
-        });
+        };
+        nextAlerts.unshift(alert);
+        if (isSignedIn && userId === activeAccountUserRef.current) {
+          pendingRemovedAlertFingerprintsRef.current.delete(fingerprint);
+          pendingAlertUpsertsRef.current.set(fingerprint, alert);
+        }
         addedAlert = true;
       }
 
       return addedAlert ? nextAlerts.slice(0, 50) : previousAlerts;
     });
-  }, [savedMarkers]);
+  }, [isSignedIn, savedMarkers, userId]);
 
   const savedIds = useMemo(() => new Set(savedMarkers.keys()), [savedMarkers]);
   const savedCount = savedMarkers.size;
