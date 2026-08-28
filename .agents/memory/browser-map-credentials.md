@@ -9,6 +9,12 @@ Only initialize the Google Maps browser loader for a value that matches the exac
 
 **How to apply:** Keep the same strict validation at build-time exposure and client-time provider selection. Treat Google authentication failure as a provider failure, not as a reason to remove the coordinate fallback.
 
+Google Maps loading must also have a short timeout that advances to the generic tile provider.
+
+**Why:** The browser loader can remain pending when the script is blocked without raising an authentication or network error, leaving the map blank even though filtered listings are available.
+
+**How to apply:** Bound the Google provider's initialization time and preserve the existing provider chain: Google Maps, generic tiles, then the coordinate map.
+
 Inline Google map label styles cannot be combined with Advanced Markers: a map ID is required for Advanced Markers, but causes Google to ignore the map's inline `styles` option.
 
 **Why:** Removing the map ID makes the styled map look correct but breaks Advanced Markers; keeping it makes the app's label-hiding rules silently ineffective.

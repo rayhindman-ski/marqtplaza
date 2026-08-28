@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
 import type { Marker } from './data';
+import { translations } from './i18n';
 import {
   formatEventTiming,
   freshnessBadge,
@@ -64,8 +65,60 @@ describe('listing presentation', () => {
       }),
       true,
     );
-    assert.match(routeUrl(marker, 'bicycling') ?? '', /travelmode=bicycling/);
-    assert.equal(routeUrl({ ...marker, isApproximateLocation: true }, 'walking'), null);
+    const routeModes = ['driving', 'bicycling', 'walking', 'transit'] as const;
+    for (const mode of routeModes) {
+      const url = routeUrl(marker, mode);
+      assert.ok(url, `expected a route URL for ${mode}`);
+      assert.match(url, new RegExp(`travelmode=${mode}`));
+      assert.match(url, /destination=Family%20workshop%2C%2052\.071%2C%204\.301/);
+    }
+
+    const approximateMarker = { ...marker, isApproximateLocation: true };
+    for (const mode of routeModes) {
+      assert.equal(routeUrl(approximateMarker, mode), null, `approximate marker exposed ${mode} directions`);
+    }
+  });
+
+  it('keeps every active quick filter conjunctive', () => {
+    const filters = new Set([
+      'today',
+      'week',
+      'nearby',
+      'free',
+      'family',
+      'indoor',
+      'open-now',
+    ] as const);
+    const now = new Date('2026-08-27T10:00:00Z');
+
+    assert.equal(
+      matchesDiscoveryQuickFilters(marker, filters, {
+        now,
+        nearbyOrigin: { lat: 52.0705, lng: 4.3007 },
+      }),
+      true,
+    );
+    assert.equal(
+      matchesDiscoveryQuickFilters(
+        { ...marker, isIndoor: false },
+        filters,
+        { now, nearbyOrigin: { lat: 52.0705, lng: 4.3007 } },
+      ),
+      false,
+    );
+    assert.equal(
+      matchesDiscoveryQuickFilters(
+        { ...marker, lat: 52.11, lng: 4.35 },
+        filters,
+        { now, nearbyOrigin: { lat: 52.0705, lng: 4.3007 } },
+      ),
+      false,
+    );
+  });
+
+  it('keeps discovery category labels available in English and Dutch', () => {
+    assert.equal(translations.en.categories.Family, 'Family & Kids');
+    assert.equal(translations.nl.categories.Family, 'Gezin & Kinderen');
   });
 
   it('only labels recent timestamps as fresh', () => {

@@ -40,6 +40,7 @@ const MARQTPLAZA_MARKER_GRADIENT = 'linear-gradient(135deg, #ff9a52 0%, #f36c21 
 const TILE_SIZE = 256;
 const MIN_TILE_ZOOM = 10;
 const MAX_TILE_ZOOM = 18;
+const GOOGLE_MAPS_LOAD_TIMEOUT_MS = 4_000;
 const googleMapsApiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string | undefined;
 const googleMapsBrowserKeyPattern = /^AIza[0-9A-Za-z_-]{35}$/;
 const hasGoogleMapsApiKey = googleMapsBrowserKeyPattern.test(googleMapsApiKey ?? '');
@@ -398,6 +399,7 @@ function CoordinateMapFallback({
           >
             <button
               type="button"
+              data-map-pin
               data-event-id={point.id}
               onClick={() => onMarkerClick(point.id)}
               onMouseEnter={() => setHoveredMarkerId(point.id)}
@@ -809,6 +811,8 @@ function GoogleMapCanvas({
         'padding:0',
       ].join(';');
       element.setAttribute('type', 'button');
+      element.setAttribute('data-map-pin', '');
+      element.setAttribute('data-event-id', marker.id);
       element.setAttribute('aria-label', t.openMarker(marker.name));
       element.addEventListener('click', () => onMarkerClick(marker.id));
       const icon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -919,7 +923,16 @@ function GoogleMapCanvas({
       apiOptionsSet = true;
     }
 
-    (importLibrary('maps') as Promise<google.maps.MapsLibrary>)
+    let loadTimeout: ReturnType<typeof setTimeout> | undefined;
+    const mapsLibrary = importLibrary('maps') as Promise<google.maps.MapsLibrary>;
+    const loadTimedOut = new Promise<never>((_, reject) => {
+      loadTimeout = setTimeout(
+        () => reject(new Error('Google Maps did not load before the fallback timeout.')),
+        GOOGLE_MAPS_LOAD_TIMEOUT_MS,
+      );
+    });
+
+    Promise.race([mapsLibrary, loadTimedOut])
       .then(({ Map: GoogleMap }) => {
         if (disposed || !containerRef.current) return;
         mapRef.current = new GoogleMap(containerRef.current, {
@@ -933,10 +946,14 @@ function GoogleMapCanvas({
         });
         setMapReady(true);
       })
-      .catch(onUnavailable);
+      .catch(onUnavailable)
+      .finally(() => {
+        if (loadTimeout) clearTimeout(loadTimeout);
+      });
 
     return () => {
       disposed = true;
+      if (loadTimeout) clearTimeout(loadTimeout);
       mapsWindow.gm_authFailure = previousAuthFailure;
     };
   }, [location, onUnavailable]);
