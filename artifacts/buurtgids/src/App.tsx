@@ -1535,6 +1535,7 @@ function DiscoveryState({
     initialNeighborhood ? [initialNeighborhood] : [],
   );
   const [postcodeFilter, setPostcodeFilter] = useState(initialPostcode ?? '');
+  const [neighborhoodSearch, setNeighborhoodSearch] = useState('');
   const [selectedMarker, setSelectedMarker] = useState<string | null>(null);
   const [view, setView] = useState<'map' | 'list'>('map');
   const [agendaTime, setAgendaTime] = useState<AgendaTimeFilter>('all');
@@ -1852,6 +1853,12 @@ function DiscoveryState({
     .join(' ');
 
   const savedCount = savedIds.size;
+  const normalizedNeighborhoodSearch = neighborhoodSearch.trim().toLocaleLowerCase(language === 'nl' ? 'nl-NL' : 'en-GB');
+  const visibleNeighborhoods = normalizedNeighborhoodSearch
+    ? location.neighborhoods.filter((neighborhood) =>
+      neighborhood.toLocaleLowerCase(language === 'nl' ? 'nl-NL' : 'en-GB').includes(normalizedNeighborhoodSearch),
+    )
+    : location.neighborhoods;
 
   return (
     <div className="flex h-screen w-full overflow-hidden bg-background">
@@ -2089,6 +2096,30 @@ function DiscoveryState({
             </FilterFrame>
           )}
           <FilterFrame title={`${t.neighborhoods} / ${t.postcodeFilterLabel}`}>
+            <label className="block">
+              <span className="mb-1 block text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
+                {t.postcodeFilterLabel}
+              </span>
+              <input
+                type="search"
+                value={postcodeFilter}
+                onChange={(event) => setPostcodeFilter(event.target.value)}
+                placeholder={t.postcodeFilterPlaceholder}
+                className="h-9 w-full rounded-lg border border-border/70 bg-card px-2.5 text-xs font-medium text-foreground outline-none placeholder:text-muted-foreground/70 focus:border-primary focus:ring-2 focus:ring-primary/20"
+              />
+            </label>
+            <label className="mt-2 block">
+              <span className="mb-1 block text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
+                {language === 'nl' ? 'Zoek buurt' : 'Search neighborhood'}
+              </span>
+              <input
+                type="search"
+                value={neighborhoodSearch}
+                onChange={(event) => setNeighborhoodSearch(event.target.value)}
+                placeholder={language === 'nl' ? 'Typ een buurtnaam…' : 'Type a neighborhood name…'}
+                className="h-9 w-full rounded-lg border border-border/70 bg-card px-2.5 text-xs font-medium text-foreground outline-none placeholder:text-muted-foreground/70 focus:border-primary focus:ring-2 focus:ring-primary/20"
+              />
+            </label>
             <div className="mb-2">
                 <NeighborhoodActionButtons
                   language={language}
@@ -2100,7 +2131,7 @@ function DiscoveryState({
               role="group"
               aria-label={t.neighborhoods}
               data-neighborhood-list
-              className="overflow-x-hidden rounded-lg bg-muted/20 p-1"
+              className="max-h-44 overflow-y-auto overflow-x-hidden rounded-lg border border-border/50 bg-muted/20 p-1 pr-1.5"
             >
               <div className="grid min-w-0 grid-cols-2 gap-1">
                 <label
@@ -2122,7 +2153,7 @@ function DiscoveryState({
                   />
                    <span className="min-w-0 truncate whitespace-nowrap">{t.allNeighborhoods}</span>
                 </label>
-                {location.neighborhoods.map((neighborhood) => {
+                {visibleNeighborhoods.map((neighborhood) => {
                   const isChecked = selectedNeighborhoods.includes(neighborhood);
                   return (
                     <label
@@ -2145,24 +2176,17 @@ function DiscoveryState({
                   );
                 })}
               </div>
+              {visibleNeighborhoods.length === 0 && (
+                <p className="px-3 py-5 text-center text-xs font-medium text-muted-foreground">
+                  {language === 'nl' ? 'Geen buurten gevonden.' : 'No neighborhoods found.'}
+                </p>
+              )}
             </div>
             <p className="mt-2 text-[10px] font-medium text-muted-foreground">
               {selectedNeighborhoods.length > 0
                 ? t.neighborhoodsSelected(selectedNeighborhoods.length)
                 : t.allNeighborhoods}
             </p>
-            <label className="mt-2 block">
-              <span className="mb-1 block text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
-                {t.postcodeFilterLabel}
-              </span>
-              <input
-                type="search"
-                value={postcodeFilter}
-                onChange={(event) => setPostcodeFilter(event.target.value)}
-                placeholder={t.postcodeFilterPlaceholder}
-                className="h-9 w-full rounded-lg border border-border/70 bg-card px-2.5 text-xs font-medium text-foreground outline-none placeholder:text-muted-foreground/70 focus:border-primary focus:ring-2 focus:ring-primary/20"
-              />
-            </label>
           </FilterFrame>
           </div>
         </div>
