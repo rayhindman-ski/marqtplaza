@@ -321,6 +321,18 @@ function getDistanceKm(latA: number, lngA: number, latB: number, lngB: number) {
 
 const STORAGE_KEY = 'buurtgids_saved_places';
 const EVENT_ALERTS_STORAGE_KEY = 'buurtgids_saved_event_alerts';
+const SAVED_EVENTS_TEST_AUTH_EVENT = 'buurtplaza:saved-events-test-auth';
+
+type SavedEventsTestAuth = {
+  userId: string | null;
+};
+
+declare global {
+  interface Window {
+    __setSavedEventsTestAuth?: (auth: SavedEventsTestAuth) => void;
+    __savedEventsTestAuth?: SavedEventsTestAuth;
+  }
+}
 
 type EventAlertField = 'time' | 'venue' | 'price';
 
@@ -2768,7 +2780,30 @@ function useSavedPlaces() {
   const [savedEventAlerts, setSavedEventAlerts] = useState<SavedEventAlert[]>(readBrowserEventAlerts);
   const [syncRetry, setSyncRetry] = useState(0);
   const [hydrationRetry, setHydrationRetry] = useState(0);
-  const { getToken, isSignedIn, userId } = useAuth();
+  const clerkAuth = useAuth();
+  const testAuthEnabled = import.meta.env.DEV
+    && new URLSearchParams(window.location.search).get('e2eSavedEventsAuth') === '1';
+  const [testAuth, setTestAuth] = useState<SavedEventsTestAuth | null>(
+    testAuthEnabled ? (window.__savedEventsTestAuth ?? { userId: null }) : null,
+  );
+  useEffect(() => {
+    if (!testAuthEnabled) return;
+    const updateTestAuth = () => setTestAuth(window.__savedEventsTestAuth ?? { userId: null });
+    window.__setSavedEventsTestAuth = (auth) => {
+      window.__savedEventsTestAuth = auth;
+      window.dispatchEvent(new Event(SAVED_EVENTS_TEST_AUTH_EVENT));
+    };
+    window.addEventListener(SAVED_EVENTS_TEST_AUTH_EVENT, updateTestAuth);
+    return () => {
+      window.removeEventListener(SAVED_EVENTS_TEST_AUTH_EVENT, updateTestAuth);
+      delete window.__setSavedEventsTestAuth;
+    };
+  }, [testAuthEnabled]);
+  const userId = testAuthEnabled ? testAuth?.userId ?? null : clerkAuth.userId;
+  const isSignedIn = testAuthEnabled ? Boolean(userId) : clerkAuth.isSignedIn;
+  const getToken = testAuthEnabled
+    ? async () => userId ? `e2e-token:${userId}` : null
+    : clerkAuth.getToken;
   const activeAccountUserRef = useRef<string | null>(null);
   const accountHydratedRef = useRef(false);
   const syncInFlightUserRef = useRef<string | null>(null);
