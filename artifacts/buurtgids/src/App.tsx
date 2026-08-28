@@ -1534,6 +1534,9 @@ function DiscoveryState({
   const [selectedNeighborhoods, setSelectedNeighborhoods] = useState<string[]>(
     initialNeighborhood ? [initialNeighborhood] : [],
   );
+  const [neighborhoodSelection, setNeighborhoodSelection] = useState<'all' | 'some' | 'none'>(
+    initialNeighborhood ? 'some' : 'all',
+  );
   const [postcodeFilter, setPostcodeFilter] = useState(initialPostcode ?? '');
   const [neighborhoodSearch, setNeighborhoodSearch] = useState('');
   const [selectedMarker, setSelectedMarker] = useState<string | null>(null);
@@ -1660,21 +1663,29 @@ function DiscoveryState({
   };
 
   const toggleNeighborhood = (neighborhood: string) => {
-    setSelectedNeighborhoods((current) =>
-      current.includes(neighborhood)
-        ? current.filter((item) => item !== neighborhood)
-        : [...current, neighborhood],
-    );
+    if (neighborhoodSelection === 'all') {
+      setNeighborhoodSelection('some');
+      setSelectedNeighborhoods([neighborhood]);
+    } else if (selectedNeighborhoods.includes(neighborhood)) {
+      const next = selectedNeighborhoods.filter((item) => item !== neighborhood);
+      setSelectedNeighborhoods(next);
+      setNeighborhoodSelection(next.length > 0 ? 'some' : 'none');
+    } else {
+      setSelectedNeighborhoods([...selectedNeighborhoods, neighborhood]);
+      setNeighborhoodSelection('some');
+    }
     setSelectedMarker(null);
   };
 
   const selectAllNeighborhoods = () => {
-    setSelectedNeighborhoods(location.neighborhoods);
+    setSelectedNeighborhoods([]);
+    setNeighborhoodSelection('all');
     setSelectedMarker(null);
   };
 
   const deselectAllNeighborhoods = () => {
     setSelectedNeighborhoods([]);
+    setNeighborhoodSelection('none');
     setSelectedMarker(null);
   };
 
@@ -1706,8 +1717,10 @@ function DiscoveryState({
   useEffect(() => {
     setTopLevelCategories(initialPostcode ? allTopLevelState() : topLevelStateFor(listingSection));
     setSubcategories(initialPostcode ? allSubcategoryState() : subcategoryStateFor(listingSection));
+    setSelectedNeighborhoods(initialNeighborhood ? [initialNeighborhood] : []);
+    setNeighborhoodSelection(initialNeighborhood ? 'some' : 'all');
     setSelectedMarker(null);
-  }, [initialPostcode, listingSection]);
+  }, [initialNeighborhood, initialPostcode, listingSection]);
 
   useEffect(() => {
     if (nearbyStatus !== 'locating') return;
@@ -1838,7 +1851,9 @@ function DiscoveryState({
     ) {
       return false;
     }
-    if (selectedAreas.length === 0) return true;
+    if (neighborhoodSelection === 'none') return false;
+    if (neighborhoodSelection === 'all') return true;
+    if (selectedAreas.length === 0) return false;
     if (marker.category === 'Social map') {
       return Boolean(marker.neighborhood && selectedNeighborhoods.includes(marker.neighborhood));
     }
@@ -2141,18 +2156,18 @@ function DiscoveryState({
               <div className="grid min-w-0 grid-cols-2 gap-1">
                 <label
                   className={cn(
-                      "flex min-h-8 min-w-0 cursor-pointer items-center gap-1.5 rounded-lg border px-2 py-1.5 text-[10px] font-bold transition-all",
-                    selectedNeighborhoods.length === 0
+                    "flex min-h-9 min-w-0 cursor-pointer items-center gap-1.5 rounded-lg border-2 px-2 py-1.5 text-[10px] font-bold transition-all",
+                    neighborhoodSelection === 'all'
                        ? "border-primary/50 bg-primary/10 text-foreground shadow-[0_3px_10px_-6px_rgba(243,108,33,0.8)]"
-                       : "border-border/60 bg-card/70 text-muted-foreground hover:border-primary/40 hover:bg-primary/5 hover:text-foreground",
+                       : "border-border/70 bg-card/70 text-muted-foreground hover:border-primary/50 hover:bg-primary/5 hover:text-foreground",
                   )}
                 >
                   <input
                     type="checkbox"
-                    checked={selectedNeighborhoods.length === 0}
+                    checked={neighborhoodSelection === 'all'}
                     onChange={() => {
-                      setSelectedNeighborhoods([]);
-                      setSelectedMarker(null);
+                      if (neighborhoodSelection === 'all') deselectAllNeighborhoods();
+                      else selectAllNeighborhoods();
                     }}
                     className="h-4 w-4 shrink-0 accent-primary"
                   />
@@ -2164,11 +2179,12 @@ function DiscoveryState({
                     <label
                       key={neighborhood}
                       className={cn(
-                        "flex min-h-8 min-w-0 cursor-pointer items-center gap-1.5 rounded-lg border px-2 py-1.5 text-[10px] font-semibold transition-all",
+                        "flex min-h-9 min-w-0 cursor-pointer items-center gap-1.5 rounded-lg border-2 px-2 py-1.5 text-[10px] font-semibold transition-all",
                         isChecked
                           ? "border-primary/50 bg-primary/10 text-foreground shadow-[0_3px_10px_-6px_rgba(243,108,33,0.8)]"
-                          : "border-border/60 bg-card/70 text-muted-foreground hover:border-primary/40 hover:bg-primary/5 hover:text-foreground",
+                          : "border-border/70 bg-card/70 text-muted-foreground hover:border-primary/50 hover:bg-primary/5 hover:text-foreground",
                       )}
+                      title={`${t.neighborhoodLabel}: ${neighborhood}`}
                     >
                       <input
                         type="checkbox"
@@ -2188,9 +2204,11 @@ function DiscoveryState({
               )}
             </div>
             <p className="mt-2 text-[10px] font-medium text-muted-foreground">
-              {selectedNeighborhoods.length > 0
+              {neighborhoodSelection === 'some'
                 ? t.neighborhoodsSelected(selectedNeighborhoods.length)
-                : t.allNeighborhoods}
+                : neighborhoodSelection === 'none'
+                  ? t.noNeighborhoodsSelected
+                  : t.allNeighborhoods}
             </p>
           </FilterFrame>
           </div>

@@ -122,6 +122,7 @@ export const translations = {
     selectAllNeighborhoods: 'Selecteer alles',
     clearNeighborhoodSelection: 'Deselecteer alles',
     neighborhoodsSelected: (count: number) => `${count} ${count === 1 ? 'buurt' : 'buurten'} geselecteerd`,
+    noNeighborhoodsSelected: 'Geen buurten geselecteerd',
     chooseNeighborhood: (city: string) => `Kies een buurt in ${city}`,
     emptySearch: 'Vul een stad of Haagse postcode in.',
     locationNotFound:
@@ -273,6 +274,7 @@ export const translations = {
     selectAllNeighborhoods: 'Select all',
     clearNeighborhoodSelection: 'Deselect all',
     neighborhoodsSelected: (count: number) => `${count} ${count === 1 ? 'neighborhood' : 'neighborhoods'} selected`,
+    noNeighborhoodsSelected: 'No neighborhoods selected',
     chooseNeighborhood: (city: string) => `Choose a neighborhood in ${city}`,
     emptySearch: 'Please enter a city or Hague postcode.',
     locationNotFound:
