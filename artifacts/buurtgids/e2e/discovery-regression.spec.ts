@@ -120,7 +120,7 @@ test('keeps discovery filters, map pins, routes, and translations in sync', asyn
   await expect(page.getByText('Route niet beschikbaar: dit kaartpunt is een benadering.')).toBeVisible();
 });
 
-test('live search toggle updates mode and anonymousId in listings queries', async ({ page }) => {
+test('main search external-source setting controls discovery mode and persists', async ({ page }) => {
   let listingsRequests: URL[] = [];
 
   await page.route('**/api/listings*', async (route) => {
@@ -132,7 +132,21 @@ test('live search toggle updates mode and anonymousId in listings queries', asyn
       body: JSON.stringify({
         source: mode === 'stored_only' ? 'stored' : 'curated',
         cacheMiss: mode === 'stored_only',
-        listings: [],
+        listings: [{
+          id: 'postcode-result',
+          locationId: 'dhg',
+          category: 'Businesses',
+          businessCategory: 'Retail & Shopping',
+          name: 'Stored postcode result',
+          description: 'A stored neighborhood listing',
+          details: '2511 AB Den Haag',
+          address: '2511 AB Den Haag',
+          x: 50,
+          y: 50,
+          lat: 52.071,
+          lng: 4.301,
+          source: 'google_places',
+        }],
       }),
     });
   });
@@ -151,45 +165,28 @@ test('live search toggle updates mode and anonymousId in listings queries', asyn
     await route.fulfill({ contentType: 'image/png', body: transparentPng });
   });
 
-  await page.goto('/activiteiten/den-haag');
+  await page.goto('/');
 
   // default mode=live
-  const toggle = page.getByRole('checkbox', { name: 'Enable live search' });
+  const toggle = page.getByRole('checkbox', { name: 'Include external sources' });
   await expect(toggle).toBeChecked();
+  await toggle.uncheck();
+  await page.getByRole('textbox').fill('2511');
+  await page.getByRole('button', { name: 'Explore' }).click();
+
   await expect(async () => {
     expect(listingsRequests.length).toBeGreaterThan(0);
   }).toPass();
-
-  const firstReq = listingsRequests[0];
-  expect(firstReq.searchParams.get('mode')).toBe('live');
-
-  const anonId = firstReq.searchParams.get('anonymousId');
+  expect(listingsRequests[0].searchParams.get('mode')).toBe('stored_only');
+  const anonId = listingsRequests[0].searchParams.get('anonymousId');
   expect(anonId).toBeTruthy();
-  expect(anonId).toMatch(/^anon_|^[0-9a-f-]{36}$/i); // uuid or fallback
-
-  // toggling sends mode=stored_only
-  listingsRequests = [];
-  await toggle.uncheck({ force: true });
-
-  await expect(page.getByText('You are currently seeing only previously stored results.')).toBeVisible();
+  expect(anonId).toMatch(/^anon_|^[0-9a-f-]{36}$/i);
+  await expect(page.getByText('Stored postcode result').first()).toBeVisible();
   await expect(page.getByText('Stored data')).toBeVisible();
   await expect(page.getByText('No local data')).toBeVisible();
+  await expect(page.getByRole('checkbox', { name: 'Include external sources' })).toHaveCount(0);
 
-  await expect(async () => {
-    expect(listingsRequests.length).toBeGreaterThan(0);
-  }).toPass();
-  expect(listingsRequests[0].searchParams.get('mode')).toBe('stored_only');
-  expect(listingsRequests[0].searchParams.get('anonymousId')).toBe(anonId); // anonymousId is stable
-
-  // persistence survives reload
-  listingsRequests = [];
-  await page.reload();
-  await expect(page.getByRole('checkbox', { name: 'Enable live search' })).not.toBeChecked();
-  await expect(page.getByText('You are currently seeing only previously stored results.')).toBeVisible();
-
-  await expect(async () => {
-    expect(listingsRequests.length).toBeGreaterThan(0);
-  }).toPass();
-  expect(listingsRequests[0].searchParams.get('mode')).toBe('stored_only');
-  expect(listingsRequests[0].searchParams.get('anonymousId')).toBe(anonId);
+  // The single top-level setting persists when returning to the main search page.
+  await page.goto('/');
+  await expect(page.getByRole('checkbox', { name: 'Include external sources' })).not.toBeChecked();
 });

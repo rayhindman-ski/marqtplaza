@@ -840,6 +840,15 @@ function SaveButton({ saved, onToggle }: { saved: boolean; onToggle: (e: React.M
     </button>
   );
 }
+
+const DISCOVERY_EXTERNAL_SOURCES_STORAGE_KEY = 'buurtplaza-discovery-live-mode';
+
+function readIncludeExternalSources(): boolean {
+  if (typeof window === 'undefined') return true;
+  const saved = window.localStorage.getItem(DISCOVERY_EXTERNAL_SOURCES_STORAGE_KEY);
+  return saved === null ? true : saved === 'true';
+}
+
 function SearchState({
   language,
   userRole,
@@ -872,7 +881,15 @@ function SearchState({
   const [query, setQuery] = useState('');
   const [error, setError] = useState('');
   const [selectedCityId, setSelectedCityId] = useState<string | null>(null);
+  const [includeExternalSources, setIncludeExternalSources] = useState(readIncludeExternalSources);
   const t = translations[language];
+
+  useEffect(() => {
+    window.localStorage.setItem(
+      DISCOVERY_EXTERNAL_SOURCES_STORAGE_KEY,
+      String(includeExternalSources),
+    );
+  }, [includeExternalSources]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -937,6 +954,25 @@ function SearchState({
             {t.searchDescription}
           </p>
         </div>
+
+        <label className="mx-auto flex w-full max-w-lg cursor-pointer items-start gap-3 rounded-2xl border border-border/70 bg-card/90 px-4 py-3 text-left shadow-sm backdrop-blur-sm transition-colors hover:border-primary/40">
+          <input
+            type="checkbox"
+            checked={includeExternalSources}
+            onChange={(event) => setIncludeExternalSources(event.target.checked)}
+            className="mt-0.5 h-4 w-4 shrink-0 accent-primary"
+          />
+          <span>
+            <span className="block text-sm font-extrabold text-foreground">
+              {language === 'nl' ? 'Externe bronnen meenemen' : 'Include external sources'}
+            </span>
+            <span className="mt-0.5 block text-xs leading-relaxed text-muted-foreground">
+              {language === 'nl'
+                ? 'Uitgeschakeld gebruikt alleen eerder opgeslagen resultaten. Deze keuze wordt onthouden.'
+                : 'When off, searches use only previously stored results. This choice is remembered.'}
+            </span>
+          </span>
+        </label>
 
         <form onSubmit={handleSubmit} className="relative group w-full max-w-lg mx-auto">
           <div className={cn(
@@ -1606,14 +1642,7 @@ function DiscoveryState({
     ? selectedNeighborhoods.join(',')
     : undefined;
 
-  const [liveMode, setLiveMode] = useState<boolean>(() => {
-    const saved = localStorage.getItem('buurtplaza-discovery-live-mode');
-    return saved === null ? true : saved === 'true';
-  });
-
-  useEffect(() => {
-    localStorage.setItem('buurtplaza-discovery-live-mode', String(liveMode));
-  }, [liveMode]);
+  const [liveMode] = useState(readIncludeExternalSources);
 
   const mode = liveMode ? 'live' : 'stored_only';
   const anonymousId = useMemo(() => {
@@ -1991,32 +2020,6 @@ function DiscoveryState({
             </button>
           </div>
           <div className="mt-3 space-y-2">
-            <FilterFrame title={language === 'nl' ? 'Live zoeken' : 'Live search'} defaultOpen={true}>
-              <div className="flex flex-col gap-2">
-                <label className="flex items-center justify-between gap-3 cursor-pointer py-1">
-                  <span className="text-[11px] font-bold text-foreground">
-                    {language === 'nl' ? 'Toon resultaten van externe bronnen' : 'Show results from external sources'}
-                  </span>
-                  <input
-                    type="checkbox"
-                    checked={liveMode}
-                    onChange={(e) => setLiveMode(e.target.checked)}
-                    className="sr-only peer"
-                    aria-label={language === 'nl' ? 'Live zoeken aanzetten' : 'Enable live search'}
-                  />
-                  <div className="relative h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent bg-muted transition-colors peer-checked:bg-primary peer-focus-visible:ring-2 peer-focus-visible:ring-primary peer-focus-visible:ring-offset-2 peer-focus-visible:ring-offset-background">
-                    <span className={cn("pointer-events-none block h-4 w-4 rounded-full bg-background shadow-lg ring-0 transition-transform", liveMode ? "translate-x-4" : "translate-x-0")} />
-                  </div>
-                </label>
-                {!liveMode && (
-                  <p className="text-[10px] leading-relaxed text-muted-foreground bg-muted/50 p-2 rounded-lg">
-                    {language === 'nl'
-                      ? 'Je ziet nu alleen eerder opgeslagen resultaten. Zet live zoeken aan om actuele gegevens op te halen.'
-                      : 'You are currently seeing only previously stored results. Enable live search to fetch real-time data.'}
-                  </p>
-                )}
-              </div>
-            </FilterFrame>
             <FilterFrame title={language === 'nl' ? 'Snel kiezen' : 'Quick choices'}>
               <div className="flex flex-wrap gap-1.5" role="group" aria-label={language === 'nl' ? 'Snelle filters' : 'Quick filters'}>
                 {([
