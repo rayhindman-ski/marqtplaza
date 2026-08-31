@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { GetListingsLanguage } from './getListingsLanguage';
+import type { GetListingsMode } from './getListingsMode';
 import type { GetListingsSection } from './getListingsSection';
 
 export type GetListingsParams = {
@@ -25,4 +26,14 @@ language: GetListingsLanguage;
  * Comma-separated neighborhood names used to target local business discovery.
  */
 neighborhoods?: string;
+/**
+ * Whether external providers may be queried or only previously stored external results may be used.
+ */
+mode?: GetListingsMode;
+/**
+ * Stable browser identifier used to associate anonymous discovery requests without requiring sign-in.
+ * @minLength 8
+ * @maxLength 100
+ */
+anonymousId?: string;
 };

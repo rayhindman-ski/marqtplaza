@@ -1,7 +1,14 @@
 import { Router, type IRouter } from "express";
 import { and, asc, desc, eq, gte } from "drizzle-orm";
-import { db } from "@workspace/db";
-import { discoveredEventsTable } from "@workspace/db/schema";
+import { getAuth } from "@clerk/express";
+import {
+  db,
+  discoveredEventsTable,
+  externalQueriesTable,
+  externalResultsTable,
+  type DiscoveredEvent,
+  userQueriesTable,
+} from "@workspace/db";
 import { MARKERS } from "../lib/static-listings.js";
 import {
   SOCIAL_MAP_LISTINGS,
@@ -13,6 +20,7 @@ import { getSocialMapReviewReport } from "../lib/social-map-review.js";
 import {
   ensureLocalizedEventCopy,
   eventCopyForLanguage,
+  selectEventsWithLocalizedCopy,
   type EventLanguage,
 } from "../lib/event-localization.js";
 
@@ -268,6 +276,61 @@ function parseListingSection(value: unknown): ListingSection {
   const section = String(value ?? "events").trim();
   if (section === "businesses" || section === "food-drink" || section === "social-map") return section;
   return "events";
+}
+
+export type ListingsMode = "live" | "stored_only";
+
+export function parseListingsMode(value: unknown): ListingsMode {
+  return value === "stored_only" ? "stored_only" : "live";
+}
+
+export function allowsExternalQueries(mode: ListingsMode): boolean {
+  return mode === "live";
+}
+
+export function parseAnonymousId(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const normalized = value.trim();
+  return normalized.length >= 8 && normalized.length <= 100 ? normalized : undefined;
+}
+
+export async function prepareEventsForMode(
+  events: DiscoveredEvent[],
+  language: EventLanguage,
+  mode: ListingsMode,
+  ensureCopy: typeof ensureLocalizedEventCopy = ensureLocalizedEventCopy,
+): Promise<DiscoveredEvent[]> {
+  if (!allowsExternalQueries(mode)) {
+    return selectEventsWithLocalizedCopy(events, language);
+  }
+  return ensureCopy(events, language);
+}
+
+export function normalizeNeighborhoods(value: unknown): string[] {
+  const raw = Array.isArray(value) ? value.join(",") : String(value ?? "");
+  return [...new Map(
+    raw.split(",")
+      .map((neighborhood) => neighborhood.trim().replace(/\s+/g, " "))
+      .filter(Boolean)
+      .slice(0, 12)
+      .map((neighborhood) => [neighborhood.toLocaleLowerCase("nl-NL"), neighborhood] as const),
+  ).values()].sort((a, b) => a.localeCompare(b, "nl-NL"));
+}
+
+export function normalizedListingsKey(
+  cityId: string,
+  section: ListingSection,
+  language: EventLanguage,
+  neighborhoods: string[],
+): string {
+  return JSON.stringify({
+    cityId: cityId.trim().toLowerCase(),
+    section,
+    language,
+    neighborhoods: normalizeNeighborhoods(neighborhoods)
+      .map((neighborhood) => neighborhood.toLocaleLowerCase("nl-NL"))
+      .sort((a, b) => a.localeCompare(b, "nl-NL")),
+  });
 }
 
 export function parseEventLanguage(value: unknown): EventLanguage | null {
@@ -1010,15 +1073,130 @@ async function fetchCityListingsFromOverpass(
   return data.elements ?? [];
 }
 
-router.get("/listings", async (req, res) => {
+type ExternalProvider = "google_places" | "openstreetmap";
+
+async function createListingsQuery(input: {
+  cityId: string;
+  section: ListingSection;
+  language: EventLanguage;
+  neighborhoods: string[];
+  mode: ListingsMode;
+  anonymousId?: string;
+  userId?: string | null;
+  normalizedKey: string;
+}): Promise<number> {
+  const [query] = await db.insert(userQueriesTable).values({
+    ...input,
+    interests: [input.section],
+    status: "running",
+    startedAt: new Date(),
+  }).returning({ id: userQueriesTable.id });
+  if (!query) throw new Error("Could not persist listings query.");
+  return query.id;
+}
+
+async function finalizeListingsQuery(queryId: number, status: "succeeded" | "partial" | "failed", error?: string): Promise<void> {
+  await db.update(userQueriesTable).set({
+    status,
+    ...(error ? { error } : {}),
+    completedAt: new Date(),
+  }).where(eq(userQueriesTable.id, queryId));
+}
+
+async function captureProviderResult(
+  queryId: number,
+  provider: ExternalProvider,
+  normalizedKey: string,
+  requestPayload: Record<string, unknown>,
+  load: () => Promise<Listing[]>,
+): Promise<{ provider: ExternalProvider; listings: Listing[]; error?: unknown }> {
+  let externalQueryId: number | undefined;
+  try {
+    const [externalQuery] = await db.insert(externalQueriesTable).values({
+      userQueryId: queryId,
+      provider,
+      normalizedKey,
+      requestPayload,
+      status: "running",
+      startedAt: new Date(),
+    }).returning({ id: externalQueriesTable.id });
+    if (!externalQuery) throw new Error(`Could not persist ${provider} query.`);
+    const persistedExternalQueryId = externalQuery.id;
+    externalQueryId = persistedExternalQueryId;
+
+    const listings = await load();
+    await db.transaction(async (tx) => {
+      await tx.insert(externalResultsTable).values({
+        externalQueryId: persistedExternalQueryId,
+        userQueryId: queryId,
+        provider,
+        normalizedKey,
+        payload: listings,
+        resultCount: listings.length,
+      });
+      await tx.update(externalQueriesTable).set({
+        status: "succeeded",
+        completedAt: new Date(),
+      }).where(eq(externalQueriesTable.id, persistedExternalQueryId));
+    });
+    return { provider, listings };
+  } catch (error) {
+    if (externalQueryId !== undefined) {
+      try {
+        await db.update(externalQueriesTable).set({
+          status: "failed",
+          error: error instanceof Error ? error.message : String(error),
+          completedAt: new Date(),
+        }).where(eq(externalQueriesTable.id, externalQueryId));
+      } catch {
+        // The original provider/persistence failure is the useful error returned
+        // to the caller; the parent query will still be finalized there.
+      }
+    }
+    return { provider, listings: [], error };
+  }
+}
+
+export function mergeStoredProviderListings(
+  googleListings: Listing[],
+  osmListings: Listing[],
+): Listing[] {
+  return mergeBusinessListings(googleListings, osmListings).listings;
+}
+
+async function loadStoredProviderResults(
+  normalizedKey: string,
+  providers: ExternalProvider[],
+): Promise<Map<ExternalProvider, Listing[]>> {
+  const rows = await db.select({
+    provider: externalResultsTable.provider,
+    payload: externalResultsTable.payload,
+  }).from(externalResultsTable)
+    .where(and(
+      eq(externalResultsTable.normalizedKey, normalizedKey),
+    ))
+    .orderBy(desc(externalResultsTable.fetchedAt), desc(externalResultsTable.id));
+  const results = new Map<ExternalProvider, Listing[]>();
+  for (const row of rows) {
+    if (!providers.includes(row.provider as ExternalProvider) || results.has(row.provider as ExternalProvider)) continue;
+    if (Array.isArray(row.payload)) results.set(row.provider as ExternalProvider, row.payload as Listing[]);
+  }
+  return results;
+}
+
+function storedMissMessage(language: EventLanguage): string {
+  return language === "nl"
+    ? "Geen opgeslagen resultaten beschikbaar voor deze zoekopdracht. Vernieuw in live-modus."
+    : "No stored results are available for this query. Refresh in live mode.";
+}
+
+router.get("/listings", async (req, res): Promise<void> => {
   const cityId = String(req.query["cityId"] ?? "").trim();
   const listingSection = parseListingSection(req.query["section"]);
   const language = parseEventLanguage(req.query["language"]);
-  const requestedNeighborhoods = String(req.query["neighborhoods"] ?? "")
-    .split(",")
-    .map((value) => value.trim())
-    .filter(Boolean)
-    .slice(0, 12);
+  const requestedNeighborhoods = normalizeNeighborhoods(req.query["neighborhoods"]);
+  const mode = parseListingsMode(req.query["mode"]);
+  const anonymousId = parseAnonymousId(req.query["anonymousId"]);
 
   if (!cityId || !language) {
     res.status(400).json({
@@ -1034,17 +1212,45 @@ router.get("/listings", async (req, res) => {
     res.status(400).json({ listings: [], source: "fallback", message: `Unknown city: ${cityId}` });
     return;
   }
+  const normalizedKey = normalizedListingsKey(cityId, listingSection, language, requestedNeighborhoods);
+  const queryId = await createListingsQuery({
+    cityId,
+    section: listingSection,
+    language,
+    neighborhoods: requestedNeighborhoods,
+    mode,
+    anonymousId,
+    userId: getAuth(req).userId,
+    normalizedKey,
+  });
 
   if (listingSection === "social-map") {
     if (cityId !== "dhg") {
+      await finalizeListingsQuery(queryId, "succeeded");
       res.json({
         listings: [],
         source: "curated",
         message: "De Sociale kaart is momenteel alleen beschikbaar voor Den Haag.",
+        queryId, mode, cacheHit: false, cacheMiss: false, partial: false, providers: [],
       });
       return;
     }
-    const reviewReport = await getSocialMapReviewReport();
+    let reviewReport: Awaited<ReturnType<typeof getSocialMapReviewReport>>;
+    try {
+      reviewReport = await getSocialMapReviewReport();
+    } catch (error) {
+      await finalizeListingsQuery(queryId, "failed", "Could not load social map review data.");
+      req.log.warn({ err: error }, "Social map review data unavailable");
+      res.status(503).json({
+        listings: [],
+        source: "curated",
+        message: language === "nl"
+          ? "De Sociale kaart is tijdelijk niet beschikbaar."
+          : "The social map is temporarily unavailable.",
+        queryId, mode, cacheHit: false, cacheMiss: false, partial: false, providers: [],
+      });
+      return;
+    }
     const reviewItems = new Map(reviewReport.items.map((item) => [item.id, item]));
     const listings: Listing[] = SOCIAL_MAP_LISTINGS.map((listing) => {
       const { x, y } = toXY(listing.lat, listing.lng, bounds);
@@ -1075,10 +1281,12 @@ router.get("/listings", async (req, res) => {
         nextReviewAt: review?.nextReviewAt ?? SOCIAL_MAP_SNAPSHOT_DATE,
       };
     });
+    await finalizeListingsQuery(queryId, "succeeded");
     res.json({
       listings,
       source: "curated",
       message: `${SOCIAL_MAP_SOURCE_NOTE} Snapshot: ${reviewReport.snapshotDate}.`,
+      queryId, mode, cacheHit: false, cacheMiss: false, partial: false, providers: [],
     });
     return;
   }
@@ -1093,53 +1301,52 @@ router.get("/listings", async (req, res) => {
   }));
   if (curated.length > 0) {
     if (cityId !== "dhg") {
-      res.json({ listings: curatedListings, source: "curated" });
+      await finalizeListingsQuery(queryId, "succeeded");
+      res.json({ listings: curatedListings, source: "curated", queryId, mode, cacheHit: false, cacheMiss: false, partial: false, providers: [] });
       return;
     }
 
     if (listingSection !== "events") {
-      try {
-        const googleListings = await fetchGooglePlaces(bounds, listingSection, requestedNeighborhoods);
-        if (googleListings.length > 0) {
-          let mergedListings = googleListings;
-          let osmAdded = 0;
-          try {
-    const elements = await fetchCityListings(bounds);
-            const supplementalListings = fetchOpenStreetMapBusinesses(elements, listingSection, bounds);
-            const merged = mergeBusinessListings(googleListings, supplementalListings);
-            mergedListings = merged.listings;
-            osmAdded = merged.osmAdded;
-          } catch (error) {
-            console.warn("[listings] OpenStreetMap supplement unavailable:", error instanceof Error ? error.message : error);
-          }
-          res.json({
-            listings: mergedListings,
-            source: "google_places",
-            message: `${googleListings.length} Haagse ${listingSection === "food-drink" ? "horecazaken" : "bedrijven"} uit Google Places${osmAdded > 0 ? ` en ${osmAdded} aanvullende OpenStreetMap-vermeldingen` : ""}.`,
-          });
-          return;
-        }
-      } catch (error) {
-        console.warn(`[listings] Google Places ${listingSection} unavailable:`, error instanceof Error ? error.message : error);
-      }
-
-      try {
-    const elements = await fetchCityListings(bounds);
-        const fallbackListings = fetchOpenStreetMapBusinesses(elements, listingSection, bounds);
+      const providers: ExternalProvider[] = ["google_places", "openstreetmap"];
+      if (!allowsExternalQueries(mode)) {
+        const stored = await loadStoredProviderResults(normalizedKey, providers);
+        const googleListings = stored.get("google_places") ?? [];
+        const osmListings = stored.get("openstreetmap") ?? [];
+        const hit = stored.size > 0;
+        await finalizeListingsQuery(queryId, hit && stored.size < providers.length ? "partial" : "succeeded");
         res.json({
-          listings: fallbackListings,
-          source: "fallback",
-          message: fallbackListings.length > 0
+          listings: mergeStoredProviderListings(googleListings, osmListings),
+          source: "stored",
+          ...(hit ? {} : { message: storedMissMessage(language) }),
+          queryId, mode, cacheHit: hit, cacheMiss: !hit, partial: hit && stored.size < providers.length,
+          providers: [...stored.keys()],
+        });
+        return;
+      }
+      const [google, osm] = await Promise.all([
+        captureProviderResult(queryId, "google_places", normalizedKey, { section: listingSection, neighborhoods: requestedNeighborhoods }, () =>
+          fetchGooglePlaces(bounds, listingSection, requestedNeighborhoods)),
+        captureProviderResult(queryId, "openstreetmap", normalizedKey, { section: listingSection }, async () =>
+          fetchOpenStreetMapBusinesses(await fetchCityListings(bounds), listingSection, bounds)),
+      ]);
+      const successful = [google, osm].filter((result) => !result.error);
+      const merged = mergeBusinessListings(google.listings, osm.listings);
+      const partial = successful.length > 0 && successful.length < providers.length;
+      const status = successful.length === 0 ? "failed" : partial ? "partial" : "succeeded";
+      await finalizeListingsQuery(queryId, status, successful.length === 0 ? "All external providers failed." : undefined);
+      if (google.error) req.log.warn({ err: google.error }, "Google Places listings unavailable");
+      if (osm.error) req.log.warn({ err: osm.error }, "OpenStreetMap listings unavailable");
+      res.json({
+        listings: merged.listings,
+        source: google.listings.length > 0 ? "google_places" : "fallback",
+        message: google.listings.length > 0
+          ? `${google.listings.length} Haagse ${listingSection === "food-drink" ? "horecazaken" : "bedrijven"} uit Google Places${merged.osmAdded > 0 ? ` en ${merged.osmAdded} aanvullende OpenStreetMap-vermeldingen` : ""}.`
+          : osm.listings.length > 0
             ? "Google Places is tijdelijk niet beschikbaar; OpenStreetMap-resultaten worden getoond."
             : "Er zijn tijdelijk geen gecontroleerde resultaten voor deze sectie.",
-        });
-      } catch {
-        res.json({
-          listings: [],
-          source: "fallback",
-          message: "Google Places en de aanvullende kaartbron zijn tijdelijk niet beschikbaar.",
-        });
-      }
+        queryId, mode, cacheHit: false, cacheMiss: false, partial,
+        providers: successful.map((result) => result.provider),
+      });
       return;
     }
 
@@ -1154,7 +1361,7 @@ router.get("/listings", async (req, res) => {
           gte(discoveredEventsTable.startsAt, today),
         ))
         .orderBy(asc(discoveredEventsTable.startsAt), desc(discoveredEventsTable.lastSeenAt));
-      const localizedEvents = await ensureLocalizedEventCopy(discovered, language);
+      const localizedEvents = await prepareEventsForMode(discovered, language, mode);
       const discoveredListings = localizedEvents
         .map((event) => {
         const copy = eventCopyForLanguage(event, language);
@@ -1191,30 +1398,73 @@ router.get("/listings", async (req, res) => {
           lastSeenAt: event.lastSeenAt?.toISOString(),
           updatedAt: event.updatedAt?.toISOString(),
       }});
+      await finalizeListingsQuery(queryId, "succeeded");
+      const storedHit = discoveredListings.length > 0;
       res.json({
         listings: discoveredListings,
-        source: discoveredListings.length > 0 ? "live" : "fallback",
-        message: discoveredListings.length > 0
-          ? language === "nl"
-            ? `${discoveredListings.length} gecontroleerde aankomende evenement${discoveredListings.length === 1 ? "" : "en"} gevonden in Den Haag.`
-            : `${discoveredListings.length} verified upcoming event${discoveredListings.length === 1 ? "" : "s"} found in The Hague.`
-          : language === "nl"
-            ? "Er zijn momenteel geen gecontroleerde aankomende evenementen beschikbaar."
-            : "No verified upcoming events are currently available.",
+        source: mode === "stored_only"
+          ? "stored"
+          : discoveredListings.length > 0 ? "live" : "fallback",
+        message: mode === "stored_only" && !storedHit
+          ? storedMissMessage(language)
+          : discoveredListings.length > 0
+            ? language === "nl"
+              ? `${discoveredListings.length} gecontroleerde aankomende evenement${discoveredListings.length === 1 ? "" : "en"} gevonden in Den Haag.`
+              : `${discoveredListings.length} verified upcoming event${discoveredListings.length === 1 ? "" : "s"} found in The Hague.`
+            : language === "nl"
+              ? "Er zijn momenteel geen gecontroleerde aankomende evenementen beschikbaar."
+              : "No verified upcoming events are currently available.",
+        queryId,
+        mode,
+        cacheHit: mode === "stored_only" && storedHit,
+        cacheMiss: mode === "stored_only" && !storedHit,
+        partial: false,
+        providers: [],
       });
-    } catch {
+    } catch (error) {
+      await finalizeListingsQuery(queryId, "failed", "Could not load discovered events.");
+      req.log.warn({ err: error }, "Discovered events unavailable");
       res.json({
         listings: [],
         source: "fallback",
         message: language === "nl"
           ? "Actuele evenementen zijn tijdelijk niet beschikbaar."
           : "Current events are temporarily unavailable.",
+        queryId, mode, cacheHit: false, cacheMiss: false, partial: false, providers: [],
       });
     }
     return;
   }
 
+  if (!allowsExternalQueries(mode)) {
+    const stored = await loadStoredProviderResults(normalizedKey, ["openstreetmap"]);
+    const listings = stored.get("openstreetmap") ?? [];
+    const hit = stored.has("openstreetmap");
+    await finalizeListingsQuery(queryId, "succeeded");
+    res.json({
+      listings,
+      source: "stored",
+      ...(hit ? {} : { message: storedMissMessage(language) }),
+      queryId, mode, cacheHit: hit, cacheMiss: !hit, partial: false,
+      providers: hit ? ["openstreetmap"] : [],
+    });
+    return;
+  }
+
+  let overpassQueryId: number | undefined;
   try {
+    const [overpassQuery] = await db.insert(externalQueriesTable).values({
+      userQueryId: queryId,
+      provider: "openstreetmap",
+      normalizedKey,
+      requestPayload: { section: listingSection, cityId },
+      status: "running",
+      startedAt: new Date(),
+    }).returning({ id: externalQueriesTable.id });
+    if (!overpassQuery) throw new Error("Could not persist OpenStreetMap query.");
+    const persistedOverpassQueryId = overpassQuery.id;
+    overpassQueryId = persistedOverpassQueryId;
+
     const elements = await fetchCityListings(bounds);
 
     // Classify elements into categories (max 20 per category)
@@ -1272,16 +1522,56 @@ router.get("/listings", async (req, res) => {
         source: "curated" as const,
         sourceName: sourceNameFromUrl(listing.sourceUrl),
       }));
+      await db.transaction(async (tx) => {
+        await tx.insert(externalResultsTable).values({
+          externalQueryId: persistedOverpassQueryId,
+          userQueryId: queryId,
+          provider: "openstreetmap",
+          normalizedKey,
+          payload: listings,
+          resultCount: 0,
+        });
+        await tx.update(externalQueriesTable).set({ status: "succeeded", completedAt: new Date() })
+          .where(eq(externalQueriesTable.id, persistedOverpassQueryId));
+      });
+      await finalizeListingsQuery(queryId, "succeeded");
       res.json({
         listings: fallback,
         source: "fallback",
         message: "No live results – showing curated listings",
+        queryId, mode, cacheHit: false, cacheMiss: false, partial: false, providers: ["openstreetmap"],
       });
       return;
     }
 
-    res.json({ listings, source: "live" });
-  } catch {
+    await db.transaction(async (tx) => {
+      await tx.insert(externalResultsTable).values({
+        externalQueryId: persistedOverpassQueryId,
+        userQueryId: queryId,
+        provider: "openstreetmap",
+        normalizedKey,
+        payload: listings,
+        resultCount: listings.length,
+      });
+      await tx.update(externalQueriesTable).set({ status: "succeeded", completedAt: new Date() })
+        .where(eq(externalQueriesTable.id, persistedOverpassQueryId));
+    });
+    await finalizeListingsQuery(queryId, "succeeded");
+    res.json({ listings, source: "live", queryId, mode, cacheHit: false, cacheMiss: false, partial: false, providers: ["openstreetmap"] });
+  } catch (error) {
+    if (overpassQueryId !== undefined) {
+      try {
+        await db.update(externalQueriesTable).set({
+          status: "failed",
+          error: error instanceof Error ? error.message : String(error),
+          completedAt: new Date(),
+        }).where(eq(externalQueriesTable.id, overpassQueryId));
+      } catch {
+        // Finalizing the parent query below prevents a permanently running row.
+      }
+    }
+    await finalizeListingsQuery(queryId, "failed", "OpenStreetMap provider failed.");
+    req.log.warn({ err: error }, "OpenStreetMap listings unavailable");
     // Overpass unreachable or timed out – serve static fallback so the UI is never broken
     const fallback = MARKERS
       .filter((m) => m.locationId === cityId)
@@ -1294,6 +1584,7 @@ router.get("/listings", async (req, res) => {
       listings: fallback,
       source: "fallback",
       message: "Live data temporarily unavailable – showing curated listings",
+      queryId, mode, cacheHit: false, cacheMiss: false, partial: false, providers: [],
     });
   }
 });

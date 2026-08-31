@@ -302,12 +302,19 @@ export const DecideEventReviewCandidateResponse = zod.object({
  * @summary Get local listings for a city
  */
 export const getListingsQuerySectionDefault = `events`;
+export const getListingsQueryModeDefault = `live`;
+export const getListingsQueryAnonymousIdMin = 8;
+export const getListingsQueryAnonymousIdMax = 100;
+
+
 
 export const GetListingsQueryParams = zod.object({
   "cityId": zod.coerce.string().describe('The city identifier (ams, rot, utr, dhg, ein)'),
   "section": zod.enum(['events', 'businesses', 'food-drink', 'social-map']).default(getListingsQuerySectionDefault).describe('Which Den Haag discovery stream to return.'),
   "language": zod.enum(['nl', 'en']).describe('Language selected by the user for all human-readable listing copy.'),
-  "neighborhoods": zod.coerce.string().optional().describe('Comma-separated neighborhood names used to target local business discovery.')
+  "neighborhoods": zod.coerce.string().optional().describe('Comma-separated neighborhood names used to target local business discovery.'),
+  "mode": zod.enum(['live', 'stored_only']).default(getListingsQueryModeDefault).describe('Whether external providers may be queried or only previously stored external results may be used.'),
+  "anonymousId": zod.coerce.string().min(getListingsQueryAnonymousIdMin).max(getListingsQueryAnonymousIdMax).optional().describe('Stable browser identifier used to associate anonymous discovery requests without requiring sign-in.')
 })
 
 export const GetListingsResponse = zod.object({
@@ -355,8 +362,14 @@ export const GetListingsResponse = zod.object({
   "lastCheckedAt": zod.string().optional().describe('Date or timestamp of the latest source review for this record.'),
   "nextReviewAt": zod.string().optional().describe('Scheduled date for the next source review.')
 })),
-  "source": zod.enum(['live', 'google_places', 'fallback', 'curated']),
-  "message": zod.string().optional()
+  "source": zod.enum(['live', 'google_places', 'fallback', 'curated', 'stored']),
+  "message": zod.string().optional(),
+  "queryId": zod.number().optional().describe('Identifier of the persisted user query.'),
+  "mode": zod.enum(['live', 'stored_only']).optional(),
+  "cacheHit": zod.boolean().optional(),
+  "cacheMiss": zod.boolean().optional(),
+  "partial": zod.boolean().optional(),
+  "providers": zod.array(zod.enum(['google_places', 'openstreetmap'])).optional()
 })
 
 

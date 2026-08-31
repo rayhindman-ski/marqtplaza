@@ -238,6 +238,22 @@ paths:
           schema:
             type: string
           description: Comma-separated neighborhood names used to target local business discovery.
+        - name: mode
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [live, stored_only]
+            default: live
+          description: Whether external providers may be queried or only previously stored external results may be used.
+        - name: anonymousId
+          in: query
+          required: false
+          schema:
+            type: string
+            minLength: 8
+            maxLength: 100
+          description: Stable browser identifier used to associate anonymous discovery requests without requiring sign-in.
       responses:
         "200":
           description: Listings result (live or fallback)
@@ -2148,9 +2164,26 @@ components:
             $ref: "#/components/schemas/Listing"
         source:
           type: string
-          enum: [live, google_places, fallback, curated]
+          enum: [live, google_places, fallback, curated, stored]
         message:
           type: string
+        queryId:
+          type: number
+          description: Identifier of the persisted user query.
+        mode:
+          type: string
+          enum: [live, stored_only]
+        cacheHit:
+          type: boolean
+        cacheMiss:
+          type: boolean
+        partial:
+          type: boolean
+        providers:
+          type: array
+          items:
+            type: string
+            enum: [google_places, openstreetmap]
       required:
         - listings
         - source

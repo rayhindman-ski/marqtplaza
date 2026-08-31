@@ -1606,22 +1606,43 @@ function DiscoveryState({
     ? selectedNeighborhoods.join(',')
     : undefined;
 
+  const [liveMode, setLiveMode] = useState<boolean>(() => {
+    const saved = localStorage.getItem('buurtplaza-discovery-live-mode');
+    return saved === null ? true : saved === 'true';
+  });
+
+  useEffect(() => {
+    localStorage.setItem('buurtplaza-discovery-live-mode', String(liveMode));
+  }, [liveMode]);
+
+  const mode = liveMode ? 'live' : 'stored_only';
+  const anonymousId = useMemo(() => {
+    let id = localStorage.getItem('buurtplaza-anonymous-id');
+    if (!id) {
+      id = typeof crypto !== 'undefined' && crypto.randomUUID
+        ? crypto.randomUUID()
+        : `anon_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+      localStorage.setItem('buurtplaza-anonymous-id', id);
+    }
+    return id;
+  }, []);
+
   // Fetch selected top-level sections only; each query keeps its generated cache key.
   const eventsQuery = useGetListings(
-    { cityId: locationId, section: 'events', language, neighborhoods: requestedNeighborhoods },
-    { query: { enabled: topLevelCategories.events, queryKey: getGetListingsQueryKey({ cityId: locationId, section: 'events', language, neighborhoods: requestedNeighborhoods }) } },
+    { cityId: locationId, section: 'events', language, neighborhoods: requestedNeighborhoods, mode, anonymousId },
+    { query: { enabled: topLevelCategories.events, queryKey: getGetListingsQueryKey({ cityId: locationId, section: 'events', language, neighborhoods: requestedNeighborhoods, mode, anonymousId }) } },
   );
   const businessesQuery = useGetListings(
-    { cityId: locationId, section: 'businesses', language, neighborhoods: requestedNeighborhoods },
-    { query: { enabled: topLevelCategories.businesses && hasSearchArea, queryKey: getGetListingsQueryKey({ cityId: locationId, section: 'businesses', language, neighborhoods: requestedNeighborhoods }) } },
+    { cityId: locationId, section: 'businesses', language, neighborhoods: requestedNeighborhoods, mode, anonymousId },
+    { query: { enabled: topLevelCategories.businesses && hasSearchArea, queryKey: getGetListingsQueryKey({ cityId: locationId, section: 'businesses', language, neighborhoods: requestedNeighborhoods, mode, anonymousId }) } },
   );
   const foodDrinkQuery = useGetListings(
-    { cityId: locationId, section: 'food-drink', language, neighborhoods: requestedNeighborhoods },
-    { query: { enabled: topLevelCategories['food-drink'] && hasSearchArea, queryKey: getGetListingsQueryKey({ cityId: locationId, section: 'food-drink', language, neighborhoods: requestedNeighborhoods }) } },
+    { cityId: locationId, section: 'food-drink', language, neighborhoods: requestedNeighborhoods, mode, anonymousId },
+    { query: { enabled: topLevelCategories['food-drink'] && hasSearchArea, queryKey: getGetListingsQueryKey({ cityId: locationId, section: 'food-drink', language, neighborhoods: requestedNeighborhoods, mode, anonymousId }) } },
   );
   const socialMapQuery = useGetListings(
-    { cityId: locationId, section: 'social-map', language, neighborhoods: requestedNeighborhoods },
-    { query: { enabled: topLevelCategories['social-map'], queryKey: getGetListingsQueryKey({ cityId: locationId, section: 'social-map', language, neighborhoods: requestedNeighborhoods }) } },
+    { cityId: locationId, section: 'social-map', language, neighborhoods: requestedNeighborhoods, mode, anonymousId },
+    { query: { enabled: topLevelCategories['social-map'], queryKey: getGetListingsQueryKey({ cityId: locationId, section: 'social-map', language, neighborhoods: requestedNeighborhoods, mode, anonymousId }) } },
   );
   const listingQueries = {
     events: eventsQuery,
@@ -1912,6 +1933,8 @@ function DiscoveryState({
   const hasOpenStreetMap = selectedListings.some((listing) => listing.source === 'openstreetmap');
   const isFallback = selectedData.some((result) => result.source === 'fallback');
   const isCurated = selectedData.some((result) => result.source === 'curated');
+  const isStored = selectedData.some((result) => result.source === 'stored');
+  const isCacheMiss = selectedData.some((result) => result.cacheMiss);
   const fallbackMessage = selectedData
     .filter((result) => result.source === 'fallback' && result.message)
     .map((result) => result.message)
@@ -1968,6 +1991,32 @@ function DiscoveryState({
             </button>
           </div>
           <div className="mt-3 space-y-2">
+            <FilterFrame title={language === 'nl' ? 'Live zoeken' : 'Live search'} defaultOpen={true}>
+              <div className="flex flex-col gap-2">
+                <label className="flex items-center justify-between gap-3 cursor-pointer py-1">
+                  <span className="text-[11px] font-bold text-foreground">
+                    {language === 'nl' ? 'Toon resultaten van externe bronnen' : 'Show results from external sources'}
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={liveMode}
+                    onChange={(e) => setLiveMode(e.target.checked)}
+                    className="sr-only peer"
+                    aria-label={language === 'nl' ? 'Live zoeken aanzetten' : 'Enable live search'}
+                  />
+                  <div className="relative h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent bg-muted transition-colors peer-checked:bg-primary peer-focus-visible:ring-2 peer-focus-visible:ring-primary peer-focus-visible:ring-offset-2 peer-focus-visible:ring-offset-background">
+                    <span className={cn("pointer-events-none block h-4 w-4 rounded-full bg-background shadow-lg ring-0 transition-transform", liveMode ? "translate-x-4" : "translate-x-0")} />
+                  </div>
+                </label>
+                {!liveMode && (
+                  <p className="text-[10px] leading-relaxed text-muted-foreground bg-muted/50 p-2 rounded-lg">
+                    {language === 'nl'
+                      ? 'Je ziet nu alleen eerder opgeslagen resultaten. Zet live zoeken aan om actuele gegevens op te halen.'
+                      : 'You are currently seeing only previously stored results. Enable live search to fetch real-time data.'}
+                  </p>
+                )}
+              </div>
+            </FilterFrame>
             <FilterFrame title={language === 'nl' ? 'Snel kiezen' : 'Quick choices'}>
               <div className="flex flex-wrap gap-1.5" role="group" aria-label={language === 'nl' ? 'Snelle filters' : 'Quick filters'}>
                 {([
@@ -2283,6 +2332,18 @@ function DiscoveryState({
                 {t.curatedDataBadge}
               </span>
             ) : null}
+            {isStored && (
+              <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-600 bg-slate-100 border border-slate-300 px-2.5 py-1 rounded-full dark:bg-slate-800 dark:border-slate-700 dark:text-slate-300">
+                <Bookmark className="w-3 h-3" />
+                {language === 'nl' ? 'Opgeslagen gegevens' : 'Stored data'}
+              </span>
+            )}
+            {isCacheMiss && !liveMode && (
+              <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-rose-600 bg-rose-50 border border-rose-200 px-2.5 py-1 rounded-full dark:bg-rose-950 dark:border-rose-800 dark:text-rose-300">
+                <WifiOff className="w-3 h-3" />
+                {language === 'nl' ? 'Geen lokale gegevens' : 'No local data'}
+              </span>
+            )}
             {isFallback && fallbackMessage && (
               <span className="text-xs text-muted-foreground">{fallbackMessage}</span>
             )}

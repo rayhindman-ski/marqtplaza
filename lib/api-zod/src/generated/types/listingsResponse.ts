@@ -6,10 +6,19 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { Listing } from './listing';
+import type { ListingsResponseMode } from './listingsResponseMode';
+import type { ListingsResponseProvidersItem } from './listingsResponseProvidersItem';
 import type { ListingsResponseSource } from './listingsResponseSource';
 
 export interface ListingsResponse {
   listings: Listing[];
   source: ListingsResponseSource;
   message?: string;
+  /** Identifier of the persisted user query. */
+  queryId?: number;
+  mode?: ListingsResponseMode;
+  cacheHit?: boolean;
+  cacheMiss?: boolean;
+  partial?: boolean;
+  providers?: ListingsResponseProvidersItem[];
 }

@@ -26,3 +26,6 @@ export * from "./newsArticles";
 export * from "./newsSourceStatuses";
 export * from "./providerUsage";
 export * from "./socialMapReviewReports";
+export * from "./userQueries";
+export * from "./externalQueries";
+export * from "./externalResults";

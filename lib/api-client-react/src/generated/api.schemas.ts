@@ -1110,12 +1110,36 @@ export const ListingsResponseSource = {
   google_places: 'google_places',
   fallback: 'fallback',
   curated: 'curated',
+  stored: 'stored',
+} as const;
+
+export type ListingsResponseMode = typeof ListingsResponseMode[keyof typeof ListingsResponseMode];
+
+
+export const ListingsResponseMode = {
+  live: 'live',
+  stored_only: 'stored_only',
+} as const;
+
+export type ListingsResponseProvidersItem = typeof ListingsResponseProvidersItem[keyof typeof ListingsResponseProvidersItem];
+
+
+export const ListingsResponseProvidersItem = {
+  google_places: 'google_places',
+  openstreetmap: 'openstreetmap',
 } as const;
 
 export interface ListingsResponse {
   listings: Listing[];
   source: ListingsResponseSource;
   message?: string;
+  /** Identifier of the persisted user query. */
+  queryId?: number;
+  mode?: ListingsResponseMode;
+  cacheHit?: boolean;
+  cacheMiss?: boolean;
+  partial?: boolean;
+  providers?: ListingsResponseProvidersItem[];
 }
 
 export interface GooglePlacesUsage {
@@ -1272,6 +1296,16 @@ language: GetListingsLanguage;
  * Comma-separated neighborhood names used to target local business discovery.
  */
 neighborhoods?: string;
+/**
+ * Whether external providers may be queried or only previously stored external results may be used.
+ */
+mode?: GetListingsMode;
+/**
+ * Stable browser identifier used to associate anonymous discovery requests without requiring sign-in.
+ * @minLength 8
+ * @maxLength 100
+ */
+anonymousId?: string;
 };
 
 export type GetListingsSection = typeof GetListingsSection[keyof typeof GetListingsSection];
@@ -1290,6 +1324,14 @@ export type GetListingsLanguage = typeof GetListingsLanguage[keyof typeof GetLis
 export const GetListingsLanguage = {
   nl: 'nl',
   en: 'en',
+} as const;
+
+export type GetListingsMode = typeof GetListingsMode[keyof typeof GetListingsMode];
+
+
+export const GetListingsMode = {
+  live: 'live',
+  stored_only: 'stored_only',
 } as const;
 
 export type RunSocialMapReview502 = {

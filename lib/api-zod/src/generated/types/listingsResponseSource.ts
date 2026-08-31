@@ -14,4 +14,5 @@ export const ListingsResponseSource = {
   google_places: 'google_places',
   fallback: 'fallback',
   curated: 'curated',
+  stored: 'stored',
 } as const;

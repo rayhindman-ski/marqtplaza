@@ -113,9 +113,83 @@ test('keeps discovery filters, map pins, routes, and translations in sync', asyn
   await expect(approximateCard.locator('a[href*="google.com/maps/dir"]')).toHaveCount(0);
   await expect(approximateCard.getByText('Directions unavailable: this map point is approximate.')).toBeVisible();
 
-  await page.getByRole('combobox').selectOption('nl');
+  await page.getByLabel('Language').selectOption('nl');
   for (const label of ['Snel kiezen', 'Dichtbij', 'Binnen', 'Activiteitenkalender', 'Vandaag', 'Gratis']) {
     await expect(page.getByText(label, { exact: true }).first()).toBeVisible();
   }
   await expect(page.getByText('Route niet beschikbaar: dit kaartpunt is een benadering.')).toBeVisible();
+});
+
+test('live search toggle updates mode and anonymousId in listings queries', async ({ page }) => {
+  let listingsRequests: URL[] = [];
+
+  await page.route('**/api/listings*', async (route) => {
+    const url = new URL(route.request().url());
+    listingsRequests.push(url);
+    const mode = url.searchParams.get('mode');
+    await route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({
+        source: mode === 'stored_only' ? 'stored' : 'curated',
+        cacheMiss: mode === 'stored_only',
+        listings: [],
+      }),
+    });
+  });
+
+  await page.route('**/api/weather*', async (route) => {
+    await route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({
+        cityId: 'dhg', locationName: 'Den Haag', fetchedAt: new Date().toISOString(),
+        current: { temperature: 18, apparentTemperature: 18, precipitation: 0, windSpeed: 5, weatherCode: 0, condition: 'clear', isDay: true },
+        forecast: [], provider: 'open-meteo',
+      }),
+    });
+  });
+  await page.route('https://tile.openstreetmap.org/**', async (route) => {
+    await route.fulfill({ contentType: 'image/png', body: transparentPng });
+  });
+
+  await page.goto('/activiteiten/den-haag');
+
+  // default mode=live
+  const toggle = page.getByRole('checkbox', { name: 'Enable live search' });
+  await expect(toggle).toBeChecked();
+  await expect(async () => {
+    expect(listingsRequests.length).toBeGreaterThan(0);
+  }).toPass();
+
+  const firstReq = listingsRequests[0];
+  expect(firstReq.searchParams.get('mode')).toBe('live');
+
+  const anonId = firstReq.searchParams.get('anonymousId');
+  expect(anonId).toBeTruthy();
+  expect(anonId).toMatch(/^anon_|^[0-9a-f-]{36}$/i); // uuid or fallback
+
+  // toggling sends mode=stored_only
+  listingsRequests = [];
+  await toggle.uncheck({ force: true });
+
+  await expect(page.getByText('You are currently seeing only previously stored results.')).toBeVisible();
+  await expect(page.getByText('Stored data')).toBeVisible();
+  await expect(page.getByText('No local data')).toBeVisible();
+
+  await expect(async () => {
+    expect(listingsRequests.length).toBeGreaterThan(0);
+  }).toPass();
+  expect(listingsRequests[0].searchParams.get('mode')).toBe('stored_only');
+  expect(listingsRequests[0].searchParams.get('anonymousId')).toBe(anonId); // anonymousId is stable
+
+  // persistence survives reload
+  listingsRequests = [];
+  await page.reload();
+  await expect(page.getByRole('checkbox', { name: 'Enable live search' })).not.toBeChecked();
+  await expect(page.getByText('You are currently seeing only previously stored results.')).toBeVisible();
+
+  await expect(async () => {
+    expect(listingsRequests.length).toBeGreaterThan(0);
+  }).toPass();
+  expect(listingsRequests[0].searchParams.get('mode')).toBe('stored_only');
+  expect(listingsRequests[0].searchParams.get('anonymousId')).toBe(anonId);
 });
