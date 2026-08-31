@@ -13,7 +13,6 @@
 - [Brand logo asset](brand-logo-asset.md) — the primary PNG has transparent padding; compact headers need a shared cropped wrapper rather than raw image sizing.
 - [Community contribution privacy](community-privacy.md) — the village-square layer uses moderated local messages, not public profiles or private messaging.
 - [Business claim integrity](business-claim-integrity.md) — claims must resolve current listings server-side and preserve one pending/approved owner path transactionally.
-- [Google Places lifetime cap](google-places-lifetime-cap.md) — all billable Places calls share a permanent 100-call allowance that only an editor can reset manually.
 - [Saved-event sync ownership](saved-event-sync-ownership.md) — keep anonymous staging separate; use operation sync plus deletion tombstones for account-backed events.
 - [Weather response caching](weather-response-caching.md) — browser weather requests must bypass HTTP cache so a bodyless 304 cannot hide the map weather strip.
 - [Discovery outbound isolation](discovery-lineage-failure-isolation.md) — stored-only is read-only; live provider and lineage failures settle independently.

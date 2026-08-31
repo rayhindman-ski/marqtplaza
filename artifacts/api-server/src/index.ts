@@ -2,6 +2,7 @@ import app from "./app";
 import { logger } from "./lib/logger";
 import { ensureSocialMapReviewStorage, startSocialMapReviewScheduler } from "./lib/social-map-review";
 import { ensureNewsSourceStatusStorage, startNewsSourceScheduler } from "./routes/news";
+import { startNeighborhoodDiscoveryScheduler } from "./lib/neighborhood-discovery-refresh";
 
 const rawPort = process.env["PORT"];
 
@@ -22,6 +23,7 @@ async function startServer(): Promise<void> {
   await ensureSocialMapReviewStorage();
   startNewsSourceScheduler();
   startSocialMapReviewScheduler();
+  startNeighborhoodDiscoveryScheduler();
   app.listen(port, (err) => {
     if (err) {
       logger.error({ err }, "Error listening on port");

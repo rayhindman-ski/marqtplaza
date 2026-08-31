@@ -1,11 +1,13 @@
 import { Router, type IRouter } from "express";
-import { and, asc, desc, eq, gte } from "drizzle-orm";
+import { and, asc, desc, eq, gte, sql } from "drizzle-orm";
 import { getAuth } from "@clerk/express";
 import {
   db,
   discoveredEventsTable,
   externalQueriesTable,
   externalResultsTable,
+  providerUsageTable,
+  pool,
   type DiscoveredEvent,
   userQueriesTable,
 } from "@workspace/db";
@@ -25,7 +27,7 @@ import {
 } from "../lib/event-localization.js";
 
 const router: IRouter = Router();
-type ListingSection = "events" | "businesses" | "food-drink" | "social-map";
+export type ListingSection = "events" | "businesses" | "food-drink" | "social-map";
 type ListingCategory = "Museums" | "Tours" | "Family" | "Entertainment" | "Outdoors" | "Markets" | "Businesses" | "Food & Drink" | "Social map";
 type BusinessCategory =
   | "Retail & Shopping"
@@ -716,6 +718,7 @@ async function collectGooglePlaces(
       const searchResults = resultsBySearch[searchIndex];
       let pageToken: string | undefined;
       for (let page = 0; page < GOOGLE_PLACES_MAX_PAGES_PER_SEARCH; page += 1) {
+        await reserveGooglePlacesRequest();
         const response = await withGoogleRequestSlot(() => fetch(GOOGLE_PLACES_URL, {
           method: "POST",
           headers: {
@@ -1009,7 +1012,7 @@ function fetchOpenStreetMapBusinesses(elements: OsmElement[], section: Exclude<L
   return listings;
 }
 
-interface OsmElement {
+export interface OsmElement {
   id: number;
   lat: number;
   lon: number;
@@ -1018,6 +1021,76 @@ interface OsmElement {
 
 interface OsmResponse {
   elements: OsmElement[];
+}
+
+const GOOGLE_PLACES_LIFETIME_LIMIT = 100;
+const OVERPASS_MIN_INTERVAL_MS = 2_000;
+const PROVIDER_MAX_ATTEMPTS = 3;
+
+export async function reserveGooglePlacesRequest(): Promise<void> {
+  const reserved = await db.execute(sql`
+    insert into ${providerUsageTable} (provider, request_count, updated_at)
+    values ('google_places', 1, now())
+    on conflict (provider) do update
+      set request_count = ${providerUsageTable.requestCount} + 1,
+          updated_at = now()
+      where ${providerUsageTable.requestCount} < ${GOOGLE_PLACES_LIFETIME_LIMIT}
+    returning request_count
+  `);
+  if (reserved.rows.length === 0) {
+    throw new Error(`Google Places permanent request allowance of ${GOOGLE_PLACES_LIFETIME_LIMIT} is exhausted.`);
+  }
+}
+
+export function retryDelayMs(attempt: number, retryAfterHeader?: string | null): number {
+  const retryAfterSeconds = retryAfterHeader ? Number(retryAfterHeader) : Number.NaN;
+  if (Number.isFinite(retryAfterSeconds) && retryAfterSeconds >= 0) {
+    return Math.min(retryAfterSeconds * 1_000, 30_000);
+  }
+  return Math.min(1_000 * (2 ** attempt), 30_000);
+}
+
+export async function withBoundedBackoff<T>(
+  operation: () => Promise<T>,
+  attempts = PROVIDER_MAX_ATTEMPTS,
+): Promise<T> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    try {
+      return await operation();
+    } catch (error) {
+      lastError = error;
+      if (attempt + 1 < attempts) {
+        await new Promise((resolve) => setTimeout(resolve, retryDelayMs(attempt)));
+      }
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error("Provider operation failed.");
+}
+
+async function waitForOverpassSlot(): Promise<void> {
+  const client = await pool.connect();
+  try {
+    await client.query("select pg_advisory_lock(hashtextextended($1, 0))", ["buurtplaza:overpass"]);
+    const usage = await client.query<{ updated_at: Date }>(
+      "select updated_at from provider_usage where provider = $1",
+      ["openstreetmap"],
+    );
+    const lastRequestAt = usage.rows[0]?.updated_at?.getTime() ?? 0;
+    const waitMs = Math.max(0, lastRequestAt + OVERPASS_MIN_INTERVAL_MS - Date.now());
+    if (waitMs > 0) await new Promise((resolve) => setTimeout(resolve, waitMs));
+    await client.query(`
+      insert into provider_usage (provider, request_count, updated_at)
+      values ($1, 0, now())
+      on conflict (provider) do update set updated_at = now()
+    `, ["openstreetmap"]);
+  } finally {
+    try {
+      await client.query("select pg_advisory_unlock(hashtextextended($1, 0))", ["buurtplaza:overpass"]);
+    } finally {
+      client.release();
+    }
+  }
 }
 
 async function fetchCityListings(
@@ -1043,8 +1116,21 @@ async function fetchCityListings(
   }
 }
 
-async function fetchCityListingsFromOverpass(
+interface OverpassRequestDependencies {
+  fetch: typeof fetch;
+  waitForSlot: () => Promise<void>;
+  sleep: (milliseconds: number) => Promise<void>;
+}
+
+const defaultOverpassRequestDependencies: OverpassRequestDependencies = {
+  fetch,
+  waitForSlot: waitForOverpassSlot,
+  sleep: (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds)),
+};
+
+export async function fetchCityListingsFromOverpass(
   bounds: { s: number; w: number; n: number; e: number },
+  dependencies: OverpassRequestDependencies = defaultOverpassRequestDependencies,
 ): Promise<OsmElement[]> {
   // Single query combining businesses, events, and specials to avoid rate limits
   const bbox = `${bounds.s},${bounds.w},${bounds.n},${bounds.e}`;
@@ -1060,20 +1146,40 @@ async function fetchCityListingsFromOverpass(
   const url =
     "https://overpass-api.de/api/interpreter?data=" + encodeURIComponent(query);
 
-  const res = await fetch(url, {
-    headers: {
-      "User-Agent":
-        "buurtplaza.nl/1.0 (neighbourhood discovery app; contact: info@buurtplaza.nl)",
-    },
-    signal: AbortSignal.timeout(25000),
-  });
-
-  if (!res.ok) throw new Error(`Overpass HTTP ${res.status}`);
-  const data = (await res.json()) as OsmResponse;
-  return data.elements ?? [];
+  let lastError: unknown;
+  for (let attempt = 0; attempt < PROVIDER_MAX_ATTEMPTS; attempt += 1) {
+    await dependencies.waitForSlot();
+    let res: Response;
+    try {
+      res = await dependencies.fetch(url, {
+        headers: {
+          "User-Agent":
+            "buurtplaza.nl/1.0 (neighbourhood discovery app; contact: info@buurtplaza.nl)",
+        },
+        signal: AbortSignal.timeout(25000),
+      });
+    } catch (error) {
+      lastError = error;
+      if (attempt + 1 < PROVIDER_MAX_ATTEMPTS) {
+        await dependencies.sleep(retryDelayMs(attempt));
+      }
+      continue;
+    }
+    if (res.ok) {
+      const data = (await res.json()) as OsmResponse;
+      return data.elements ?? [];
+    }
+    lastError = new Error(`Overpass HTTP ${res.status}`);
+    if (res.status !== 429 && res.status < 500) throw lastError;
+    if (attempt + 1 < PROVIDER_MAX_ATTEMPTS) {
+      await dependencies.sleep(retryDelayMs(attempt, res.headers.get("retry-after")));
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error("Overpass request failed.");
 }
 
 type ExternalProvider = "google_places" | "openstreetmap";
+export const SCHEDULED_DISCOVERY_PROVIDERS = ["openstreetmap"] as const satisfies readonly ExternalProvider[];
 
 async function createListingsQuery(input: {
   cityId: string;
@@ -1103,12 +1209,54 @@ async function finalizeListingsQuery(queryId: number, status: "succeeded" | "par
   }).where(eq(userQueriesTable.id, queryId));
 }
 
+export interface NeighborhoodRefreshScope {
+  cityId: string;
+  section: "businesses" | "food-drink";
+  language: EventLanguage;
+  neighborhoods: string[];
+  normalizedKey: string;
+}
+
+export async function refreshNeighborhoodDiscoveryScope(scope: NeighborhoodRefreshScope): Promise<{
+  status: "succeeded" | "partial" | "failed";
+  providers: ExternalProvider[];
+}> {
+  const bounds = CITY_BOUNDS[scope.cityId];
+  if (!bounds) throw new Error(`Unknown city: ${scope.cityId}`);
+  const neighborhoods = normalizeNeighborhoods(scope.neighborhoods);
+  const normalizedKey = normalizedListingsKey(scope.cityId, scope.section, scope.language, neighborhoods);
+  if (normalizedKey !== scope.normalizedKey) throw new Error("Refresh scope normalized key does not match its fields.");
+
+  const queryId = await createListingsQuery({
+    cityId: scope.cityId,
+    section: scope.section,
+    language: scope.language,
+    neighborhoods,
+    mode: "live",
+    normalizedKey,
+  });
+  // Scheduled refreshes deliberately use the non-billable source. Google Places
+  // has a permanent 100-request allowance and remains available for intentional
+  // live searches; background work must not silently consume that finite budget.
+  const outcomes = await Promise.all(SCHEDULED_DISCOVERY_PROVIDERS.map((provider) =>
+    captureProviderResult(queryId, provider, normalizedKey, {
+      section: scope.section,
+      scheduled: true,
+    }, async () => fetchOpenStreetMapBusinesses(await fetchCityListings(bounds), scope.section, bounds), 1),
+  ));
+  const successful = outcomes.filter((outcome) => !outcome.error);
+  const status = successful.length === 0 ? "failed" : "succeeded";
+  await finalizeListingsQuery(queryId, status, status === "failed" ? "Scheduled OpenStreetMap refresh failed." : undefined);
+  return { status, providers: successful.map((outcome) => outcome.provider) };
+}
+
 async function captureProviderResult(
   queryId: number,
   provider: ExternalProvider,
   normalizedKey: string,
   requestPayload: Record<string, unknown>,
   load: () => Promise<Listing[]>,
+  attempts = PROVIDER_MAX_ATTEMPTS,
 ): Promise<{ provider: ExternalProvider; listings: Listing[]; error?: unknown }> {
   let externalQueryId: number | undefined;
   try {
@@ -1124,7 +1272,7 @@ async function captureProviderResult(
     const persistedExternalQueryId = externalQuery.id;
     externalQueryId = persistedExternalQueryId;
 
-    const listings = await load();
+    const listings = await withBoundedBackoff(load, attempts);
     await db.transaction(async (tx) => {
       await tx.insert(externalResultsTable).values({
         externalQueryId: persistedExternalQueryId,
@@ -1327,7 +1475,7 @@ router.get("/listings", async (req, res): Promise<void> => {
         captureProviderResult(queryId, "google_places", normalizedKey, { section: listingSection, neighborhoods: requestedNeighborhoods }, () =>
           fetchGooglePlaces(bounds, listingSection, requestedNeighborhoods)),
         captureProviderResult(queryId, "openstreetmap", normalizedKey, { section: listingSection }, async () =>
-          fetchOpenStreetMapBusinesses(await fetchCityListings(bounds), listingSection, bounds)),
+          fetchOpenStreetMapBusinesses(await fetchCityListings(bounds), listingSection, bounds), 1),
       ]);
       const successful = [google, osm].filter((result) => !result.error);
       const merged = mergeBusinessListings(google.listings, osm.listings);
