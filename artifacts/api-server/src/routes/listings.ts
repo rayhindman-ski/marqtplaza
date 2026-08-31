@@ -26,7 +26,6 @@ import {
   type EventLanguage,
 } from "../lib/event-localization.js";
 
-const router: IRouter = Router();
 export type ListingSection = "events" | "businesses" | "food-drink" | "social-map";
 type ListingCategory = "Museums" | "Tours" | "Family" | "Entertainment" | "Outdoors" | "Markets" | "Businesses" | "Food & Drink" | "Social map";
 type BusinessCategory =
@@ -43,7 +42,7 @@ type BusinessCategory =
   | "Arts, Culture & Entertainment"
   | "Fitness & Sports";
 type ListingSource = "google_maps" | "openstreetmap" | "curated" | "source_scan";
-type Listing = {
+export type Listing = {
   id: string;
   locationId: string;
   category: ListingCategory;
@@ -1338,7 +1337,31 @@ function storedMissMessage(language: EventLanguage): string {
     : "No stored results are available for this query. Refresh in live mode.";
 }
 
-router.get("/listings", async (req, res): Promise<void> => {
+export interface ListingsRouterDependencies {
+  getUserId: (req: Parameters<typeof getAuth>[0]) => string | null;
+  loadGooglePlaces: (
+    bounds: GeographicBounds,
+    section: Exclude<ListingSection, "events" | "social-map">,
+    neighborhoods: string[],
+  ) => Promise<Listing[]>;
+  loadOpenStreetMapBusinesses: (
+    bounds: GeographicBounds,
+    section: Exclude<ListingSection, "events" | "social-map">,
+  ) => Promise<Listing[]>;
+}
+
+const defaultListingsRouterDependencies: ListingsRouterDependencies = {
+  getUserId: (req) => getAuth(req).userId,
+  loadGooglePlaces: fetchGooglePlaces,
+  loadOpenStreetMapBusinesses: async (bounds, section) =>
+    fetchOpenStreetMapBusinesses(await fetchCityListings(bounds), section, bounds),
+};
+
+export function createListingsRouter(
+  dependencies: ListingsRouterDependencies = defaultListingsRouterDependencies,
+): IRouter {
+  const router: IRouter = Router();
+  router.get("/listings", async (req, res): Promise<void> => {
   const cityId = String(req.query["cityId"] ?? "").trim();
   const listingSection = parseListingSection(req.query["section"]);
   const language = parseEventLanguage(req.query["language"]);
@@ -1368,7 +1391,7 @@ router.get("/listings", async (req, res): Promise<void> => {
     neighborhoods: requestedNeighborhoods,
     mode,
     anonymousId,
-    userId: getAuth(req).userId,
+    userId: dependencies.getUserId(req),
     normalizedKey,
   });
 
@@ -1473,9 +1496,9 @@ router.get("/listings", async (req, res): Promise<void> => {
       }
       const [google, osm] = await Promise.all([
         captureProviderResult(queryId, "google_places", normalizedKey, { section: listingSection, neighborhoods: requestedNeighborhoods }, () =>
-          fetchGooglePlaces(bounds, listingSection, requestedNeighborhoods)),
+          dependencies.loadGooglePlaces(bounds, listingSection, requestedNeighborhoods)),
         captureProviderResult(queryId, "openstreetmap", normalizedKey, { section: listingSection }, async () =>
-          fetchOpenStreetMapBusinesses(await fetchCityListings(bounds), listingSection, bounds), 1),
+          dependencies.loadOpenStreetMapBusinesses(bounds, listingSection), 1),
       ]);
       const successful = [google, osm].filter((result) => !result.error);
       const merged = mergeBusinessListings(google.listings, osm.listings);
@@ -1735,6 +1758,9 @@ router.get("/listings", async (req, res): Promise<void> => {
       queryId, mode, cacheHit: false, cacheMiss: false, partial: false, providers: [],
     });
   }
-});
+  });
+  return router;
+}
 
+const router = createListingsRouter();
 export default router;
