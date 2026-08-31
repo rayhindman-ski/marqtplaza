@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import type { AddressInfo } from "node:net";
 import { after, before, describe, it } from "node:test";
 import express from "express";
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import pino from "pino";
 import {
   db,
@@ -14,9 +14,11 @@ import {
 import { createListingsRouter, type Listing } from "./listings";
 
 const runId = `listings-query-${process.pid}-${Date.now()}`;
-const anonymousIds = [`${runId}-live`, `${runId}-stored`];
-const triggerName = "listings_test_fail_google_query";
-const triggerFunctionName = "listings_test_reject_google_query";
+const anonymousIds = [`${runId}-query-failure`, `${runId}-result-failure`, `${runId}-stored`];
+const queryTriggerName = "listings_test_fail_google_query";
+const queryTriggerFunctionName = "listings_test_reject_google_query";
+const resultTriggerName = "listings_test_fail_google_result";
+const resultTriggerFunctionName = "listings_test_reject_google_result";
 let googleLoaderCalls = 0;
 let osmLoaderCalls = 0;
 const testLogger = pino({ enabled: false });
@@ -47,7 +49,13 @@ app.use("/api", createListingsRouter({
   getUserId: () => null,
   loadGooglePlaces: async () => {
     googleLoaderCalls += 1;
-    throw new Error("Google loader should not run when its lineage insert fails.");
+    return [{
+      ...osmListing,
+      id: "google-result-that-cannot-be-saved",
+      name: "Unsaved Google Shop",
+      source: "google_maps",
+      sourceName: "Google Maps",
+    }];
   },
   loadOpenStreetMapBusinesses: async () => {
     osmLoaderCalls += 1;
@@ -82,7 +90,7 @@ describe("listings route provider failure isolation (isolated database integrati
   before(async () => {
     await cleanTestRows();
     await pool.query(`
-      create or replace function ${triggerFunctionName}()
+      create or replace function ${queryTriggerFunctionName}()
       returns trigger language plpgsql as $$
       begin
         if new.provider = 'google_places' then
@@ -92,11 +100,11 @@ describe("listings route provider failure isolation (isolated database integrati
       end;
       $$;
     `);
-    await pool.query(`drop trigger if exists ${triggerName} on "external-queries"`);
+    await pool.query(`drop trigger if exists ${queryTriggerName} on "external-queries"`);
     await pool.query(`
-      create trigger ${triggerName}
+      create trigger ${queryTriggerName}
       before insert on "external-queries"
-      for each row execute function ${triggerFunctionName}()
+      for each row execute function ${queryTriggerFunctionName}()
     `);
 
     await new Promise<void>((resolve) => {
@@ -106,8 +114,10 @@ describe("listings route provider failure isolation (isolated database integrati
   });
 
   after(async () => {
-    await pool.query(`drop trigger if exists ${triggerName} on "external-queries"`);
-    await pool.query(`drop function if exists ${triggerFunctionName}()`);
+    await pool.query(`drop trigger if exists ${queryTriggerName} on "external-queries"`);
+    await pool.query(`drop trigger if exists ${resultTriggerName} on "external-results"`);
+    await pool.query(`drop function if exists ${queryTriggerFunctionName}()`);
+    await pool.query(`drop function if exists ${resultTriggerFunctionName}()`);
     await cleanTestRows();
     await new Promise<void>((resolve, reject) => {
       server.close((error) => error ? reject(error) : resolve());
@@ -133,10 +143,61 @@ describe("listings route provider failure isolation (isolated database integrati
     assert.ok(query?.completedAt);
   });
 
+  it("keeps successful listings when another provider's result cannot be saved", async () => {
+    await pool.query(`drop trigger if exists ${queryTriggerName} on "external-queries"`);
+    await pool.query(`
+      create or replace function ${resultTriggerFunctionName}()
+      returns trigger language plpgsql as $$
+      begin
+        if new.provider = 'google_places' then
+          raise exception 'forced google result persistence failure';
+        end if;
+        return new;
+      end;
+      $$;
+    `);
+    await pool.query(`drop trigger if exists ${resultTriggerName} on "external-results"`);
+    await pool.query(`
+      create trigger ${resultTriggerName}
+      before insert on "external-results"
+      for each row execute function ${resultTriggerFunctionName}()
+    `);
+
+    const result = await requestListings(anonymousIds[1], "live");
+    assert.equal(result.status, 200);
+    assert.equal(result.body.partial, true);
+    assert.deepEqual(result.body.providers, ["openstreetmap"]);
+    assert.equal(result.body.listings.some((listing: { name?: string }) =>
+      listing.name === "Reliable Local Shop"), true);
+    assert.equal(result.body.listings.some((listing: { name?: string }) =>
+      listing.name === "Unsaved Google Shop"), false);
+    assert.equal(googleLoaderCalls, 1);
+    assert.equal(osmLoaderCalls, 2);
+
+    const [query] = await db.select({
+      status: userQueriesTable.status,
+      completedAt: userQueriesTable.completedAt,
+    }).from(userQueriesTable).where(eq(userQueriesTable.id, result.body.queryId));
+    assert.equal(query?.status, "partial");
+    assert.ok(query?.completedAt);
+
+    const [failedExternalQuery] = await db.select({
+      status: externalQueriesTable.status,
+      error: externalQueriesTable.error,
+      completedAt: externalQueriesTable.completedAt,
+    }).from(externalQueriesTable).where(and(
+      eq(externalQueriesTable.userQueryId, result.body.queryId),
+      eq(externalQueriesTable.provider, "google_places"),
+    ));
+    assert.equal(failedExternalQuery?.status, "failed");
+    assert.match(failedExternalQuery?.error ?? "", /forced google result persistence failure/);
+    assert.ok(failedExternalQuery?.completedAt);
+  });
+
   it("never invokes provider loaders for a stored-only cache miss and still returns 200", async () => {
     const googleCallsBefore = googleLoaderCalls;
     const osmCallsBefore = osmLoaderCalls;
-    const result = await requestListings(anonymousIds[1], "stored_only");
+    const result = await requestListings(anonymousIds[2], "stored_only");
     assert.equal(result.status, 200);
     assert.equal(result.body.cacheMiss, true);
     assert.equal(result.body.cacheHit, false);
