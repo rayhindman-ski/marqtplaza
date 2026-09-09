@@ -9,6 +9,12 @@ Google Places Text Search must follow its `nextPageToken` within a bounded page 
 
 **How to apply:** Use overlapping area/category searches with a process-wide upstream concurrency limit and per-section in-flight coalescing. Fairly distribute the final result cap across completed searches, preserve Hague bounds/evidence checks, and reserve space for deduplicated OpenStreetMap supplements rather than allowing a full Google response to crowd them out.
 
+Google Places discovery queries are currently disabled; OpenStreetMap is the sole active external business provider until an explicit decision is made to restore Google querying.
+
+**Why:** The configured permanent Google Places request allowance has been exhausted, so attempting the provider only adds failed lineage records, retries, and latency.
+
+**How to apply:** Keep production provider selection Google-free, including claim lookups. Failure-isolation tests may explicitly inject and enable a fake Google loader without permitting real requests.
+
 When a discovery rectangle reaches beyond the municipal boundary, coordinate inclusion alone is not sufficient for OpenStreetMap records: each record needs positive local evidence such as an approved locality or a Hague postcode, as well as rejection of conflicting locality tags.
 
 **Why:** Public map records often have no locality tag, and a deliberately overlapping search rectangle can otherwise silently publish nearby-municipality entries as Hague listings.

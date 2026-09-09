@@ -238,6 +238,26 @@ paths:
           schema:
             type: string
           description: Comma-separated neighborhood names used to target local business discovery.
+        - name: businessCategories
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Comma-separated business subcategories used to narrow provider retrieval before applying result limits.
+        - name: searchLat
+          in: query
+          required: false
+          schema:
+            type: number
+            format: double
+          description: Center latitude for a selected neighborhood's targeted provider search.
+        - name: searchLng
+          in: query
+          required: false
+          schema:
+            type: number
+            format: double
+          description: Center longitude for a selected neighborhood's targeted provider search.
         - name: mode
           in: query
           required: false

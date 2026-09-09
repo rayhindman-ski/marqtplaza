@@ -3,9 +3,11 @@ import { describe, it } from "node:test";
 
 import {
   allowsExternalQueries,
+  fetchOpenStreetMapBusinesses,
   normalizeNeighborhoods,
   normalizedListingsKey,
   parseAnonymousId,
+  parseBusinessCategories,
   parseListingsMode,
   prepareEventsForMode,
 } from "./listings";
@@ -57,5 +59,86 @@ describe("listings query persistence inputs", () => {
       normalizedListingsKey(" DHG ", "businesses", "nl", first),
       normalizedListingsKey("dhg", "businesses", "nl", second),
     );
+  });
+
+  it("normalizes supported business subcategories and rejects unknown values", () => {
+    assert.deepEqual(
+      parseBusinessCategories("Beauty & Personal Care,Unknown,Beauty & Personal Care"),
+      ["Beauty & Personal Care"],
+    );
+  });
+
+  it("filters OSM business categories before applying the provider result cap", () => {
+    const retail = Array.from({ length: 200 }, (_, index) => ({
+      id: index + 1,
+      lat: 52.08,
+      lon: 4.32,
+      tags: {
+        name: `Retail ${index}`,
+        shop: "clothes",
+        "addr:street": "Laan",
+        "addr:housenumber": String(index + 1),
+        "addr:postcode": "2593AA",
+        "addr:city": "Den Haag",
+      },
+    }));
+    const beauty = {
+      id: 999,
+      lat: 52.085,
+      lon: 4.344,
+      tags: {
+        name: "Theresiastraat Beauty",
+        shop: "beauty",
+        "addr:street": "Theresiastraat",
+        "addr:housenumber": "226",
+        "addr:postcode": "2593AV",
+        "addr:city": "Den Haag",
+      },
+    };
+    const listings = fetchOpenStreetMapBusinesses(
+      [...retail, beauty],
+      "businesses",
+      { s: 52.025, w: 4.235, n: 52.125, e: 4.42 },
+      ["Beauty & Personal Care"],
+    );
+    assert.deepEqual(listings.map((listing) => listing.name), ["Theresiastraat Beauty"]);
+  });
+
+  it("keeps the closest neighborhood businesses when a targeted category exceeds the cap", () => {
+    const distantBeauty = Array.from({ length: 200 }, (_, index) => ({
+      id: index + 1,
+      lat: 52.04,
+      lon: 4.25,
+      tags: {
+        name: `Distant Beauty ${index}`,
+        shop: "beauty",
+        "addr:street": "Distant Street",
+        "addr:housenumber": String(index + 1),
+        "addr:postcode": "2551AA",
+        "addr:city": "Den Haag",
+      },
+    }));
+    const nearbyBeauty = {
+      id: 999,
+      lat: 52.089,
+      lon: 4.337,
+      tags: {
+        name: "Nearby Theresiastraat Beauty",
+        shop: "beauty",
+        "addr:street": "Theresiastraat",
+        "addr:housenumber": "113",
+        "addr:postcode": "2593AD",
+        "addr:city": "Den Haag",
+      },
+    };
+    const listings = fetchOpenStreetMapBusinesses(
+      [...distantBeauty, nearbyBeauty],
+      "businesses",
+      { s: 52.025, w: 4.235, n: 52.125, e: 4.42 },
+      ["Beauty & Personal Care"],
+      { lat: 52.089, lng: 4.337 },
+    );
+    assert.equal(listings.length, 200);
+    assert.ok(listings.some((listing) => listing.name === "Nearby Theresiastraat Beauty"));
   });
 });

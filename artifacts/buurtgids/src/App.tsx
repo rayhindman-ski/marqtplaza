@@ -1641,6 +1641,14 @@ function DiscoveryState({
     && selectedNeighborhoods.length < location.neighborhoods.length
     ? selectedNeighborhoods.join(',')
     : undefined;
+  const businessSubcategories = subcategoriesForTopLevel('businesses') as BusinessCategory[];
+  const selectedBusinessCategories = businessSubcategories.filter((category) => subcategories[category]);
+  const requestedBusinessCategories = selectedBusinessCategories.length < businessSubcategories.length
+    ? selectedBusinessCategories.join(',')
+    : undefined;
+  const requestedSearchCenter = selectedNeighborhoods.length === 1
+    ? location?.neighborhoodCoords[selectedNeighborhoods[0]]
+    : undefined;
 
   const [liveMode] = useState(readIncludeExternalSources);
 
@@ -1662,8 +1670,8 @@ function DiscoveryState({
     { query: { enabled: topLevelCategories.events, queryKey: getGetListingsQueryKey({ cityId: locationId, section: 'events', language, neighborhoods: requestedNeighborhoods, mode, anonymousId }) } },
   );
   const businessesQuery = useGetListings(
-    { cityId: locationId, section: 'businesses', language, neighborhoods: requestedNeighborhoods, mode, anonymousId },
-    { query: { enabled: topLevelCategories.businesses && hasSearchArea, queryKey: getGetListingsQueryKey({ cityId: locationId, section: 'businesses', language, neighborhoods: requestedNeighborhoods, mode, anonymousId }) } },
+    { cityId: locationId, section: 'businesses', language, neighborhoods: requestedNeighborhoods, businessCategories: requestedBusinessCategories, searchLat: requestedSearchCenter?.lat, searchLng: requestedSearchCenter?.lng, mode, anonymousId },
+    { query: { enabled: topLevelCategories.businesses && hasSearchArea && selectedBusinessCategories.length > 0, queryKey: getGetListingsQueryKey({ cityId: locationId, section: 'businesses', language, neighborhoods: requestedNeighborhoods, businessCategories: requestedBusinessCategories, searchLat: requestedSearchCenter?.lat, searchLng: requestedSearchCenter?.lng, mode, anonymousId }) } },
   );
   const foodDrinkQuery = useGetListings(
     { cityId: locationId, section: 'food-drink', language, neighborhoods: requestedNeighborhoods, mode, anonymousId },

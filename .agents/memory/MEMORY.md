@@ -17,3 +17,4 @@
 - [Weather response caching](weather-response-caching.md) — browser weather requests must bypass HTTP cache so a bodyless 304 cannot hide the map weather strip.
 - [Discovery outbound isolation](discovery-lineage-failure-isolation.md) — stored-only is read-only; live provider and lineage failures settle independently.
 - [Provider integration tests](provider-integration-tests.md) — inject outbound loaders at route construction; replacing global fetch cannot override dependencies captured during module load.
+- [Neighborhood category result caps](neighborhood-category-result-caps.md) — narrow by selected category and neighborhood, then rank by proximity before enforcing provider caps.

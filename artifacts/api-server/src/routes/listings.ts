@@ -28,7 +28,7 @@ import {
 
 export type ListingSection = "events" | "businesses" | "food-drink" | "social-map";
 type ListingCategory = "Museums" | "Tours" | "Family" | "Entertainment" | "Outdoors" | "Markets" | "Businesses" | "Food & Drink" | "Social map";
-type BusinessCategory =
+export type BusinessCategory =
   | "Retail & Shopping"
   | "Food & Drink"
   | "Health & Wellness"
@@ -41,6 +41,21 @@ type BusinessCategory =
   | "Hospitality & Travel"
   | "Arts, Culture & Entertainment"
   | "Fitness & Sports";
+const BUSINESS_CATEGORIES: readonly BusinessCategory[] = [
+  "Retail & Shopping",
+  "Food & Drink",
+  "Health & Wellness",
+  "Beauty & Personal Care",
+  "Professional Services",
+  "Finance & Legal",
+  "Home & Repair",
+  "Automotive & Mobility",
+  "Education & Childcare",
+  "Hospitality & Travel",
+  "Arts, Culture & Entertainment",
+  "Fitness & Sports",
+];
+const BUSINESS_CATEGORY_SET = new Set<string>(BUSINESS_CATEGORIES);
 type ListingSource = "google_maps" | "openstreetmap" | "curated" | "source_scan";
 export type Listing = {
   id: string;
@@ -318,11 +333,21 @@ export function normalizeNeighborhoods(value: unknown): string[] {
   ).values()].sort((a, b) => a.localeCompare(b, "nl-NL"));
 }
 
+export function parseBusinessCategories(value: unknown): BusinessCategory[] {
+  const raw = Array.isArray(value) ? value.join(",") : String(value ?? "");
+  return [...new Set(
+    raw.split(",")
+      .map((category) => category.trim())
+      .filter((category): category is BusinessCategory => BUSINESS_CATEGORY_SET.has(category)),
+  )].sort((a, b) => a.localeCompare(b, "en"));
+}
+
 export function normalizedListingsKey(
   cityId: string,
   section: ListingSection,
   language: EventLanguage,
   neighborhoods: string[],
+  businessCategories: BusinessCategory[] = [],
 ): string {
   return JSON.stringify({
     cityId: cityId.trim().toLowerCase(),
@@ -331,6 +356,9 @@ export function normalizedListingsKey(
     neighborhoods: normalizeNeighborhoods(neighborhoods)
       .map((neighborhood) => neighborhood.toLocaleLowerCase("nl-NL"))
       .sort((a, b) => a.localeCompare(b, "nl-NL")),
+    ...(businessCategories.length > 0
+      ? { businessCategories: parseBusinessCategories(businessCategories) }
+      : {}),
   });
 }
 
@@ -524,6 +552,7 @@ const GOOGLE_PLACES_MAX_RESULTS = 200;
 const GOOGLE_PLACES_MAX_PAGES_PER_SEARCH = 3;
 const GOOGLE_PLACES_CONCURRENCY = 6;
 const GOOGLE_PLACES_CACHE_TTL_MS = 15 * 60 * 1000;
+const GOOGLE_PLACES_QUERIES_ENABLED = false;
 const OPEN_STREET_MAP_RESULT_RESERVE = 0.25;
 const googlePlacesCache = new Map<string, { expiresAt: number; listings: Listing[] }>();
 const googlePlacesRequests = new Map<string, Promise<Listing[]>>();
@@ -533,7 +562,15 @@ const overpassCache = new Map<string, { expiresAt: number; elements: OsmElement[
 const overpassRequests = new Map<string, Promise<OsmElement[]>>();
 
 type GeographicBounds = { s: number; w: number; n: number; e: number };
+type SearchCenter = { lat: number; lng: number };
 type GoogleSearchSpec = { textQuery: string; bounds: GeographicBounds };
+
+function distanceFromSearchCenterSquared(lat: number, lng: number, center: SearchCenter): number {
+  const latitudeScale = Math.cos(center.lat * Math.PI / 180);
+  const latitudeDelta = lat - center.lat;
+  const longitudeDelta = (lng - center.lng) * latitudeScale;
+  return latitudeDelta ** 2 + longitudeDelta ** 2;
+}
 
 // Text Search is ranked and query-scoped, so one city-wide query systematically
 // misses smaller businesses. These overlapping cells give every part of The
@@ -578,15 +615,35 @@ const GOOGLE_SEARCH_TERMS: Record<Exclude<ListingSection, "events" | "social-map
   ],
 };
 
+const GOOGLE_BUSINESS_CATEGORY_SEARCH_TERMS: Record<Exclude<BusinessCategory, "Food & Drink">, string[]> = {
+  "Retail & Shopping": ["winkels retail en speciaalzaken in Den Haag Nederland"],
+  "Health & Wellness": ["zorg huisartsen tandartsen apotheken en opticiens in Den Haag"],
+  "Beauty & Personal Care": ["kappers barbiers schoonheidssalons nagelstudio's parfumerie en spa's in Den Haag"],
+  "Professional Services": ["professionele diensten kantoren en consultants in Den Haag"],
+  "Finance & Legal": ["advocaten accountants banken verzekeringen notarissen en makelaars in Den Haag"],
+  "Home & Repair": ["klusbedrijven loodgieters elektriciens en reparatie in Den Haag"],
+  "Automotive & Mobility": ["autogarages fietsenwinkels en mobiliteit in Den Haag"],
+  "Education & Childcare": ["scholen kinderopvang en onderwijs in Den Haag"],
+  "Hospitality & Travel": ["hotels hostels reisbureaus en toerisme in Den Haag"],
+  "Arts, Culture & Entertainment": ["kunst cultuur theaters bioscopen en musea in Den Haag"],
+  "Fitness & Sports": ["sportscholen fitness en sportclubs in Den Haag"],
+};
+
 function googleSearchSpecs(
   section: Exclude<ListingSection, "events" | "social-map">,
   neighborhoods: string[] = [],
+  businessCategories: BusinessCategory[] = [],
 ): GoogleSearchSpec[] {
+  const baseTerms = section === "businesses" && businessCategories.length > 0
+    ? businessCategories
+      .filter((category): category is Exclude<BusinessCategory, "Food & Drink"> => category !== "Food & Drink")
+      .flatMap((category) => GOOGLE_BUSINESS_CATEGORY_SEARCH_TERMS[category])
+    : GOOGLE_SEARCH_TERMS[section];
   const terms = neighborhoods.length > 0
     ? neighborhoods.flatMap((neighborhood) =>
-      GOOGLE_SEARCH_TERMS[section].map((term) => `${term} nabij ${neighborhood}`),
+      baseTerms.map((term) => `${term} nabij ${neighborhood}`),
     )
-    : GOOGLE_SEARCH_TERMS[section];
+    : baseTerms;
   return HAGUE_DISCOVERY_AREAS.flatMap((area) =>
     terms.map((term) => ({
       textQuery: term,
@@ -644,14 +701,15 @@ async function fetchGooglePlaces(
   bounds: { s: number; w: number; n: number; e: number },
   section: Exclude<ListingSection, "events" | "social-map">,
   neighborhoods: string[] = [],
+  businessCategories: BusinessCategory[] = [],
 ): Promise<Listing[]> {
-  const cacheKey = `${section}:${neighborhoods.slice().sort().join("|")}`;
+  const cacheKey = `${section}:${neighborhoods.slice().sort().join("|")}:${businessCategories.slice().sort().join("|")}`;
   const cached = googlePlacesCache.get(cacheKey);
   if (cached && cached.expiresAt > Date.now()) return cached.listings;
   const inFlight = googlePlacesRequests.get(cacheKey);
   if (inFlight) return inFlight;
 
-  const request = collectGooglePlaces(bounds, section, neighborhoods);
+  const request = collectGooglePlaces(bounds, section, neighborhoods, businessCategories);
   googlePlacesRequests.set(cacheKey, request);
   try {
     const listings = await request;
@@ -672,6 +730,7 @@ export async function resolveClaimableBusinessListing(
   if (!bounds) return null;
 
   if (listingSource === "google_maps") {
+    if (!GOOGLE_PLACES_QUERIES_ENABLED) return null;
     const results = await Promise.allSettled([
       fetchGooglePlaces(bounds, "businesses"),
       fetchGooglePlaces(bounds, "food-drink"),
@@ -701,12 +760,14 @@ async function collectGooglePlaces(
   bounds: { s: number; w: number; n: number; e: number },
   section: Exclude<ListingSection, "events" | "social-map">,
   neighborhoods: string[] = [],
+  businessCategories: BusinessCategory[] = [],
 ): Promise<Listing[]> {
   const apiKey = process.env.GOOGLE_MAPS_API_KEY;
   if (!apiKey) return [];
 
   const seen = new Set<string>();
-  const searches = googleSearchSpecs(section, neighborhoods);
+  const searches = googleSearchSpecs(section, neighborhoods, businessCategories);
+  const selectedBusinessCategories = new Set(businessCategories);
   const resultsBySearch = searches.map((): Listing[] => []);
   let nextSearchIndex = 0;
   const worker = async () => {
@@ -769,6 +830,11 @@ async function collectGooglePlaces(
            if (section === "food-drink" && place.primaryType && !isFoodGooglePlace(place)) continue;
            const businessCategory = businessCategoryForGooglePlace(place, section);
            if (section === "businesses" && businessCategory === "Food & Drink") continue;
+           if (
+             section === "businesses"
+             && selectedBusinessCategories.size > 0
+             && !selectedBusinessCategories.has(businessCategory)
+           ) continue;
 
            const providerKey = place.id ? `id:${place.id}` : undefined;
            const nameAddressKey = `place:${normalizedTitle(name)}|${normalizedAddress(address)}`;
@@ -888,7 +954,10 @@ function businessCategoryForOsmTags(
   if (["pharmacy", "doctors", "dentist", "clinic", "hospital", "optician", "hearing_aids"].includes(amenity ?? "")) {
     return "Health & Wellness";
   }
-  if (["hairdresser", "beauty", "beauty_salon", "spa"].includes(amenity ?? "") || ["hairdresser", "beauty"].includes(shop ?? "")) {
+  if (
+    ["hairdresser", "beauty", "beauty_salon", "spa", "massage", "nail_salon"].includes(amenity ?? "")
+    || ["hairdresser", "beauty", "cosmetics", "perfumery", "massage", "nail_salon", "tattoo"].includes(shop ?? "")
+  ) {
     return "Beauty & Personal Care";
   }
   if (["bank", "bureau_de_change", "insurance", "lawyer", "notary"].includes(amenity ?? "")
@@ -971,9 +1040,55 @@ function isFoodOsmTags(tags: Record<string, string>): boolean {
   return OSM_FOOD_AMENITIES.has(tags.amenity) || OSM_FOOD_SHOPS.has(tags.shop);
 }
 
-function fetchOpenStreetMapBusinesses(elements: OsmElement[], section: Exclude<ListingSection, "events" | "social-map">, bounds: { s: number; w: number; n: number; e: number }): Listing[] {
+const OSM_SELECTORS_BY_BUSINESS_CATEGORY: Record<Exclude<BusinessCategory, "Food & Drink">, string[]> = {
+  "Retail & Shopping": ["nwr[shop]"],
+  "Health & Wellness": [
+    'nwr[amenity~"^(pharmacy|doctors|dentist|clinic|hospital|optician|hearing_aids)$"]',
+    'nwr[shop~"^(chemist|medical_supply|optician|hearing_aids)$"]',
+  ],
+  "Beauty & Personal Care": [
+    'nwr[amenity~"^(hairdresser|beauty|beauty_salon|spa|massage|nail_salon)$"]',
+    'nwr[shop~"^(hairdresser|beauty|cosmetics|perfumery|massage|nail_salon|tattoo)$"]',
+  ],
+  "Professional Services": ["nwr[office]", "nwr[craft]"],
+  "Finance & Legal": [
+    'nwr[amenity~"^(bank|bureau_de_change|insurance|lawyer|notary)$"]',
+    'nwr[office~"^(financial|insurance|lawyer)$"]',
+  ],
+  "Home & Repair": [
+    'nwr[craft~"^(electrician|plumber|carpenter|painter|roofing|gardener|handyman)$"]',
+    'nwr[shop~"^(hardware|trade)$"]',
+  ],
+  "Automotive & Mobility": [
+    'nwr[shop~"^(car_repair|car|car_parts|tyres|bicycle|motorcycle)$"]',
+    'nwr[amenity~"^(car_repair|fuel|parking)$"]',
+  ],
+  "Education & Childcare": [
+    'nwr[amenity~"^(school|college|university|kindergarten|language_school)$"]',
+  ],
+  "Hospitality & Travel": [
+    'nwr[tourism~"^(hotel|hostel|guest_house|motel)$"]',
+    'nwr[amenity~"^(hotel|hostel)$"]',
+  ],
+  "Arts, Culture & Entertainment": [
+    'nwr[tourism~"^(museum|gallery)$"]',
+    'nwr[amenity~"^(theatre|cinema|arts_centre|music_venue)$"]',
+  ],
+  "Fitness & Sports": [
+    'nwr[leisure~"^(gym|sports_centre|fitness_centre|stadium|pitch)$"]',
+  ],
+};
+
+export function fetchOpenStreetMapBusinesses(
+  elements: OsmElement[],
+  section: Exclude<ListingSection, "events" | "social-map">,
+  bounds: { s: number; w: number; n: number; e: number },
+  businessCategories: BusinessCategory[] = [],
+  searchCenter?: SearchCenter,
+): Listing[] {
   const listings: Listing[] = [];
   const seen = new Set<string>();
+  const selectedBusinessCategories = new Set(businessCategories);
 
   for (const element of elements) {
     if (!isInHagueBounds(element.lat, element.lon)) continue;
@@ -985,11 +1100,17 @@ function fetchOpenStreetMapBusinesses(elements: OsmElement[], section: Exclude<L
 
     const address = osmAddressFromTags(tags);
     const { x, y } = toXY(element.lat, element.lon, bounds);
+    const businessCategory = businessCategoryForOsmTags(tags, section);
+    if (
+      section === "businesses"
+      && selectedBusinessCategories.size > 0
+      && !selectedBusinessCategories.has(businessCategory)
+    ) continue;
     const listing: Listing = {
       id: `osm-${element.id}`,
       locationId: "dhg",
       category: section === "food-drink" ? "Food & Drink" : "Businesses",
-      businessCategory: businessCategoryForOsmTags(tags, section),
+      businessCategory,
       name: tags.name,
       ...(address ? { address } : {}),
       description: descriptionFromTags(tags),
@@ -1005,10 +1126,15 @@ function fetchOpenStreetMapBusinesses(elements: OsmElement[], section: Exclude<L
     if (seen.has(key)) continue;
     seen.add(key);
     listings.push(listing);
-    if (listings.length >= GOOGLE_PLACES_MAX_RESULTS) break;
   }
 
-  return listings;
+  if (searchCenter) {
+    listings.sort((a, b) =>
+      distanceFromSearchCenterSquared(a.lat, a.lng, searchCenter)
+      - distanceFromSearchCenterSquared(b.lat, b.lng, searchCenter),
+    );
+  }
+  return listings.slice(0, GOOGLE_PLACES_MAX_RESULTS);
 }
 
 export interface OsmElement {
@@ -1019,7 +1145,11 @@ export interface OsmElement {
 }
 
 interface OsmResponse {
-  elements: OsmElement[];
+  elements: Array<Omit<OsmElement, "lat" | "lon"> & {
+    lat?: number;
+    lon?: number;
+    center?: { lat?: number; lon?: number };
+  }>;
 }
 
 const GOOGLE_PLACES_LIFETIME_LIMIT = 100;
@@ -1094,14 +1224,28 @@ async function waitForOverpassSlot(): Promise<void> {
 
 async function fetchCityListings(
   bounds: { s: number; w: number; n: number; e: number },
+  businessCategories: BusinessCategory[] = [],
+  searchCenter?: SearchCenter,
 ): Promise<OsmElement[]> {
-  const cacheKey = `${bounds.s}:${bounds.w}:${bounds.n}:${bounds.e}`;
+  const cacheKey = [
+    bounds.s,
+    bounds.w,
+    bounds.n,
+    bounds.e,
+    businessCategories.slice().sort().join("|"),
+    searchCenter ? `${searchCenter.lat}:${searchCenter.lng}` : "",
+  ].join(":");
   const cached = overpassCache.get(cacheKey);
   if (cached && cached.expiresAt > Date.now()) return cached.elements;
   const inFlight = overpassRequests.get(cacheKey);
   if (inFlight) return inFlight;
 
-  const request = fetchCityListingsFromOverpass(bounds);
+  const request = fetchCityListingsFromOverpass(
+    bounds,
+    defaultOverpassRequestDependencies,
+    businessCategories,
+    searchCenter,
+  );
   overpassRequests.set(cacheKey, request);
   try {
     const elements = await request;
@@ -1130,17 +1274,30 @@ const defaultOverpassRequestDependencies: OverpassRequestDependencies = {
 export async function fetchCityListingsFromOverpass(
   bounds: { s: number; w: number; n: number; e: number },
   dependencies: OverpassRequestDependencies = defaultOverpassRequestDependencies,
+  businessCategories: BusinessCategory[] = [],
+  searchCenter?: SearchCenter,
 ): Promise<OsmElement[]> {
-  // Single query combining businesses, events, and specials to avoid rate limits
   const bbox = `${bounds.s},${bounds.w},${bounds.n},${bounds.e}`;
-  const query = `[out:json][timeout:20];
+  const searchArea = searchCenter
+    ? `(around:3000,${searchCenter.lat},${searchCenter.lng})`
+    : `(${bbox})`;
+  const targetedSelectors = businessCategories
+    .filter((category): category is Exclude<BusinessCategory, "Food & Drink"> => category !== "Food & Drink")
+    .flatMap((category) => OSM_SELECTORS_BY_BUSINESS_CATEGORY[category]);
+  const query = targetedSelectors.length > 0
+    ? `[out:json][timeout:20];
+(
+  ${[...new Set(targetedSelectors)].map((selector) => `${selector}[name]${searchArea};`).join("\n  ")}
+);
+out center 2000;`
+    : `[out:json][timeout:20];
 (
   node[amenity][name](${bbox});
   node[shop][name](${bbox});
   node[leisure][name](${bbox});
   node[tourism][name](${bbox});
 );
-   out 2000;`;
+out 2000;`;
 
   const url =
     "https://overpass-api.de/api/interpreter?data=" + encodeURIComponent(query);
@@ -1166,7 +1323,12 @@ export async function fetchCityListingsFromOverpass(
     }
     if (res.ok) {
       const data = (await res.json()) as OsmResponse;
-      return data.elements ?? [];
+      return (data.elements ?? []).flatMap((element) => {
+        const lat = element.lat ?? element.center?.lat;
+        const lon = element.lon ?? element.center?.lon;
+        if (typeof lat !== "number" || typeof lon !== "number") return [];
+        return [{ id: element.id, lat, lon, tags: element.tags ?? {} }];
+      });
     }
     lastError = new Error(`Overpass HTTP ${res.status}`);
     if (res.status !== 429 && res.status < 500) throw lastError;
@@ -1339,22 +1501,33 @@ function storedMissMessage(language: EventLanguage): string {
 
 export interface ListingsRouterDependencies {
   getUserId: (req: Parameters<typeof getAuth>[0]) => string | null;
+  googlePlacesEnabled?: boolean;
   loadGooglePlaces: (
     bounds: GeographicBounds,
     section: Exclude<ListingSection, "events" | "social-map">,
     neighborhoods: string[],
+    businessCategories: BusinessCategory[],
   ) => Promise<Listing[]>;
   loadOpenStreetMapBusinesses: (
     bounds: GeographicBounds,
     section: Exclude<ListingSection, "events" | "social-map">,
+    businessCategories: BusinessCategory[],
+    searchCenter?: SearchCenter,
   ) => Promise<Listing[]>;
 }
 
 const defaultListingsRouterDependencies: ListingsRouterDependencies = {
   getUserId: (req) => getAuth(req).userId,
+  googlePlacesEnabled: GOOGLE_PLACES_QUERIES_ENABLED,
   loadGooglePlaces: fetchGooglePlaces,
-  loadOpenStreetMapBusinesses: async (bounds, section) =>
-    fetchOpenStreetMapBusinesses(await fetchCityListings(bounds), section, bounds),
+  loadOpenStreetMapBusinesses: async (bounds, section, businessCategories, searchCenter) =>
+    fetchOpenStreetMapBusinesses(
+      await fetchCityListings(bounds, businessCategories, searchCenter),
+      section,
+      bounds,
+      businessCategories,
+      searchCenter,
+    ),
 };
 
 export function createListingsRouter(
@@ -1366,6 +1539,11 @@ export function createListingsRouter(
   const listingSection = parseListingSection(req.query["section"]);
   const language = parseEventLanguage(req.query["language"]);
   const requestedNeighborhoods = normalizeNeighborhoods(req.query["neighborhoods"]);
+  const requestedBusinessCategories = listingSection === "businesses"
+    ? parseBusinessCategories(req.query["businessCategories"])
+    : [];
+  const requestedSearchLat = Number(req.query["searchLat"]);
+  const requestedSearchLng = Number(req.query["searchLng"]);
   const mode = parseListingsMode(req.query["mode"]);
   const anonymousId = parseAnonymousId(req.query["anonymousId"]);
 
@@ -1383,7 +1561,18 @@ export function createListingsRouter(
     res.status(400).json({ listings: [], source: "fallback", message: `Unknown city: ${cityId}` });
     return;
   }
-  const normalizedKey = normalizedListingsKey(cityId, listingSection, language, requestedNeighborhoods);
+  const requestedSearchCenter = Number.isFinite(requestedSearchLat)
+    && Number.isFinite(requestedSearchLng)
+    && isInHagueBounds(requestedSearchLat, requestedSearchLng)
+    ? { lat: requestedSearchLat, lng: requestedSearchLng }
+    : undefined;
+  const normalizedKey = normalizedListingsKey(
+    cityId,
+    listingSection,
+    language,
+    requestedNeighborhoods,
+    requestedBusinessCategories,
+  );
   const queryId = await createListingsQuery({
     cityId,
     section: listingSection,
@@ -1478,10 +1667,14 @@ export function createListingsRouter(
     }
 
     if (listingSection !== "events") {
-      const providers: ExternalProvider[] = ["google_places", "openstreetmap"];
+      const providers: ExternalProvider[] = dependencies.googlePlacesEnabled
+        ? ["google_places", "openstreetmap"]
+        : ["openstreetmap"];
       if (!allowsExternalQueries(mode)) {
         const stored = await loadStoredProviderResults(normalizedKey, providers);
-        const googleListings = stored.get("google_places") ?? [];
+        const googleListings = dependencies.googlePlacesEnabled
+          ? stored.get("google_places") ?? []
+          : [];
         const osmListings = stored.get("openstreetmap") ?? [];
         const hit = stored.size > 0;
         await finalizeListingsQuery(queryId, hit && stored.size < providers.length ? "partial" : "succeeded");
@@ -1494,26 +1687,46 @@ export function createListingsRouter(
         });
         return;
       }
-      const [google, osm] = await Promise.all([
-        captureProviderResult(queryId, "google_places", normalizedKey, { section: listingSection, neighborhoods: requestedNeighborhoods }, () =>
-          dependencies.loadGooglePlaces(bounds, listingSection, requestedNeighborhoods)),
-        captureProviderResult(queryId, "openstreetmap", normalizedKey, { section: listingSection }, async () =>
-          dependencies.loadOpenStreetMapBusinesses(bounds, listingSection), 1),
+      const outcomes = await Promise.all([
+        ...(dependencies.googlePlacesEnabled
+          ? [captureProviderResult(queryId, "google_places", normalizedKey, {
+              section: listingSection,
+              neighborhoods: requestedNeighborhoods,
+              businessCategories: requestedBusinessCategories,
+            }, () => dependencies.loadGooglePlaces(
+              bounds,
+              listingSection,
+              requestedNeighborhoods,
+              requestedBusinessCategories,
+            ))]
+          : []),
+        captureProviderResult(queryId, "openstreetmap", normalizedKey, {
+          section: listingSection,
+          businessCategories: requestedBusinessCategories,
+          searchCenter: requestedSearchCenter,
+        }, async () => dependencies.loadOpenStreetMapBusinesses(
+          bounds,
+          listingSection,
+          requestedBusinessCategories,
+          requestedSearchCenter,
+        ), 1),
       ]);
-      const successful = [google, osm].filter((result) => !result.error);
-      const merged = mergeBusinessListings(google.listings, osm.listings);
+      const google = outcomes.find((result) => result.provider === "google_places");
+      const osm = outcomes.find((result) => result.provider === "openstreetmap");
+      const successful = outcomes.filter((result) => !result.error);
+      const merged = mergeBusinessListings(google?.listings ?? [], osm?.listings ?? []);
       const partial = successful.length > 0 && successful.length < providers.length;
       const status = successful.length === 0 ? "failed" : partial ? "partial" : "succeeded";
       await finalizeListingsQuery(queryId, status, successful.length === 0 ? "All external providers failed." : undefined);
-      if (google.error) req.log.warn({ err: google.error }, "Google Places listings unavailable");
-      if (osm.error) req.log.warn({ err: osm.error }, "OpenStreetMap listings unavailable");
+      if (google?.error) req.log.warn({ err: google.error }, "Google Places listings unavailable");
+      if (osm?.error) req.log.warn({ err: osm.error }, "OpenStreetMap listings unavailable");
       res.json({
         listings: merged.listings,
-        source: google.listings.length > 0 ? "google_places" : "fallback",
-        message: google.listings.length > 0
+        source: google?.listings.length ? "google_places" : osm?.listings.length ? "live" : "fallback",
+        message: google?.listings.length
           ? `${google.listings.length} Haagse ${listingSection === "food-drink" ? "horecazaken" : "bedrijven"} uit Google Places${merged.osmAdded > 0 ? ` en ${merged.osmAdded} aanvullende OpenStreetMap-vermeldingen` : ""}.`
-          : osm.listings.length > 0
-            ? "Google Places is tijdelijk niet beschikbaar; OpenStreetMap-resultaten worden getoond."
+          : osm?.listings.length
+            ? `${osm.listings.length} Haagse ${listingSection === "food-drink" ? "horecazaken" : "bedrijven"} uit OpenStreetMap.`
             : "Er zijn tijdelijk geen gecontroleerde resultaten voor deze sectie.",
         queryId, mode, cacheHit: false, cacheMiss: false, partial,
         providers: successful.map((result) => result.provider),

@@ -313,6 +313,9 @@ export const GetListingsQueryParams = zod.object({
   "section": zod.enum(['events', 'businesses', 'food-drink', 'social-map']).default(getListingsQuerySectionDefault).describe('Which Den Haag discovery stream to return.'),
   "language": zod.enum(['nl', 'en']).describe('Language selected by the user for all human-readable listing copy.'),
   "neighborhoods": zod.coerce.string().optional().describe('Comma-separated neighborhood names used to target local business discovery.'),
+  "businessCategories": zod.coerce.string().optional().describe('Comma-separated business subcategories used to narrow provider retrieval before applying result limits.'),
+  "searchLat": zod.coerce.number().optional().describe('Center latitude for a selected neighborhood\'s targeted provider search.'),
+  "searchLng": zod.coerce.number().optional().describe('Center longitude for a selected neighborhood\'s targeted provider search.'),
   "mode": zod.enum(['live', 'stored_only']).default(getListingsQueryModeDefault).describe('Whether external providers may be queried or only previously stored external results may be used.'),
   "anonymousId": zod.coerce.string().min(getListingsQueryAnonymousIdMin).max(getListingsQueryAnonymousIdMax).optional().describe('Stable browser identifier used to associate anonymous discovery requests without requiring sign-in.')
 })

@@ -47,6 +47,7 @@ app.use((req, _res, next) => {
 });
 app.use("/api", createListingsRouter({
   getUserId: () => null,
+  googlePlacesEnabled: true,
   loadGooglePlaces: async () => {
     googleLoaderCalls += 1;
     return [{

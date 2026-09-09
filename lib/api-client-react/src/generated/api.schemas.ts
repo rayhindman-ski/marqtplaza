@@ -1297,6 +1297,18 @@ language: GetListingsLanguage;
  */
 neighborhoods?: string;
 /**
+ * Comma-separated business subcategories used to narrow provider retrieval before applying result limits.
+ */
+businessCategories?: string;
+/**
+ * Center latitude for a selected neighborhood's targeted provider search.
+ */
+searchLat?: number;
+/**
+ * Center longitude for a selected neighborhood's targeted provider search.
+ */
+searchLng?: number;
+/**
  * Whether external providers may be queried or only previously stored external results may be used.
  */
 mode?: GetListingsMode;
