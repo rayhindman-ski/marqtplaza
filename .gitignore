@@ -47,3 +47,6 @@ Thumbs.db
 # Replit
 .cache/
 .local/
+
+# Local environment secrets (values belong in Replit Secrets)
+/config/environments/*/application.secrets
