@@ -6,7 +6,9 @@ if (!process.env.DATABASE_URL) {
 }
 
 export default defineConfig({
-  schema: path.join(__dirname, "./src/schema/index.ts"),
+  // drizzle-kit's internal glob matching expects forward slashes; on Windows
+  // path.join() produces backslashes which silently match zero schema files.
+  schema: path.join(__dirname, "./src/schema/index.ts").split(path.sep).join("/"),
   dialect: "postgresql",
   dbCredentials: {
     url: process.env.DATABASE_URL,

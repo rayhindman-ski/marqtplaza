@@ -654,10 +654,13 @@ function WeatherCard({ cityId, language }: { cityId: string; language: Language 
     },
   );
   const data = weatherQuery.data;
-  const currentLabel = data
+  // Guard with data?.current (not just data) — a malformed/unexpected response
+  // shape (e.g. wrong proxy target, backend contract drift) can still produce
+  // a truthy `data` without a `current` field, which previously crashed here.
+  const currentLabel = data?.current
     ? (weatherConditionLabels[data.current.condition]?.[language] ?? weatherConditionLabels.unknown[language])
     : '';
-  const updatedLabel = data
+  const updatedLabel = data?.fetchedAt
     ? new Intl.DateTimeFormat(language === 'nl' ? 'nl-NL' : 'en-GB', {
       hour: '2-digit',
       minute: '2-digit',
@@ -676,7 +679,7 @@ function WeatherCard({ cityId, language }: { cityId: string; language: Language 
     );
   }
 
-  if (weatherQuery.isError || !data) {
+  if (weatherQuery.isError || !data?.current) {
     return (
       <div className="w-full border-t border-white/40 bg-gradient-to-r from-secondary/85 via-teal-600/75 to-cyan-400/65 px-4 py-2 text-xs font-bold text-white backdrop-blur-md">
         {localizedLocationName} · {language === 'nl' ? 'Weer tijdelijk niet beschikbaar' : 'Weather temporarily unavailable'}
@@ -1634,6 +1637,7 @@ function DiscoveryState({
     initialPostcode?.trim()
     || initialNeighborhood?.trim()
     || selectedNeighborhoods.length > 0
+    || neighborhoodSelection === 'all'
     || postcodeFilter.trim().length >= 4,
   );
   const requestedNeighborhoods = location

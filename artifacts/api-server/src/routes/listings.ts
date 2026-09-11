@@ -552,7 +552,9 @@ const GOOGLE_PLACES_MAX_RESULTS = 200;
 const GOOGLE_PLACES_MAX_PAGES_PER_SEARCH = 3;
 const GOOGLE_PLACES_CONCURRENCY = 6;
 const GOOGLE_PLACES_CACHE_TTL_MS = 15 * 60 * 1000;
-const GOOGLE_PLACES_QUERIES_ENABLED = false;
+// Google Places can be disabled purely via config (env var), without touching code.
+// Default is disabled (false) unless GOOGLE_PLACES_QUERIES_ENABLED=true is explicitly set.
+const GOOGLE_PLACES_QUERIES_ENABLED = process.env.GOOGLE_PLACES_QUERIES_ENABLED === "true";
 const OPEN_STREET_MAP_RESULT_RESERVE = 0.25;
 const googlePlacesCache = new Map<string, { expiresAt: number; listings: Listing[] }>();
 const googlePlacesRequests = new Map<string, Promise<Listing[]>>();

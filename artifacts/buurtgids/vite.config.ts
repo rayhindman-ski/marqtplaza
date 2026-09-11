@@ -81,6 +81,17 @@ export default defineConfig({
     fs: {
       strict: true,
     },
+    // Local dev only: in production/Replit, the platform's routing layer
+    // forwards /api/* to the api-server artifact (see artifact.toml paths).
+    // That routing doesn't exist when running vite standalone locally, so
+    // without this proxy every /api call falls through to the SPA index.html
+    // fallback (200 OK, text/html) instead of hitting the real backend.
+    proxy: {
+      '/api': {
+        target: process.env.API_PROXY_TARGET ?? 'http://localhost:8080',
+        changeOrigin: true,
+      },
+    },
   },
   preview: {
     port,
