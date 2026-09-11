@@ -9,6 +9,7 @@ import {
   eventPriceEvidenceFromHtml,
   eventMetadata,
   parseVisibleEventPrice,
+  sourceScanStatus,
   structuredEventsFromPage,
   structuredIndoorStatus,
   type SourceDefinition,
@@ -20,6 +21,44 @@ const source: SourceDefinition = {
   activityUrl: "https://events.example.test",
   sourceGroup: "city-agenda",
 };
+
+describe("source scan outcomes", () => {
+  it("keeps verified events distinct from partial coverage", () => {
+    assert.equal(sourceScanStatus({
+      eventCount: 1,
+      sourceDenied: false,
+      pagesFailed: 0,
+      crawlLimitReached: false,
+    }), "found");
+    assert.equal(sourceScanStatus({
+      eventCount: 1,
+      sourceDenied: false,
+      pagesFailed: 1,
+      crawlLimitReached: false,
+    }), "partial");
+  });
+
+  it("does not collapse blocked or failed sources into an empty result", () => {
+    assert.equal(sourceScanStatus({
+      eventCount: 0,
+      sourceDenied: true,
+      pagesFailed: 0,
+      crawlLimitReached: false,
+    }), "blocked");
+    assert.equal(sourceScanStatus({
+      eventCount: 0,
+      sourceDenied: false,
+      pagesFailed: 1,
+      crawlLimitReached: false,
+    }), "error");
+    assert.equal(sourceScanStatus({
+      eventCount: 0,
+      sourceDenied: false,
+      pagesFailed: 0,
+      crawlLimitReached: false,
+    }), "no_events");
+  });
+});
 
 describe("event price capture", () => {
   it("keeps a structured exact paid price", () => {

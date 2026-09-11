@@ -16,4 +16,6 @@ already need cross-cutting decisions to be explicit.
 **How to apply:** For non-trivial feature work, create a numbered feature
 directory with `pnpm speckit:new -- "short name"`, complete the spec and plan
 before implementation, then record convergence evidence. Do not add this
-process to trivial copy or dependency-only changes.
+process to trivial copy or dependency-only changes. Generated task templates
+may wrap placeholder lines, so replace the scaffold with the exact completed
+task list when context-based patching cannot match the wrapped text.

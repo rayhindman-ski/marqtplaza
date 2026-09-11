@@ -1150,6 +1150,21 @@ function mapCoordinates(event: SourceScanEvent): {
 }
 
 type PublicationStatus = "eligible" | PublicationReason;
+export type SourceScanStatus = "found" | "partial" | "no_events" | "blocked" | "error";
+
+export function sourceScanStatus(input: {
+  eventCount: number;
+  sourceDenied: boolean;
+  pagesFailed: number;
+  crawlLimitReached: boolean;
+}): SourceScanStatus {
+  if (input.eventCount > 0) {
+    return input.crawlLimitReached || input.pagesFailed > 0 ? "partial" : "found";
+  }
+  if (input.sourceDenied) return "blocked";
+  if (input.pagesFailed > 0) return "error";
+  return "no_events";
+}
 
 function isForeignLocation(event: SourceScanEvent): boolean {
   const evidence = `${event.title} ${event.venue ?? ""} ${event.description ?? ""}`;
@@ -1529,14 +1544,12 @@ async function scanSource(source: SourceDefinition): Promise<EventSourceScanResu
     }
   }
 
-  const reachedLimit = metrics.crawlLimitReached;
-  const status = events.length > 0
-    ? (reachedLimit || metrics.pagesFailed > 0 ? "partial" : "found")
-    : sourceDenied
-      ? "blocked"
-      : metrics.pagesFailed > 0
-        ? "error"
-        : "no_events";
+  const status = sourceScanStatus({
+    eventCount: events.length,
+    sourceDenied,
+    pagesFailed: metrics.pagesFailed,
+    crawlLimitReached: metrics.crawlLimitReached,
+  });
 
   const message = status === "blocked"
     ? "The source denied automated access."
