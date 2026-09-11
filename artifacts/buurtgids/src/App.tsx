@@ -12,7 +12,7 @@ import {
   Landmark, Route as RouteIcon, Baby, Building2, Coffee, Gamepad2, HandHeart, Waves, ShoppingBag, ExternalLink, AlertCircle, CalendarPlus,
   CalendarDays, UsersRound, Utensils,
   CloudSun, Cloud, CloudFog, CloudRain, CloudSnow, Sun, Wind, Droplets, Tag, Store,
-  Bike, Car, Footprints, TrainFront, ShieldCheck, Sparkles, Navigation
+  Bike, Car, Footprints, TrainFront, ShieldCheck, Sparkles, Navigation, UserRound
 } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -56,6 +56,9 @@ import BusinessProfileView from './pages/BusinessProfileView';
 import BusinessClaimView from './pages/BusinessClaimView';
 import MyBusinessWorkspace from './pages/MyBusinessWorkspace';
 import BusinessModerationView from './pages/BusinessModerationView';
+import OnboardingPage from './pages/OnboardingPage';
+import AccountPage from './pages/AccountPage';
+import BusinessOnboardingPage from './pages/BusinessOnboardingPage';
 import { useEditorAccess } from './lib/editorAccess';
 import {
   getLocationName,
@@ -806,6 +809,8 @@ function ReferenceCategoryNav({
           { href: '/buurt', label: language === 'nl' ? 'Buurtplein' : 'Community', Icon: HandHeart },
           { href: '/deals', label: language === 'nl' ? 'Deals' : 'Deals', Icon: Tag },
           { href: '/mijn-bedrijf', label: language === 'nl' ? 'Mijn bedrijf' : 'My business', Icon: Store },
+          { href: '/bedrijf-aanmelden', label: language === 'nl' ? 'Bedrijf aanmelden' : 'List a business', Icon: Building2 },
+          { href: '/account', label: language === 'nl' ? 'Mijn account' : 'My account', Icon: UserRound },
         ].filter(({ href }) => userRole === 'designer' || !['/capture', '/bronnen'].includes(href))
           .map(({ href, label, Icon }) => (
           <span key={href} className="group relative">
@@ -2960,6 +2965,9 @@ export default function App() {
           <Route path="/beoordelen/community" component={CommunityModerationView} />
           <Route path="/sign-in/*?" component={SignInPage} />
           <Route path="/sign-up/*?" component={SignUpPage} />
+          <Route path="/onboarding" component={OnboardingPage} />
+          <Route path="/account/*?" component={AccountPage} />
+          <Route path="/bedrijf-aanmelden" component={BusinessOnboardingPage} />
           <Route path="/nieuws" component={NewsFeedView} />
           <Route path="/nieuws/:id" component={NewsArticleView} />
           <Route path="/deals" component={DealsView} />
@@ -3627,7 +3635,12 @@ const clerkAppearance = {
 function SignUpPage() {
   return (
     <div className="flex min-h-[100dvh] items-center justify-center bg-background px-4">
-      <SignUp routing="path" path={`${basePath}/sign-up`} signInUrl={`${basePath}/sign-in`} />
+      <SignUp
+        routing="path"
+        path={`${basePath}/sign-up`}
+        signInUrl={`${basePath}/sign-in`}
+        forceRedirectUrl={`${basePath}/onboarding`}
+      />
     </div>
   );
 }
