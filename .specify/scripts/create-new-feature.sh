@@ -2,6 +2,9 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+if [[ "${1:-}" == "--" ]]; then
+  shift
+fi
 INPUT="${1:-}"
 
 if [[ -z "$INPUT" ]]; then
@@ -43,12 +46,13 @@ cp "$ROOT/.specify/templates/tasks-template.md" "$feature_dir/tasks.md"
 
 today="$(date +%F)"
 branch="$id-$slug"
+title="$(printf '%s' "$INPUT" | sed 's/[&/\]/\\&/g')"
 for file in "$feature_dir/spec.md" "$feature_dir/plan.md" "$feature_dir/tasks.md"; do
   sed -i \
-    -e "s/\\[FEATURE NAME\\]/$INPUT/g" \
-    -e "s/\\[###-short-name\\]/$branch/g" \
-    -e "s/\\[YYYY-MM-DD\\]/$today/g" \
+    -e "s/\[FEATURE NAME\]/$title/g" \
+    -e "s/\[###-short-name\]/$branch/g" \
+    -e "s/\[YYYY-MM-DD\]/$today/g" \
     "$file"
 done
 
-printf 'Created %s\\n' "${feature_dir#"$ROOT/"}"
+printf 'Created %s\n' "${feature_dir#"$ROOT/"}"

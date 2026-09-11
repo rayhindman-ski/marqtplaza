@@ -14,11 +14,11 @@ for required in \
 done
 
 if ((${#missing[@]} > 0)); then
-  printf 'Spec Kit prerequisites missing:\\n' >&2
-  printf '  - %s\\n' "${missing[@]}" >&2
+  printf 'Spec Kit prerequisites missing:\n' >&2
+  printf '  - %s\n' "${missing[@]}" >&2
   exit 1
 fi
 
-printf 'Spec Kit prerequisites are present.\\n'
-printf 'Constitution: .specify/memory/constitution.md\\n'
-printf 'Feature specs: .specify/specs/\\n'
+printf 'Spec Kit prerequisites are present.\n'
+printf 'Constitution: .specify/memory/constitution.md\n'
+printf 'Feature specs: .specify/specs/\n'

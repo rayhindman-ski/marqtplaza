@@ -2,6 +2,9 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+if [[ "${1:-}" == "--" ]]; then
+  shift
+fi
 feature="${1:-}"
 
 if [[ -z "$feature" ]]; then
