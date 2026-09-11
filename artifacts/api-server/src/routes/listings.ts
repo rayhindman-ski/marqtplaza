@@ -124,6 +124,23 @@ function sourceNameFromUrl(sourceUrl?: string): string | undefined {
   }
 }
 
+// Enhancement #1 (Verified, Fresh Listing Facts): Google Places and
+// OpenStreetMap listings are fetched live on every request, so the moment
+// we build the response *is* the verification moment. Stamping `lastCheckedAt`
+// here (rather than trying to persist/track it per-POI) gives the frontend an
+// honest, accurate "verified as of" timestamp for map-sourced listings without
+// requiring a background re-check pipeline. Curated/stored/source_scan
+// listings already carry their own `lastCheckedAt`/`updatedAt` from the
+// review pipeline and are left untouched.
+function stampLiveVerificationTimestamp(listings: Listing[]): Listing[] {
+  const checkedAt = new Date().toISOString();
+  return listings.map((listing) => (
+    (listing.source === "google_maps" || listing.source === "openstreetmap") && !listing.lastCheckedAt
+      ? { ...listing, lastCheckedAt: checkedAt }
+      : listing
+  ));
+}
+
 // Bounding boxes for each supported city (south, west, north, east)
 const CITY_BOUNDS: Record<string, { s: number; w: number; n: number; e: number }> = {
   ams: { s: 52.34, w: 4.85, n: 52.40, e: 5.00 },
@@ -931,7 +948,7 @@ function mergeBusinessListings(
     addListing(listing);
   }
   return {
-    listings,
+    listings: stampLiveVerificationTimestamp(listings),
     osmAdded,
   };
 }
@@ -1941,7 +1958,7 @@ export function createListingsRouter(
         .where(eq(externalQueriesTable.id, persistedOverpassQueryId));
     });
     await finalizeListingsQuery(queryId, "succeeded");
-    res.json({ listings, source: "live", queryId, mode, cacheHit: false, cacheMiss: false, partial: false, providers: ["openstreetmap"] });
+    res.json({ listings: stampLiveVerificationTimestamp(listings), source: "live", queryId, mode, cacheHit: false, cacheMiss: false, partial: false, providers: ["openstreetmap"] });
   } catch (error) {
     if (overpassQueryId !== undefined) {
       try {

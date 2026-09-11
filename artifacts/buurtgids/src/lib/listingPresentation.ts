@@ -193,3 +193,52 @@ export function trustBadge(
     ? (language === 'nl' ? 'Lokale bron' : 'Local source')
     : null;
 }
+
+// Enhancement #1 (Verified, Fresh Listing Facts): listings sourced live from
+// Google Places/OpenStreetMap (see api-server's stampLiveVerificationTimestamp)
+// plus curated/reviewed listings carry a verification timestamp. Anything
+// older than VERIFICATION_STALE_DAYS -- or missing a timestamp entirely for a
+// sourced listing -- is surfaced as possibly outdated so users don't act on
+// stale facts.
+export const VERIFICATION_STALE_DAYS = 30;
+
+export function lastVerifiedLabel(
+  marker: Pick<Marker, 'source' | 'lastCheckedAt' | 'updatedAt' | 'snapshotDate'>,
+  language: Language,
+  now = new Date(),
+): string | null {
+  if (!marker.source) return null;
+  const checked = validDate(marker.lastCheckedAt) ?? validDate(marker.updatedAt) ?? validDate(marker.snapshotDate);
+  if (!checked) return null;
+  const diffMs = now.getTime() - checked.getTime();
+  if (diffMs < 0) return null;
+  const diffMinutes = Math.round(diffMs / 60_000);
+  if (diffMinutes < 60) {
+    return language === 'nl' ? 'Zojuist geverifieerd' : 'Verified just now';
+  }
+  if (diffMinutes < 24 * 60) {
+    const hours = Math.floor(diffMinutes / 60);
+    return language === 'nl'
+      ? `${hours} uur geleden geverifieerd`
+      : `Verified ${hours} ${hours === 1 ? 'hour' : 'hours'} ago`;
+  }
+  const days = Math.floor(diffMinutes / (24 * 60));
+  if (days < 30) {
+    return language === 'nl'
+      ? `${days} ${days === 1 ? 'dag' : 'dagen'} geleden geverifieerd`
+      : `Verified ${days} ${days === 1 ? 'day' : 'days'} ago`;
+  }
+  const locale = language === 'nl' ? 'nl-NL' : 'en-GB';
+  const dateLabel = new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short', year: 'numeric' }).format(checked);
+  return language === 'nl' ? `Geverifieerd op ${dateLabel}` : `Verified on ${dateLabel}`;
+}
+
+export function isVerificationStale(
+  marker: Pick<Marker, 'source' | 'lastCheckedAt' | 'updatedAt' | 'snapshotDate'>,
+  now = new Date(),
+): boolean {
+  if (!marker.source) return false;
+  const checked = validDate(marker.lastCheckedAt) ?? validDate(marker.updatedAt) ?? validDate(marker.snapshotDate);
+  if (!checked) return true;
+  return now.getTime() - checked.getTime() > VERIFICATION_STALE_DAYS * 24 * 60 * 60 * 1000;
+}

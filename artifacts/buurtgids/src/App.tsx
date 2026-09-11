@@ -70,6 +70,8 @@ import {
 import {
   formatEventTiming,
   freshnessBadge,
+  isVerificationStale,
+  lastVerifiedLabel,
   matchesDiscoveryQuickFilters,
   routeUrl,
   trustBadge,
@@ -1305,6 +1307,8 @@ function MarkerCard({
   const timing = isEvent ? formatEventTiming(marker.startsAt, language) : null;
   const freshness = freshnessBadge(marker, language);
   const trust = trustBadge(marker, language);
+  const verifiedLabel = lastVerifiedLabel(marker, language);
+  const isStale = isVerificationStale(marker);
   const eventPrice = marker.priceText?.trim()
     || (marker.priceType === 'free'
       ? (language === 'nl' ? 'Gratis' : 'Free')
@@ -1408,7 +1412,7 @@ function MarkerCard({
             </div>
           )}
           {isExpanded && <>
-           {(marker.businessCategory || marker.socialCategory || sourceLabel || trust || freshness || marker.reviewStatus || (topLevelForMarker(marker) === 'events' && eventBadgeLabel(marker, language).length > 0)) && (
+           {(marker.businessCategory || marker.socialCategory || sourceLabel || trust || freshness || verifiedLabel || isStale || marker.reviewStatus || (topLevelForMarker(marker) === 'events' && eventBadgeLabel(marker, language).length > 0)) && (
              <div className="mb-3 flex flex-wrap items-center gap-1.5">
                {marker.businessCategory && (
                  <span className="rounded-md bg-primary/10 px-2 py-1 text-[11px] font-bold text-primary">
@@ -1444,6 +1448,18 @@ function MarkerCard({
                   <span data-testid={`freshness-badge-${marker.id}`} className="inline-flex items-center gap-1 rounded-md bg-violet-600/10 px-2 py-1 text-[11px] font-bold text-violet-800">
                     <Sparkles className="h-3 w-3" aria-hidden="true" />
                     {freshness}
+                  </span>
+                )}
+                {verifiedLabel && (
+                  <span data-testid={`verified-badge-${marker.id}`} className="inline-flex items-center gap-1 rounded-md bg-teal-600/10 px-2 py-1 text-[11px] font-bold text-teal-800">
+                    <Clock className="h-3 w-3" aria-hidden="true" />
+                    {verifiedLabel}
+                  </span>
+                )}
+                {isStale && (
+                  <span data-testid={`stale-badge-${marker.id}`} className="inline-flex items-center gap-1 rounded-md bg-amber-500/10 px-2 py-1 text-[11px] font-bold text-amber-800">
+                    <AlertCircle className="h-3 w-3" aria-hidden="true" />
+                    {language === 'nl' ? 'Mogelijk verouderd' : 'May be outdated'}
                   </span>
                 )}
                 {topLevelForMarker(marker) === 'events' && eventBadgeLabel(marker, language).map((badge) => (
