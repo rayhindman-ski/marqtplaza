@@ -7,7 +7,10 @@
     "build": "pnpm run test:saved-events:integration && pnpm run typecheck && pnpm --filter @workspace/buurtgids run test && pnpm -r --if-present run build",
     "test:saved-events:integration": "pnpm --dir lib/db exec node scripts/run-saved-events-integration.mjs",
     "typecheck:libs": "tsc --build",
-    "typecheck": "pnpm run typecheck:libs && pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck"
+    "typecheck": "pnpm run typecheck:libs && pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck",
+    "speckit:check": ".specify/scripts/check-prerequisites.sh",
+    "speckit:new": ".specify/scripts/create-new-feature.sh",
+    "speckit:plan": ".specify/scripts/setup-plan.sh"
   },
   "private": true,
   "dependencies": {

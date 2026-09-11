@@ -10,9 +10,98 @@ import {
   parseBusinessCategories,
   parseListingsMode,
   prepareEventsForMode,
+  summarizeEventEvidence,
 } from "./listings";
 
 describe("listings query persistence inputs", () => {
+  it("marks approved upcoming events as verified evidence", () => {
+    const evidence = summarizeEventEvidence({
+      language: "en",
+      mode: "live",
+      listings: [{ sourceName: "Amare", lastSeenAt: "2026-09-11T10:00:00.000Z" }],
+      sourceStatuses: [{
+        sourceId: "amare",
+        sourceName: "Amare",
+        status: "found",
+        lastScannedAt: new Date("2026-09-11T10:00:00.000Z"),
+      }],
+      now: new Date("2026-09-11T12:00:00.000Z"),
+    });
+    assert.equal(evidence.status, "verified");
+    assert.match(evidence.message, /verified upcoming event/);
+    assert.equal(evidence.sources[0]?.status, "verified");
+  });
+
+  it("keeps blocked sources distinct from an intentional empty result", () => {
+    const evidence = summarizeEventEvidence({
+      language: "nl",
+      mode: "live",
+      listings: [],
+      sourceStatuses: [
+        {
+          sourceId: "amare",
+          sourceName: "Amare",
+          status: "blocked",
+          lastScannedAt: new Date("2026-09-11T10:00:00.000Z"),
+        },
+        {
+          sourceId: "wijkz",
+          sourceName: "Wijkz",
+          status: "no_events",
+          lastScannedAt: new Date("2026-09-11T10:00:00.000Z"),
+        },
+      ],
+      now: new Date("2026-09-11T12:00:00.000Z"),
+    });
+    assert.equal(evidence.status, "blocked");
+    assert.equal(evidence.sources[0]?.status, "blocked");
+    assert.equal(evidence.sources[1]?.status, "empty");
+  });
+
+  it("reports a checked source with no eligible events as empty", () => {
+    const evidence = summarizeEventEvidence({
+      language: "en",
+      mode: "live",
+      listings: [],
+      sourceStatuses: [{
+        sourceId: "wijkz",
+        sourceName: "Wijkz",
+        status: "no_events",
+        lastScannedAt: new Date("2026-09-11T10:00:00.000Z"),
+      }],
+      now: new Date("2026-09-11T12:00:00.000Z"),
+    });
+    assert.equal(evidence.status, "empty");
+    assert.match(evidence.message, /no verified upcoming events/);
+  });
+
+  it("marks old stored evidence as stale", () => {
+    const evidence = summarizeEventEvidence({
+      language: "en",
+      mode: "stored_only",
+      listings: [{ sourceName: "Amare", lastSeenAt: "2026-09-09T10:00:00.000Z" }],
+      sourceStatuses: [{
+        sourceId: "amare",
+        sourceName: "Amare",
+        status: "found",
+        lastScannedAt: new Date("2026-09-09T10:00:00.000Z"),
+      }],
+      now: new Date("2026-09-11T12:00:00.000Z"),
+    });
+    assert.equal(evidence.status, "stale");
+    assert.match(evidence.message, /older than 24 hours/);
+  });
+
+  it("reports unavailable evidence when no scan status exists", () => {
+    const evidence = summarizeEventEvidence({
+      language: "en",
+      mode: "live",
+      listings: [],
+      sourceStatuses: [],
+    });
+    assert.equal(evidence.status, "unavailable");
+  });
+
   it("defaults to live and only permits stored_only explicitly", () => {
     assert.equal(parseListingsMode(undefined), "live");
     assert.equal(parseListingsMode("live"), "live");

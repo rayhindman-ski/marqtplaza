@@ -1,170 +1,4 @@
-openapi: 3.1.0
-info:
-  # Do not change the title, if the title changes, the import paths will be broken
-  title: Api
-  version: 0.1.0
-  description: API specification
-servers:
-  - url: /api
-    description: Base API path
-tags:
-  - name: health
-    description: Health operations
-  - name: capture
-    description: Business event capture operations
-  - name: listings
-    description: Local business and event listings
-  - name: source-scanning
-    description: Den Haag activity source scanning
-  - name: event-review
-    description: Editorial review of source-scanned Den Haag event candidates
-  - name: social-map-review
-    description: Periodic source review of curated Den Haag support locations
-  - name: news
-    description: Den Haag news aggregation
-  - name: weather
-    description: City weather forecast
-  - name: community
-    description: Resident and organisation community posts
-  - name: businesses
-    description: Business claims, profiles, and local deals
-  - name: saved-events
-    description: Account-backed saved event snapshots and alerts
-paths:
-  /healthz:
-    get:
-      operationId: healthCheck
-      tags: [health]
-      summary: Health check
-      description: Returns server health status
-      responses:
-        "200":
-          description: Healthy
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/HealthStatus"
-
-  /weather:
-    get:
-      operationId: getWeather
-      tags: [weather]
-      summary: Get a short city weather forecast
-      parameters:
-        - name: cityId
-          in: query
-          required: true
-          schema:
-            type: string
-          description: The city identifier (ams, rot, utr, dhg, ein)
-      responses:
-        "200":
-          description: Current conditions and a three-day forecast
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/WeatherResponse"
-        "400":
-          description: Unknown city
-        "503":
-          description: Weather provider temporarily unavailable
-
-  /capture/search:
-    post:
-      operationId: captureSearch
-      tags: [capture]
-      summary: Search for businesses
-      requestBody:
-        required: false
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/CaptureSearchRequest"
-      responses:
-        "200":
-          description: List of matching businesses
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/BusinessListResult"
-
-  /capture/scan:
-    post:
-      operationId: captureScan
-      tags: [capture]
-      summary: Scan a business for events, news, and ads
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/CaptureScanRequest"
-      responses:
-        "200":
-          description: Scan results (events, news, ads)
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ScanResultList"
-
-  /capture/persist:
-    post:
-      operationId: capturePersist
-      tags: [capture]
-      summary: Persist selected scan results to the database
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/CapturePersistRequest"
-      responses:
-        "200":
-          description: Number of saved rows
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/PersistOutcome"
-
-  /sources/scan:
-    post:
-      operationId: scanActivitySources
-      tags: [source-scanning]
-      summary: Deeply scan selected Den Haag sources for activity events
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/SourceScanRequest"
-      responses:
-        "200":
-          description: Scan status and discovered event links per source
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/SourceScanResponse"
-        "400":
-          description: Invalid source selection
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/SourceScanResponse"
-
-  /sources/review:
-    get:
-      operationId: getEventReviewCandidates
-      tags: [event-review]
-      summary: Get excluded source-scanned event candidates for editorial review
-      parameters:
-        - name: status
-          in: query
-          required: false
-          schema:
-            type: string
-            enum: [all, open, rejected]
-            default: all
-          description: Whether to return open candidates, definitively rejected candidates, or both.
+ndidates, definitively rejected candidates, or both.
       responses:
         "200":
           description: Candidates that are not currently published in the public event list.
@@ -2204,9 +2038,43 @@ components:
           items:
             type: string
             enum: [google_places, openstreetmap]
+        evidence:
+          $ref: "#/components/schemas/EventEvidence"
       required:
         - listings
         - source
+
+    EventEvidence:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [verified, empty, stale, blocked, unavailable]
+        lastCheckedAt:
+          type: ["string", "null"]
+          format: date-time
+        message:
+          type: string
+        sources:
+          type: array
+          items:
+            $ref: "#/components/schemas/EventEvidenceSource"
+      required: [status, lastCheckedAt, message, sources]
+
+    EventEvidenceSource:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        status:
+          type: string
+          enum: [verified, empty, stale, blocked, unavailable]
+        lastCheckedAt:
+          type: ["string", "null"]
+          format: date-time
+      required: [id, name, status, lastCheckedAt]
 
     GooglePlacesUsage:
       type: object

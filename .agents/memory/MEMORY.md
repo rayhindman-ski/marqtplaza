@@ -1,3 +1,4 @@
+- [Event source evidence](event-evidence.md) — distinguish checked-empty from blocked, stale, unavailable, and verified event coverage.
 - [Overpass API fetch pattern](overpass-fetch.md) — must use GET with `?data=` param and a User-Agent header; POST and text/plain body returns 406/504 from Node.js fetch.
 - [Browser map credentials](browser-map-credentials.md) — only load Google Maps for an exact browser-key format; otherwise use generic tiles before coordinate fallback.
 - [buurtplaza Location interface](buurtplaza-location-interface.md) — Location type needs postcodes, neighborhoods, and mapType fields; SchematicMap and CaptureView depend on them.
@@ -18,3 +19,4 @@
 - [Discovery outbound isolation](discovery-lineage-failure-isolation.md) — stored-only is read-only; live provider and lineage failures settle independently.
 - [Provider integration tests](provider-integration-tests.md) — inject outbound loaders at route construction; replacing global fetch cannot override dependencies captured during module load.
 - [Neighborhood category result caps](neighborhood-category-result-caps.md) — narrow by selected category and neighborhood, then rank by proximity before enforcing provider caps.
+- [Spec Kit workflow](speckit-workflow.md) — use the project-local constitution → spec → plan → tasks → implement → converge flow for non-trivial changes.

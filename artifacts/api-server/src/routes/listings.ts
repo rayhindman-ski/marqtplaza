@@ -1,398 +1,4 @@
-import { Router, type IRouter } from "express";
-import { and, asc, desc, eq, gte, sql } from "drizzle-orm";
-import { getAuth } from "@clerk/express";
-import {
-  db,
-  discoveredEventsTable,
-  externalQueriesTable,
-  externalResultsTable,
-  providerUsageTable,
-  pool,
-  type DiscoveredEvent,
-  userQueriesTable,
-} from "@workspace/db";
-import { MARKERS } from "../lib/static-listings.js";
-import {
-  SOCIAL_MAP_LISTINGS,
-  SOCIAL_MAP_SNAPSHOT_DATE,
-  SOCIAL_MAP_SOURCE_NOTE,
-  type SocialMapCategory,
-} from "../lib/social-map-listings.js";
-import { getSocialMapReviewReport } from "../lib/social-map-review.js";
-import {
-  ensureLocalizedEventCopy,
-  eventCopyForLanguage,
-  selectEventsWithLocalizedCopy,
-  type EventLanguage,
-} from "../lib/event-localization.js";
-
-export type ListingSection = "events" | "businesses" | "food-drink" | "social-map";
-type ListingCategory = "Museums" | "Tours" | "Family" | "Entertainment" | "Outdoors" | "Markets" | "Businesses" | "Food & Drink" | "Social map";
-export type BusinessCategory =
-  | "Retail & Shopping"
-  | "Food & Drink"
-  | "Health & Wellness"
-  | "Beauty & Personal Care"
-  | "Professional Services"
-  | "Finance & Legal"
-  | "Home & Repair"
-  | "Automotive & Mobility"
-  | "Education & Childcare"
-  | "Hospitality & Travel"
-  | "Arts, Culture & Entertainment"
-  | "Fitness & Sports";
-const BUSINESS_CATEGORIES: readonly BusinessCategory[] = [
-  "Retail & Shopping",
-  "Food & Drink",
-  "Health & Wellness",
-  "Beauty & Personal Care",
-  "Professional Services",
-  "Finance & Legal",
-  "Home & Repair",
-  "Automotive & Mobility",
-  "Education & Childcare",
-  "Hospitality & Travel",
-  "Arts, Culture & Entertainment",
-  "Fitness & Sports",
-];
-const BUSINESS_CATEGORY_SET = new Set<string>(BUSINESS_CATEGORIES);
-type ListingSource = "google_maps" | "openstreetmap" | "curated" | "source_scan";
-export type Listing = {
-  id: string;
-  locationId: string;
-  category: ListingCategory;
-  name: string;
-  address?: string;
-  description: string;
-  x: number;
-  y: number;
-  details: string;
-  lat: number;
-  lng: number;
-  sourceUrl?: string;
-  businessCategory?: BusinessCategory;
-  source?: ListingSource;
-  sourceName?: string;
-  neighborhood?: string;
-  socialCategory?: SocialMapCategory;
-  officialUrl?: string;
-  sourcePageUrl?: string;
-  snapshotDate?: string;
-  reviewStatus?: "verified" | "review_due" | "changed" | "unavailable";
-  reviewReason?: string | null;
-  lastCheckedAt?: string;
-  nextReviewAt?: string;
-  startsAt?: string | null;
-  isCancelled?: boolean;
-  openingTimes?: string | null;
-  venue?: string | null;
-  sourceGroup?: "city-agenda" | "culture" | "community" | "meals";
-  organizer?: string | null;
-  activityKind?: string | null;
-  priceType?: "free" | "low-cost" | "paid" | "unknown";
-  priceText?: string | null;
-  mealType?: "community-meal" | "food-support" | null;
-  audience?: string | null;
-  recurrenceText?: string | null;
-  isApproximateLocation?: boolean;
-  isIndoor?: boolean | null;
-  openNow?: boolean | null;
-  firstSeenAt?: string;
-  lastSeenAt?: string;
-  updatedAt?: string;
-};
-
-export type ClaimableBusinessListing = Pick<
-  Listing,
-  | "id"
-  | "locationId"
-  | "name"
-  | "address"
-  | "neighborhood"
-  | "lat"
-  | "lng"
-  | "sourceUrl"
-  | "source"
->;
-
-function sourceNameFromUrl(sourceUrl?: string): string | undefined {
-  if (!sourceUrl) return undefined;
-  try {
-    return new URL(sourceUrl).hostname.replace(/^www\./, "");
-  } catch {
-    return undefined;
-  }
-}
-
-// Bounding boxes for each supported city (south, west, north, east)
-const CITY_BOUNDS: Record<string, { s: number; w: number; n: number; e: number }> = {
-  ams: { s: 52.34, w: 4.85, n: 52.40, e: 5.00 },
-  rot: { s: 51.88, w: 4.43, n: 51.96, e: 4.55 },
-  utr: { s: 52.07, w: 5.09, n: 52.12, e: 5.17 },
-  // Include the Hague's outer neighbourhoods. Provider locality evidence
-  // below rejects nearby municipalities inside this safe discovery rectangle.
-  dhg: { s: 52.025, w: 4.235, n: 52.125, e: 4.42 },
-  ein: { s: 51.41, w: 5.43, n: 51.47, e: 5.52 },
-};
-
-// Map amenity/shop/leisure tags to our 6 app categories
-const AMENITY_TO_CATEGORY: Record<string, string> = {
-  // Markets — food, drink, everyday commerce
-  cafe: "Markets",
-  restaurant: "Markets",
-  bar: "Markets",
-  pub: "Markets",
-  bakery: "Markets",
-  pharmacy: "Markets",
-  bank: "Markets",
-  hairdresser: "Markets",
-  florist: "Markets",
-  butcher: "Markets",
-  supermarket: "Markets",
-  fast_food: "Markets",
-  ice_cream: "Markets",
-  food_court: "Markets",
-  marketplace: "Markets",
-  market: "Markets",
-  // Entertainment — performances, nightlife, venues
-  theatre: "Entertainment",
-  cinema: "Entertainment",
-  arts_centre: "Entertainment",
-  community_centre: "Entertainment",
-  events_venue: "Entertainment",
-  nightclub: "Entertainment",
-  music_venue: "Entertainment",
-  social_centre: "Entertainment",
-  // Museums — cultural institutions
-  library: "Museums",
-};
-
-const SHOP_TO_CATEGORY: Record<string, string> = {
-  books: "Markets",
-  clothes: "Markets",
-  bicycle: "Markets",
-  furniture: "Markets",
-  gift: "Markets",
-  jewelry: "Markets",
-  shoes: "Markets",
-  sports: "Markets",
-  toys: "Markets",
-  electronics: "Markets",
-  convenience: "Markets",
-  deli: "Markets",
-  confectionery: "Markets",
-};
-
-const LEISURE_TO_CATEGORY: Record<string, string> = {
-  fitness_centre: "Outdoors",
-  sports_centre: "Outdoors",
-  stadium: "Entertainment",
-  park: "Outdoors",
-  nature_reserve: "Outdoors",
-  beach: "Outdoors",
-};
-
-const TOURISM_TO_CATEGORY: Record<string, string> = {
-  museum: "Museums",
-  gallery: "Museums",
-  attraction: "Tours",
-  viewpoint: "Outdoors",
-};
-
-function classifyNode(tags: Record<string, string>): string | null {
-  if (tags["amenity"] && AMENITY_TO_CATEGORY[tags["amenity"]]) {
-    return AMENITY_TO_CATEGORY[tags["amenity"]];
-  }
-  if (tags["shop"] && SHOP_TO_CATEGORY[tags["shop"]]) {
-    return SHOP_TO_CATEGORY[tags["shop"]];
-  }
-  if (tags["leisure"] && LEISURE_TO_CATEGORY[tags["leisure"]]) {
-    return LEISURE_TO_CATEGORY[tags["leisure"]];
-  }
-  if (tags["tourism"] && TOURISM_TO_CATEGORY[tags["tourism"]]) {
-    return TOURISM_TO_CATEGORY[tags["tourism"]];
-  }
-  return null;
-}
-
-// Convert lat/lon to x/y percentage within city bounding box
-function toXY(
-  lat: number,
-  lon: number,
-  bounds: { s: number; w: number; n: number; e: number },
-): { x: number; y: number } {
-  const x = ((lon - bounds.w) / (bounds.e - bounds.w)) * 100;
-  const y = ((bounds.n - lat) / (bounds.n - bounds.s)) * 100;
-  return {
-    x: Math.max(5, Math.min(95, Math.round(x))),
-    y: Math.max(5, Math.min(95, Math.round(y))),
-  };
-}
-
-// Build a human-readable description from OSM tags
-function descriptionFromTags(tags: Record<string, string>): string {
-  const cuisine = tags["cuisine"];
-  const amenity = tags["amenity"];
-  const shop = tags["shop"];
-  const leisure = tags["leisure"];
-  const tourism = tags["tourism"];
-
-  if (cuisine) {
-    const type = (amenity ?? "restaurant").replace(/_/g, " ");
-    return `${cap(type)} – ${cuisine.split(";")[0].replace(/_/g, " ")} cuisine`;
-  }
-  if (shop) return `Local ${shop.replace(/_/g, " ")} shop`;
-  if (amenity) return cap(amenity.replace(/_/g, " ")) + " in the neighbourhood";
-  if (leisure) return cap(leisure.replace(/_/g, " ")) + " venue";
-  if (tourism) return cap(tourism.replace(/_/g, " ")) + " attraction";
-  return "Local spot in the neighbourhood";
-}
-
-// Build a short details string from OSM tags
-function detailsFromTags(tags: Record<string, string>, category: string): string {
-  if (category === "Markets") {
-    const hours = tags["opening_hours"];
-    if (hours) {
-      const match = hours.match(/\d{2}:\d{2}/g);
-      if (match && match.length >= 2) return `Open until ${match[1]}`;
-    }
-    return "Open today";
-  }
-  if (category === "Entertainment") return "Check venue for schedule";
-  if (category === "Museums") return "Open during regular hours";
-  return "";
-}
-
-function cap(s: string): string {
-  return s.charAt(0).toUpperCase() + s.slice(1);
-}
-
-function canonicalExternalUrl(value: string | undefined): string | null {
-  if (!value) return null;
-  try {
-    const url = new URL(value);
-    url.hash = "";
-    url.search = "";
-    url.pathname = url.pathname.replace(/\/+$/, "") || "/";
-    return url.href;
-  } catch {
-    return null;
-  }
-}
-
-function normalizedTitle(value: string | undefined): string {
-  return (value ?? "").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
-}
-
-function normalizedAddress(value: string | undefined): string {
-  return normalizedTitle(value ?? "");
-}
-
-function parseListingSection(value: unknown): ListingSection {
-  const section = String(value ?? "events").trim();
-  if (section === "businesses" || section === "food-drink" || section === "social-map") return section;
-  return "events";
-}
-
-export type ListingsMode = "live" | "stored_only";
-
-export function parseListingsMode(value: unknown): ListingsMode {
-  return value === "stored_only" ? "stored_only" : "live";
-}
-
-export function allowsExternalQueries(mode: ListingsMode): boolean {
-  return mode === "live";
-}
-
-export function parseAnonymousId(value: unknown): string | undefined {
-  if (typeof value !== "string") return undefined;
-  const normalized = value.trim();
-  return normalized.length >= 8 && normalized.length <= 100 ? normalized : undefined;
-}
-
-export async function prepareEventsForMode(
-  events: DiscoveredEvent[],
-  language: EventLanguage,
-  mode: ListingsMode,
-  ensureCopy: typeof ensureLocalizedEventCopy = ensureLocalizedEventCopy,
-): Promise<DiscoveredEvent[]> {
-  if (!allowsExternalQueries(mode)) {
-    return selectEventsWithLocalizedCopy(events, language);
-  }
-  return ensureCopy(events, language);
-}
-
-export function normalizeNeighborhoods(value: unknown): string[] {
-  const raw = Array.isArray(value) ? value.join(",") : String(value ?? "");
-  return [...new Map(
-    raw.split(",")
-      .map((neighborhood) => neighborhood.trim().replace(/\s+/g, " "))
-      .filter(Boolean)
-      .slice(0, 12)
-      .map((neighborhood) => [neighborhood.toLocaleLowerCase("nl-NL"), neighborhood] as const),
-  ).values()].sort((a, b) => a.localeCompare(b, "nl-NL"));
-}
-
-export function parseBusinessCategories(value: unknown): BusinessCategory[] {
-  const raw = Array.isArray(value) ? value.join(",") : String(value ?? "");
-  return [...new Set(
-    raw.split(",")
-      .map((category) => category.trim())
-      .filter((category): category is BusinessCategory => BUSINESS_CATEGORY_SET.has(category)),
-  )].sort((a, b) => a.localeCompare(b, "en"));
-}
-
-export function normalizedListingsKey(
-  cityId: string,
-  section: ListingSection,
-  language: EventLanguage,
-  neighborhoods: string[],
-  businessCategories: BusinessCategory[] = [],
-): string {
-  return JSON.stringify({
-    cityId: cityId.trim().toLowerCase(),
-    section,
-    language,
-    neighborhoods: normalizeNeighborhoods(neighborhoods)
-      .map((neighborhood) => neighborhood.toLocaleLowerCase("nl-NL"))
-      .sort((a, b) => a.localeCompare(b, "nl-NL")),
-    ...(businessCategories.length > 0
-      ? { businessCategories: parseBusinessCategories(businessCategories) }
-      : {}),
-  });
-}
-
-export function parseEventLanguage(value: unknown): EventLanguage | null {
-  return value === "nl" || value === "en" ? value : null;
-}
-
-export function localizedEventDetails(
-  event: typeof discoveredEventsTable.$inferSelect,
-  language: EventLanguage,
-): string {
-  const locale = language === "nl" ? "nl-NL" : "en-GB";
-  const parsedDate = event.startsAt ? new Date(event.startsAt) : null;
-  const date = parsedDate && !Number.isNaN(parsedDate.getTime())
-    ? new Intl.DateTimeFormat(locale, {
-        dateStyle: "medium",
-        timeStyle: event.startsAt?.includes("T") ? "short" : undefined,
-        timeZone: "Europe/Amsterdam",
-      }).format(parsedDate)
-    : (language === "nl" ? "Datum niet beschikbaar" : "Date not provided");
-  const openingTimeRanges = event.openingTimes?.match(/\b\d{1,2}[:.]\d{2}\s*[-–]\s*\d{1,2}[:.]\d{2}\b/g);
-  const openingTimes = event.openingTimes
-    ? openingTimeRanges?.join(", ")
-      ?? (language === "nl" ? "Zie evenementpagina" : "See event page")
-    : "";
-  const genericVenue = event.venue?.trim().toLowerCase();
-  const venue = !event.venue || genericVenue === "walking" || genericVenue === "route" || genericVenue === "directions"
-    ? (language === "nl" ? "Locatie niet beschikbaar" : "Venue not provided")
-    : language === "en" && /\b(exacte locatie|locatie volgt)\b/i.test(event.venue)
-      ? "The Hague, exact venue to be confirmed"
-      : language === "nl" && /\b(exact location|venue to be confirmed)\b/i.test(event.venue)
-        ? "Den Haag, exacte locatie volgt"
-        : event.venue;
-  return [
+eturn [
     date,
     openingTimes
       ? `${language === "nl" ? "Openingstijden" : "Opening times"}: ${openingTimes}`
@@ -1782,6 +1388,26 @@ export function createListingsRouter(
           lastSeenAt: event.lastSeenAt?.toISOString(),
           updatedAt: event.updatedAt?.toISOString(),
       }});
+      let sourceStatuses: EventSourceStatusSnapshot[] = [];
+      try {
+        const persistedStatuses = await db
+          .select({
+            sourceId: eventSourceStatusesTable.sourceId,
+            sourceName: eventSourceStatusesTable.sourceName,
+            status: eventSourceStatusesTable.status,
+            lastScannedAt: eventSourceStatusesTable.lastScannedAt,
+          })
+          .from(eventSourceStatusesTable);
+        sourceStatuses = persistedStatuses;
+      } catch (error) {
+        req.log.warn({ err: error }, "Event source evidence unavailable");
+      }
+      const evidence = summarizeEventEvidence({
+        language,
+        mode,
+        listings: discoveredListings,
+        sourceStatuses,
+      });
       await finalizeListingsQuery(queryId, "succeeded");
       const storedHit = discoveredListings.length > 0;
       res.json({
@@ -1798,6 +1424,7 @@ export function createListingsRouter(
             : language === "nl"
               ? "Er zijn momenteel geen gecontroleerde aankomende evenementen beschikbaar."
               : "No verified upcoming events are currently available.",
+         evidence,
         queryId,
         mode,
         cacheHit: mode === "stored_only" && storedHit,
@@ -1814,6 +1441,7 @@ export function createListingsRouter(
         message: language === "nl"
           ? "Actuele evenementen zijn tijdelijk niet beschikbaar."
           : "Current events are temporarily unavailable.",
+        evidence: summarizeEventEvidence({ language, mode, listings: [], sourceStatuses: [] }),
         queryId, mode, cacheHit: false, cacheMiss: false, partial: false, providers: [],
       });
     }
