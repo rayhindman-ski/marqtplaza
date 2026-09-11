@@ -1129,6 +1129,44 @@ export const ListingsResponseProvidersItem = {
   openstreetmap: 'openstreetmap',
 } as const;
 
+export type EventEvidenceStatus = typeof EventEvidenceStatus[keyof typeof EventEvidenceStatus];
+
+
+export const EventEvidenceStatus = {
+  verified: 'verified',
+  empty: 'empty',
+  stale: 'stale',
+  blocked: 'blocked',
+  unavailable: 'unavailable',
+} as const;
+
+export type EventEvidenceSourceStatus = typeof EventEvidenceSourceStatus[keyof typeof EventEvidenceSourceStatus];
+
+
+export const EventEvidenceSourceStatus = {
+  verified: 'verified',
+  empty: 'empty',
+  stale: 'stale',
+  blocked: 'blocked',
+  unavailable: 'unavailable',
+} as const;
+
+export interface EventEvidenceSource {
+  id: string;
+  name: string;
+  status: EventEvidenceSourceStatus;
+  /** @nullable */
+  lastCheckedAt: string | null;
+}
+
+export interface EventEvidence {
+  status: EventEvidenceStatus;
+  /** @nullable */
+  lastCheckedAt: string | null;
+  message: string;
+  sources: EventEvidenceSource[];
+}
+
 export interface ListingsResponse {
   listings: Listing[];
   source: ListingsResponseSource;
@@ -1140,6 +1178,7 @@ export interface ListingsResponse {
   cacheMiss?: boolean;
   partial?: boolean;
   providers?: ListingsResponseProvidersItem[];
+  evidence?: EventEvidence;
 }
 
 export interface GooglePlacesUsage {

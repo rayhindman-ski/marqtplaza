@@ -372,7 +372,18 @@ export const GetListingsResponse = zod.object({
   "cacheHit": zod.boolean().optional(),
   "cacheMiss": zod.boolean().optional(),
   "partial": zod.boolean().optional(),
-  "providers": zod.array(zod.enum(['google_places', 'openstreetmap'])).optional()
+  "providers": zod.array(zod.enum(['google_places', 'openstreetmap'])).optional(),
+  "evidence": zod.object({
+  "status": zod.enum(['verified', 'empty', 'stale', 'blocked', 'unavailable']),
+  "lastCheckedAt": zod.coerce.date().nullable(),
+  "message": zod.string(),
+  "sources": zod.array(zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "status": zod.enum(['verified', 'empty', 'stale', 'blocked', 'unavailable']),
+  "lastCheckedAt": zod.coerce.date().nullable()
+}))
+}).optional()
 })
 
 

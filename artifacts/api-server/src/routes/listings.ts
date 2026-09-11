@@ -4,6 +4,7 @@ import { getAuth } from "@clerk/express";
 import {
   db,
   discoveredEventsTable,
+  eventSourceStatusesTable,
   externalQueriesTable,
   externalResultsTable,
   providerUsageTable,
@@ -101,6 +102,118 @@ export type Listing = {
   lastSeenAt?: string;
   updatedAt?: string;
 };
+
+export type EventEvidenceStatus = "verified" | "empty" | "stale" | "blocked" | "unavailable";
+
+export type EventEvidenceSource = {
+  id: string;
+  name: string;
+  status: EventEvidenceStatus;
+  lastCheckedAt?: string | null;
+};
+
+export type EventEvidence = {
+  status: EventEvidenceStatus;
+  lastCheckedAt?: string | null;
+  message: string;
+  sources: EventEvidenceSource[];
+};
+
+type EventSourceStatusSnapshot = {
+  sourceId: string;
+  sourceName: string;
+  status: string;
+  lastScannedAt: Date | null;
+};
+
+const EVENT_EVIDENCE_STALE_MS = 24 * 60 * 60 * 1000;
+
+export function summarizeEventEvidence({
+  language,
+  mode,
+  listings,
+  sourceStatuses,
+  now = new Date(),
+}: {
+  language: EventLanguage;
+  mode: "live" | "stored_only";
+  listings: Array<Pick<Listing, "sourceName" | "lastSeenAt">>;
+  sourceStatuses: EventSourceStatusSnapshot[];
+  now?: Date;
+}): EventEvidence {
+  const toPublicStatus = (status: string): EventEvidenceStatus =>
+    status === "found" ? "verified"
+      : status === "no_events" ? "empty"
+        : status === "partial" ? "stale"
+          : status === "blocked" ? "blocked"
+            : "unavailable";
+  const sources = sourceStatuses.length > 0
+    ? sourceStatuses.map((source) => ({
+        id: source.sourceId,
+        name: source.sourceName,
+        status: toPublicStatus(source.status),
+        lastCheckedAt: source.lastScannedAt?.toISOString() ?? null,
+      }))
+    : Array.from(new Map(
+      listings
+        .filter((listing): listing is Pick<Listing, "sourceName" | "lastSeenAt"> & { sourceName: string } => Boolean(listing.sourceName))
+        .map((listing) => [listing.sourceName, listing]),
+    ).entries()).map(([name, listing]) => ({
+      id: name.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+      name,
+      status: "verified" as const,
+      lastCheckedAt: listing.lastSeenAt ?? null,
+    }));
+  const checkedTimes = sources
+    .map((source) => source.lastCheckedAt ? Date.parse(source.lastCheckedAt) : NaN)
+    .filter(Number.isFinite);
+  const latestCheckedAt = checkedTimes.length > 0
+    ? new Date(Math.max(...checkedTimes)).toISOString()
+    : null;
+  const hasFreshSuccessfulScan = sourceStatuses.some((source) =>
+    ["found", "no_events"].includes(source.status)
+    && source.lastScannedAt
+    && now.getTime() - source.lastScannedAt.getTime() <= EVENT_EVIDENCE_STALE_MS,
+  );
+  const hasBlockingSource = sources.some((source) => ["blocked", "unavailable"].includes(source.status));
+  const allSourcesEmpty = sources.length > 0 && sources.every((source) => source.status === "empty");
+  let status: EventEvidenceStatus;
+  if (listings.length > 0) {
+    status = mode === "stored_only" && sourceStatuses.length > 0 && !hasFreshSuccessfulScan
+      ? "stale"
+      : "verified";
+  } else if (sourceStatuses.length === 0) {
+    status = "unavailable";
+  } else if (mode === "stored_only" && !hasFreshSuccessfulScan && !hasBlockingSource) {
+    status = "stale";
+  } else if (allSourcesEmpty) {
+    status = "empty";
+  } else if (hasBlockingSource) {
+    status = "blocked";
+  } else {
+    status = "unavailable";
+  }
+  const message = status === "verified"
+    ? language === "nl"
+      ? `${listings.length} gecontroleerde aankomende evenement${listings.length === 1 ? "" : "en"} beschikbaar.`
+      : `${listings.length} verified upcoming event${listings.length === 1 ? "" : "s"} available.`
+    : status === "empty"
+      ? language === "nl"
+        ? "De gecontroleerde bronnen zijn gelezen, maar er zijn momenteel geen aankomende evenementen."
+        : "Approved sources were checked, but no verified upcoming events are currently available."
+      : status === "stale"
+        ? language === "nl"
+          ? "Opgeslagen evenementgegevens zijn ouder dan 24 uur en kunnen verouderd zijn."
+          : "Stored event evidence is older than 24 hours and may be stale."
+        : status === "blocked"
+          ? language === "nl"
+            ? "De evenementdekking is onvolledig omdat een of meer goedgekeurde bronnen niet konden worden gelezen."
+            : "Event coverage is incomplete because one or more approved sources could not be read."
+          : language === "nl"
+            ? "Bewijs voor actuele evenementen is momenteel niet beschikbaar."
+            : "Evidence for current events is temporarily unavailable.";
+  return { status, lastCheckedAt: latestCheckedAt, message, sources };
+}
 
 export type ClaimableBusinessListing = Pick<
   Listing,
@@ -1782,6 +1895,26 @@ export function createListingsRouter(
           lastSeenAt: event.lastSeenAt?.toISOString(),
           updatedAt: event.updatedAt?.toISOString(),
       }});
+      let sourceStatuses: EventSourceStatusSnapshot[] = [];
+      try {
+        const persistedStatuses = await db
+          .select({
+            sourceId: eventSourceStatusesTable.sourceId,
+            sourceName: eventSourceStatusesTable.sourceName,
+            status: eventSourceStatusesTable.status,
+            lastScannedAt: eventSourceStatusesTable.lastScannedAt,
+          })
+          .from(eventSourceStatusesTable);
+        sourceStatuses = persistedStatuses;
+      } catch (error) {
+        req.log.warn({ err: error }, "Event source evidence unavailable");
+      }
+      const evidence = summarizeEventEvidence({
+        language,
+        mode,
+        listings: discoveredListings,
+        sourceStatuses,
+      });
       await finalizeListingsQuery(queryId, "succeeded");
       const storedHit = discoveredListings.length > 0;
       res.json({
@@ -1798,6 +1931,7 @@ export function createListingsRouter(
             : language === "nl"
               ? "Er zijn momenteel geen gecontroleerde aankomende evenementen beschikbaar."
               : "No verified upcoming events are currently available.",
+         evidence,
         queryId,
         mode,
         cacheHit: mode === "stored_only" && storedHit,
@@ -1814,6 +1948,7 @@ export function createListingsRouter(
         message: language === "nl"
           ? "Actuele evenementen zijn tijdelijk niet beschikbaar."
           : "Current events are temporarily unavailable.",
+        evidence: summarizeEventEvidence({ language, mode, listings: [], sourceStatuses: [] }),
         queryId, mode, cacheHit: false, cacheMiss: false, partial: false, providers: [],
       });
     }

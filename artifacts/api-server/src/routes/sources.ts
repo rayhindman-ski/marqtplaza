@@ -1,7 +1,10 @@
 import { Router } from "express";
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@workspace/db";
-import { discoveredEventsTable } from "@workspace/db/schema";
+import {
+  discoveredEventsTable,
+  eventSourceStatusesTable,
+} from "@workspace/db/schema";
 import { requireEditor } from "../middlewares/requireEditor";
 import { queueMissingEventTranslations } from "../lib/event-localization.js";
 
@@ -86,6 +89,17 @@ type ScanMetrics = {
   sitemapsRead: number;
   robotsPagesSkipped: number;
   crawlLimitReached: boolean;
+};
+
+type EventSourceScanStatus = "found" | "partial" | "blocked" | "error" | "no_events";
+
+type EventSourceScanResult = ScanMetrics & {
+  sourceId: string;
+  sourceName: string;
+  scannedUrl: string;
+  status: EventSourceScanStatus;
+  events: SourceScanEvent[];
+  message: string;
 };
 
 const DEN_HAAG_SOURCES: SourceDefinition[] = [
@@ -1286,7 +1300,7 @@ async function persistEvents(source: SourceDefinition, events: SourceScanEvent[]
   };
 }
 
-async function scanSource(source: SourceDefinition) {
+async function scanSource(source: SourceDefinition): Promise<EventSourceScanResult> {
   const metrics = emptyMetrics();
   const sourceOrigin = new URL(source.activityUrl).origin;
   const queue: CrawlPage[] = [];
@@ -1589,10 +1603,46 @@ router.post("/scan", async (req, res) => {
       return;
     }
 
-    const scans = [];
+    const scans: EventSourceScanResult[] = [];
     for (let index = 0; index < selectedSources.length; index += 2) {
       const batch = selectedSources.slice(index, index + 2);
       scans.push(...await Promise.all(batch.map(scanSource)));
+    }
+
+    const scannedAt = new Date();
+    const statusWrites = await Promise.allSettled(scans.map((scan) =>
+      db.insert(eventSourceStatusesTable).values({
+        sourceId: scan.sourceId,
+        sourceName: scan.sourceName,
+        sourceUrl: scan.scannedUrl,
+        sourceGroup: SOURCE_BY_ID.get(scan.sourceId)?.sourceGroup ?? "city-agenda",
+        status: scan.status,
+        lastScannedAt: scannedAt,
+        message: scan.message,
+        eventsCaptured: scan.eventsCaptured,
+        eventsEligible: scan.eventsEligible,
+        eventsAdded: scan.eventsAdded,
+        eventsUpdated: scan.eventsUpdated,
+        pagesFailed: scan.pagesFailed,
+      }).onConflictDoUpdate({
+        target: eventSourceStatusesTable.sourceId,
+        set: {
+          sourceName: scan.sourceName,
+          sourceUrl: scan.scannedUrl,
+          sourceGroup: SOURCE_BY_ID.get(scan.sourceId)?.sourceGroup ?? "city-agenda",
+          status: scan.status,
+          lastScannedAt: scannedAt,
+          message: scan.message,
+          eventsCaptured: scan.eventsCaptured,
+          eventsEligible: scan.eventsEligible,
+          eventsAdded: scan.eventsAdded,
+          eventsUpdated: scan.eventsUpdated,
+          pagesFailed: scan.pagesFailed,
+        },
+      }),
+    ));
+    if (statusWrites.some((result) => result.status === "rejected")) {
+      req.log.warn("One or more event source statuses could not be persisted");
     }
 
     res.json({ scannedAt: new Date().toISOString(), scans });

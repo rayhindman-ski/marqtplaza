@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { EventEvidence } from './eventEvidence';
 import type { Listing } from './listing';
 import type { ListingsResponseMode } from './listingsResponseMode';
 import type { ListingsResponseProvidersItem } from './listingsResponseProvidersItem';
@@ -21,4 +22,5 @@ export interface ListingsResponse {
   cacheMiss?: boolean;
   partial?: boolean;
   providers?: ListingsResponseProvidersItem[];
+  evidence?: EventEvidence;
 }

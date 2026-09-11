@@ -81,6 +81,15 @@ function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+function formatEvidenceCheckedAt(value: string, language: Language): string {
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return value;
+  return new Intl.DateTimeFormat(language === 'nl' ? 'nl-NL' : 'en-GB', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(date);
+}
+
 type UserRole = 'designer' | 'user';
 const USER_ROLE_STORAGE_KEY = 'buurtplaza-user-role';
 
@@ -1976,6 +1985,17 @@ function DiscoveryState({
     .filter((result) => result.source === 'fallback' && result.message)
     .map((result) => result.message)
     .join(' ');
+  const eventEvidence = topLevelCategories.events
+    ? selectedData.find((result) => result.evidence)?.evidence
+    : undefined;
+  const evidenceStatus = eventEvidence?.status;
+  const evidenceTone = evidenceStatus === 'verified'
+    ? 'border-emerald-200 bg-emerald-50 text-emerald-950'
+    : evidenceStatus === 'empty'
+      ? 'border-slate-200 bg-slate-50 text-slate-900'
+      : evidenceStatus === 'stale'
+        ? 'border-amber-200 bg-amber-50 text-amber-950'
+        : 'border-rose-200 bg-rose-50 text-rose-950';
 
   const savedCount = savedIds.size;
   const normalizedNeighborhoodSearch = neighborhoodSearch.trim().toLocaleLowerCase(language === 'nl' ? 'nl-NL' : 'en-GB');
@@ -2363,6 +2383,46 @@ function DiscoveryState({
                 {selectedTopLevelSections.includes('social-map') ? t.socialMapCoverageNote : t.listingsCoverageNote}
               </p>
             )}
+            {eventEvidence && evidenceStatus && (
+              <div
+                data-testid="event-evidence-summary"
+                role="status"
+                aria-live="polite"
+                className={cn('w-full rounded-xl border px-3 py-2.5', evidenceTone)}
+              >
+                <div className="flex items-start gap-2">
+                  <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                      <span className="text-[10px] font-black uppercase tracking-[0.14em]">
+                        {t.eventEvidenceTitle}
+                      </span>
+                      <span data-testid="event-evidence-status" className="text-xs font-bold">
+                        {t.eventEvidenceStatus[evidenceStatus]}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-xs leading-relaxed">{eventEvidence.message}</p>
+                    {eventEvidence.lastCheckedAt && (
+                      <p className="mt-1 text-[10px] opacity-75">
+                        {t.eventEvidenceLastChecked(formatEvidenceCheckedAt(eventEvidence.lastCheckedAt, language))}
+                      </p>
+                    )}
+                    {eventEvidence.sources.length > 0 && (
+                      <ul className="mt-2 flex flex-wrap gap-1.5" aria-label={t.eventEvidenceTitle}>
+                        {eventEvidence.sources.slice(0, 6).map((source) => (
+                          <li
+                            key={source.id}
+                            className="rounded-full border border-current/15 bg-white/50 px-2 py-0.5 text-[10px] font-semibold"
+                          >
+                            {source.name}: {t.eventEvidenceSourceStatus[source.status]}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
             {selectedTopLevelSections.includes('social-map') && socialMapSnapshotDate && (
               <span data-testid="text-social-map-public-snapshot-date" className="w-full text-xs text-muted-foreground">
                 {t.socialMapSnapshot(socialMapSnapshotDate)}
@@ -2462,7 +2522,9 @@ function DiscoveryState({
                 </div>
                 <h3 className="text-lg font-bold text-foreground mb-2">{t.noDiscoveries}</h3>
                 <p className="text-sm text-muted-foreground max-w-[250px] leading-relaxed">
-                  {t.noDiscoveriesDescription}
+                   {topLevelCategories.events && eventEvidence && allMarkers.length === 0
+                     ? eventEvidence.message
+                     : t.noDiscoveriesDescription}
                 </p>
               </div>
             )}
