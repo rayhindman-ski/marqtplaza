@@ -1,9 +1,4 @@
-70 focus:border-primary focus:ring-2 focus:ring-primary/20"
-              />
-            </label>
-            <label className="mt-2 block">
-              <span className="mb-1 block text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
-                {language === 'nl' ? 'Zoek buurt' : 'Search neighborhood'}
+ : 'Search neighborhood'}
               </span>
               <input
                 type="search"
@@ -708,6 +703,9 @@ export default function App() {
           <Route path="/beoordelen/community" component={CommunityModerationView} />
           <Route path="/sign-in/*?" component={SignInPage} />
           <Route path="/sign-up/*?" component={SignUpPage} />
+          <Route path="/onboarding" component={OnboardingPage} />
+          <Route path="/account/*?" component={AccountPage} />
+          <Route path="/bedrijf-aanmelden" component={BusinessOnboardingPage} />
           <Route path="/nieuws" component={NewsFeedView} />
           <Route path="/nieuws/:id" component={NewsArticleView} />
           <Route path="/deals" component={DealsView} />
@@ -1375,7 +1373,12 @@ const clerkAppearance = {
 function SignUpPage() {
   return (
     <div className="flex min-h-[100dvh] items-center justify-center bg-background px-4">
-      <SignUp routing="path" path={`${basePath}/sign-up`} signInUrl={`${basePath}/sign-in`} />
+      <SignUp
+        routing="path"
+        path={`${basePath}/sign-up`}
+        signInUrl={`${basePath}/sign-in`}
+        forceRedirectUrl={`${basePath}/onboarding`}
+      />
     </div>
   );
 }
