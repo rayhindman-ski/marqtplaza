@@ -2040,6 +2040,9 @@ function DiscoveryState({
   const nearbyOrigin = nearbyPosition
     ?? selectedAreas[0]
     ?? { lat: location.lat, lng: location.lng };
+  const activeNeighborhoodNames = neighborhoodSelection === 'all'
+    ? location.neighborhoods
+    : selectedNeighborhoods;
   const filteredMarkers = allMarkers.filter((marker) => {
     const markerTopLevel = topLevelForMarker(marker);
     if (!topLevelCategories[markerTopLevel]) return false;
@@ -2069,12 +2072,11 @@ function DiscoveryState({
       return false;
     }
     if (neighborhoodSelection === 'none') return false;
-    if (neighborhoodSelection === 'all') return true;
-    if (selectedAreas.length === 0) return false;
+    if (activeNeighborhoodNames.length === 0) return false;
     if (marker.category === 'Social map') {
-      return Boolean(marker.neighborhood && selectedNeighborhoods.includes(marker.neighborhood));
+      if (!marker.neighborhood || !activeNeighborhoodNames.includes(marker.neighborhood)) return false;
     }
-    return selectedAreas.some((area) => getDistanceKm(marker.lat, marker.lng, area.lat, area.lng) <= 2.5);
+    return isMarkerWithinNeighborhoods(marker, activeNeighborhoodNames);
   });
   const isLoading = selectedQueries.some((query) => query.isLoading);
   const isError = selectedQueries.some((query) => query.isError) && selectedListings.length === 0;
@@ -2695,6 +2697,7 @@ function DiscoveryState({
             language={language}
             locationId={location.id}
             selectedNeighborhoods={selectedNeighborhoods}
+            showAllNeighborhoods
             highlightedNeighborhood={selectedNeighborhoods.length === 1 ? selectedNeighborhoods[0] : null}
             onNeighborhoodClick={toggleNeighborhood}
             markers={filteredMarkers}
