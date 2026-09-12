@@ -54,6 +54,7 @@ interface GoogleMapViewProps {
   language: Language;
   locationId: string;
   selectedNeighborhoods: string[];
+  showAllNeighborhoods?: boolean;
   showNeighborhoodLabels?: boolean;
   highlightedNeighborhood?: string | null;
   onNeighborhoodClick?: (name: string) => void;
@@ -382,6 +383,7 @@ function CoordinateMapFallback({
   language,
   locationId,
   selectedNeighborhoods,
+  showAllNeighborhoods = false,
   showNeighborhoodLabels = true,
   highlightedNeighborhood = null,
   onNeighborhoodClick,
@@ -394,6 +396,7 @@ function CoordinateMapFallback({
   | 'language'
   | 'locationId'
   | 'selectedNeighborhoods'
+  | 'showAllNeighborhoods'
   | 'showNeighborhoodLabels'
   | 'highlightedNeighborhood'
   | 'onNeighborhoodClick'
@@ -403,7 +406,10 @@ function CoordinateMapFallback({
   | 'onMarkerClick'
 >) {
   const points = getMapPoints(markers);
-  const neighborhoodAreas = getNeighborhoodAreas(locationId, selectedNeighborhoods);
+  const displayedNeighborhoods = showAllNeighborhoods
+    ? (getLocation(locationId)?.neighborhoods ?? selectedNeighborhoods)
+    : selectedNeighborhoods;
+  const neighborhoodAreas = getNeighborhoodAreas(locationId, displayedNeighborhoods);
   const mapCopy = MAP_COPY[language];
   const [hoveredMarkerId, setHoveredMarkerId] = useState<string | null>(null);
 
