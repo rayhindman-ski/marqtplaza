@@ -22,3 +22,4 @@
 - [Neighborhood category result caps](neighborhood-category-result-caps.md) — narrow by selected category and neighborhood, then rank by proximity before enforcing provider caps.
 - [Spec Kit workflow](speckit-workflow.md) — use the project-local constitution → spec → plan → tasks → implement → converge flow for non-trivial changes.
 - [Connected GitHub branch publishing](github-branch-publishing.md) — when no git remote is available, diff the workspace tree against the remote branch and publish through Git Data API objects.
+- [Database error assertions](database-error-assertions.md) — Drizzle/pg may expose wrapped SQL errors without the server trigger message; assert stable failure state instead of exact text.

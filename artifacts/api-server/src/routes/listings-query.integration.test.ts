@@ -6,15 +6,29 @@ import { and, eq, inArray } from "drizzle-orm";
 import pino from "pino";
 import {
   db,
+  discoveredEventsTable,
   externalQueriesTable,
   externalResultsTable,
+  eventSourceStatusesTable,
   pool,
   userQueriesTable,
 } from "@workspace/db";
 import { createListingsRouter, type Listing } from "./listings";
+import sourcesRouter from "./sources";
 
 const runId = `listings-query-${process.pid}-${Date.now()}`;
-const anonymousIds = [`${runId}-query-failure`, `${runId}-result-failure`, `${runId}-stored`];
+const anonymousIds = [
+  `${runId}-query-failure`,
+  `${runId}-result-failure`,
+  `${runId}-stored`,
+  `${runId}-scan-to-listing`,
+];
+const scanEventUrls = [
+  "https://www.getyourguide.com/en-gb/the-hague-l1267/test-community-event",
+  "https://www.getyourguide.com/en-gb/the-hague-l1267/online-skills-session",
+  "https://www.getyourguide.com/en-gb/the-hague-l1267/past-foreign-event",
+];
+const scanSourceIds = ["getyourguide", "denhaag-com", "wearetravelers", "flitz-events", "kidsproof"];
 const queryTriggerName = "listings_test_fail_google_query";
 const queryTriggerFunctionName = "listings_test_reject_google_query";
 const resultTriggerName = "listings_test_fail_google_result";
@@ -41,10 +55,12 @@ const osmListing: Listing = {
 };
 
 const app = express();
+app.use(express.json());
 app.use((req, _res, next) => {
   req.log = testLogger;
   next();
 });
+
 app.use("/api", createListingsRouter({
   getUserId: () => null,
   googlePlacesEnabled: true,
@@ -63,9 +79,11 @@ app.use("/api", createListingsRouter({
     return [osmListing];
   },
 }));
+app.use("/api/sources", sourcesRouter);
 
 let server: ReturnType<typeof app.listen>;
 let baseUrl = "";
+const originalFetch = globalThis.fetch;
 
 async function cleanTestRows(): Promise<void> {
   const queries = await db.select({ id: userQueriesTable.id })
@@ -79,6 +97,11 @@ async function cleanTestRows(): Promise<void> {
   }
 }
 
+async function cleanEventRows(): Promise<void> {
+  await db.delete(discoveredEventsTable).where(inArray(discoveredEventsTable.canonicalUrl, scanEventUrls));
+  await db.delete(eventSourceStatusesTable).where(inArray(eventSourceStatusesTable.sourceId, scanSourceIds));
+}
+
 async function requestListings(anonymousId: string, mode: "live" | "stored_only") {
   const neighborhoods = mode === "stored_only" ? "&neighborhoods=Scheveningen" : "";
   const response = await fetch(
@@ -87,9 +110,17 @@ async function requestListings(anonymousId: string, mode: "live" | "stored_only"
   return { status: response.status, body: await response.json() as Record<string, any> };
 }
 
-describe("listings route provider failure isolation (isolated database integration)", () => {
+async function requestEventListings() {
+  const response = await fetch(
+    `${baseUrl}/api/listings?cityId=dhg&section=events&language=en&mode=live&neighborhoods=Scheveningen&anonymousId=${anonymousIds[3]}`,
+  );
+  return { status: response.status, body: await response.json() as Record<string, any> };
+}
+
+describe("listings route integration (isolated database integration)", () => {
   before(async () => {
     await cleanTestRows();
+    await cleanEventRows();
     await pool.query(`
       create or replace function ${queryTriggerFunctionName}()
       returns trigger language plpgsql as $$
@@ -119,6 +150,8 @@ describe("listings route provider failure isolation (isolated database integrati
     await pool.query(`drop trigger if exists ${resultTriggerName} on "external-results"`);
     await pool.query(`drop function if exists ${queryTriggerFunctionName}()`);
     await pool.query(`drop function if exists ${resultTriggerFunctionName}()`);
+    globalThis.fetch = originalFetch;
+    await cleanEventRows();
     await cleanTestRows();
     await new Promise<void>((resolve, reject) => {
       server.close((error) => error ? reject(error) : resolve());
@@ -205,5 +238,170 @@ describe("listings route provider failure isolation (isolated database integrati
     assert.deepEqual(result.body.listings, []);
     assert.equal(googleLoaderCalls, googleCallsBefore);
     assert.equal(osmLoaderCalls, osmCallsBefore);
+  });
+
+  it("publishes only eligible scanned events and preserves source evidence states", async () => {
+    const startsAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1_000).toISOString();
+    const sourceIndex = `
+      <html lang="en">
+        <script type="application/ld+json">${JSON.stringify([
+          {
+            "@type": "Event",
+            "name": "Scheveningen community workshop",
+            "url": scanEventUrls[0],
+            "startDate": startsAt,
+            "description": "A local workshop for neighbors.",
+            "location": {
+              "@type": "Place",
+              "name": "Buurtcentrum Scheveningen",
+              "address": {
+                "streetAddress": "Keizerstraat 1",
+                "postalCode": "2584 BG",
+                "addressLocality": "Den Haag"
+              },
+              "geo": { "latitude": 52.108, "longitude": 4.28 }
+            }
+          },
+          {
+            "@type": "Event",
+            "name": "Online skills session",
+            "url": scanEventUrls[1],
+            "description": "An event without a local venue or date."
+          },
+          {
+            "@type": "Event",
+            "name": "Past foreign event",
+            "url": scanEventUrls[2],
+            "startDate": "2020-01-01T18:00:00Z",
+            "location": {
+              "@type": "Place",
+              "name": "Paris",
+              "geo": { "latitude": 48.8566, "longitude": 2.3522 }
+            }
+          }
+        ])}</script>
+      </html>
+    `;
+
+    globalThis.fetch = async (input, init) => {
+      const url = String(input);
+      if (url.startsWith(baseUrl)) return originalFetch(input, init);
+      const parsed = new URL(url);
+      if (parsed.pathname === "/robots.txt") {
+        return new Response("User-agent: *\nAllow: /", {
+          headers: { "content-type": "text/plain" },
+        });
+      }
+      if (parsed.pathname === "/en-gb/the-hague-l1267") {
+        return new Response(sourceIndex, {
+          headers: { "content-type": "text/html; charset=utf-8" },
+        });
+      }
+      if (/sitemap(?:_index)?\.xml$/i.test(parsed.pathname)) {
+        return new Response("<urlset></urlset>", {
+          headers: { "content-type": "application/xml" },
+        });
+      }
+      return new Response("<html></html>", {
+        headers: { "content-type": "text/html; charset=utf-8" },
+      });
+    };
+
+    const scanResponse = await fetch(`${baseUrl}/api/sources/scan`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ sourceIds: ["getyourguide"] }),
+    });
+    const scanBody = await scanResponse.json() as {
+      scans: Array<{
+        status: string;
+        eventsCaptured: number;
+        eventsEligible: number;
+        eventsAdded: number;
+      }>;
+    };
+    assert.equal(scanResponse.status, 200);
+    assert.equal(scanBody.scans[0]?.status, "found");
+    assert.equal(scanBody.scans[0]?.eventsCaptured, 3);
+    assert.equal(scanBody.scans[0]?.eventsEligible, 1);
+    assert.equal(scanBody.scans[0]?.eventsAdded, 3);
+
+    const persistedEvents = await db
+      .select({
+        canonicalUrl: discoveredEventsTable.canonicalUrl,
+        reviewStatus: discoveredEventsTable.reviewStatus,
+        reviewReason: discoveredEventsTable.reviewReason,
+      })
+      .from(discoveredEventsTable)
+      .where(inArray(discoveredEventsTable.canonicalUrl, scanEventUrls));
+    assert.equal(persistedEvents.length, 3);
+    assert.deepEqual(
+      persistedEvents.map((event) => event.reviewStatus).sort(),
+      ["approved", "pending_review", "pending_review"],
+    );
+    assert.deepEqual(
+      persistedEvents
+        .filter((event) => event.reviewStatus === "pending_review")
+        .map((event) => event.reviewReason)
+        .sort(),
+      ["missing_date", "out_of_window"],
+    );
+
+    const checkedAt = new Date();
+    await db.insert(eventSourceStatusesTable).values([
+      {
+        sourceId: "denhaag-com",
+        sourceName: "DenHaag.com",
+        sourceUrl: "https://denhaag.com/en/calendar",
+        sourceGroup: "city-agenda",
+        status: "partial",
+        lastScannedAt: checkedAt,
+        message: "Some pages could not be read.",
+      },
+      {
+        sourceId: "wearetravelers",
+        sourceName: "We Are Travelers",
+        sourceUrl: "https://www.wearetravelers.nl",
+        sourceGroup: "city-agenda",
+        status: "no_events",
+        lastScannedAt: checkedAt,
+        message: "No upcoming events found.",
+      },
+      {
+        sourceId: "flitz-events",
+        sourceName: "Flitz-Events",
+        sourceUrl: "https://flitz-events.nl/teamuitje/den-haag",
+        sourceGroup: "city-agenda",
+        status: "blocked",
+        lastScannedAt: checkedAt,
+        message: "The source denied automated access.",
+      },
+    ]);
+
+    const listingResult = await requestEventListings();
+    assert.equal(listingResult.status, 200);
+    assert.equal(listingResult.body.listings.length, 1);
+    assert.equal(listingResult.body.listings[0]?.name, "Scheveningen community workshop");
+    assert.equal(listingResult.body.listings[0]?.source, "source_scan");
+    assert.equal(listingResult.body.evidence.status, "verified");
+
+    const evidenceById = new Map(
+      listingResult.body.evidence.sources.map((source: { id: string; status: string }) => [source.id, source.status]),
+    );
+    assert.equal(evidenceById.get("getyourguide"), "verified");
+    assert.equal(evidenceById.get("denhaag-com"), "stale");
+    assert.equal(evidenceById.get("wearetravelers"), "empty");
+    assert.equal(evidenceById.get("flitz-events"), "blocked");
+    assert.equal(evidenceById.has("kidsproof"), false);
+
+    await db.update(discoveredEventsTable)
+      .set({ reviewStatus: "pending_review" })
+      .where(inArray(discoveredEventsTable.canonicalUrl, scanEventUrls));
+    await db.delete(eventSourceStatusesTable).where(inArray(eventSourceStatusesTable.sourceId, scanSourceIds));
+    const unavailableResult = await requestEventListings();
+    assert.equal(unavailableResult.status, 200);
+    assert.deepEqual(unavailableResult.body.listings, []);
+    assert.equal(unavailableResult.body.evidence.status, "unavailable");
+    assert.deepEqual(unavailableResult.body.evidence.sources, []);
   });
 });
