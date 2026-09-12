@@ -205,6 +205,48 @@ test('keeps discovery filters, map pins, routes, and translations in sync', asyn
 });
 
 for (const [mapPath, tilesAvailable] of [['tile map', true], ['coordinate fallback', false]] as const) {
+  test(`keeps homepage neighborhood hover state aligned with the second map in the ${mapPath}`, async ({ page }) => {
+    await stubBoundaryDiscovery(page, tilesAvailable);
+    await page.goto('/');
+
+    const centrumBoundary = page.getByRole('button', { name: 'Select neighborhood: Centrum', exact: true });
+    const scheveningenBoundary = page.getByRole('button', { name: 'Select neighborhood: Scheveningen', exact: true });
+    const neighborhoodLabel = (name: string) => page.locator('[data-neighborhood-label]').filter({ hasText: new RegExp(`^${name}$`) });
+
+    await expect(centrumBoundary).toHaveCount(1);
+    await expect(scheveningenBoundary).toHaveCount(1);
+    await expect(centrumBoundary).toHaveClass(/stroke-teal-700/);
+
+    await centrumBoundary.dispatchEvent('mouseover');
+    await expect(centrumBoundary).toHaveClass(/stroke-primary/);
+    await expect(neighborhoodLabel('Centrum')).toBeVisible();
+    await expect(neighborhoodLabel('Centrum')).toHaveText('Centrum');
+
+    await centrumBoundary.dispatchEvent('mouseout');
+    await expect(neighborhoodLabel('Centrum')).toHaveCount(0);
+    await expect(centrumBoundary).toHaveClass(/stroke-teal-700/);
+
+    await centrumBoundary.click();
+    await expect(neighborhoodLabel('Centrum')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Select neighborhood', exact: true })).toBeVisible();
+
+    await scheveningenBoundary.dispatchEvent('mouseover');
+    await expect(scheveningenBoundary).toHaveClass(/stroke-primary/);
+    await expect(neighborhoodLabel('Scheveningen')).toBeVisible();
+    await expect(neighborhoodLabel('Centrum')).toHaveCount(0);
+
+    await scheveningenBoundary.dispatchEvent('mouseout');
+    await expect(neighborhoodLabel('Scheveningen')).toHaveCount(0);
+    await expect(neighborhoodLabel('Centrum')).toBeVisible();
+    await expect(centrumBoundary).toHaveClass(/stroke-primary/);
+
+    await page.getByRole('button', { name: 'Select neighborhood', exact: true }).click();
+    await expect(page).toHaveURL(/\/activiteiten\/den-haag\?neighborhood=Centrum/);
+    await expect(page.getByRole('checkbox', { name: 'Centrum', exact: true })).toBeChecked();
+    await expect(page.getByRole('button', { name: 'Select neighborhood: Centrum', exact: true })).toHaveCount(1);
+    await expect(page.locator('[data-neighborhood-boundary]')).toHaveCount(1);
+  });
+
   test(`keeps neighborhood polygon selection aligned in the ${mapPath}`, async ({ page }) => {
     await stubBoundaryDiscovery(page, tilesAvailable);
 
