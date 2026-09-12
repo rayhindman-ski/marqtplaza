@@ -51,6 +51,8 @@ interface GoogleMapViewProps {
   language: Language;
   locationId: string;
   selectedNeighborhoods: string[];
+  neighborhoodRadiusMeters?: number;
+  showNeighborhoodLabels?: boolean;
   markers: MarkerData[];
   selectedMarkerId: string | null;
   savedIds: Set<string>;
@@ -373,12 +375,21 @@ function CoordinateMapFallback({
   language,
   locationId,
   selectedNeighborhoods,
+  neighborhoodRadiusMeters = NEIGHBORHOOD_HIGHLIGHT_RADIUS_METERS,
+  showNeighborhoodLabels = true,
   markers,
   selectedMarkerId,
   onMarkerClick,
 }: Pick<
   GoogleMapViewProps,
-  'language' | 'locationId' | 'selectedNeighborhoods' | 'markers' | 'selectedMarkerId' | 'onMarkerClick'
+  | 'language'
+  | 'locationId'
+  | 'selectedNeighborhoods'
+  | 'neighborhoodRadiusMeters'
+  | 'showNeighborhoodLabels'
+  | 'markers'
+  | 'selectedMarkerId'
+  | 'onMarkerClick'
 >) {
   const points = getMapPoints(markers);
   const neighborhoodAreas = getNeighborhoodAreas(locationId, selectedNeighborhoods);
@@ -400,8 +411,8 @@ function CoordinateMapFallback({
 
   const selectedPoint = points.find((point) => point.id === selectedMarkerId);
   const neighborhoodCoordinates = neighborhoodAreas.flatMap((area) => {
-    const latitudeRadius = NEIGHBORHOOD_HIGHLIGHT_RADIUS_METERS / 111_320;
-    const longitudeRadius = NEIGHBORHOOD_HIGHLIGHT_RADIUS_METERS
+    const latitudeRadius = neighborhoodRadiusMeters / 111_320;
+    const longitudeRadius = neighborhoodRadiusMeters
       / (111_320 * Math.max(0.2, Math.cos((area.lat * Math.PI) / 180)));
     return [
       { lat: area.lat - latitudeRadius, lng: area.lng - longitudeRadius },
@@ -458,12 +469,14 @@ function CoordinateMapFallback({
               height: `${height}%`,
             }}
           >
-            <span
-              data-neighborhood-label
-              className="absolute left-1/2 top-3 -translate-x-1/2 whitespace-nowrap rounded-full border-2 border-teal-700/85 bg-white/95 px-2.5 py-1 text-[11px] font-black text-teal-900 shadow-md"
-            >
-              {area.name}
-            </span>
+            {showNeighborhoodLabels && (
+              <span
+                data-neighborhood-label
+                className="absolute left-1/2 top-3 -translate-x-1/2 whitespace-nowrap rounded-full border-2 border-teal-700/85 bg-white/95 px-2.5 py-1 text-[11px] font-black text-teal-900 shadow-md"
+              >
+                {area.name}
+              </span>
+            )}
           </div>
         );
       })}
@@ -535,6 +548,8 @@ function TileMapView({
   language,
   locationId,
   selectedNeighborhoods,
+  neighborhoodRadiusMeters = NEIGHBORHOOD_HIGHLIGHT_RADIUS_METERS,
+  showNeighborhoodLabels = true,
   markers,
   selectedMarkerId,
   savedIds,
@@ -749,7 +764,7 @@ function TileMapView({
 
       {neighborhoodAreas.map((area) => {
         const world = latLngToWorld(area, viewport.zoom);
-        const radius = getProjectedNeighborhoodRadius(area, viewport.zoom);
+        const radius = getProjectedNeighborhoodRadius(area, viewport.zoom, neighborhoodRadiusMeters);
         return (
           <div
             key={`neighborhood-${area.name}`}
@@ -762,12 +777,14 @@ function TileMapView({
               height: radius.height * 2,
             }}
           >
-            <span
-              data-neighborhood-label
-              className="absolute left-1/2 top-3 -translate-x-1/2 whitespace-nowrap rounded-full border-2 border-teal-700/85 bg-white/95 px-2.5 py-1 text-[11px] font-black text-teal-900 shadow-md"
-            >
-              {area.name}
-            </span>
+            {showNeighborhoodLabels && (
+              <span
+                data-neighborhood-label
+                className="absolute left-1/2 top-3 -translate-x-1/2 whitespace-nowrap rounded-full border-2 border-teal-700/85 bg-white/95 px-2.5 py-1 text-[11px] font-black text-teal-900 shadow-md"
+              >
+                {area.name}
+              </span>
+            )}
           </div>
         );
       })}
@@ -884,6 +901,8 @@ function GoogleMapCanvas({
   language,
   locationId,
   selectedNeighborhoods,
+  neighborhoodRadiusMeters = NEIGHBORHOOD_HIGHLIGHT_RADIUS_METERS,
+  showNeighborhoodLabels = true,
   markers,
   selectedMarkerId,
   savedIds,
@@ -895,7 +914,7 @@ function GoogleMapCanvas({
   const markersRef = useRef<Map<string, HtmlMarkerOverlay>>(new Map());
   const neighborhoodOverlaysRef = useRef<Map<string, {
     circle: google.maps.Circle;
-    label: HtmlMarkerOverlay;
+    label?: HtmlMarkerOverlay;
   }>>(new Map());
   const [mapReady, setMapReady] = useState(false);
   const location = getLocation(locationId);
@@ -1128,7 +1147,7 @@ function GoogleMapCanvas({
     for (const [name, overlay] of neighborhoodOverlaysRef.current) {
       if (activeNames.has(name)) continue;
       overlay.circle.setMap(null);
-      overlay.label.setMap(null);
+      overlay.label?.setMap(null);
       neighborhoodOverlaysRef.current.delete(name);
     }
 
@@ -1136,15 +1155,17 @@ function GoogleMapCanvas({
       const existing = neighborhoodOverlaysRef.current.get(area.name);
       if (existing) {
         existing.circle.setCenter({ lat: area.lat, lng: area.lng });
-        existing.label.setPosition({ lat: area.lat, lng: area.lng });
-        existing.label.setContent(createNeighborhoodLabelElement(area.name));
+         if (existing.label) {
+           existing.label.setPosition({ lat: area.lat, lng: area.lng });
+           existing.label.setContent(createNeighborhoodLabelElement(area.name));
+         }
         continue;
       }
 
       const circle = new google.maps.Circle({
         map: mapRef.current,
         center: { lat: area.lat, lng: area.lng },
-        radius: NEIGHBORHOOD_HIGHLIGHT_RADIUS_METERS,
+        radius: neighborhoodRadiusMeters,
         strokeColor: '#0f766e',
         strokeOpacity: 0.9,
         strokeWeight: 3,
@@ -1153,15 +1174,24 @@ function GoogleMapCanvas({
         clickable: false,
         zIndex: 1,
       });
-      const label = createHtmlMarkerOverlay(
-        mapRef.current,
-        { lat: area.lat, lng: area.lng },
-        createNeighborhoodLabelElement(area.name),
-        5,
-      );
-      neighborhoodOverlaysRef.current.set(area.name, { circle, label });
+       const label = showNeighborhoodLabels
+         ? createHtmlMarkerOverlay(
+             mapRef.current,
+             { lat: area.lat, lng: area.lng },
+             createNeighborhoodLabelElement(area.name),
+             5,
+           )
+         : undefined;
+       neighborhoodOverlaysRef.current.set(area.name, { circle, ...(label ? { label } : {}) });
     }
-  }, [location, locationId, mapReady, selectedNeighborhoods]);
+   }, [
+     location,
+     locationId,
+     mapReady,
+     neighborhoodRadiusMeters,
+     selectedNeighborhoods,
+     showNeighborhoodLabels,
+   ]);
 
   useEffect(() => {
     if (!mapReady || !mapRef.current) return;
@@ -1226,7 +1256,7 @@ function GoogleMapCanvas({
     markersRef.current.clear();
     for (const overlay of neighborhoodOverlaysRef.current.values()) {
       overlay.circle.setMap(null);
-      overlay.label.setMap(null);
+      overlay.label?.setMap(null);
     }
     neighborhoodOverlaysRef.current.clear();
   }, []);

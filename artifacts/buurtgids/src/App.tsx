@@ -1027,6 +1027,8 @@ function SearchState({
                 language={language}
                 locationId={mapLocation.id}
                 selectedNeighborhoods={mapLocation.neighborhoods}
+                neighborhoodRadiusMeters={320}
+                showNeighborhoodLabels={false}
                 markers={[]}
                 selectedMarkerId={null}
                 savedIds={new Set()}
@@ -1040,8 +1042,8 @@ function SearchState({
                   {getLocationName(mapLocation, language)}
                   {' · '}
                   {language === 'nl'
-                    ? 'Elke buurt is omlijnd en gelabeld.'
-                    : 'Each neighborhood is outlined and labeled.'}
+                    ? 'Elke buurt is omlijnd; de namen staan ernaast.'
+                    : 'Each neighborhood is outlined; names are listed alongside.'}
                 </p>
               </div>
             </div>
