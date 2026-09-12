@@ -459,11 +459,15 @@ export function filterEventsByNeighborhoods(
   return events.filter((event) => {
     // Events without an explicit neighborhood still have usable coordinates.
     // Keep them so the client can apply the documented radius filter.
-    if (!event.neighborhood?.trim()) return true;
-    const neighborhood = normalizeNeighborhoods(event.neighborhood)[0];
-    return neighborhood
-      ? requested.has(neighborhood.toLocaleLowerCase("nl-NL"))
-      : true;
+    const rawNeighborhood = event.neighborhood?.trim() ?? "";
+    if (!rawNeighborhood) return true;
+
+    // Delimiter-only values are malformed assignments, not unassigned events.
+    const neighborhood = normalizeNeighborhoods(rawNeighborhood)[0];
+    return Boolean(
+      neighborhood
+      && requested.has(neighborhood.toLocaleLowerCase("nl-NL")),
+    );
   });
 }
 

@@ -170,6 +170,22 @@ describe("listings query persistence inputs", () => {
     assert.deepEqual(filtered.map((event) => event.id), [1, 3]);
   });
 
+  it("keeps only genuinely unassigned events available for coordinate filtering", () => {
+    const events = [
+      { id: 1, neighborhood: undefined },
+      { id: 2, neighborhood: "" },
+      { id: 3, neighborhood: "   " },
+      { id: 4, neighborhood: ",,," },
+      { id: 5, neighborhood: ", , " },
+      { id: 6, neighborhood: "Centrum" },
+      { id: 7, neighborhood: "Scheveningen" },
+    ] as Parameters<typeof filterEventsByNeighborhoods>[0];
+
+    const filtered = filterEventsByNeighborhoods(events, ["centrum"]);
+
+    assert.deepEqual(filtered.map((event) => event.id), [1, 2, 3, 6]);
+  });
+
   it("normalizes supported business subcategories and rejects unknown values", () => {
     assert.deepEqual(
       parseBusinessCategories("Beauty & Personal Care,Unknown,Beauty & Personal Care"),
