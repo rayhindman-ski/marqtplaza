@@ -1,21 +1,4 @@
-eturn [
-    date,
-    openingTimes
-      ? `${language === "nl" ? "Openingstijden" : "Opening times"}: ${openingTimes}`
-      : "",
-    venue,
-    event.isApproximateLocation
-      ? (language === "nl"
-          ? "Kaartpunt: centrum van Den Haag (exacte coördinaten niet beschikbaar)"
-          : "Map pin: The Hague city centre (exact coordinates unavailable)")
-      : "",
-  ].filter(Boolean).join(" · ");
-}
-
-function isInHagueBounds(lat: number, lng: number): boolean {
-  const bounds = CITY_BOUNDS.dhg;
-  return lat >= bounds.s && lat <= bounds.n
-    && lng >= bounds.w && lng <= bounds.e;
+w && lng <= bounds.e;
 }
 
 function hasHagueEvidence(address: string): boolean {
@@ -991,7 +974,22 @@ export async function refreshNeighborhoodDiscoveryScope(scope: NeighborhoodRefre
   const bounds = CITY_BOUNDS[scope.cityId];
   if (!bounds) throw new Error(`Unknown city: ${scope.cityId}`);
   const neighborhoods = normalizeNeighborhoods(scope.neighborhoods);
-  const normalizedKey = normalizedListingsKey(scope.cityId, scope.section, scope.language, neighborhoods);
+  let businessCategories: BusinessCategory[] = [];
+  try {
+    const keyFields = JSON.parse(scope.normalizedKey) as { businessCategories?: unknown };
+    businessCategories = scope.section === "businesses"
+      ? parseBusinessCategories(keyFields.businessCategories)
+      : [];
+  } catch {
+    // The key mismatch below remains the explicit guard for malformed refresh scopes.
+  }
+  const normalizedKey = normalizedListingsKey(
+    scope.cityId,
+    scope.section,
+    scope.language,
+    neighborhoods,
+    businessCategories,
+  );
   if (normalizedKey !== scope.normalizedKey) throw new Error("Refresh scope normalized key does not match its fields.");
 
   const queryId = await createListingsQuery({
@@ -1008,8 +1006,15 @@ export async function refreshNeighborhoodDiscoveryScope(scope: NeighborhoodRefre
   const outcomes = await Promise.all(SCHEDULED_DISCOVERY_PROVIDERS.map((provider) =>
     captureProviderResult(queryId, provider, normalizedKey, {
       section: scope.section,
+      neighborhoods,
+      businessCategories,
       scheduled: true,
-    }, async () => fetchOpenStreetMapBusinesses(await fetchCityListings(bounds), scope.section, bounds), 1),
+    }, async () => fetchOpenStreetMapBusinesses(
+      await fetchCityListings(bounds, businessCategories),
+      scope.section,
+      bounds,
+      businessCategories,
+    ), 1),
   ));
   const successful = outcomes.filter((outcome) => !outcome.error);
   const status = successful.length === 0 ? "failed" : "succeeded";

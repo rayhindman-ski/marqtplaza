@@ -1,5 +1,4 @@
- : 'Search neighborhood'}
-              </span>
+     </span>
               <input
                 type="search"
                 value={neighborhoodSearch}

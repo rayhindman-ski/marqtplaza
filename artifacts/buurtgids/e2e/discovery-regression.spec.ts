@@ -12,11 +12,13 @@ function todayAt(hour: number) {
 }
 
 test('keeps discovery filters, map pins, routes, and translations in sync', async ({ page }) => {
+  const listingsRequests: URL[] = [];
   await page.addInitScript(() => {
     navigator.geolocation.getCurrentPosition = () => undefined;
   });
 
   await page.route('**/api/listings*', async (route) => {
+    listingsRequests.push(new URL(route.request().url()));
     await route.fulfill({
       contentType: 'application/json',
       body: JSON.stringify({
@@ -76,8 +78,10 @@ test('keeps discovery filters, map pins, routes, and translations in sync', asyn
     await route.fulfill({ contentType: 'image/png', body: transparentPng });
   });
 
-  await page.goto('/activiteiten/den-haag');
+  await page.goto('/activiteiten/den-haag?neighborhood=Centrum');
   await expect(page.getByText('Quick choices')).toBeVisible();
+  await expect(page.getByRole('checkbox', { name: 'Centrum', exact: true })).toBeChecked();
+  await expect.poll(() => listingsRequests.some((request) => request.searchParams.get('neighborhoods') === 'Centrum')).toBe(true);
   for (const label of ['Family', 'Indoor', 'Today', 'Free']) {
     await page.getByRole('button', { name: label, exact: true }).click();
   }
