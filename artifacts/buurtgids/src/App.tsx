@@ -12,7 +12,7 @@ import {
   Landmark, Route as RouteIcon, Baby, Building2, Coffee, Gamepad2, HandHeart, Waves, ShoppingBag, ExternalLink, AlertCircle, CalendarPlus,
   CalendarDays, UsersRound, Utensils,
   CloudSun, Cloud, CloudFog, CloudRain, CloudSnow, Sun, Wind, Droplets, Tag, Store,
-  Bike, Car, Footprints, TrainFront, ShieldCheck, Sparkles, Navigation, UserRound
+  Bike, Car, Footprints, TrainFront, ShieldCheck, Sparkles, Navigation, UserRound, Loader2
 } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -1233,10 +1233,12 @@ function FilterFrame({
   title,
   children,
   defaultOpen = true,
+  status,
 }: {
   title: string;
   children: React.ReactNode;
   defaultOpen?: boolean;
+  status?: React.ReactNode;
 }) {
   const [isOpen, setIsOpen] = useState(defaultOpen);
   return (
@@ -1248,7 +1250,10 @@ function FilterFrame({
         className="flex min-h-9 w-full items-center justify-between gap-2 px-3 py-2 text-left text-[10px] font-black uppercase tracking-[0.14em] text-muted-foreground hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
       >
         <span>{title}</span>
-        <ChevronDown className={cn("h-4 w-4 shrink-0 transition-transform", isOpen && "rotate-180")} />
+        <span className="flex items-center gap-2">
+          {status}
+          <ChevronDown className={cn("h-4 w-4 shrink-0 transition-transform", isOpen && "rotate-180")} />
+        </span>
       </button>
       {isOpen && <div className="border-t border-border/60 p-2">{children}</div>}
     </section>
@@ -2054,6 +2059,21 @@ function DiscoveryState({
     return isPointInsideNeighborhoods(marker.lat, marker.lng, activeNeighborhoodNames);
   });
   const isLoading = selectedQueries.some((query) => query.isLoading);
+  // A background refetch after a filter change shows the previous response
+  // (placeholder data) until the narrowed result arrives; surface that state.
+  const isRefreshing = !isLoading && selectedQueries.some((query) => query.isFetching);
+  const refreshingLabel = language === 'nl' ? 'Resultaten worden bijgewerkt…' : 'Updating results…';
+  const refreshingIndicator = isRefreshing ? (
+    <span
+      role="status"
+      aria-live="polite"
+      data-testid="results-refreshing"
+      className="inline-flex items-center gap-1 text-[10px] font-semibold normal-case tracking-normal text-primary"
+    >
+      <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
+      {refreshingLabel}
+    </span>
+  ) : null;
   const isError = selectedQueries.some((query) => query.isError) && selectedListings.length === 0;
   const refetch = () => Promise.all(selectedQueries.map((query) => query.refetch()));
   const isLive = selectedData.some((result) => result.source === 'live');
@@ -2109,7 +2129,10 @@ function DiscoveryState({
             </button>
             <div className="flex-1 min-w-0">
               <h2 className="text-3xl font-extrabold text-foreground tracking-tight">{getLocationName(location, language)}</h2>
-              <p className="text-sm text-muted-foreground font-medium">{t.discoveriesNearby(filteredMarkers.length)}</p>
+              <p className="flex items-center gap-2 text-sm text-muted-foreground font-medium">
+                {t.discoveriesNearby(filteredMarkers.length)}
+                {isRefreshing && <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" aria-hidden="true" />}
+              </p>
             </div>
             <button
               onClick={onViewSaved}
@@ -2225,7 +2248,7 @@ function DiscoveryState({
               </div>
             </FilterFrame>
             {visibleSubcategories.length > 0 && (
-              <FilterFrame title={t.subcategories}>
+              <FilterFrame title={t.subcategories} status={refreshingIndicator}>
                 <div className="mb-2">
                   <CategoryActionButtons
                     language={language}
@@ -2238,7 +2261,8 @@ function DiscoveryState({
                 <div
                   role="group"
                   aria-label={t.subcategories}
-                  className="grid grid-cols-2 gap-1"
+                  aria-busy={isRefreshing}
+                  className={cn("grid grid-cols-2 gap-1 transition-opacity", isRefreshing && "opacity-70")}
                 >
                   {visibleSubcategories.map((subcategory) => {
                     const isChecked = subcategories[subcategory];
