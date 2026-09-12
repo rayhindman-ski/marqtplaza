@@ -79,6 +79,7 @@ import {
   type DiscoveryQuickFilter,
   type RouteMode,
 } from './lib/listingPresentation';
+import { NEIGHBORHOOD_BOUNDARIES, type NeighborhoodBoundary } from './lib/neighborhood-boundaries';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -91,6 +92,40 @@ function formatEvidenceCheckedAt(value: string, language: Language): string {
     dateStyle: 'medium',
     timeStyle: 'short',
   }).format(date);
+}
+
+function isPointInsideRing(lat: number, lng: number, ring: NeighborhoodBoundary[number]): boolean {
+  let inside = false;
+
+  for (let index = 0, previousIndex = ring.length - 1; index < ring.length; previousIndex = index++) {
+    const [currentLat, currentLng] = ring[index];
+    const [previousLat, previousLng] = ring[previousIndex];
+    const latDelta = previousLat - currentLat;
+    const lngDelta = previousLng - currentLng;
+    const crossProduct = (lat - currentLat) * lngDelta - (lng - currentLng) * latDelta;
+    const onSegment = Math.abs(crossProduct) < 1e-10
+      && lat >= Math.min(currentLat, previousLat)
+      && lat <= Math.max(currentLat, previousLat)
+      && lng >= Math.min(currentLng, previousLng)
+      && lng <= Math.max(currentLng, previousLng);
+
+    if (onSegment) return true;
+
+    const crossesLatitude = (currentLat > lat) !== (previousLat > lat);
+    if (crossesLatitude) {
+      const intersectionLng = (lngDelta * (lat - currentLat)) / latDelta + currentLng;
+      if (lng < intersectionLng) inside = !inside;
+    }
+  }
+
+  return inside;
+}
+
+function isMarkerWithinNeighborhoods(marker: Pick<Marker, 'lat' | 'lng'>, neighborhoodNames: string[]): boolean {
+  return neighborhoodNames.some((neighborhoodName) => {
+    const boundary = NEIGHBORHOOD_BOUNDARIES[neighborhoodName];
+    return boundary?.some((ring) => isPointInsideRing(marker.lat, marker.lng, ring)) ?? false;
+  });
 }
 
 type UserRole = 'designer' | 'user';
