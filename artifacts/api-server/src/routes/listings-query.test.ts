@@ -4,6 +4,7 @@ import { describe, it } from "node:test";
 import {
   allowsExternalQueries,
   fetchOpenStreetMapBusinesses,
+  filterEventsByNeighborhoods,
   normalizeNeighborhoods,
   normalizedListingsKey,
   parseAnonymousId,
@@ -148,6 +149,18 @@ describe("listings query persistence inputs", () => {
       normalizedListingsKey(" DHG ", "businesses", "nl", first),
       normalizedListingsKey("dhg", "businesses", "nl", second),
     );
+  });
+
+  it("matches event neighborhoods without formatting-sensitive exclusions", () => {
+    const events = [
+      { id: 1, neighborhood: "  Laak   Centraal  " },
+      { id: 2, neighborhood: "  Centrum  " },
+      { id: 3, neighborhood: undefined },
+    ] as Parameters<typeof filterEventsByNeighborhoods>[0];
+
+    const filtered = filterEventsByNeighborhoods(events, [" laak centraal "]);
+
+    assert.deepEqual(filtered.map((event) => event.id), [1, 3]);
   });
 
   it("normalizes supported business subcategories and rejects unknown values", () => {
