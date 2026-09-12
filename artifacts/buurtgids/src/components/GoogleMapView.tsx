@@ -1045,7 +1045,11 @@ function GoogleMapCanvas({
       const wrapper = document.createElement('div');
       const isMuted = Boolean(selectedMarkerId) && !isSelected;
       wrapper.style.cssText = [
-        'position:relative',
+        // Google OverlayView writes the projected coordinate to this wrapper's
+        // left/top values. It must be removed from normal flow; relative
+        // positioning turns those coordinates into per-element offsets and
+        // makes correctly filtered pins appear outside their polygon.
+        'position:absolute',
         'display:flex',
         'align-items:center',
         'justify-content:center',
