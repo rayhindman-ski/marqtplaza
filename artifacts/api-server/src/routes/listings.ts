@@ -446,6 +446,27 @@ export function normalizeNeighborhoods(value: unknown): string[] {
   ).values()].sort((a, b) => a.localeCompare(b, "nl-NL"));
 }
 
+export function filterEventsByNeighborhoods(
+  events: DiscoveredEvent[],
+  neighborhoods: string[],
+): DiscoveredEvent[] {
+  const requested = new Set(
+    normalizeNeighborhoods(neighborhoods)
+      .map((neighborhood) => neighborhood.toLocaleLowerCase("nl-NL")),
+  );
+  if (requested.size === 0) return events;
+
+  return events.filter((event) => {
+    // Events without an explicit neighborhood still have usable coordinates.
+    // Keep them so the client can apply the documented radius filter.
+    if (!event.neighborhood?.trim()) return true;
+    const neighborhood = normalizeNeighborhoods(event.neighborhood)[0];
+    return neighborhood
+      ? requested.has(neighborhood.toLocaleLowerCase("nl-NL"))
+      : true;
+  });
+}
+
 export function parseBusinessCategories(value: unknown): BusinessCategory[] {
   const raw = Array.isArray(value) ? value.join(",") : String(value ?? "");
   return [...new Set(
@@ -1880,7 +1901,11 @@ export function createListingsRouter(
           gte(discoveredEventsTable.startsAt, today),
         ))
         .orderBy(asc(discoveredEventsTable.startsAt), desc(discoveredEventsTable.lastSeenAt));
-      const localizedEvents = await prepareEventsForMode(discovered, language, mode);
+      const localizedEvents = await prepareEventsForMode(
+        filterEventsByNeighborhoods(discovered, requestedNeighborhoods),
+        language,
+        mode,
+      );
       const discoveredListings = localizedEvents
         .map((event) => {
         const copy = eventCopyForLanguage(event, language);

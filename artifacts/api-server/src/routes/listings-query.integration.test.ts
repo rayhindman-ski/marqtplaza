@@ -28,6 +28,11 @@ const scanEventUrls = [
   "https://www.getyourguide.com/en-gb/the-hague-l1267/online-skills-session",
   "https://www.getyourguide.com/en-gb/the-hague-l1267/past-foreign-event",
 ];
+const neighborhoodEventUrls = [
+  "https://example.test/centrum-community-event",
+  "https://example.test/unassigned-community-event",
+];
+const eventTestUrls = [...scanEventUrls, ...neighborhoodEventUrls];
 const scanSourceIds = ["getyourguide", "denhaag-com", "wearetravelers", "flitz-events", "kidsproof"];
 const queryTriggerName = "listings_test_fail_google_query";
 const queryTriggerFunctionName = "listings_test_reject_google_query";
@@ -98,7 +103,7 @@ async function cleanTestRows(): Promise<void> {
 }
 
 async function cleanEventRows(): Promise<void> {
-  await db.delete(discoveredEventsTable).where(inArray(discoveredEventsTable.canonicalUrl, scanEventUrls));
+  await db.delete(discoveredEventsTable).where(inArray(discoveredEventsTable.canonicalUrl, eventTestUrls));
   await db.delete(eventSourceStatusesTable).where(inArray(eventSourceStatusesTable.sourceId, scanSourceIds));
 }
 
@@ -110,9 +115,9 @@ async function requestListings(anonymousId: string, mode: "live" | "stored_only"
   return { status: response.status, body: await response.json() as Record<string, any> };
 }
 
-async function requestEventListings() {
+async function requestEventListings(neighborhood = "Scheveningen") {
   const response = await fetch(
-    `${baseUrl}/api/listings?cityId=dhg&section=events&language=en&mode=live&neighborhoods=Scheveningen&anonymousId=${anonymousIds[3]}`,
+    `${baseUrl}/api/listings?cityId=dhg&section=events&language=en&mode=live&neighborhoods=${encodeURIComponent(neighborhood)}&anonymousId=${anonymousIds[3]}`,
   );
   return { status: response.status, body: await response.json() as Record<string, any> };
 }
@@ -347,6 +352,45 @@ describe("listings route integration (isolated database integration)", () => {
       ["missing_date", "out_of_window"],
     );
 
+    const fixtureStartsAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1_000).toISOString();
+    await db.insert(discoveredEventsTable).values([
+      {
+        locationId: "dhg",
+        sourceId: "test-fixture",
+        sourceName: "Test fixture",
+        canonicalUrl: neighborhoodEventUrls[0],
+        title: "Centrum community event",
+        description: "An approved event assigned to Centrum.",
+        sourceLanguage: "en",
+        startsAt: fixtureStartsAt,
+        category: "Entertainment",
+        neighborhood: "Centrum",
+        lat: 52.078,
+        lng: 4.315,
+        x: 50,
+        y: 50,
+        isApproximateLocation: false,
+        reviewStatus: "approved",
+      },
+      {
+        locationId: "dhg",
+        sourceId: "test-fixture",
+        sourceName: "Test fixture",
+        canonicalUrl: neighborhoodEventUrls[1],
+        title: "Unassigned community event",
+        description: "An approved event without an assigned neighborhood.",
+        sourceLanguage: "en",
+        startsAt: fixtureStartsAt,
+        category: "Entertainment",
+        lat: 52.109,
+        lng: 4.281,
+        x: 50,
+        y: 50,
+        isApproximateLocation: false,
+        reviewStatus: "approved",
+      },
+    ]);
+
     const checkedAt = new Date();
     await db.insert(eventSourceStatusesTable).values([
       {
@@ -380,8 +424,12 @@ describe("listings route integration (isolated database integration)", () => {
 
     const listingResult = await requestEventListings();
     assert.equal(listingResult.status, 200);
-    assert.equal(listingResult.body.listings.length, 1);
-    assert.equal(listingResult.body.listings[0]?.name, "Scheveningen community workshop");
+    assert.deepEqual(
+      listingResult.body.listings.map((listing: { name: string }) => listing.name),
+      ["Scheveningen community workshop", "Unassigned community event"],
+    );
+    assert.equal(listingResult.body.listings.some((listing: { name: string }) =>
+      listing.name === "Centrum community event"), false);
     assert.equal(listingResult.body.listings[0]?.source, "source_scan");
     assert.equal(listingResult.body.evidence.status, "verified");
 
@@ -396,7 +444,7 @@ describe("listings route integration (isolated database integration)", () => {
 
     await db.update(discoveredEventsTable)
       .set({ reviewStatus: "pending_review" })
-      .where(inArray(discoveredEventsTable.canonicalUrl, scanEventUrls));
+      .where(inArray(discoveredEventsTable.canonicalUrl, eventTestUrls));
     await db.delete(eventSourceStatusesTable).where(inArray(eventSourceStatusesTable.sourceId, scanSourceIds));
     const unavailableResult = await requestEventListings();
     assert.equal(unavailableResult.status, 200);
