@@ -897,6 +897,7 @@ function SearchState({
   const [selectedCityId, setSelectedCityId] = useState<string | null>(null);
   const [includeExternalSources, setIncludeExternalSources] = useState(readIncludeExternalSources);
   const t = translations[language];
+  const mapLocation = LOCATIONS.find((location) => location.id === selectedCityId) ?? LOCATIONS[0];
 
   useEffect(() => {
     window.localStorage.setItem(
@@ -1020,72 +1021,100 @@ function SearchState({
         </form>
 
         <div className="w-full pt-6">
-          <p className="text-xs text-muted-foreground mb-4 uppercase tracking-widest font-bold">{t.popularDestinations}</p>
-          <div className="flex flex-wrap justify-center gap-2.5">
-            {LOCATIONS.map(loc => {
-              const neighborhoodOptions = selectedCityId === loc.id
-                ? loc.neighborhoods
-                : (popularNeighborhoods[loc.id] ?? loc.neighborhoods.slice(0, 8));
-
-              return (
-              <div
-                key={loc.id}
-                className={cn(
-                  "flex w-full max-w-5xl flex-col items-center gap-2 rounded-2xl p-1.5 transition-colors",
-                  selectedCityId === loc.id && "bg-primary/5 p-3 ring-1 ring-primary/20",
-                )}
-              >
-                <button
-                  type="button"
-                  aria-pressed={selectedCityId === loc.id}
-                  onClick={() => setSelectedCityId(loc.id)}
-                  className={cn(
-                    "px-4 py-2 backdrop-blur-sm border rounded-full text-sm font-semibold transition-all shadow-sm hover:shadow-md",
-                    selectedCityId === loc.id
-                      ? "bg-foreground text-background border-foreground"
-                      : "bg-card/80 border-border/60 text-foreground hover:border-primary/50 hover:text-primary",
-                  )}
-                >
-                  {getLocationName(loc, language)}
-                </button>
-                <div className="w-full text-left">
-                  <p className="mb-2 text-center text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
-                    {selectedCityId === loc.id
-                      ? t.chooseNeighborhood(getLocationName(loc, language))
-                      : t.popularNeighborhoods}
-                  </p>
-                  <div className="mb-3 flex flex-wrap justify-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => onSearch(loc.id, undefined, DEFAULT_START_SECTION)}
-                      className="rounded-full border border-primary/40 bg-primary/10 px-3 py-1.5 text-[11px] font-extrabold text-primary transition-colors hover:bg-primary/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                    >
-                      {t.selectAllNeighborhoods}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setSelectedCityId(null)}
-                      className="rounded-full border border-border/70 bg-card/80 px-3 py-1.5 text-[11px] font-extrabold text-muted-foreground transition-colors hover:border-primary/40 hover:bg-primary/5 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                    >
-                      {t.clearNeighborhoodSelection}
-                    </button>
-                  </div>
-                  <div className="grid w-full grid-cols-2 gap-2 animate-in fade-in slide-in-from-top-1 duration-300 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
-                    {neighborhoodOptions.map((neighborhood) => (
-                      <button
-                        key={neighborhood}
-                        type="button"
-                        onClick={() => onSearch(loc.id, neighborhood, DEFAULT_START_SECTION)}
-                        className="min-h-10 rounded-xl border border-border/50 bg-card/80 px-3 py-2 text-left text-xs font-semibold text-muted-foreground transition-all hover:border-primary/50 hover:bg-primary/5 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                      >
-                        {neighborhood}
-                      </button>
-                    ))}
-                  </div>
-                </div>
+          <div className="grid gap-6 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1.35fr)] lg:items-start">
+            <div className="relative h-[25rem] overflow-hidden rounded-3xl border border-border/70 bg-card/80 text-left shadow-xl backdrop-blur-sm sm:h-[30rem]">
+              <GoogleMapView
+                language={language}
+                locationId={mapLocation.id}
+                selectedNeighborhoods={mapLocation.neighborhoods}
+                markers={[]}
+                selectedMarkerId={null}
+                savedIds={new Set()}
+                onMarkerClick={() => undefined}
+              />
+              <div className="pointer-events-none absolute left-4 top-4 z-10 max-w-[calc(100%-2rem)] rounded-2xl border border-border/70 bg-card/90 px-4 py-3 shadow-lg backdrop-blur-sm">
+                <p className="text-sm font-extrabold text-foreground">
+                  {language === 'nl' ? 'Buurten op de kaart' : 'Neighborhoods on the map'}
+                </p>
+                <p className="mt-1 text-xs font-semibold text-muted-foreground">
+                  {getLocationName(mapLocation, language)}
+                  {' · '}
+                  {language === 'nl'
+                    ? 'Elke buurt is omlijnd en gelabeld.'
+                    : 'Each neighborhood is outlined and labeled.'}
+                </p>
               </div>
-              );
-            })}
+            </div>
+
+            <div>
+              <p className="mb-4 text-xs font-bold uppercase tracking-widest text-muted-foreground">{t.popularDestinations}</p>
+              <div className="flex flex-wrap justify-center gap-2.5">
+                {LOCATIONS.map(loc => {
+                  const neighborhoodOptions = selectedCityId === loc.id
+                    ? loc.neighborhoods
+                    : (popularNeighborhoods[loc.id] ?? loc.neighborhoods.slice(0, 8));
+
+                  return (
+                  <div
+                    key={loc.id}
+                    className={cn(
+                      "flex w-full max-w-5xl flex-col items-center gap-2 rounded-2xl p-1.5 transition-colors",
+                      selectedCityId === loc.id && "bg-primary/5 p-3 ring-1 ring-primary/20",
+                    )}
+                  >
+                    <button
+                      type="button"
+                      aria-pressed={selectedCityId === loc.id}
+                      onClick={() => setSelectedCityId(loc.id)}
+                      className={cn(
+                        "px-4 py-2 backdrop-blur-sm border rounded-full text-sm font-semibold transition-all shadow-sm hover:shadow-md",
+                        selectedCityId === loc.id
+                          ? "bg-foreground text-background border-foreground"
+                          : "bg-card/80 border-border/60 text-foreground hover:border-primary/50 hover:text-primary",
+                      )}
+                    >
+                      {getLocationName(loc, language)}
+                    </button>
+                    <div className="w-full text-left">
+                      <p className="mb-2 text-center text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
+                        {selectedCityId === loc.id
+                          ? t.chooseNeighborhood(getLocationName(loc, language))
+                          : t.popularNeighborhoods}
+                      </p>
+                      <div className="mb-3 flex flex-wrap justify-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => onSearch(loc.id, undefined, DEFAULT_START_SECTION)}
+                          className="rounded-full border border-primary/40 bg-primary/10 px-3 py-1.5 text-[11px] font-extrabold text-primary transition-colors hover:bg-primary/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                        >
+                          {t.selectAllNeighborhoods}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedCityId(null)}
+                          className="rounded-full border border-border/70 bg-card/80 px-3 py-1.5 text-[11px] font-extrabold text-muted-foreground transition-colors hover:border-primary/40 hover:bg-primary/5 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                        >
+                          {t.clearNeighborhoodSelection}
+                        </button>
+                      </div>
+                      <div className="grid w-full grid-cols-2 gap-2 animate-in fade-in slide-in-from-top-1 duration-300 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-2 xl:grid-cols-3">
+                        {neighborhoodOptions.map((neighborhood) => (
+                          <button
+                            key={neighborhood}
+                            type="button"
+                            onClick={() => onSearch(loc.id, neighborhood, DEFAULT_START_SECTION)}
+                            className="min-h-10 rounded-xl border border-border/50 bg-card/80 px-3 py-2 text-left text-xs font-semibold text-muted-foreground transition-all hover:border-primary/50 hover:bg-primary/5 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                          >
+                            {neighborhood}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                  );
+                })}
+              </div>
+            </div>
           </div>
         </div>
       </div>
