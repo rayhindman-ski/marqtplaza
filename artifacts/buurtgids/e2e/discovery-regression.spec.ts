@@ -270,8 +270,8 @@ for (const [mapPath, tilesAvailable] of [['tile map', true], ['coordinate fallba
     await expect(page).toHaveURL(/\/activiteiten\/den-haag\?neighborhood=Centrum/);
     await expect(page.getByRole('checkbox', { name: 'Centrum', exact: true })).toBeChecked();
     await expect(page.getByRole('button', { name: 'Select neighborhood: Centrum', exact: true })).toHaveCount(1);
-    await expect(page.locator('[data-neighborhood-boundary]')).toHaveCountGreaterThan(1);
-    await expect(page.locator('[data-neighborhood-boundary]').filter({ has: undefined })).toHaveCountGreaterThan(1);
+    expect(await page.locator('[data-neighborhood-boundary]').count()).toBeGreaterThan(1);
+    await expect(page.locator('[data-neighborhood-boundary]').filter({ hasText: '' })).toHaveCount(0);
   });
 
   test(`keeps neighborhood polygon selection aligned in the ${mapPath}`, async ({ page }) => {
