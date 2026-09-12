@@ -42,6 +42,8 @@ const NEIGHBORHOOD_PULSE_DURATION_MS = 2_400;
 const TILE_SIZE = 256;
 const MIN_TILE_ZOOM = 10;
 const MAX_TILE_ZOOM = 18;
+const MAP_CLUSTER_RADIUS_PX = 56;
+const COORDINATE_CLUSTER_RADIUS_PERCENT = 7;
 const GOOGLE_MAPS_LOAD_TIMEOUT_MS = 4_000;
 const googleMapsApiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string | undefined;
 const googleMapsBrowserKeyPattern = /^AIza[0-9A-Za-z_-]{35}$/;
@@ -304,6 +306,97 @@ function worldToLatLng(x: number, y: number, zoom: number): LatLng {
     lat: (180 / Math.PI) * Math.atan(Math.sinh(mercatorY)),
     lng: ((longitude + 540) % 360) - 180,
   };
+}
+
+type MapPointCluster = {
+  id: string;
+  points: MapPoint[];
+  lat: number;
+  lng: number;
+  x: number;
+  y: number;
+};
+
+function clusterMapPoints(
+  points: MapPoint[],
+  getPosition: (point: MapPoint) => { x: number; y: number },
+  radius: number,
+): MapPointCluster[] {
+  const clusters: MapPointCluster[] = [];
+
+  for (const point of points) {
+    const position = getPosition(point);
+    const cluster = clusters.find((candidate) => (
+      Math.hypot(candidate.x - position.x, candidate.y - position.y) <= radius
+    ));
+
+    if (!cluster) {
+      clusters.push({
+        id: `cluster-${point.id}`,
+        points: [point],
+        lat: point.lat,
+        lng: point.lng,
+        x: position.x,
+        y: position.y,
+      });
+      continue;
+    }
+
+    const nextCount = cluster.points.length + 1;
+    cluster.points.push(point);
+    cluster.lat = (cluster.lat * (nextCount - 1) + point.lat) / nextCount;
+    cluster.lng = (cluster.lng * (nextCount - 1) + point.lng) / nextCount;
+    cluster.x = (cluster.x * (nextCount - 1) + position.x) / nextCount;
+    cluster.y = (cluster.y * (nextCount - 1) + position.y) / nextCount;
+    cluster.id = `cluster-${cluster.points.map(({ id }) => id).sort().join('-')}`;
+  }
+
+  return clusters;
+}
+
+function ClusterSummaryMarker({
+  cluster,
+  style,
+  onClick,
+}: {
+  cluster: MapPointCluster;
+  style: React.CSSProperties;
+  onClick?: () => void;
+}) {
+  const count = cluster.points.length;
+  const size = count >= 100 ? 62 : count >= 10 ? 56 : 50;
+  const isInteractive = Boolean(onClick);
+
+  return (
+    <div
+      key={cluster.id}
+      data-map-cluster
+      role={isInteractive ? 'button' : 'img'}
+      tabIndex={isInteractive ? 0 : undefined}
+      aria-label={`${count} listings in this area`}
+      title={`${count} listings in this area`}
+      className="absolute z-30 -translate-x-1/2 -translate-y-1/2"
+      style={style}
+      onClick={onClick}
+      onKeyDown={(event) => {
+        if (isInteractive && (event.key === 'Enter' || event.key === ' ')) {
+          event.preventDefault();
+          onClick?.();
+        }
+      }}
+    >
+      <span
+        className="flex items-center justify-center rounded-full border-[3px] border-white bg-[linear-gradient(135deg,#ff9a52_0%,#f36c21_48%,#c94d12_100%)] font-black text-white shadow-[0_7px_16px_-5px_rgba(23,34,53,0.5),0_0_0_2px_rgba(243,108,33,0.3)]"
+        style={{
+          width: size,
+          height: size,
+          fontSize: count >= 100 ? 14 : 16,
+        }}
+      >
+        {count}
+      </span>
+    </div>
+  );
 }
 
 function getInitialViewport(locationId: string): TileViewport {
