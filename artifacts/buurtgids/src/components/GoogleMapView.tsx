@@ -368,6 +368,20 @@ function projectCoordinatePoint(
   };
 }
 
+function shouldShowNeighborhoodLabel(
+  name: string,
+  options: {
+    showNeighborhoodLabels: boolean;
+    showAllNeighborhoods: boolean;
+    selectedNeighborhoods: string[];
+    highlightedNeighborhood: string | null;
+  },
+): boolean {
+  if (options.highlightedNeighborhood === name) return true;
+  if (!options.showNeighborhoodLabels) return false;
+  return !options.showAllNeighborhoods || options.selectedNeighborhoods.includes(name);
+}
+
 function handleNeighborhoodKeyDown(
   event: React.KeyboardEvent<SVGPolygonElement>,
   name: string,
@@ -427,7 +441,12 @@ function CoordinateMapFallback({
   }
 
   const selectedPoint = points.find((point) => point.id === selectedMarkerId);
-  const neighborhoodCoordinates = getBoundaryPoints(neighborhoodAreas);
+  // The camera follows the selected neighborhoods; context boundaries are drawn
+  // but must not widen the viewport to the whole city.
+  const viewportAreas = selectedNeighborhoods.length > 0
+    ? getNeighborhoodAreas(locationId, selectedNeighborhoods)
+    : neighborhoodAreas;
+  const neighborhoodCoordinates = getBoundaryPoints(viewportAreas);
   const mapCoordinates = selectedPoint
     ? [
         { lat: selectedPoint.lat - 0.012, lng: selectedPoint.lng - 0.018 },
@@ -501,7 +520,7 @@ function CoordinateMapFallback({
                 />
               ))}
             </svg>
-            {(showNeighborhoodLabels || highlightedNeighborhood === area.name) && (
+            {shouldShowNeighborhoodLabel(area.name, { showNeighborhoodLabels, showAllNeighborhoods, selectedNeighborhoods, highlightedNeighborhood }) && (
               <span
                 data-neighborhood-label
                 className="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-1/2 whitespace-nowrap rounded-full border-2 border-teal-700/85 bg-white/95 px-2.5 py-1 text-[11px] font-black text-teal-900 shadow-md"
@@ -638,7 +657,7 @@ function TileMapView({
   }, [locationId]);
 
   useEffect(() => {
-    const viewportNeighborhoods = showAllNeighborhoods
+    const viewportNeighborhoods = showAllNeighborhoods && selectedNeighborhoods.length === 0
       ? (getLocation(locationId)?.neighborhoods ?? selectedNeighborhoods)
       : selectedNeighborhoods;
     setViewport(
@@ -846,7 +865,7 @@ function TileMapView({
         </svg>
       )}
       {neighborhoodAreas.map((area) => {
-        if (!showNeighborhoodLabels && highlightedNeighborhood !== area.name) return null;
+        if (!shouldShowNeighborhoodLabel(area.name, { showNeighborhoodLabels, showAllNeighborhoods, selectedNeighborhoods, highlightedNeighborhood })) return null;
         const world = latLngToWorld(area, viewport.zoom);
         return (
           <span
@@ -997,6 +1016,12 @@ function GoogleMapCanvas({
   }>>(new Map());
   const [mapReady, setMapReady] = useState(false);
   const location = getLocation(locationId);
+  // Polygon listeners are bound once per overlay; route them through refs so
+  // they always call the latest React callbacks instead of a stale closure.
+  const neighborhoodClickRef = useRef(onNeighborhoodClick);
+  const neighborhoodHoverRef = useRef(onNeighborhoodHover);
+  neighborhoodClickRef.current = onNeighborhoodClick;
+  neighborhoodHoverRef.current = onNeighborhoodHover;
 
   const buildMarkerEl = useCallback(
     (marker: MarkerData, isSelected: boolean, isSaved: boolean): HTMLElement => {
@@ -1196,7 +1221,9 @@ function GoogleMapCanvas({
     if (!mapReady || !mapRef.current || !location) return;
     const neighborhoods = getNeighborhoodAreas(
       locationId,
-      showAllNeighborhoods ? (location.neighborhoods ?? selectedNeighborhoods) : selectedNeighborhoods,
+      showAllNeighborhoods && selectedNeighborhoods.length === 0
+        ? (location.neighborhoods ?? selectedNeighborhoods)
+        : selectedNeighborhoods,
     );
     if (neighborhoods.length === 0 && markers.length === 1) {
       mapRef.current.panTo({ lat: markers[0].lat, lng: markers[0].lng });
@@ -1249,17 +1276,18 @@ function GoogleMapCanvas({
           fillColor: highlightedNeighborhood === area.name ? '#f36c21' : '#2dd4bf',
           fillOpacity: highlightedNeighborhood === area.name ? 0.2 : 0.1,
         });
-        if ((showNeighborhoodLabels || highlightedNeighborhood === area.name) && existing.label) {
+        const labelVisible = shouldShowNeighborhoodLabel(area.name, { showNeighborhoodLabels, showAllNeighborhoods, selectedNeighborhoods, highlightedNeighborhood });
+        if (labelVisible && existing.label) {
           existing.label.setPosition({ lat: area.lat, lng: area.lng });
           existing.label.setContent(createNeighborhoodLabelElement(area.name));
-        } else if ((showNeighborhoodLabels || highlightedNeighborhood === area.name) && !existing.label) {
+        } else if (labelVisible && !existing.label) {
           existing.label = createHtmlMarkerOverlay(
             mapRef.current,
             { lat: area.lat, lng: area.lng },
             createNeighborhoodLabelElement(area.name),
             5,
           );
-        } else if (!showNeighborhoodLabels && highlightedNeighborhood !== area.name && existing.label) {
+        } else if (!labelVisible && existing.label) {
           existing.label.setMap(null);
           existing.label = undefined;
         }
@@ -1278,13 +1306,13 @@ function GoogleMapCanvas({
         zIndex: 1,
       });
       if (onNeighborhoodClick) {
-        polygon.addListener('click', () => onNeighborhoodClick(area.name));
+        polygon.addListener('click', () => neighborhoodClickRef.current?.(area.name));
       }
       if (onNeighborhoodHover) {
-        polygon.addListener('mouseover', () => onNeighborhoodHover(area.name));
-        polygon.addListener('mouseout', () => onNeighborhoodHover(null));
+        polygon.addListener('mouseover', () => neighborhoodHoverRef.current?.(area.name));
+        polygon.addListener('mouseout', () => neighborhoodHoverRef.current?.(null));
       }
-      const label = showNeighborhoodLabels || highlightedNeighborhood === area.name
+      const label = shouldShowNeighborhoodLabel(area.name, { showNeighborhoodLabels, showAllNeighborhoods, selectedNeighborhoods, highlightedNeighborhood })
         ? createHtmlMarkerOverlay(
             mapRef.current,
             { lat: area.lat, lng: area.lng },

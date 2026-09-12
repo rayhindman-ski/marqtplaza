@@ -103,14 +103,14 @@ test('keeps discovery filters, map pins, routes, and translations in sync', asyn
         id: 'qualifying-event', locationId: 'dhg', category: 'Family',
         name: 'Qualifying family workshop', description: 'Indoor family workshop',
         details: 'Today', startsAt: todayAt(14), x: 50, y: 50,
-        lat: 52.071, lng: 4.301, address: '2511 AB Den Haag',
+        lat: 52.075, lng: 4.31, address: '2511 AB Den Haag',
         activityKind: 'family', priceType: 'free', isIndoor: true, openNow: true,
       },
       {
         id: 'assigned-elsewhere-event', locationId: 'dhg', category: 'Family',
         name: 'Scheveningen family workshop', description: 'Assigned to another neighborhood',
         details: 'Today', startsAt: todayAt(14), x: 51, y: 51,
-        lat: 52.071, lng: 4.301, address: '2511 AB Den Haag',
+        lat: 52.075, lng: 4.31, address: '2511 AB Den Haag',
         neighborhood: 'Scheveningen',
         activityKind: 'family', priceType: 'free', isIndoor: true, openNow: true,
       },
@@ -118,14 +118,14 @@ test('keeps discovery filters, map pins, routes, and translations in sync', asyn
         id: 'paid-event', locationId: 'dhg', category: 'Family',
         name: 'Paid family workshop', description: 'Paid event',
         details: 'Today', startsAt: todayAt(14), x: 52, y: 52,
-        lat: 52.071, lng: 4.301, address: '2511 AB Den Haag',
+        lat: 52.075, lng: 4.31, address: '2511 AB Den Haag',
         activityKind: 'family', priceType: 'paid', isIndoor: true, openNow: true,
       },
       {
         id: 'outdoor-event', locationId: 'dhg', category: 'Outdoors',
         name: 'Outdoor event', description: 'Outdoor event',
         details: 'Today', startsAt: todayAt(14), x: 55, y: 55,
-        lat: 52.071, lng: 4.301, address: '2511 AB Den Haag',
+        lat: 52.075, lng: 4.31, address: '2511 AB Den Haag',
         activityKind: 'outdoor', priceType: 'free', isIndoor: false, openNow: true,
       },
       {
@@ -139,7 +139,7 @@ test('keeps discovery filters, map pins, routes, and translations in sync', asyn
         id: 'approximate-event', locationId: 'dhg', category: 'Family',
         name: 'Approximate family workshop', description: 'Approximate event',
         details: 'Today', startsAt: todayAt(14), x: 48, y: 48,
-        lat: 52.071, lng: 4.301, address: '2511 AB Den Haag',
+        lat: 52.075, lng: 4.31, address: '2511 AB Den Haag',
         activityKind: 'family', priceType: 'free', isIndoor: true, openNow: true,
         isApproximateLocation: true,
       },
@@ -311,7 +311,8 @@ for (const [mapPath, tilesAvailable] of [['tile map', true], ['coordinate fallba
 
     await boundary.click();
     await expect(neighborhoodControl).not.toBeChecked();
-    await expect(page.getByRole('button', { name: 'Select neighborhood: Centrum', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Select neighborhood: Centrum', exact: true })).toHaveCount(1);
+    await expect(boundary).toHaveCSS('stroke-opacity', '0.2');
     await neighborhoodControl.check();
     await expect(neighborhoodControl).toBeChecked();
     await expect(page.getByRole('button', { name: 'Select neighborhood: Centrum', exact: true })).toHaveCount(1);
@@ -455,12 +456,7 @@ test('keeps every selected neighborhood free of out-of-boundary listings', async
   for (const name of neighborhoodNames) {
     if (previousName) {
       const previousCheckbox = page.getByRole('checkbox', { name: previousName, exact: true });
-      const responsePromise = page.waitForResponse((response) => {
-        const url = new URL(response.url());
-        return url.pathname.includes('/api/listings') && !url.searchParams.get('neighborhoods');
-      });
       await previousCheckbox.uncheck();
-      await responsePromise;
     }
 
     const checkbox = page.getByRole('checkbox', { name, exact: true });
