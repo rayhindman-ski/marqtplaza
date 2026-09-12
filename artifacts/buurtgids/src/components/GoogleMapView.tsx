@@ -487,15 +487,17 @@ function CoordinateMapFallback({
                    onBlur={() => onNeighborhoodHover?.(null)}
                   onKeyDown={(event) => handleNeighborhoodKeyDown(event, area.name, onNeighborhoodClick)}
                   className={mapClassNames(
-                     (onNeighborhoodClick || onNeighborhoodHover) && "pointer-events-auto cursor-pointer focus-visible:outline-none",
+                    (onNeighborhoodClick || onNeighborhoodHover) && "pointer-events-auto cursor-pointer focus-visible:outline-none",
                     highlightedNeighborhood === area.name
                       ? "fill-primary/20 stroke-primary"
-                      : "fill-teal-400/10 stroke-teal-700/85",
+                      : "fill-teal-400/10 stroke-teal-700/20",
                   )}
-                   style={{
-                     strokeWidth: highlightedNeighborhood === area.name ? 0.8 : 0.35,
-                     vectorEffect: 'non-scaling-stroke',
-                   }}
+                  style={{
+                    strokeWidth: highlightedNeighborhood === area.name ? 0.8 : 0.35,
+                    strokeOpacity: highlightedNeighborhood === area.name ? 1 : 0.2,
+                    transition: 'stroke 180ms ease, stroke-opacity 180ms ease',
+                    vectorEffect: 'non-scaling-stroke',
+                  }}
                 />
               ))}
             </svg>
@@ -579,6 +581,7 @@ function TileMapView({
   language,
   locationId,
   selectedNeighborhoods,
+  showAllNeighborhoods = false,
   showNeighborhoodLabels = true,
   highlightedNeighborhood = null,
   onNeighborhoodClick,
@@ -635,12 +638,15 @@ function TileMapView({
   }, [locationId]);
 
   useEffect(() => {
+    const viewportNeighborhoods = showAllNeighborhoods
+      ? (getLocation(locationId)?.neighborhoods ?? selectedNeighborhoods)
+      : selectedNeighborhoods;
     setViewport(
-      selectedNeighborhoods.length > 0
-        ? getNeighborhoodViewport(locationId, selectedNeighborhoods, size)
+      viewportNeighborhoods.length > 0
+        ? getNeighborhoodViewport(locationId, viewportNeighborhoods, size)
         : getMarkerViewport(locationId, markers, size),
     );
-  }, [locationId, markers, selectedNeighborhoods, size.height, size.width]);
+  }, [locationId, markers, selectedNeighborhoods, showAllNeighborhoods, size.height, size.width]);
 
   useEffect(() => {
     const marker = markers.find((item) => item.id === selectedMarkerId);
@@ -724,7 +730,10 @@ function TileMapView({
   }, [reportUnavailable, tileSetKey]);
 
   const points = getMapPoints(markers);
-  const neighborhoodAreas = getNeighborhoodAreas(locationId, selectedNeighborhoods);
+  const displayedNeighborhoods = showAllNeighborhoods
+    ? (getLocation(locationId)?.neighborhoods ?? selectedNeighborhoods)
+    : selectedNeighborhoods;
+  const neighborhoodAreas = getNeighborhoodAreas(locationId, displayedNeighborhoods);
   const [hoveredMarkerId, setHoveredMarkerId] = useState<string | null>(null);
   const center = latLngToWorld(viewport.center, viewport.zoom);
   const mapLeft = center.x - size.width / 2;
