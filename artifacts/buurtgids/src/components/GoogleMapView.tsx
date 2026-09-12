@@ -205,9 +205,7 @@ function DataLoadingNotice({ isDataLoading }: { isDataLoading: boolean }) {
   );
 }
 
-type MapPoint = Pick<MarkerData, 'id' | 'name' | 'category' | 'description' | 'details' | 'lat' | 'lng'> & {
-  category: MapCategory;
-};
+type MapPoint = MarkerData;
 
 function getCategoryIcon(category: MapCategory) {
   return CATEGORY_ICONS[category] ?? MapPinIcon;
@@ -377,6 +375,9 @@ function ClusterSummaryMarker({
       title={`${count} listings in this area`}
       className="absolute z-30 -translate-x-1/2 -translate-y-1/2"
       style={style}
+      onPointerDown={(event) => {
+        if (isInteractive) event.stopPropagation();
+      }}
       onClick={onClick}
       onKeyDown={(event) => {
         if (isInteractive && (event.key === 'Enter' || event.key === ' ')) {
@@ -397,6 +398,43 @@ function ClusterSummaryMarker({
       </span>
     </div>
   );
+}
+
+function createHtmlClusterElement(
+  cluster: MapPointCluster,
+  onClick: () => void,
+): HTMLElement {
+  const count = cluster.points.length;
+  const size = count >= 100 ? 62 : count >= 10 ? 56 : 50;
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.setAttribute('data-map-cluster', '');
+  button.setAttribute('aria-label', `${count} listings in this area. Zoom in to expand.`);
+  button.title = `${count} listings in this area`;
+  button.style.cssText = [
+    'position:absolute',
+    'display:flex',
+    'align-items:center',
+    'justify-content:center',
+    'transform:translate(-50%,-50%)',
+    `width:${size}px`,
+    `height:${size}px`,
+    'border:3px solid #fff',
+    'border-radius:50%',
+    'background:linear-gradient(135deg,#ff9a52 0%,#f36c21 48%,#c94d12 100%)',
+    'box-shadow:0 7px 16px -5px rgba(23,34,53,0.5),0 0 0 2px rgba(243,108,33,0.3)',
+    'color:#fff',
+    `font:${count >= 100 ? 14 : 16}px/1 ui-sans-serif,system-ui,sans-serif`,
+    'font-weight:900',
+    'cursor:pointer',
+    'padding:0',
+  ].join(';');
+  button.textContent = String(count);
+  button.addEventListener('click', (event) => {
+    event.stopPropagation();
+    onClick();
+  });
+  return button;
 }
 
 function getInitialViewport(locationId: string): TileViewport {
@@ -586,6 +624,14 @@ function CoordinateMapFallback({
   const minLng = Math.min(...longitudes) - longitudePadding;
   const maxLng = Math.max(...longitudes) + longitudePadding;
   const bounds = { minLat, maxLat, minLng, maxLng };
+  const pointClusters = clusterMapPoints(
+    points,
+    (point) => ({
+      x: ((point.lng - minLng) / (maxLng - minLng)) * 100,
+      y: ((maxLat - point.lat) / (maxLat - minLat)) * 100,
+    }),
+    COORDINATE_CLUSTER_RADIUS_PERCENT,
+  );
 
   return (
     <div
@@ -659,7 +705,21 @@ function CoordinateMapFallback({
         );
       })}
       <DataLoadingNotice isDataLoading={isDataLoading} />
-      {points.map((point) => {
+      {pointClusters.map((cluster) => {
+        const point = cluster.points[0]!;
+        if (cluster.points.length > 1) {
+          return (
+            <ClusterSummaryMarker
+              key={cluster.id}
+              cluster={cluster}
+              style={{
+                left: `${cluster.x}%`,
+                top: `${cluster.y}%`,
+              }}
+            />
+          );
+        }
+
         const left = ((point.lng - minLng) / (maxLng - minLng)) * 100;
         const top = ((maxLat - point.lat) / (maxLat - minLat)) * 100;
         const isSelected = point.id === selectedMarkerId;
@@ -894,6 +954,14 @@ function TileMapView({
   const center = latLngToWorld(viewport.center, viewport.zoom);
   const mapLeft = center.x - size.width / 2;
   const mapTop = center.y - size.height / 2;
+  const pointClusters = clusterMapPoints(
+    points,
+    (point) => {
+      const world = latLngToWorld({ lat: point.lat, lng: point.lng }, viewport.zoom);
+      return { x: world.x - mapLeft, y: world.y - mapTop };
+    },
+    MAP_CLUSTER_RADIUS_PX,
+  );
 
   const changeZoom = (amount: number) => {
     setViewport((current) => ({
@@ -931,6 +999,13 @@ function TileMapView({
     if (dragRef.current?.pointerId === event.pointerId) {
       dragRef.current = null;
     }
+  };
+
+  const zoomToCluster = (cluster: MapPointCluster) => {
+    setViewport((current) => ({
+      center: { lat: cluster.lat, lng: cluster.lng },
+      zoom: Math.min(MAX_TILE_ZOOM, current.zoom + 2),
+    }));
   };
 
   return (
@@ -1027,7 +1102,19 @@ function TileMapView({
         );
       })}
 
-      {points.map((point) => {
+      {pointClusters.map((cluster) => {
+        const point = cluster.points[0]!;
+        if (cluster.points.length > 1) {
+          return (
+            <ClusterSummaryMarker
+              key={cluster.id}
+              cluster={cluster}
+              style={{ left: cluster.x, top: cluster.y }}
+              onClick={() => zoomToCluster(cluster)}
+            />
+          );
+        }
+
         const world = latLngToWorld({ lat: point.lat, lng: point.lng }, viewport.zoom);
         const left = world.x - mapLeft;
         const top = world.y - mapTop;
@@ -1158,8 +1245,9 @@ function GoogleMapCanvas({
     polygon: google.maps.Polygon;
     label?: HtmlMarkerOverlay;
   }>>(new Map());
-  const [mapReady, setMapReady] = useState(false);
   const location = getLocation(locationId);
+  const [mapReady, setMapReady] = useState(false);
+  const [mapZoom, setMapZoom] = useState(() => location?.zoom ?? 12);
   // Polygon listeners are bound once per overlay; route them through refs so
   // they always call the latest React callbacks instead of a stale closure.
   const neighborhoodClickRef = useRef(onNeighborhoodClick);
@@ -1314,6 +1402,18 @@ function GoogleMapCanvas({
     [language, onMarkerClick, selectedMarkerId],
   );
 
+  const buildClusterEl = useCallback(
+    (cluster: MapPointCluster): HTMLElement => {
+      return createHtmlClusterElement(cluster, () => {
+        const map = mapRef.current;
+        if (!map) return;
+        map.panTo({ lat: cluster.lat, lng: cluster.lng });
+        map.setZoom(Math.min(18, (map.getZoom() ?? mapZoom) + 2));
+      });
+    },
+    [mapZoom],
+  );
+
   useEffect(() => {
     if (!location || !containerRef.current) {
       onUnavailable();
@@ -1351,6 +1451,7 @@ function GoogleMapCanvas({
           streetViewControl: false,
           fullscreenControl: false,
         });
+        setMapZoom(location.zoom);
         setMapReady(true);
       })
       .catch(onUnavailable)
@@ -1364,6 +1465,14 @@ function GoogleMapCanvas({
       mapsWindow.gm_authFailure = previousAuthFailure;
     };
   }, [location, onUnavailable]);
+
+  useEffect(() => {
+    if (!mapReady || !mapRef.current) return;
+    const zoomListener = mapRef.current.addListener('zoom_changed', () => {
+      setMapZoom(mapRef.current?.getZoom() ?? location?.zoom ?? 12);
+    });
+    return () => zoomListener.remove();
+  }, [location?.zoom, mapReady]);
 
   // Only refit the camera when the content actually changes; parent re-renders
   // (e.g. hover state) that pass equivalent props must never reset user zoom.
@@ -1534,7 +1643,15 @@ function GoogleMapCanvas({
       content.addEventListener('marker-preview-visibility', handlePreviewVisibility);
     };
 
-    const newIds = new Set(markers.map((marker) => marker.id));
+    const pointClusters = clusterMapPoints(
+      markers,
+      (marker) => {
+        const world = latLngToWorld({ lat: marker.lat, lng: marker.lng }, mapZoom);
+        return { x: world.x, y: world.y };
+      },
+      MAP_CLUSTER_RADIUS_PX,
+    );
+    const newIds = new Set(pointClusters.map((cluster) => cluster.id));
     for (const [id, mapMarker] of markersRef.current) {
       if (!newIds.has(id)) {
         mapMarker.setMap(null);
@@ -1542,11 +1659,20 @@ function GoogleMapCanvas({
       }
     }
 
-    for (const marker of markers) {
-      if (marker.lat == null || marker.lng == null) continue;
-      const isSelected = selectedMarkerId === marker.id;
-      const existing = markersRef.current.get(marker.id);
+    for (const cluster of pointClusters) {
+      const marker = cluster.points[0]!;
+      const isCluster = cluster.points.length > 1;
+      const overlayId = cluster.id;
+      const existing = markersRef.current.get(overlayId);
       if (existing) {
+        if (isCluster) {
+          existing.setPosition({ lat: cluster.lat, lng: cluster.lng });
+          existing.setContent(buildClusterEl(cluster));
+          existing.setZIndex(50);
+          continue;
+        }
+
+        const isSelected = selectedMarkerId === marker.id;
         const content = buildMarkerEl(marker, isSelected, savedIds.has(marker.id));
         attachPreviewPriority(existing, content, isSelected);
         existing.setPosition({ lat: marker.lat, lng: marker.lng });
@@ -1555,17 +1681,21 @@ function GoogleMapCanvas({
         continue;
       }
 
-      const content = buildMarkerEl(marker, isSelected, savedIds.has(marker.id));
+      const content = isCluster
+        ? buildClusterEl(cluster)
+        : buildMarkerEl(marker, selectedMarkerId === marker.id, savedIds.has(marker.id));
       const mapMarker = createHtmlMarkerOverlay(
         mapRef.current,
-        { lat: marker.lat, lng: marker.lng },
+        { lat: isCluster ? cluster.lat : marker.lat, lng: isCluster ? cluster.lng : marker.lng },
         content,
-        isSelected ? 100 : 1,
+        isCluster ? 50 : selectedMarkerId === marker.id ? 100 : 1,
       );
-      attachPreviewPriority(mapMarker, content, isSelected);
-      markersRef.current.set(marker.id, mapMarker);
+      if (!isCluster) {
+        attachPreviewPriority(mapMarker, content, selectedMarkerId === marker.id);
+      }
+      markersRef.current.set(overlayId, mapMarker);
     }
-  }, [buildMarkerEl, mapReady, markers, onMarkerClick, savedIds, selectedMarkerId]);
+  }, [buildClusterEl, buildMarkerEl, mapReady, mapZoom, markers, onMarkerClick, savedIds, selectedMarkerId]);
 
   useEffect(() => {
     if (!mapReady || !mapRef.current || !selectedMarkerId) return;

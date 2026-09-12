@@ -201,12 +201,13 @@ test('keeps discovery filters, map pins, routes, and translations in sync', asyn
   const listIds = (await eventList.locator('[data-event-id]').evaluateAll(
     (nodes) => nodes.map((node) => node.getAttribute('data-event-id')).sort(),
   ));
-  await expect(page.locator('[data-map-pin]')).toHaveCount(2, { timeout: 10_000 });
-  const pinIds = await page.locator('[data-map-pin]').evaluateAll(
-    (nodes) => nodes.map((node) => node.getAttribute('data-event-id')).sort(),
+  await expect(page.locator('[data-map-cluster]')).toHaveCount(1, { timeout: 10_000 });
+  await expect(page.locator('[data-map-cluster]')).toHaveText('2');
+  await expect(page.locator('[data-map-cluster]')).toHaveAttribute(
+    'aria-label',
+    '2 listings in this area. Zoom in to expand.',
   );
-  expect(pinIds).toEqual(listIds);
-  await expect(page.locator('[data-map-pin][data-event-id="assigned-elsewhere-event"]')).toHaveCount(0);
+  await expect(page.locator('[data-map-pin]')).toHaveCount(0);
 
   const exactCard = page.locator('#event-qualifying-event');
   const routeLinks = exactCard.locator('a[href*="google.com/maps/dir"]');
