@@ -319,6 +319,30 @@ for (const [mapPath, tilesAvailable] of [['tile map', true], ['coordinate fallba
   });
 }
 
+test('homepage map keeps the user zoom level when hovering neighborhoods', async ({ page }) => {
+  await stubBoundaryDiscovery(page, true);
+  await page.goto('/');
+
+  const centrumBoundary = page.getByRole('button', { name: 'Select neighborhood: Centrum', exact: true });
+  await expect(centrumBoundary).toHaveCount(1);
+  const tileZoom = () => page.locator('img[src*="tile.openstreetmap.org"]').first()
+    .getAttribute('src').then((src) => Number(new URL(src ?? '').pathname.split('/')[1]));
+
+  const initialZoom = await tileZoom();
+  await page.getByRole('button', { name: 'Zoom in', exact: true }).click();
+  await page.getByRole('button', { name: 'Zoom in', exact: true }).click();
+  await expect.poll(tileZoom).toBe(initialZoom + 2);
+
+  await centrumBoundary.dispatchEvent('mouseover');
+  await expect(centrumBoundary).toHaveCSS('stroke-opacity', '1');
+  await centrumBoundary.dispatchEvent('mouseout');
+  await expect(centrumBoundary).toHaveCSS('stroke-opacity', '0.2');
+  await page.mouse.move(700, 300);
+  await page.mouse.move(720, 320);
+  await page.waitForTimeout(300);
+  expect(await tileZoom()).toBe(initialZoom + 2);
+});
+
 test('main search external-source setting controls discovery mode and persists', async ({ page }) => {
   let listingsRequests: URL[] = [];
 

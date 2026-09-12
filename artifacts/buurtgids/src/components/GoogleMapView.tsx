@@ -368,6 +368,11 @@ function projectCoordinatePoint(
   };
 }
 
+function getViewportSignature(markers: MarkerData[], neighborhoods: string[]): string {
+  const markerPart = markers.map((marker) => `${marker.id}:${marker.lat}:${marker.lng}`).join('|');
+  return `${neighborhoods.join(',')}#${markerPart}`;
+}
+
 function shouldShowNeighborhoodLabel(
   name: string,
   options: {
@@ -656,26 +661,35 @@ function TileMapView({
     setViewport(getInitialViewport(locationId));
   }, [locationId]);
 
+  // Only refit the camera when the content actually changes; parent re-renders
+  // (e.g. hover state) that pass equivalent props must never reset user zoom.
+  const viewportSignature = getViewportSignature(markers, selectedNeighborhoods);
+  const markersRef = useRef(markers);
+  markersRef.current = markers;
+  const selectedNeighborhoodsRef = useRef(selectedNeighborhoods);
+  selectedNeighborhoodsRef.current = selectedNeighborhoods;
+
   useEffect(() => {
-    const viewportNeighborhoods = showAllNeighborhoods && selectedNeighborhoods.length === 0
-      ? (getLocation(locationId)?.neighborhoods ?? selectedNeighborhoods)
-      : selectedNeighborhoods;
+    const selected = selectedNeighborhoodsRef.current;
+    const viewportNeighborhoods = showAllNeighborhoods && selected.length === 0
+      ? (getLocation(locationId)?.neighborhoods ?? selected)
+      : selected;
     setViewport(
       viewportNeighborhoods.length > 0
         ? getNeighborhoodViewport(locationId, viewportNeighborhoods, size)
-        : getMarkerViewport(locationId, markers, size),
+        : getMarkerViewport(locationId, markersRef.current, size),
     );
-  }, [locationId, markers, selectedNeighborhoods, showAllNeighborhoods, size.height, size.width]);
+  }, [locationId, viewportSignature, showAllNeighborhoods, size.height, size.width]);
 
   useEffect(() => {
-    const marker = markers.find((item) => item.id === selectedMarkerId);
+    const marker = markersRef.current.find((item) => item.id === selectedMarkerId);
     if (marker?.lat != null && marker.lng != null) {
       setViewport((current) => ({
         ...current,
         center: { lat: marker.lat, lng: marker.lng },
       }));
     }
-  }, [markers, selectedMarkerId]);
+  }, [selectedMarkerId]);
 
   const tiles = useMemo(() => {
     if (size.width === 0 || size.height === 0) return [];
@@ -1217,8 +1231,18 @@ function GoogleMapCanvas({
     };
   }, [location, onUnavailable]);
 
+  // Only refit the camera when the content actually changes; parent re-renders
+  // (e.g. hover state) that pass equivalent props must never reset user zoom.
+  const viewportSignature = getViewportSignature(markers, selectedNeighborhoods);
+  const viewportMarkersRef = useRef(markers);
+  viewportMarkersRef.current = markers;
+  const viewportNeighborhoodsRef = useRef(selectedNeighborhoods);
+  viewportNeighborhoodsRef.current = selectedNeighborhoods;
+
   useEffect(() => {
     if (!mapReady || !mapRef.current || !location) return;
+    const markers = viewportMarkersRef.current;
+    const selectedNeighborhoods = viewportNeighborhoodsRef.current;
     const neighborhoods = getNeighborhoodAreas(
       locationId,
       showAllNeighborhoods && selectedNeighborhoods.length === 0
@@ -1246,7 +1270,8 @@ function GoogleMapCanvas({
       });
       mapRef.current.fitBounds(bounds, 64);
     }
-  }, [location, mapReady, markers, selectedNeighborhoods, showAllNeighborhoods]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- content tracked via viewportSignature
+  }, [location, locationId, mapReady, viewportSignature, showAllNeighborhoods]);
 
   useEffect(() => {
     if (!mapReady || !mapRef.current || !location) return;
@@ -1384,11 +1409,11 @@ function GoogleMapCanvas({
 
   useEffect(() => {
     if (!mapReady || !mapRef.current || !selectedMarkerId) return;
-    const marker = markers.find((item) => item.id === selectedMarkerId);
+    const marker = viewportMarkersRef.current.find((item) => item.id === selectedMarkerId);
     if (marker?.lat != null && marker.lng != null) {
       mapRef.current.panTo({ lat: marker.lat, lng: marker.lng });
     }
-  }, [mapReady, markers, selectedMarkerId]);
+  }, [mapReady, selectedMarkerId]);
 
   useEffect(() => () => {
     for (const mapMarker of markersRef.current.values()) {
