@@ -7,9 +7,11 @@ Een hyperlokale gids voor het ontdekken van bedrijven, evenementen en specials i
 - `pnpm --filter @workspace/api-server run dev` — run the API server (port 5000)
 - `pnpm run typecheck` — full typecheck across all packages
 - `pnpm run build` — typecheck + build all packages
+- `pnpm run test:listings-query:integration` — provision the disposable `buurtplaza_listings_query_test` database from `DATABASE_URL`, then run the provider-failure isolation check
 - `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
 - `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
 - Required env: `DATABASE_URL` — Postgres connection string
+- The listings integration check never falls back to `DATABASE_URL` as its test database. The root command provisions its named disposable database; the API package command requires an explicit `LISTINGS_TEST_DATABASE_URL`.
 
 ## Stack
 
