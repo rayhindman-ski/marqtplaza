@@ -1,4 +1,208 @@
-ndidates, definitively rejected candidates, or both.
+openapi: 3.1.0
+info:
+  # Do not change the title, if the title changes, the import paths will be broken
+  title: Api
+  version: 0.1.0
+  description: API specification
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: capture
+    description: Business event capture operations
+  - name: listings
+    description: Local business and event listings
+  - name: source-scanning
+    description: Den Haag activity source scanning
+  - name: event-review
+    description: Editorial review of source-scanned Den Haag event candidates
+  - name: social-map-review
+    description: Periodic source review of curated Den Haag support locations
+  - name: news
+    description: Den Haag news aggregation
+  - name: weather
+    description: City weather forecast
+  - name: community
+    description: Resident and organisation community posts
+  - name: businesses
+    description: Business claims, profiles, and local deals
+  - name: saved-events
+    description: Account-backed saved event snapshots and alerts
+  - name: registration
+    description: Authenticated community registration and participation eligibility
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      description: Returns server health status
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+
+  /registration:
+    get:
+      operationId: getRegistration
+      tags: [registration]
+      summary: Get the signed-in user's registration profile
+      responses:
+        "200":
+          description: Registration status and community participation access
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RegistrationStatus"
+        "401":
+          description: Authentication is required
+    put:
+      operationId: saveRegistration
+      tags: [registration]
+      summary: Create or update the signed-in user's registration profile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegistrationInput"
+      responses:
+        "200":
+          description: Saved registration profile and community participation access
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RegistrationStatus"
+        "400":
+          description: Invalid registration details
+        "401":
+          description: Authentication is required
+
+  /weather:
+    get:
+      operationId: getWeather
+      tags: [weather]
+      summary: Get a short city weather forecast
+      parameters:
+        - name: cityId
+          in: query
+          required: true
+          schema:
+            type: string
+          description: The city identifier (ams, rot, utr, dhg, ein)
+      responses:
+        "200":
+          description: Current conditions and a three-day forecast
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WeatherResponse"
+        "400":
+          description: Unknown city
+        "503":
+          description: Weather provider temporarily unavailable
+
+  /capture/search:
+    post:
+      operationId: captureSearch
+      tags: [capture]
+      summary: Search for businesses
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CaptureSearchRequest"
+      responses:
+        "200":
+          description: List of matching businesses
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BusinessListResult"
+
+  /capture/scan:
+    post:
+      operationId: captureScan
+      tags: [capture]
+      summary: Scan a business for events, news, and ads
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CaptureScanRequest"
+      responses:
+        "200":
+          description: Scan results (events, news, ads)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScanResultList"
+
+  /capture/persist:
+    post:
+      operationId: capturePersist
+      tags: [capture]
+      summary: Persist selected scan results to the database
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CapturePersistRequest"
+      responses:
+        "200":
+          description: Number of saved rows
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PersistOutcome"
+
+  /sources/scan:
+    post:
+      operationId: scanActivitySources
+      tags: [source-scanning]
+      summary: Deeply scan selected Den Haag sources for activity events
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SourceScanRequest"
+      responses:
+        "200":
+          description: Scan status and discovered event links per source
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SourceScanResponse"
+        "400":
+          description: Invalid source selection
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SourceScanResponse"
+
+  /sources/review:
+    get:
+      operationId: getEventReviewCandidates
+      tags: [event-review]
+      summary: Get excluded source-scanned event candidates for editorial review
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [all, open, rejected]
+            default: all
+          description: Whether to return open candidates, definitively rejected candidates, or both.
       responses:
         "200":
           description: Candidates that are not currently published in the public event list.
@@ -369,6 +573,8 @@ ndidates, definitively rejected candidates, or both.
           description: Invalid community post
         "401":
           description: Authentication is required
+        "403":
+          description: Registration is required to post
 
   /community-posts/moderation:
     get:
@@ -456,6 +662,8 @@ ndidates, definitively rejected candidates, or both.
           description: Invalid participation action or attendance requested for a non-event post
         "401":
           description: Authentication is required
+        "403":
+          description: Registration is required to participate
         "404":
           description: Approved active post not found
 
@@ -1119,6 +1327,60 @@ components:
           type: string
       required:
         - status
+
+    RegistrationType:
+      type: string
+      enum: [consumer, business]
+
+    RegistrationInput:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 160
+        registrationType:
+          $ref: "#/components/schemas/RegistrationType"
+        email:
+          type: string
+          pattern: "^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$"
+        usefulnessRating:
+          type: number
+          minimum: 1
+          maximum: 5
+        referralLikelihood:
+          type: number
+          minimum: 1
+          maximum: 5
+        desiredFeatures:
+          type: string
+          minLength: 1
+          maxLength: 2000
+      required: [name, registrationType, email, usefulnessRating, referralLikelihood, desiredFeatures]
+
+    Registration:
+      allOf:
+        - $ref: "#/components/schemas/RegistrationInput"
+        - type: object
+          properties:
+            createdAt:
+              type: string
+            updatedAt:
+              type: string
+          required: [createdAt, updatedAt]
+
+    RegistrationStatus:
+      type: object
+      properties:
+        registered:
+          type: boolean
+        canParticipate:
+          type: boolean
+        registration:
+          oneOf:
+            - $ref: "#/components/schemas/Registration"
+            - type: "null"
+      required: [registered, canParticipate, registration]
 
     SavedEventSnapshot:
       type: object

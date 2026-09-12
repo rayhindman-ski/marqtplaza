@@ -1,4 +1,490 @@
-f address === "object"
+import { Router } from "express";
+import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
+import { db } from "@workspace/db";
+import {
+  discoveredEventsTable,
+  eventSourceStatusesTable,
+} from "@workspace/db/schema";
+import { requireEditor } from "../middlewares/requireEditor";
+import { queueMissingEventTranslations } from "../lib/event-localization.js";
+import { logger } from "../lib/logger.js";
+
+const router = Router();
+
+export type SourceDefinition = {
+  id: string;
+  name: string;
+  activityUrl: string;
+  sourceGroup: "city-agenda" | "culture" | "community" | "meals";
+};
+
+type EventCategory = "Museums" | "Tours" | "Family" | "Entertainment" | "Outdoors" | "Markets";
+type ActivityKind = "community" | "culture" | "learning" | "movement" | "meal" | "family" | "market" | "outdoor" | "entertainment";
+type PriceType = "free" | "low-cost" | "paid" | "unknown";
+type MealType = "community-meal" | "food-support";
+type PublicationReason = "missing_date" | "out_of_window" | "missing_locality" | "foreign_location";
+export type EventContentLanguage = "nl" | "en" | "de" | "unknown";
+
+export type SourceScanEvent = {
+  title: string;
+  url: string;
+  sourceEventId?: string;
+  context?: string;
+  description?: string;
+  sourceLanguage?: EventContentLanguage;
+  titleNl?: string;
+  descriptionNl?: string;
+  titleEn?: string;
+  descriptionEn?: string;
+  startsAt?: string;
+  isCancelled?: boolean;
+  openingTimes?: string;
+  venue?: string;
+  category?: EventCategory;
+  organizer?: string;
+  sourceGroup?: SourceDefinition["sourceGroup"];
+  activityKind?: ActivityKind;
+  priceType?: PriceType;
+  priceText?: string;
+  mealType?: MealType;
+  audience?: string;
+  neighborhood?: string;
+  recurrenceText?: string;
+  isIndoor?: boolean;
+  lat?: number;
+  lng?: number;
+  reviewReason?: PublicationReason;
+};
+
+type ParsedPrice = Pick<SourceScanEvent, "priceType" | "priceText">;
+type CrawlPageType = "index" | "detail" | "sitemap" | "robots";
+
+type CrawlPage = {
+  url: string;
+  depth: number;
+  type: CrawlPageType;
+  fallbackTitle?: string;
+};
+
+type RobotsRule = {
+  path: string;
+  allow: boolean;
+};
+
+type ScanMetrics = {
+  eventLinksRead: number;
+  eventsCaptured: number;
+  eventsEligible: number;
+  eventsMissingDate: number;
+  eventsOutOfWindow: number;
+  eventsMissingLocality: number;
+  eventsForeignLocation: number;
+  pagesRead: number;
+  pagesFailed: number;
+  eventsAdded: number;
+  eventsUpdated: number;
+  eventsSkipped: number;
+  pagesSkipped: number;
+  indexPagesRead: number;
+  detailPagesRead: number;
+  sitemapsRead: number;
+  robotsPagesSkipped: number;
+  crawlLimitReached: boolean;
+};
+
+type EventSourceScanStatus = "found" | "partial" | "blocked" | "error" | "no_events";
+
+type EventSourceScanResult = ScanMetrics & {
+  sourceId: string;
+  sourceName: string;
+  scannedUrl: string;
+  status: EventSourceScanStatus;
+  events: SourceScanEvent[];
+  message: string;
+};
+
+const DEN_HAAG_SOURCES: SourceDefinition[] = [
+  { id: "getyourguide", name: "GetYourGuide", activityUrl: "https://www.getyourguide.com/en-gb/the-hague-l1267/", sourceGroup: "city-agenda" },
+  { id: "denhaag-com", name: "DenHaag.com", activityUrl: "https://denhaag.com/en/calendar", sourceGroup: "city-agenda" },
+  { id: "wearetravelers", name: "We Are Travelers", activityUrl: "https://www.wearetravelers.nl", sourceGroup: "city-agenda" },
+  { id: "flitz-events", name: "Flitz-Events", activityUrl: "https://flitz-events.nl/teamuitje/den-haag", sourceGroup: "city-agenda" },
+  { id: "tripadvisor", name: "Tripadvisor", activityUrl: "https://www.tripadvisor.nl/Attractions-g188633-Activities-The_Hague_South_Holland_Province.html", sourceGroup: "city-agenda" },
+  { id: "kidsproof", name: "Kidsproof Den Haag", activityUrl: "https://www.kidsproof.nl/denhaag/uitjes/uitagenda/", sourceGroup: "city-agenda" },
+  { id: "reisroutes", name: "Reisroutes", activityUrl: "https://www.reisroutes.nl/stadswandelingen/den-haag/", sourceGroup: "city-agenda" },
+  { id: "follow-my-footprints", name: "Follow my footprints", activityUrl: "https://www.followmyfootprints.nl/category/nederland/den-haag/", sourceGroup: "city-agenda" },
+  { id: "dagjeweg", name: "DagjeWeg.NL", activityUrl: "https://www.dagjeweg.nl/dagjeuit/den-haag/stedentrips", sourceGroup: "city-agenda" },
+  { id: "eventbrite", name: "Eventbrite", activityUrl: "https://www.eventbrite.nl/d/netherlands--the-hague/events/", sourceGroup: "city-agenda" },
+  { id: "fijnuit", name: "FijnUit", activityUrl: "https://www.fijnuit.nl/den-haag", sourceGroup: "city-agenda" },
+  { id: "wattedoenin", name: "Wat te doen in", activityUrl: "https://www.wattedoenin.nl/wat-te-doen-in/den-haag/", sourceGroup: "city-agenda" },
+  { id: "travel-around-with-me", name: "Travel Around With Me", activityUrl: "https://www.travelaroundwithme.com/gratis-doen-den-haag/", sourceGroup: "city-agenda" },
+  { id: "yellowbrick", name: "Yellowbrick", activityUrl: "https://yellowbrick.nl/blog/wat-te-doen-in-den-haag-tips-and-uitagenda/", sourceGroup: "city-agenda" },
+  { id: "wannado", name: "Wannado", activityUrl: "https://wannado.nl/wat-te-doen/den-haag/categorie/activiteiten-uitjes", sourceGroup: "city-agenda" },
+  { id: "see-the-hague", name: "seeTheHague", activityUrl: "https://seethehague.nl/activiteiten-in-den-haag/", sourceGroup: "city-agenda" },
+  { id: "stappen-in-den-haag", name: "Stappen in Den Haag", activityUrl: "https://stappenindenhaag.nl/de-uitagenda-van-den-haag/", sourceGroup: "city-agenda" },
+  { id: "weekends-in", name: "Weekends in", activityUrl: "https://week-endsin.com/the-hague/activities/", sourceGroup: "city-agenda" },
+  { id: "mooiste-stedentrips", name: "Mooiste Stedentrips", activityUrl: "https://mooistestedentrips.nl/mini-break-in-nederland-den-haag/", sourceGroup: "city-agenda" },
+  { id: "1001activiteiten", name: "1001activiteiten", activityUrl: "https://www.1001activiteiten.nl/provincie-zuid-holland/den-haag", sourceGroup: "city-agenda" },
+  { id: "uitjes-nl", name: "Uitjes.nl", activityUrl: "https://uitjes.nl/den-haag-uitjes/", sourceGroup: "city-agenda" },
+  { id: "enter-the-hague", name: "Enter The Hague", activityUrl: "https://www.enterthehague.com/the-hague-free-walking-tour", sourceGroup: "city-agenda" },
+  { id: "cultuurschakel", name: "CultuurSchakel", activityUrl: "https://www.cultuurschakel.nl/vrije-tijd/cultuur-proeven/", sourceGroup: "culture" },
+  { id: "lekkerweg", name: "Lekkerweg Tips", activityUrl: "https://www.lekkerwegtips.nl/wat-te-doen-in-den-haag/", sourceGroup: "city-agenda" },
+  { id: "just-peace", name: "Just Peace", activityUrl: "https://www.justpeacethehague.org/en/", sourceGroup: "community" },
+  { id: "amare", name: "Amare", activityUrl: "https://www.amare.nl/nl/agenda", sourceGroup: "culture" },
+  { id: "wijkz", name: "Wijkz", activityUrl: "https://wijkz.nl/activiteiten/", sourceGroup: "community" },
+  { id: "de-mussen", name: "De Mussen", activityUrl: "https://www.demussen.nl/activiteiten/", sourceGroup: "community" },
+  { id: "participatiekeuken", name: "Participatiekeuken", activityUrl: "https://www.participatiekeuken.nl/vredesdiners", sourceGroup: "meals" },
+];
+
+const SOURCE_BY_ID = new Map(DEN_HAAG_SOURCES.map((source) => [source.id, source]));
+const EVENT_TERMS = [
+  "agenda", "calendar", "event", "events", "activit", "uitje", "uitagenda",
+  "festival", "concert", "workshop", "markt", "market", "theater", "theatre",
+  "tentoonstelling", "expositie", "exhibition", "expo", "tour", "show",
+  "optreden", "performance", "what's on", "things to do", "film", "comedy",
+  "dance", "jazz", "music", "lecture", "lezing", "cabaret", "ontmoeten",
+  "samen eten", "maaltijd", "diner", "inloop", "buurtactiviteit", "participatie",
+  "taalcafé", "koffieochtend", "bewegen", "vrijwilliger",
+];
+const NAVIGATION_LINK_TITLES = new Set([
+  "nederlands", "english", "frans", "deutsch", "skip filters", "skip to content",
+  "excursions & activities", "activities", "agenda", "calendar", "events",
+  "directly to content", "shopping", "food, drinks & nightlife", "museums & attractions",
+  "highlights of the hague", "sport and outdoor", "cycling routes", "walking routes",
+  "top 10 must-sees", "royal the hague", "the hague's districts", "the hague & sustainability",
+  "onze organisatie", "wat wij doen", "onze partners", "nieuws", "algemene voorwaarden",
+  "privacy statement", "privacy policy", "inschrijven", "aanmelden", "contact", "vacatures",
+  "horeca aanschuiftafel", "kom ook helpen",
+]);
+const MAX_PAGES_PER_SOURCE = 100;
+const MAX_INDEX_PAGES = 24;
+const MAX_DETAIL_PAGES = 68;
+const MAX_SITEMAP_PAGES = 8;
+const MAX_EVENTS_PER_SOURCE = 240;
+const MAX_LINKS_PER_PAGE = 600;
+const MAX_SITEMAP_URLS = 300;
+const MAX_LOCALITY_RESCUES_PER_SOURCE = 48;
+const LOCALITY_RESCUE_CONCURRENCY = 3;
+const MAX_RESPONSE_CHARS = 760_000;
+const FETCH_TIMEOUT_MS = 9_000;
+const MAX_REDIRECTS = 3;
+const MAX_ACTIVE_SCAN_REQUESTS = 2;
+const EVENT_SOURCE_REFRESH_INTERVAL_MS = 12 * 60 * 60 * 1_000;
+const EVENT_SOURCE_SCHEDULER_INTERVAL_MS = 15 * 60 * 1_000;
+const EVENT_SOURCE_QUEUE_DRAIN_INTERVAL_MS = 15 * 1_000;
+const MAX_SCHEDULED_SOURCES_PER_RUN = 2;
+const EVENT_SOURCE_RETRY_LEASE_MS = 15 * 60 * 1_000;
+const RETRY_INTERVALS_MS: Record<"blocked" | "error", number> = {
+  blocked: 6 * 60 * 60 * 1_000,
+  error: 2 * 60 * 60 * 1_000,
+};
+const CRAWLER_USER_AGENT = "marqtplaza.com/1.0";
+const DEN_HAAG_CENTER = { lat: 52.0705, lng: 4.3007 };
+const DEN_HAAG_BOUNDS = { south: 52.05, west: 4.26, north: 52.11, east: 4.36 };
+let activeScanRequests = 0;
+let schedulerTimer: NodeJS.Timeout | undefined;
+let schedulerStarted = false;
+
+function emptyMetrics(): ScanMetrics {
+  return {
+    eventLinksRead: 0,
+    eventsCaptured: 0,
+    eventsEligible: 0,
+    eventsMissingDate: 0,
+    eventsOutOfWindow: 0,
+    eventsMissingLocality: 0,
+    eventsForeignLocation: 0,
+    pagesRead: 0,
+    pagesFailed: 0,
+    eventsAdded: 0,
+    eventsUpdated: 0,
+    eventsSkipped: 0,
+    pagesSkipped: 0,
+    indexPagesRead: 0,
+    detailPagesRead: 0,
+    sitemapsRead: 0,
+    robotsPagesSkipped: 0,
+    crawlLimitReached: false,
+  };
+}
+
+function decodeEntities(value: string): string {
+  return value
+    .replace(/&amp;/g, "&")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&quot;/g, "\"")
+    .replace(/&#39;|&apos;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">");
+}
+
+function stripMarkup(value: string): string {
+  return decodeEntities(value.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim());
+}
+
+function formatPriceAmount(raw: string, currency = "€"): string {
+  const normalized = raw.trim().replace(/\s+/g, "").replace(".", ",");
+  return `${currency}${normalized}`;
+}
+function shorten(value: string | undefined, maxLength = 440): string | undefined {
+  if (!value) return undefined;
+  const clean = stripMarkup(value).replace(/\s+/g, " ").trim();
+  if (!clean) return undefined;
+  return clean.length > maxLength ? `${clean.slice(0, maxLength - 1).trimEnd()}…` : clean;
+}
+
+export function detectEventContentLanguage(html: string, url: string): EventContentLanguage {
+  const path = new URL(url).pathname.toLowerCase();
+  if (/\/(?:nl|nederlands)(?:\/|$)/.test(path)) return "nl";
+  if (/\/(?:en|en-gb|english)(?:\/|$)/.test(path)) return "en";
+  if (/\/(?:de|de-de|deutsch)(?:\/|$)/.test(path)) return "de";
+  const htmlLanguage = html.match(/<html\b[^>]*\blang=["']?([a-z]{2})(?:-[a-z]{2})?["'\s>]/i)?.[1]?.toLowerCase();
+  return htmlLanguage === "nl" || htmlLanguage === "en" || htmlLanguage === "de"
+    ? htmlLanguage
+    : "unknown";
+}
+
+function withLocalizedEventCopy(
+  event: SourceScanEvent,
+  language: EventContentLanguage,
+): SourceScanEvent {
+  return {
+    ...event,
+    sourceLanguage: language,
+    titleNl: language === "nl" ? event.title : event.titleNl,
+    descriptionNl: language === "nl" ? event.description : event.descriptionNl,
+    titleEn: language === "en" ? event.title : event.titleEn,
+    descriptionEn: language === "en" ? event.description : event.descriptionEn,
+  };
+}
+
+function isCancellationText(value: string | undefined): boolean {
+  const text = value?.trim() ?? "";
+  const cancellation = "(?:cancelled|canceled|geannuleerd|afgelast|abgesagt|annulé)";
+  const eventNoun = "(?:event|evenement|activiteit|concert|voorstelling|workshop|bijeenkomst)";
+  return new RegExp(`^${cancellation}(?:\\s*[:\\-–—]|$)`, "i").test(text)
+    || new RegExp(`\\b(?:this|the|dit|deze|het)\\s+${eventNoun}\\s+(?:is|has\\s+been|wordt)\\s+${cancellation}\\b`, "i").test(text)
+    || new RegExp(`\\b${eventNoun}\\s+(?:is\\s+)?${cancellation}\\b`, "i").test(text)
+    || /\b(?:gaat\s+niet(?:\s+meer)?\s+door|will\s+not\s+take\s+place)\b/i.test(text);
+}
+
+function isCancelledEvent(...values: Array<string | undefined>): boolean {
+  return values.some((value) => isCancellationText(value));
+}
+
+function canonicalizeUrl(value: string, baseUrl: string): string | null {
+  try {
+    const url = new URL(value, baseUrl);
+    if (!["http:", "https:"].includes(url.protocol)) return null;
+    url.hash = "";
+    for (const key of [...url.searchParams.keys()]) {
+      if (key.startsWith("utm_") || ["fbclid", "gclid", "ref"].includes(key)) {
+        url.searchParams.delete(key);
+      }
+    }
+    url.pathname = url.pathname.replace(/\/+$/, "") || "/";
+    return url.href;
+  } catch {
+    return null;
+  }
+}
+
+function isApprovedSourceUrl(url: string, source: SourceDefinition): boolean {
+  try {
+    return new URL(url).origin === new URL(source.activityUrl).origin;
+  } catch {
+    return false;
+  }
+}
+
+function parseRobotsRules(text: string): RobotsRule[] {
+  const groups: Array<{ agents: string[]; rules: RobotsRule[] }> = [];
+  let current = { agents: [] as string[], rules: [] as RobotsRule[] };
+
+  function finishGroup() {
+    if (current.agents.length > 0) groups.push(current);
+    current = { agents: [], rules: [] };
+  }
+
+  for (const rawLine of text.split(/\r?\n/)) {
+    const line = rawLine.replace(/#.*/, "").trim();
+    if (!line) continue;
+    const separator = line.indexOf(":");
+    if (separator < 1) continue;
+    const directive = line.slice(0, separator).trim().toLowerCase();
+    const value = line.slice(separator + 1).trim();
+    if (directive === "user-agent") {
+      if (current.rules.length > 0) finishGroup();
+      if (value) current.agents.push(value.toLowerCase());
+      continue;
+    }
+    if ((directive === "allow" || directive === "disallow") && current.agents.length > 0) {
+      current.rules.push({ path: value, allow: directive === "allow" });
+    }
+  }
+  finishGroup();
+
+  const crawler = CRAWLER_USER_AGENT.toLowerCase();
+  const exactGroups = groups.filter((group) => group.agents.some((agent) => agent !== "*" && crawler.startsWith(agent)));
+  const applicable = exactGroups.length > 0
+    ? exactGroups
+    : groups.filter((group) => group.agents.includes("*"));
+  return applicable.flatMap((group) => group.rules);
+}
+
+function robotsPathMatches(rulePath: string, targetPath: string): boolean {
+  if (!rulePath) return false;
+  const endAnchored = rulePath.endsWith("$");
+  const expression = rulePath
+    .replace(/\$$/, "")
+    .replace(/[.+?^${}()|[\]\\]/g, "\\$&")
+    .replace(/\*/g, ".*");
+  return new RegExp(`^${expression}${endAnchored ? "$" : ""}`).test(targetPath);
+}
+
+function isAllowedByRobots(url: string, rules: RobotsRule[]): boolean {
+  if (rules.length === 0) return true;
+  const parsed = new URL(url);
+  const targetPath = `${parsed.pathname}${parsed.search}`;
+  const matches = rules
+    .filter((rule) => robotsPathMatches(rule.path, targetPath))
+    .sort((left, right) => right.path.length - left.path.length || Number(right.allow) - Number(left.allow));
+  return matches[0]?.allow ?? true;
+}
+
+function classifyEvent(value: string): EventCategory {
+  const text = value.toLowerCase();
+  if (/(kind|kids|family|gezin|children|child|baby|speel)/.test(text)) return "Family";
+  if (/(museum|exhib|tentoon|expo|gallery|kunst|art)/.test(text)) return "Museums";
+  if (/(tour|walk|wandeling|rondvaart|cruise|guided)/.test(text)) return "Tours";
+  if (/(market|markt|food|eten|culin|proeverij)/.test(text)) return "Markets";
+  if (/(beach|strand|park|outdoor|buiten|nature|natuur)/.test(text)) return "Outdoors";
+  return "Entertainment";
+}
+
+function organizerName(value: unknown): string | undefined {
+  if (typeof value === "string") return shorten(value, 160);
+  if (Array.isArray(value)) {
+    return value.map(organizerName).find((name): name is string => Boolean(name));
+  }
+  if (!value || typeof value !== "object") return undefined;
+  const record = value as Record<string, unknown>;
+  return organizerName(record.name);
+}
+
+export function eventMetadata(
+  evidence: string,
+  source: SourceDefinition,
+  offerValue?: unknown,
+): Pick<SourceScanEvent, "sourceGroup" | "activityKind" | "priceType" | "priceText" | "mealType" | "audience" | "neighborhood" | "recurrenceText"> {
+  const clean = stripMarkup(evidence).replace(/\s+/g, " ").trim();
+  const text = clean.toLowerCase();
+  const offers = (Array.isArray(offerValue) ? offerValue : [offerValue])
+    .filter((offer): offer is Record<string, unknown> => Boolean(offer) && typeof offer === "object");
+  const parseAmount = (value: unknown): number | undefined => {
+    const amount = typeof value === "number"
+      ? value
+      : typeof value === "string" && value.trim() !== ""
+        ? Number(value.replace(",", "."))
+        : Number.NaN;
+    return Number.isFinite(amount) ? amount : undefined;
+  };
+  const firstCurrency = offers
+    .map((offer) => typeof offer.priceCurrency === "string" ? offer.priceCurrency.trim().toUpperCase() : "")
+    .find(Boolean) ?? "";
+  const compatibleOffers = offers.filter((offer) => {
+    const currency = typeof offer.priceCurrency === "string" ? offer.priceCurrency.trim().toUpperCase() : "";
+    return currency === firstCurrency;
+  });
+  const structuredAmounts = compatibleOffers.flatMap((offer) => {
+    const exact = parseAmount(offer.price);
+    if (exact !== undefined) return [exact];
+    return [parseAmount(offer.lowPrice), parseAmount(offer.highPrice)]
+      .filter((amount): amount is number => amount !== undefined);
+  });
+  const visiblePrice = parseVisibleEventPrice(clean);
+  const currencyLabel = firstCurrency === "EUR" ? "€" : firstCurrency ? `${firstCurrency} ` : "";
+  const formatAmount = (amount: number): string => {
+    return `${currencyLabel}${amount.toLocaleString("nl-NL", { maximumFractionDigits: 2 })}`;
+  };
+  const structuredMin = structuredAmounts.length > 0 ? Math.min(...structuredAmounts) : undefined;
+  const structuredMax = structuredAmounts.length > 0 ? Math.max(...structuredAmounts) : undefined;
+  const structuredPrice = structuredMin === undefined || structuredMax === undefined
+    ? undefined
+    : structuredMin === structuredMax
+      ? formatAmount(structuredMin)
+      : `${formatAmount(structuredMin)}–${formatAmount(structuredMax).replace(currencyLabel, "")}`;
+  const hasMeal = /\b(samen eten|maaltijd|diner|lunch|ontbijt|buurtmaaltijd|eet(?:-|\s)?café|food support|voedselhulp)\b/i.test(clean);
+  const mealType: MealType | undefined = hasMeal
+    ? /\b(voedselhulp|voedselbank|food support|uitgifte)\b/i.test(clean) ? "food-support" : "community-meal"
+    : undefined;
+  const priceType: PriceType = structuredMax === 0
+    ? "free"
+    : /\b(laag(?:e)?\s+(?:prijs|tarief|bijdrage)|low[- ]cost|betaalbare?\s+(?:prijs|bijdrage)|eigen bijdrage)\b/i.test(clean)
+      ? "low-cost"
+      : structuredMax !== undefined && structuredMax > 0
+        ? "paid"
+          : visiblePrice.priceType ?? "unknown";
+  const activityKind: ActivityKind | undefined = mealType
+    ? "meal"
+    : /\b(workshop|cursus|lezing|taalcafé|training|learning|learn)\b/i.test(text)
+      ? "learning"
+      : /\b(sport|bewegen|yoga|wandelen|dance|dans)\b/i.test(text)
+        ? "movement"
+        : /\b(ontmoet|inloop|participatie|buurt|vrijwillig|community|social)\b/i.test(text)
+          ? "community"
+          : /\b(concert|theater|muziek|film|cabaret|performance)\b/i.test(text)
+            ? "entertainment"
+            : /\b(kunst|cultuur|tentoonstelling|expo|museum)\b/i.test(text)
+              ? "culture"
+              : /\b(markt|market)\b/i.test(text)
+                ? "market"
+                : /\b(strand|park|outdoor|buiten|natuur)\b/i.test(text)
+                  ? "outdoor"
+                  : /\b(kind|gezin|family|children)\b/i.test(text)
+                    ? "family"
+                    : undefined;
+  const audiencePatterns: Array<[RegExp, string]> = [
+    [/\b(senioren|ouderen|55\+|65\+)\b/i, "senioren"],
+    [/\b(jongeren|young people|16[-–]27)\b/i, "jongeren"],
+    [/\b(kinderen|kids|children|gezinnen|families)\b/i, "gezinnen"],
+    [/\b(nieuwkomers|newcomers|vluchtelingen|refugees)\b/i, "nieuwkomers"],
+  ];
+  const audience = audiencePatterns.find(([pattern]) => pattern.test(clean))?.[1];
+  const neighborhood = [
+    "Scheveningen", "Kijkduin", "Loosduinen", "Laak", "Laakkwartier", "Schilderswijk",
+    "Segbroek", "Escamp", "Haagse Hout", "Ypenburg", "Leidschenveen", "Centrum",
+  ].find((candidate) => new RegExp(`\\b${candidate.replace(" ", "\\s+")}\\b`, "i").test(clean));
+  const recurrence = clean.match(/\b(?:elke|iedere|every)\s+(?:week|weekend|maandag|dinsdag|woensdag|donderdag|vrijdag|zaterdag|zondag|month|maand)\b[^.]{0,70}/i)?.[0];
+
+  return {
+    sourceGroup: source.sourceGroup,
+    activityKind,
+    priceType,
+    priceText: structuredPrice ?? visiblePrice.priceText,
+    mealType,
+    audience,
+    neighborhood,
+    recurrenceText: recurrence ? shorten(recurrence, 140) : undefined,
+  };
+}
+
+function parseCoordinates(value: unknown): { lat?: number; lng?: number } {
+  if (!value || typeof value !== "object") return {};
+  const record = value as Record<string, unknown>;
+  const lat = Number(record.latitude ?? record.lat);
+  const lng = Number(record.longitude ?? record.lng);
+  return Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : {};
+}
+
+function venueFromLocation(value: unknown): string | undefined {
+  if (typeof value === "string") return shorten(value, 160);
+  if (!value || typeof value !== "object") return undefined;
+  const location = value as Record<string, unknown>;
+  const name = typeof location.name === "string" ? location.name : "";
+  const address = location.address;
+  const addressText = typeof address === "string"
+    ? address
+    : address && typeof address === "object"
       ? [
           (address as Record<string, unknown>).streetAddress,
           (address as Record<string, unknown>).postalCode,
@@ -365,7 +851,7 @@ function preferredVenue(...values: Array<string | undefined>): string | undefine
   const usable = present.filter((value) => !/^(walking|spazieren)$/i.test(value));
   if (usable.length === 0) return present[0];
   const score = (value: string) => {
-    const hasHaagEvidence = /\b(den haag|the hague|scheveningen|kijkduin|loosduinen|leyweg|strandslag\s*8|kneuterdijk|elandstraat\s*47|25\d{2}[a-z]{2})\b/i.test(value);
+    const hasHaagEvidence = /\b(den haag|the hague|scheveningen|kijkduin|loosduinen|leyweg|strandslag\s*8|kneuterdijk|elandstraat\s*47|(?:25\d{2}|249\d)[a-z]{2})\b/i.test(value);
     return (hasHaagEvidence ? 1_000 : 0) + Math.min(value.length, 240);
   };
   return usable.reduce((best, candidate) => score(candidate) > score(best) ? candidate : best);
@@ -689,7 +1175,15 @@ export function sourceScanStatus(input: {
   }
   if (input.sourceDenied) return "blocked";
   if (input.pagesFailed > 0) return "error";
+  if (input.crawlLimitReached) return "partial";
   return "no_events";
+}
+
+export function nextSourceScanAt(status: SourceScanStatus, scannedAt: Date): Date {
+  const retryInterval = status === "blocked" || status === "error"
+    ? RETRY_INTERVALS_MS[status]
+    : EVENT_SOURCE_REFRESH_INTERVAL_MS;
+  return new Date(scannedAt.getTime() + retryInterval);
 }
 
 function isForeignLocation(event: SourceScanEvent): boolean {
@@ -722,7 +1216,7 @@ function publicationStatus(event: SourceScanEvent): PublicationStatus {
     return "eligible";
   }
   const evidence = `${event.title} ${event.venue ?? ""} ${event.description ?? ""}`;
-  if (/\b(den haag|the hague|scheveningen|kijkduin|loosduinen|leyweg|haagse markt|the hague market|strandslag\s*8|kneuterdijk|ultramarijn|elandstraat\s*47|25\d{2}\s?[a-z]{2})\b/i.test(evidence)) {
+  if (/\b(den haag|the hague|scheveningen|kijkduin|loosduinen|leyweg|haagse markt|the hague market|strandslag\s*8|kneuterdijk|ultramarijn|elandstraat\s*47|(?:25\d{2}|249\d)\s?[a-z]{2})\b/i.test(evidence)) {
     return "eligible";
   }
   return isForeignLocation(event) ? "foreign_location" : "missing_locality";
@@ -839,6 +1333,188 @@ async function persistEvents(source: SourceDefinition, events: SourceScanEvent[]
     eventsAdded: events.filter((event) => !existingUrls.has(event.url)).length,
     eventsUpdated: events.filter((event) => existingUrls.has(event.url)).length,
   };
+}
+
+function failedSourceScan(source: SourceDefinition, error: unknown): EventSourceScanResult {
+  const message = error instanceof Error ? error.message : "The source scan failed unexpectedly.";
+  logger.warn({ err: error, sourceId: source.id }, "Event source scan failed unexpectedly");
+  return {
+    sourceId: source.id,
+    sourceName: source.name,
+    scannedUrl: source.activityUrl,
+    status: "error",
+    events: [],
+    ...emptyMetrics(),
+    message: `The source could not be scanned: ${message}`,
+  };
+}
+
+async function recordSourceScan(
+  source: SourceDefinition,
+  result: EventSourceScanResult,
+  database: typeof db = db,
+  scannedAt = new Date(),
+): Promise<void> {
+  await database.insert(eventSourceStatusesTable).values({
+    sourceId: source.id,
+    sourceName: source.name,
+    sourceUrl: source.activityUrl,
+    sourceGroup: source.sourceGroup,
+    status: result.status,
+    lastScannedAt: scannedAt,
+    nextScanAt: nextSourceScanAt(result.status, scannedAt),
+    retryLeaseUntil: null,
+    message: result.message,
+    eventsCaptured: result.eventsCaptured,
+    eventsEligible: result.eventsEligible,
+    eventsAdded: result.eventsAdded,
+    eventsUpdated: result.eventsUpdated,
+    pagesFailed: result.pagesFailed,
+  }).onConflictDoUpdate({
+    target: eventSourceStatusesTable.sourceId,
+    set: {
+      sourceName: source.name,
+      sourceUrl: source.activityUrl,
+      sourceGroup: source.sourceGroup,
+      status: result.status,
+      lastScannedAt: scannedAt,
+      nextScanAt: nextSourceScanAt(result.status, scannedAt),
+      retryLeaseUntil: null,
+      message: result.message,
+      eventsCaptured: result.eventsCaptured,
+      eventsEligible: result.eventsEligible,
+      eventsAdded: result.eventsAdded,
+      eventsUpdated: result.eventsUpdated,
+      pagesFailed: result.pagesFailed,
+    },
+  });
+}
+
+async function scanAndRecordSource(
+  source: SourceDefinition,
+  database: typeof db = db,
+  scannedAt = new Date(),
+): Promise<EventSourceScanResult> {
+  let result: EventSourceScanResult;
+  try {
+    result = await scanSource(source);
+  } catch (error) {
+    result = failedSourceScan(source, error);
+  }
+
+  try {
+    await recordSourceScan(source, result, database, scannedAt);
+  } catch (error) {
+    logger.warn({ err: error, sourceId: source.id }, "Event source status could not be persisted");
+  }
+  return result;
+}
+
+export async function ensureEventSourceStatusStorage(database: typeof db = db): Promise<void> {
+  await database.execute(sql`
+    CREATE TABLE IF NOT EXISTS event_source_statuses (
+      source_id text PRIMARY KEY,
+      source_name text NOT NULL,
+      source_url text NOT NULL,
+      source_group text NOT NULL,
+      status text NOT NULL DEFAULT 'pending',
+      last_scanned_at timestamptz,
+      next_scan_at timestamptz,
+      retry_lease_until timestamptz,
+      message text,
+      events_captured integer NOT NULL DEFAULT 0,
+      events_eligible integer NOT NULL DEFAULT 0,
+      events_added integer NOT NULL DEFAULT 0,
+      events_updated integer NOT NULL DEFAULT 0,
+      pages_failed integer NOT NULL DEFAULT 0
+    )
+  `);
+  await database.execute(sql`
+    ALTER TABLE event_source_statuses
+    ADD COLUMN IF NOT EXISTS next_scan_at timestamptz
+  `);
+  await database.execute(sql`
+    ALTER TABLE event_source_statuses
+    ADD COLUMN IF NOT EXISTS retry_lease_until timestamptz
+  `);
+  await database.insert(eventSourceStatusesTable).values(
+    DEN_HAAG_SOURCES.map((source) => ({
+      sourceId: source.id,
+      sourceName: source.name,
+      sourceUrl: source.activityUrl,
+      sourceGroup: source.sourceGroup,
+      status: "pending" as const,
+    })),
+  ).onConflictDoNothing();
+}
+
+async function claimDueEventSourceIds(
+  database: Pick<typeof db, "execute"> = db,
+  now = new Date(),
+): Promise<string[]> {
+  const retryLeaseUntil = new Date(now.getTime() + EVENT_SOURCE_RETRY_LEASE_MS);
+  const result = await database.execute<{ sourceId: string }>(sql`
+    WITH due AS (
+      SELECT source_id
+      FROM event_source_statuses
+      WHERE (
+        (status = 'pending' AND next_scan_at IS NULL)
+        OR (next_scan_at IS NOT NULL AND next_scan_at <= ${now})
+      )
+        AND (retry_lease_until IS NULL OR retry_lease_until <= ${now})
+      ORDER BY next_scan_at ASC NULLS FIRST
+      LIMIT ${MAX_SCHEDULED_SOURCES_PER_RUN}
+      FOR UPDATE SKIP LOCKED
+    )
+    UPDATE event_source_statuses
+    SET retry_lease_until = ${retryLeaseUntil}
+    FROM due
+    WHERE event_source_statuses.source_id = due.source_id
+    RETURNING event_source_statuses.source_id AS "sourceId"
+  `);
+  return result.rows.map((row) => row.sourceId);
+}
+
+export async function runScheduledEventScans(
+  database: typeof db = db,
+  now = new Date(),
+): Promise<EventSourceScanResult[]> {
+  if (activeScanRequests >= MAX_ACTIVE_SCAN_REQUESTS) return [];
+  const dueSourceIds = await claimDueEventSourceIds(database, now);
+  const sources = dueSourceIds
+    .map((sourceId) => SOURCE_BY_ID.get(sourceId))
+    .filter((source): source is SourceDefinition => Boolean(source));
+  if (sources.length === 0) return [];
+
+  activeScanRequests += 1;
+  try {
+    const results = await Promise.all(
+      sources.map((source) => scanAndRecordSource(source, database, now)),
+    );
+    return results;
+  } finally {
+    activeScanRequests -= 1;
+  }
+}
+
+export function startEventSourceScheduler(database: typeof db = db): void {
+  if (schedulerStarted) return;
+  schedulerStarted = true;
+  const run = async () => {
+    let completed = 0;
+    try {
+      completed = (await runScheduledEventScans(database)).length;
+    } catch (error) {
+      logger.warn({ err: error }, "Scheduled event-source refresh failed");
+    } finally {
+      schedulerTimer = setTimeout(() => { void run(); },
+        completed === MAX_SCHEDULED_SOURCES_PER_RUN
+          ? EVENT_SOURCE_QUEUE_DRAIN_INTERVAL_MS
+          : EVENT_SOURCE_SCHEDULER_INTERVAL_MS,
+      );
+    }
+  };
+  void run();
 }
 
 async function scanSource(source: SourceDefinition): Promise<EventSourceScanResult> {
@@ -1145,43 +1821,7 @@ router.post("/scan", async (req, res) => {
     const scans: EventSourceScanResult[] = [];
     for (let index = 0; index < selectedSources.length; index += 2) {
       const batch = selectedSources.slice(index, index + 2);
-      scans.push(...await Promise.all(batch.map(scanSource)));
-    }
-
-    const scannedAt = new Date();
-    const statusWrites = await Promise.allSettled(scans.map((scan) =>
-      db.insert(eventSourceStatusesTable).values({
-        sourceId: scan.sourceId,
-        sourceName: scan.sourceName,
-        sourceUrl: scan.scannedUrl,
-        sourceGroup: SOURCE_BY_ID.get(scan.sourceId)?.sourceGroup ?? "city-agenda",
-        status: scan.status,
-        lastScannedAt: scannedAt,
-        message: scan.message,
-        eventsCaptured: scan.eventsCaptured,
-        eventsEligible: scan.eventsEligible,
-        eventsAdded: scan.eventsAdded,
-        eventsUpdated: scan.eventsUpdated,
-        pagesFailed: scan.pagesFailed,
-      }).onConflictDoUpdate({
-        target: eventSourceStatusesTable.sourceId,
-        set: {
-          sourceName: scan.sourceName,
-          sourceUrl: scan.scannedUrl,
-          sourceGroup: SOURCE_BY_ID.get(scan.sourceId)?.sourceGroup ?? "city-agenda",
-          status: scan.status,
-          lastScannedAt: scannedAt,
-          message: scan.message,
-          eventsCaptured: scan.eventsCaptured,
-          eventsEligible: scan.eventsEligible,
-          eventsAdded: scan.eventsAdded,
-          eventsUpdated: scan.eventsUpdated,
-          pagesFailed: scan.pagesFailed,
-        },
-      }),
-    ));
-    if (statusWrites.some((result) => result.status === "rejected")) {
-      req.log.warn("One or more event source statuses could not be persisted");
+      scans.push(...await Promise.all(batch.map((source) => scanAndRecordSource(source))));
     }
 
     res.json({ scannedAt: new Date().toISOString(), scans });
@@ -1369,6 +2009,13 @@ router.patch("/review/:id", requireEditor, async (req, res) => {
 });
 
 export default router;
+
+export const sourcesTesting = {
+  claimDueEventSourceIds,
+  nextSourceScanAt,
+  recordSourceScan,
+  sources: DEN_HAAG_SOURCES,
+};
 
 function removeHtmlSections(html: string, tagNames: string): string {
   return html.replace(new RegExp(`<(${tagNames})\\b[^>]*>[\\s\\S]*?<\\/\\1>`, "gi"), " ");

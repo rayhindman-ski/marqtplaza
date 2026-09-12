@@ -2,6 +2,7 @@ import app from "./app";
 import { logger } from "./lib/logger";
 import { ensureSocialMapReviewStorage, startSocialMapReviewScheduler } from "./lib/social-map-review";
 import { ensureNewsSourceStatusStorage, startNewsSourceScheduler } from "./routes/news";
+import { ensureEventSourceStatusStorage, startEventSourceScheduler } from "./routes/sources";
 import { startNeighborhoodDiscoveryScheduler } from "./lib/neighborhood-discovery-refresh";
 
 const rawPort = process.env["PORT"];
@@ -20,8 +21,10 @@ if (Number.isNaN(port) || port <= 0) {
 
 async function startServer(): Promise<void> {
   await ensureNewsSourceStatusStorage();
+  await ensureEventSourceStatusStorage();
   await ensureSocialMapReviewStorage();
   startNewsSourceScheduler();
+  startEventSourceScheduler();
   startSocialMapReviewScheduler();
   startNeighborhoodDiscoveryScheduler();
   app.listen(port, (err) => {
@@ -35,6 +38,6 @@ async function startServer(): Promise<void> {
 }
 
 void startServer().catch((err: unknown) => {
-  logger.error({ err }, "Could not provision news-source retry storage");
+  logger.error({ err }, "Could not provision scheduled source storage");
   process.exit(1);
 });

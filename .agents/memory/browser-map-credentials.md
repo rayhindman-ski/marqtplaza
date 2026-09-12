@@ -20,3 +20,9 @@ Inline Google map label styles cannot be combined with Advanced Markers: a map I
 **Why:** Removing the map ID makes the styled map look correct but breaks Advanced Markers; keeping it makes the app's label-hiding rules silently ineffective.
 
 **How to apply:** Use Google `OverlayView` DOM markers when inline basemap styling is required, or use a separately configured Cloud Map Style and map ID together. Never remove the map ID without replacing Advanced Markers.
+
+Browser regression tests that cover app-owned polygon geometry should block the Google Maps loader when a workspace browser key is inherited, then exercise the tile and coordinate providers directly.
+
+**Why:** A valid browser key can silently route a test into Google's canvas-backed map, where SVG polygon geometry is not available to DOM assertions and the fallback paths go untested.
+
+**How to apply:** Keep Google integration coverage separate or explicitly mocked; make tile/fallback polygon tests deterministic by aborting the Maps loader before navigation.

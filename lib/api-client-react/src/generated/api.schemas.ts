@@ -264,6 +264,51 @@ export interface HealthStatus {
   status: string;
 }
 
+export type RegistrationType = typeof RegistrationType[keyof typeof RegistrationType];
+
+
+export const RegistrationType = {
+  consumer: 'consumer',
+  business: 'business',
+} as const;
+
+export interface RegistrationInput {
+  /**
+     * @minLength 1
+     * @maxLength 160
+     */
+  name: string;
+  registrationType: RegistrationType;
+  /** @pattern ^[^\s@]+@[^\s@]+\.[^\s@]+$ */
+  email: string;
+  /**
+     * @minimum 1
+     * @maximum 5
+     */
+  usefulnessRating: number;
+  /**
+     * @minimum 1
+     * @maximum 5
+     */
+  referralLikelihood: number;
+  /**
+     * @minLength 1
+     * @maxLength 2000
+     */
+  desiredFeatures: string;
+}
+
+export type Registration = RegistrationInput & {
+  createdAt: string;
+  updatedAt: string;
+};
+
+export interface RegistrationStatus {
+  registered: boolean;
+  canParticipate: boolean;
+  registration: Registration | null;
+}
+
 export type SavedEventSnapshotSnapshot = { [key: string]: unknown };
 
 export interface SavedEventSnapshot {

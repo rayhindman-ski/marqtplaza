@@ -6,7 +6,7 @@
 - [DenHaag calendar markup](denhaag-calendar-markup.md) — generic UI “walking” can masquerade as venue; prefer event-specific location data and richer local evidence.
 - [OpenAPI numeric counts](openapi-numeric-counts.md) — use `number`, not `integer`, for generated count schemas in this workspace’s Orval/Zod toolchain.
 - [Map marker anchoring](map-marker-anchoring.md) — custom pin wrappers own coordinates once; multi-neighborhood tile viewports must use live canvas dimensions.
-- [Neighborhood highlight radius](neighborhood-highlight-radius.md) — visual neighborhood emphasis must stay separate from the larger provider/search filter radius.
+- [Neighborhood boundaries](neighborhood-highlight-radius.md) — use official polygon geometry for visual neighborhood selection; never represent administrative areas with centroid circles.
 - [Business filter hierarchy](business-filter-hierarchy.md) — Businesses owns non-food subcategories; Food & Drink owns its matching one, and children only show when their parent is selected.
 - [Google Places discovery](google-places-discovery.md) — follow bounded next-page results; a first-page-only search makes the business inventory look incomplete.
 - [OpenAPI client regeneration](openapi-client-regeneration.md) — regenerate the shared client after merged endpoint changes before judging downstream typecheck failures.
@@ -22,3 +22,6 @@
 - [Neighborhood category result caps](neighborhood-category-result-caps.md) — narrow by selected category and neighborhood, then rank by proximity before enforcing provider caps.
 - [Spec Kit workflow](speckit-workflow.md) — use the project-local constitution → spec → plan → tasks → implement → converge flow for non-trivial changes.
 - [Connected GitHub branch publishing](github-branch-publishing.md) — when no git remote is available, diff the workspace tree against the remote branch and publish through Git Data API objects.
+- [Database error assertions](database-error-assertions.md) — Drizzle/pg may expose wrapped SQL errors without the server trigger message; assert stable failure state instead of exact text.
+- [Playwright browser executable](playwright-chromium.md) — set PLAYWRIGHT_CHROMIUM_EXECUTABLE to system chromium; boundary tests assert opacity, not polygon removal.
+- [OpenAPI email validation](openapi-email-validation.md) — use a regex pattern instead of format email because this workspace's generated Zod client runs on Zod 3.

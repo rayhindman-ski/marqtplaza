@@ -4,6 +4,7 @@ import { describe, it } from "node:test";
 import {
   allowsExternalQueries,
   fetchOpenStreetMapBusinesses,
+  filterEventsByNeighborhoods,
   normalizeNeighborhoods,
   normalizedListingsKey,
   parseAnonymousId,
@@ -150,11 +151,55 @@ describe("listings query persistence inputs", () => {
     );
   });
 
+  it("shares a listings key for equivalent neighborhood whitespace and casing", () => {
+    assert.equal(
+      normalizedListingsKey("dhg", "businesses", "nl", ["Laak Centraal", "Centrum"]),
+      normalizedListingsKey(" DHG ", "businesses", "nl", ["  laak   centraal  ", " centrum "]),
+    );
+  });
+
+  it("matches event neighborhoods without formatting-sensitive exclusions", () => {
+    const events = [
+      { id: 1, neighborhood: "  Laak   Centraal  " },
+      { id: 2, neighborhood: "  Centrum  " },
+      { id: 3, neighborhood: undefined },
+    ] as Parameters<typeof filterEventsByNeighborhoods>[0];
+
+    const filtered = filterEventsByNeighborhoods(events, [" laak centraal "]);
+
+    assert.deepEqual(filtered.map((event) => event.id), [1, 3]);
+  });
+
+  it("keeps only genuinely unassigned events available for coordinate filtering", () => {
+    const events = [
+      { id: 1, neighborhood: undefined },
+      { id: 2, neighborhood: "" },
+      { id: 3, neighborhood: "   " },
+      { id: 4, neighborhood: ",,," },
+      { id: 5, neighborhood: ", , " },
+      { id: 6, neighborhood: "Centrum" },
+      { id: 7, neighborhood: "Scheveningen" },
+    ] as Parameters<typeof filterEventsByNeighborhoods>[0];
+
+    const filtered = filterEventsByNeighborhoods(events, ["centrum"]);
+
+    assert.deepEqual(filtered.map((event) => event.id), [1, 2, 3, 6]);
+  });
+
   it("normalizes supported business subcategories and rejects unknown values", () => {
     assert.deepEqual(
       parseBusinessCategories("Beauty & Personal Care,Unknown,Beauty & Personal Care"),
       ["Beauty & Personal Care"],
     );
+  });
+
+  it("keeps business subcategories whose names contain a comma", () => {
+    assert.deepEqual(parseBusinessCategories("Arts, Culture & Entertainment"), ["Arts, Culture & Entertainment"]);
+    assert.deepEqual(
+      parseBusinessCategories("Retail & Shopping,Arts, Culture & Entertainment,Fitness & Sports"),
+      ["Arts, Culture & Entertainment", "Fitness & Sports", "Retail & Shopping"],
+    );
+    assert.deepEqual(parseBusinessCategories("Arts,Bogus,Retail &amp; Shopping"), ["Retail & Shopping"]);
   });
 
   it("filters OSM business categories before applying the provider result cap", () => {

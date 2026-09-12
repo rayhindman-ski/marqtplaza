@@ -1,10 +1,579 @@
-w && lng <= bounds.e;
+import { Router, type IRouter } from "express";
+import { and, asc, desc, eq, gte, sql } from "drizzle-orm";
+import { getAuth } from "@clerk/express";
+import {
+  db,
+  discoveredEventsTable,
+  eventSourceStatusesTable,
+  externalQueriesTable,
+  externalResultsTable,
+  providerUsageTable,
+  pool,
+  type DiscoveredEvent,
+  userQueriesTable,
+} from "@workspace/db";
+import {
+  getNeighborhoodsBoundingBox,
+  getNeighborhoodsCenter,
+  isPointInsideNeighborhoods,
+} from "@workspace/geo";
+import { MARKERS } from "../lib/static-listings.js";
+import {
+  SOCIAL_MAP_LISTINGS,
+  SOCIAL_MAP_SNAPSHOT_DATE,
+  SOCIAL_MAP_SOURCE_NOTE,
+  type SocialMapCategory,
+} from "../lib/social-map-listings.js";
+import { getSocialMapReviewReport } from "../lib/social-map-review.js";
+import {
+  ensureLocalizedEventCopy,
+  eventCopyForLanguage,
+  selectEventsWithLocalizedCopy,
+  type EventLanguage,
+} from "../lib/event-localization.js";
+
+export type ListingSection = "events" | "businesses" | "food-drink" | "social-map";
+type ListingCategory = "Museums" | "Tours" | "Family" | "Entertainment" | "Outdoors" | "Markets" | "Businesses" | "Food & Drink" | "Social map";
+export type BusinessCategory =
+  | "Retail & Shopping"
+  | "Food & Drink"
+  | "Health & Wellness"
+  | "Beauty & Personal Care"
+  | "Professional Services"
+  | "Finance & Legal"
+  | "Home & Repair"
+  | "Automotive & Mobility"
+  | "Education & Childcare"
+  | "Hospitality & Travel"
+  | "Arts, Culture & Entertainment"
+  | "Fitness & Sports";
+const BUSINESS_CATEGORIES: readonly BusinessCategory[] = [
+  "Retail & Shopping",
+  "Food & Drink",
+  "Health & Wellness",
+  "Beauty & Personal Care",
+  "Professional Services",
+  "Finance & Legal",
+  "Home & Repair",
+  "Automotive & Mobility",
+  "Education & Childcare",
+  "Hospitality & Travel",
+  "Arts, Culture & Entertainment",
+  "Fitness & Sports",
+];
+const BUSINESS_CATEGORY_SET = new Set<string>(BUSINESS_CATEGORIES);
+type ListingSource = "google_maps" | "openstreetmap" | "curated" | "source_scan";
+export type Listing = {
+  id: string;
+  locationId: string;
+  category: ListingCategory;
+  name: string;
+  address?: string;
+  description: string;
+  x: number;
+  y: number;
+  details: string;
+  lat: number;
+  lng: number;
+  sourceUrl?: string;
+  businessCategory?: BusinessCategory;
+  source?: ListingSource;
+  sourceName?: string;
+  neighborhood?: string;
+  socialCategory?: SocialMapCategory;
+  officialUrl?: string;
+  sourcePageUrl?: string;
+  snapshotDate?: string;
+  reviewStatus?: "verified" | "review_due" | "changed" | "unavailable";
+  reviewReason?: string | null;
+  lastCheckedAt?: string;
+  nextReviewAt?: string;
+  startsAt?: string | null;
+  isCancelled?: boolean;
+  openingTimes?: string | null;
+  venue?: string | null;
+  sourceGroup?: "city-agenda" | "culture" | "community" | "meals";
+  organizer?: string | null;
+  activityKind?: string | null;
+  priceType?: "free" | "low-cost" | "paid" | "unknown";
+  priceText?: string | null;
+  mealType?: "community-meal" | "food-support" | null;
+  audience?: string | null;
+  recurrenceText?: string | null;
+  isApproximateLocation?: boolean;
+  isIndoor?: boolean | null;
+  openNow?: boolean | null;
+  firstSeenAt?: string;
+  lastSeenAt?: string;
+  updatedAt?: string;
+};
+
+export type EventEvidenceStatus = "verified" | "empty" | "stale" | "blocked" | "unavailable";
+
+export type EventEvidenceSource = {
+  id: string;
+  name: string;
+  status: EventEvidenceStatus;
+  lastCheckedAt?: string | null;
+};
+
+export type EventEvidence = {
+  status: EventEvidenceStatus;
+  lastCheckedAt?: string | null;
+  message: string;
+  sources: EventEvidenceSource[];
+};
+
+type EventSourceStatusSnapshot = {
+  sourceId: string;
+  sourceName: string;
+  status: string;
+  lastScannedAt: Date | null;
+};
+
+const EVENT_EVIDENCE_STALE_MS = 24 * 60 * 60 * 1000;
+
+export function summarizeEventEvidence({
+  language,
+  mode,
+  listings,
+  sourceStatuses,
+  now = new Date(),
+}: {
+  language: EventLanguage;
+  mode: "live" | "stored_only";
+  listings: Array<Pick<Listing, "sourceName" | "lastSeenAt">>;
+  sourceStatuses: EventSourceStatusSnapshot[];
+  now?: Date;
+}): EventEvidence {
+  const toPublicStatus = (status: string): EventEvidenceStatus =>
+    status === "found" ? "verified"
+      : status === "no_events" ? "empty"
+        : status === "partial" ? "stale"
+          : status === "blocked" ? "blocked"
+            : "unavailable";
+  const sources = sourceStatuses.length > 0
+    ? sourceStatuses.map((source) => ({
+        id: source.sourceId,
+        name: source.sourceName,
+        status: toPublicStatus(source.status),
+        lastCheckedAt: source.lastScannedAt?.toISOString() ?? null,
+      }))
+    : Array.from(new Map(
+      listings
+        .filter((listing): listing is Pick<Listing, "sourceName" | "lastSeenAt"> & { sourceName: string } => Boolean(listing.sourceName))
+        .map((listing) => [listing.sourceName, listing]),
+    ).entries()).map(([name, listing]) => ({
+      id: name.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+      name,
+      status: "verified" as const,
+      lastCheckedAt: listing.lastSeenAt ?? null,
+    }));
+  const checkedTimes = sources
+    .map((source) => source.lastCheckedAt ? Date.parse(source.lastCheckedAt) : NaN)
+    .filter(Number.isFinite);
+  const latestCheckedAt = checkedTimes.length > 0
+    ? new Date(Math.max(...checkedTimes)).toISOString()
+    : null;
+  const hasFreshSuccessfulScan = sourceStatuses.some((source) =>
+    ["found", "no_events"].includes(source.status)
+    && source.lastScannedAt
+    && now.getTime() - source.lastScannedAt.getTime() <= EVENT_EVIDENCE_STALE_MS,
+  );
+  const hasBlockingSource = sources.some((source) => ["blocked", "unavailable"].includes(source.status));
+  const allSourcesEmpty = sources.length > 0 && sources.every((source) => source.status === "empty");
+  let status: EventEvidenceStatus;
+  if (listings.length > 0) {
+    status = mode === "stored_only" && sourceStatuses.length > 0 && !hasFreshSuccessfulScan
+      ? "stale"
+      : "verified";
+  } else if (sourceStatuses.length === 0) {
+    status = "unavailable";
+  } else if (mode === "stored_only" && !hasFreshSuccessfulScan && !hasBlockingSource) {
+    status = "stale";
+  } else if (allSourcesEmpty) {
+    status = "empty";
+  } else if (hasBlockingSource) {
+    status = "blocked";
+  } else {
+    status = "unavailable";
+  }
+  const message = status === "verified"
+    ? language === "nl"
+      ? `${listings.length} gecontroleerde aankomende evenement${listings.length === 1 ? "" : "en"} beschikbaar.`
+      : `${listings.length} verified upcoming event${listings.length === 1 ? "" : "s"} available.`
+    : status === "empty"
+      ? language === "nl"
+        ? "De gecontroleerde bronnen zijn gelezen, maar er zijn momenteel geen aankomende evenementen."
+        : "Approved sources were checked, but no verified upcoming events are currently available."
+      : status === "stale"
+        ? language === "nl"
+          ? "Opgeslagen evenementgegevens zijn ouder dan 24 uur en kunnen verouderd zijn."
+          : "Stored event evidence is older than 24 hours and may be stale."
+        : status === "blocked"
+          ? language === "nl"
+            ? "De evenementdekking is onvolledig omdat een of meer goedgekeurde bronnen niet konden worden gelezen."
+            : "Event coverage is incomplete because one or more approved sources could not be read."
+          : language === "nl"
+            ? "Bewijs voor actuele evenementen is momenteel niet beschikbaar."
+            : "Evidence for current events is temporarily unavailable.";
+  return { status, lastCheckedAt: latestCheckedAt, message, sources };
+}
+
+export type ClaimableBusinessListing = Pick<
+  Listing,
+  | "id"
+  | "locationId"
+  | "name"
+  | "address"
+  | "neighborhood"
+  | "lat"
+  | "lng"
+  | "sourceUrl"
+  | "source"
+>;
+
+function sourceNameFromUrl(sourceUrl?: string): string | undefined {
+  if (!sourceUrl) return undefined;
+  try {
+    return new URL(sourceUrl).hostname.replace(/^www\./, "");
+  } catch {
+    return undefined;
+  }
+}
+
+// Bounding boxes for each supported city (south, west, north, east)
+const CITY_BOUNDS: Record<string, { s: number; w: number; n: number; e: number }> = {
+  ams: { s: 52.34, w: 4.85, n: 52.40, e: 5.00 },
+  rot: { s: 51.88, w: 4.43, n: 51.96, e: 4.55 },
+  utr: { s: 52.07, w: 5.09, n: 52.12, e: 5.17 },
+  // Include the Hague's outer neighbourhoods. Provider locality evidence
+  // below rejects nearby municipalities inside this safe discovery rectangle.
+  // Must enclose every official polygon in @workspace/geo (outer areas such as
+  // Kijkduin, Wateringse Veld, and Leidschenveen reach beyond the old rectangle).
+  dhg: { s: 52.01, w: 4.185, n: 52.125, e: 4.43 },
+  ein: { s: 51.41, w: 5.43, n: 51.47, e: 5.52 },
+};
+
+// Map amenity/shop/leisure tags to our 6 app categories
+const AMENITY_TO_CATEGORY: Record<string, string> = {
+  // Markets — food, drink, everyday commerce
+  cafe: "Markets",
+  restaurant: "Markets",
+  bar: "Markets",
+  pub: "Markets",
+  bakery: "Markets",
+  pharmacy: "Markets",
+  bank: "Markets",
+  hairdresser: "Markets",
+  florist: "Markets",
+  butcher: "Markets",
+  supermarket: "Markets",
+  fast_food: "Markets",
+  ice_cream: "Markets",
+  food_court: "Markets",
+  marketplace: "Markets",
+  market: "Markets",
+  // Entertainment — performances, nightlife, venues
+  theatre: "Entertainment",
+  cinema: "Entertainment",
+  arts_centre: "Entertainment",
+  community_centre: "Entertainment",
+  events_venue: "Entertainment",
+  nightclub: "Entertainment",
+  music_venue: "Entertainment",
+  social_centre: "Entertainment",
+  // Museums — cultural institutions
+  library: "Museums",
+};
+
+const SHOP_TO_CATEGORY: Record<string, string> = {
+  books: "Markets",
+  clothes: "Markets",
+  bicycle: "Markets",
+  furniture: "Markets",
+  gift: "Markets",
+  jewelry: "Markets",
+  shoes: "Markets",
+  sports: "Markets",
+  toys: "Markets",
+  electronics: "Markets",
+  convenience: "Markets",
+  deli: "Markets",
+  confectionery: "Markets",
+};
+
+const LEISURE_TO_CATEGORY: Record<string, string> = {
+  fitness_centre: "Outdoors",
+  sports_centre: "Outdoors",
+  stadium: "Entertainment",
+  park: "Outdoors",
+  nature_reserve: "Outdoors",
+  beach: "Outdoors",
+};
+
+const TOURISM_TO_CATEGORY: Record<string, string> = {
+  museum: "Museums",
+  gallery: "Museums",
+  attraction: "Tours",
+  viewpoint: "Outdoors",
+};
+
+function classifyNode(tags: Record<string, string>): string | null {
+  if (tags["amenity"] && AMENITY_TO_CATEGORY[tags["amenity"]]) {
+    return AMENITY_TO_CATEGORY[tags["amenity"]];
+  }
+  if (tags["shop"] && SHOP_TO_CATEGORY[tags["shop"]]) {
+    return SHOP_TO_CATEGORY[tags["shop"]];
+  }
+  if (tags["leisure"] && LEISURE_TO_CATEGORY[tags["leisure"]]) {
+    return LEISURE_TO_CATEGORY[tags["leisure"]];
+  }
+  if (tags["tourism"] && TOURISM_TO_CATEGORY[tags["tourism"]]) {
+    return TOURISM_TO_CATEGORY[tags["tourism"]];
+  }
+  return null;
+}
+
+// Convert lat/lon to x/y percentage within city bounding box
+function toXY(
+  lat: number,
+  lon: number,
+  bounds: { s: number; w: number; n: number; e: number },
+): { x: number; y: number } {
+  const x = ((lon - bounds.w) / (bounds.e - bounds.w)) * 100;
+  const y = ((bounds.n - lat) / (bounds.n - bounds.s)) * 100;
+  return {
+    x: Math.max(5, Math.min(95, Math.round(x))),
+    y: Math.max(5, Math.min(95, Math.round(y))),
+  };
+}
+
+// Build a human-readable description from OSM tags
+function descriptionFromTags(tags: Record<string, string>): string {
+  const cuisine = tags["cuisine"];
+  const amenity = tags["amenity"];
+  const shop = tags["shop"];
+  const leisure = tags["leisure"];
+  const tourism = tags["tourism"];
+
+  if (cuisine) {
+    const type = (amenity ?? "restaurant").replace(/_/g, " ");
+    return `${cap(type)} – ${cuisine.split(";")[0].replace(/_/g, " ")} cuisine`;
+  }
+  if (shop) return `Local ${shop.replace(/_/g, " ")} shop`;
+  if (amenity) return cap(amenity.replace(/_/g, " ")) + " in the neighbourhood";
+  if (leisure) return cap(leisure.replace(/_/g, " ")) + " venue";
+  if (tourism) return cap(tourism.replace(/_/g, " ")) + " attraction";
+  return "Local spot in the neighbourhood";
+}
+
+// Build a short details string from OSM tags
+function detailsFromTags(tags: Record<string, string>, category: string): string {
+  if (category === "Markets") {
+    const hours = tags["opening_hours"];
+    if (hours) {
+      const match = hours.match(/\d{2}:\d{2}/g);
+      if (match && match.length >= 2) return `Open until ${match[1]}`;
+    }
+    return "Open today";
+  }
+  if (category === "Entertainment") return "Check venue for schedule";
+  if (category === "Museums") return "Open during regular hours";
+  return "";
+}
+
+function cap(s: string): string {
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+function canonicalExternalUrl(value: string | undefined): string | null {
+  if (!value) return null;
+  try {
+    const url = new URL(value);
+    url.hash = "";
+    url.search = "";
+    url.pathname = url.pathname.replace(/\/+$/, "") || "/";
+    return url.href;
+  } catch {
+    return null;
+  }
+}
+
+function normalizedTitle(value: string | undefined): string {
+  return (value ?? "").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+}
+
+function normalizedAddress(value: string | undefined): string {
+  return normalizedTitle(value ?? "");
+}
+
+function parseListingSection(value: unknown): ListingSection {
+  const section = String(value ?? "events").trim();
+  if (section === "businesses" || section === "food-drink" || section === "social-map") return section;
+  return "events";
+}
+
+export type ListingsMode = "live" | "stored_only";
+
+export function parseListingsMode(value: unknown): ListingsMode {
+  return value === "stored_only" ? "stored_only" : "live";
+}
+
+export function allowsExternalQueries(mode: ListingsMode): boolean {
+  return mode === "live";
+}
+
+export function parseAnonymousId(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const normalized = value.trim();
+  return normalized.length >= 8 && normalized.length <= 100 ? normalized : undefined;
+}
+
+export async function prepareEventsForMode(
+  events: DiscoveredEvent[],
+  language: EventLanguage,
+  mode: ListingsMode,
+  ensureCopy: typeof ensureLocalizedEventCopy = ensureLocalizedEventCopy,
+): Promise<DiscoveredEvent[]> {
+  if (!allowsExternalQueries(mode)) {
+    return selectEventsWithLocalizedCopy(events, language);
+  }
+  return ensureCopy(events, language);
+}
+
+export function normalizeNeighborhoods(value: unknown): string[] {
+  const raw = Array.isArray(value) ? value.join(",") : String(value ?? "");
+  return [...new Map(
+    raw.split(",")
+      .map((neighborhood) => neighborhood.trim().replace(/\s+/g, " "))
+      .filter(Boolean)
+      .slice(0, 12)
+      .map((neighborhood) => [neighborhood.toLocaleLowerCase("nl-NL"), neighborhood] as const),
+  ).values()].sort((a, b) => a.localeCompare(b, "nl-NL"));
+}
+
+export function filterEventsByNeighborhoods(
+  events: DiscoveredEvent[],
+  neighborhoods: string[],
+): DiscoveredEvent[] {
+  const requested = new Set(
+    normalizeNeighborhoods(neighborhoods)
+      .map((neighborhood) => neighborhood.toLocaleLowerCase("nl-NL")),
+  );
+  if (requested.size === 0) return events;
+
+  return events.filter((event) => {
+    // Events without an explicit neighborhood still have usable coordinates.
+    // Keep them so the client can apply the documented radius filter.
+    const rawNeighborhood = event.neighborhood?.trim() ?? "";
+    if (!rawNeighborhood) return true;
+
+    // Delimiter-only values are malformed assignments, not unassigned events.
+    const neighborhood = normalizeNeighborhoods(rawNeighborhood)[0];
+    return Boolean(
+      neighborhood
+      && requested.has(neighborhood.toLocaleLowerCase("nl-NL")),
+    );
+  });
+}
+
+export function parseBusinessCategories(value: unknown): BusinessCategory[] {
+  const raw = Array.isArray(value) ? value.join(",") : String(value ?? "");
+  const tokens = raw.split(",").map((token) => token.replaceAll("&amp;", "&").trim());
+  const categories = new Set<BusinessCategory>();
+  // Category names may themselves contain a comma ("Arts, Culture & Entertainment"),
+  // so rejoin adjacent tokens until they form a known category.
+  for (let index = 0; index < tokens.length; index += 1) {
+    let matched = false;
+    for (let end = tokens.length; end > index; end -= 1) {
+      const candidate = tokens.slice(index, end).join(", ");
+      if (BUSINESS_CATEGORY_SET.has(candidate)) {
+        categories.add(candidate as BusinessCategory);
+        index = end - 1;
+        matched = true;
+        break;
+      }
+    }
+    if (!matched) continue;
+  }
+  return [...categories].sort((a, b) => a.localeCompare(b, "en"));
+}
+
+export function normalizedListingsKey(
+  cityId: string,
+  section: ListingSection,
+  language: EventLanguage,
+  neighborhoods: string[],
+  businessCategories: BusinessCategory[] = [],
+): string {
+  return JSON.stringify({
+    cityId: cityId.trim().toLowerCase(),
+    section,
+    language,
+    neighborhoods: normalizeNeighborhoods(neighborhoods)
+      .map((neighborhood) => neighborhood.toLocaleLowerCase("nl-NL"))
+      .sort((a, b) => a.localeCompare(b, "nl-NL")),
+    ...(businessCategories.length > 0
+      ? { businessCategories: parseBusinessCategories(businessCategories) }
+      : {}),
+  });
+}
+
+export function parseEventLanguage(value: unknown): EventLanguage | null {
+  return value === "nl" || value === "en" ? value : null;
+}
+
+export function localizedEventDetails(
+  event: typeof discoveredEventsTable.$inferSelect,
+  language: EventLanguage,
+): string {
+  const locale = language === "nl" ? "nl-NL" : "en-GB";
+  const parsedDate = event.startsAt ? new Date(event.startsAt) : null;
+  const date = parsedDate && !Number.isNaN(parsedDate.getTime())
+    ? new Intl.DateTimeFormat(locale, {
+        dateStyle: "medium",
+        timeStyle: event.startsAt?.includes("T") ? "short" : undefined,
+        timeZone: "Europe/Amsterdam",
+      }).format(parsedDate)
+    : (language === "nl" ? "Datum niet beschikbaar" : "Date not provided");
+  const openingTimeRanges = event.openingTimes?.match(/\b\d{1,2}[:.]\d{2}\s*[-–]\s*\d{1,2}[:.]\d{2}\b/g);
+  const openingTimes = event.openingTimes
+    ? openingTimeRanges?.join(", ")
+      ?? (language === "nl" ? "Zie evenementpagina" : "See event page")
+    : "";
+  const genericVenue = event.venue?.trim().toLowerCase();
+  const venue = !event.venue || genericVenue === "walking" || genericVenue === "route" || genericVenue === "directions"
+    ? (language === "nl" ? "Locatie niet beschikbaar" : "Venue not provided")
+    : language === "en" && /\b(exacte locatie|locatie volgt)\b/i.test(event.venue)
+      ? "The Hague, exact venue to be confirmed"
+      : language === "nl" && /\b(exact location|venue to be confirmed)\b/i.test(event.venue)
+        ? "Den Haag, exacte locatie volgt"
+        : event.venue;
+  return [
+    date,
+    openingTimes
+      ? `${language === "nl" ? "Openingstijden" : "Opening times"}: ${openingTimes}`
+      : "",
+    venue,
+    event.isApproximateLocation
+      ? (language === "nl"
+          ? "Kaartpunt: centrum van Den Haag (exacte coördinaten niet beschikbaar)"
+          : "Map pin: The Hague city centre (exact coordinates unavailable)")
+      : "",
+  ].filter(Boolean).join(" · ");
+}
+
+function isInHagueBounds(lat: number, lng: number): boolean {
+  const bounds = CITY_BOUNDS.dhg;
+  return lat >= bounds.s && lat <= bounds.n
+    && lng >= bounds.w && lng <= bounds.e;
 }
 
 function hasHagueEvidence(address: string): boolean {
   const value = address.toLowerCase();
   if (/\b(delft|oegstgeest|wassenaar|rijswijk|zoetermeer|leidschendam|voorburg|westland)\b/.test(value)) return false;
-  return /\bden haag\b|\bthe hague\b|\bscheveningen\b|\bs?-?gravenhage\b|\b25\d{2}\s?[a-z]{2}\b/i.test(address);
+  return /\bden haag\b|\bthe hague\b|\bscheveningen\b|\bs?-?gravenhage\b|\b(?:25\d{2}|249\d)\s?[a-z]{2}\b/i.test(address);
 }
 
 type GooglePlace = {
@@ -152,6 +721,41 @@ const overpassRequests = new Map<string, Promise<OsmElement[]>>();
 
 type GeographicBounds = { s: number; w: number; n: number; e: number };
 type SearchCenter = { lat: number; lng: number };
+
+/**
+ * The geographic scope of a provider query. When neighborhoods are requested,
+ * the query is bounded by their official polygons: providers search the padded
+ * bounding box and results outside the polygons are discarded.
+ */
+export interface SearchArea {
+  bounds: GeographicBounds;
+  center?: SearchCenter;
+  neighborhoods: string[];
+}
+
+const NEIGHBORHOOD_QUERY_PADDING_DEGREES = 0.002;
+
+export function resolveSearchArea(
+  cityBounds: GeographicBounds,
+  neighborhoods: string[],
+  requestedCenter?: SearchCenter,
+): SearchArea {
+  const box = getNeighborhoodsBoundingBox(neighborhoods);
+  if (!box) {
+    return { bounds: cityBounds, ...(requestedCenter ? { center: requestedCenter } : {}), neighborhoods: [] };
+  }
+  const center = getNeighborhoodsCenter(neighborhoods);
+  return {
+    bounds: {
+      s: Math.max(cityBounds.s, box.s - NEIGHBORHOOD_QUERY_PADDING_DEGREES),
+      w: Math.max(cityBounds.w, box.w - NEIGHBORHOOD_QUERY_PADDING_DEGREES),
+      n: Math.min(cityBounds.n, box.n + NEIGHBORHOOD_QUERY_PADDING_DEGREES),
+      e: Math.min(cityBounds.e, box.e + NEIGHBORHOOD_QUERY_PADDING_DEGREES),
+    },
+    ...(center ? { center } : {}),
+    neighborhoods: neighborhoods.filter((name) => getNeighborhoodsBoundingBox([name])),
+  };
+}
 type GoogleSearchSpec = { textQuery: string; bounds: GeographicBounds };
 
 function distanceFromSearchCenterSquared(lat: number, lng: number, center: SearchCenter): number {
@@ -595,7 +1199,7 @@ function hasForeignOsmLocality(tags: Record<string, string>): boolean {
   const city = normalizedTitle(tags["addr:city"] ?? tags["addr:place"]);
   if (city && !["den haag", "the hague", "s gravenhage", "scheveningen"].includes(city)) return true;
   const postcode = tags["addr:postcode"];
-  return Boolean(postcode && !/^25\d{2}/.test(postcode.replace(/\s/g, "")));
+  return Boolean(postcode && !/^(?:25\d{2}|249\d)/.test(postcode.replace(/\s/g, "")));
 }
 
 function hasHagueOsmEvidence(tags: Record<string, string>): boolean {
@@ -674,6 +1278,7 @@ export function fetchOpenStreetMapBusinesses(
   bounds: { s: number; w: number; n: number; e: number },
   businessCategories: BusinessCategory[] = [],
   searchCenter?: SearchCenter,
+  neighborhoods: string[] = [],
 ): Listing[] {
   const listings: Listing[] = [];
   const seen = new Set<string>();
@@ -681,6 +1286,7 @@ export function fetchOpenStreetMapBusinesses(
 
   for (const element of elements) {
     if (!isInHagueBounds(element.lat, element.lon)) continue;
+    if (neighborhoods.length > 0 && !isPointInsideNeighborhoods(element.lat, element.lon, neighborhoods)) continue;
     const tags = element.tags ?? {};
     if (hasForeignOsmLocality(tags) || !hasHagueOsmEvidence(tags)) continue;
 
@@ -860,6 +1466,12 @@ const defaultOverpassRequestDependencies: OverpassRequestDependencies = {
   sleep: (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds)),
 };
 
+function isNarrowedBounds(bounds: GeographicBounds): boolean {
+  return Object.values(CITY_BOUNDS).every((city) =>
+    city.s !== bounds.s || city.w !== bounds.w || city.n !== bounds.n || city.e !== bounds.e,
+  );
+}
+
 export async function fetchCityListingsFromOverpass(
   bounds: { s: number; w: number; n: number; e: number },
   dependencies: OverpassRequestDependencies = defaultOverpassRequestDependencies,
@@ -867,7 +1479,9 @@ export async function fetchCityListingsFromOverpass(
   searchCenter?: SearchCenter,
 ): Promise<OsmElement[]> {
   const bbox = `${bounds.s},${bounds.w},${bounds.n},${bounds.e}`;
-  const searchArea = searchCenter
+  // A narrowed bounding box (neighborhood scope) is authoritative; the radius
+  // is only a fallback for free-form searches without polygon geometry.
+  const searchArea = searchCenter && !isNarrowedBounds(bounds)
     ? `(around:3000,${searchCenter.lat},${searchCenter.lng})`
     : `(${bbox})`;
   const targetedSelectors = businessCategories
@@ -1009,12 +1623,17 @@ export async function refreshNeighborhoodDiscoveryScope(scope: NeighborhoodRefre
       neighborhoods,
       businessCategories,
       scheduled: true,
-    }, async () => fetchOpenStreetMapBusinesses(
-      await fetchCityListings(bounds, businessCategories),
-      scope.section,
-      bounds,
-      businessCategories,
-    ), 1),
+    }, async () => {
+      const searchArea = resolveSearchArea(bounds, neighborhoods);
+      return fetchOpenStreetMapBusinesses(
+        await fetchCityListings(searchArea.bounds, businessCategories, searchArea.center),
+        scope.section,
+        bounds,
+        businessCategories,
+        searchArea.center,
+        searchArea.neighborhoods,
+      );
+    }, 1),
   ));
   const successful = outcomes.filter((outcome) => !outcome.error);
   const status = successful.length === 0 ? "failed" : "succeeded";
@@ -1124,6 +1743,7 @@ export interface ListingsRouterDependencies {
     section: Exclude<ListingSection, "events" | "social-map">,
     businessCategories: BusinessCategory[],
     searchCenter?: SearchCenter,
+    searchArea?: SearchArea,
   ) => Promise<Listing[]>;
 }
 
@@ -1131,13 +1751,14 @@ const defaultListingsRouterDependencies: ListingsRouterDependencies = {
   getUserId: (req) => getAuth(req).userId,
   googlePlacesEnabled: GOOGLE_PLACES_QUERIES_ENABLED,
   loadGooglePlaces: fetchGooglePlaces,
-  loadOpenStreetMapBusinesses: async (bounds, section, businessCategories, searchCenter) =>
+  loadOpenStreetMapBusinesses: async (bounds, section, businessCategories, searchCenter, searchArea) =>
     fetchOpenStreetMapBusinesses(
-      await fetchCityListings(bounds, businessCategories, searchCenter),
+      await fetchCityListings(searchArea?.bounds ?? bounds, businessCategories, searchCenter),
       section,
       bounds,
       businessCategories,
       searchCenter,
+      searchArea?.neighborhoods ?? [],
     ),
 };
 
@@ -1172,11 +1793,15 @@ export function createListingsRouter(
     res.status(400).json({ listings: [], source: "fallback", message: `Unknown city: ${cityId}` });
     return;
   }
-  const requestedSearchCenter = Number.isFinite(requestedSearchLat)
+  const clientSearchCenter = Number.isFinite(requestedSearchLat)
     && Number.isFinite(requestedSearchLng)
     && isInHagueBounds(requestedSearchLat, requestedSearchLng)
     ? { lat: requestedSearchLat, lng: requestedSearchLng }
     : undefined;
+  // Official polygon geometry defines the local scope; a client-supplied centre
+  // only matters for free-form searches without neighborhood geometry.
+  const searchArea = resolveSearchArea(bounds, requestedNeighborhoods, clientSearchCenter);
+  const requestedSearchCenter = searchArea.center;
   const normalizedKey = normalizedListingsKey(
     cityId,
     listingSection,
@@ -1304,12 +1929,20 @@ export function createListingsRouter(
               section: listingSection,
               neighborhoods: requestedNeighborhoods,
               businessCategories: requestedBusinessCategories,
-            }, () => dependencies.loadGooglePlaces(
-              bounds,
-              listingSection,
-              requestedNeighborhoods,
-              requestedBusinessCategories,
-            ))]
+            }, async () => {
+              const listings = await dependencies.loadGooglePlaces(
+                bounds,
+                listingSection,
+                requestedNeighborhoods,
+                requestedBusinessCategories,
+              );
+              // Google text search is neighborhood-hinted, not geometry-bound;
+              // enforce the official polygon before results are persisted.
+              return searchArea.neighborhoods.length > 0
+                ? listings.filter((listing) =>
+                  isPointInsideNeighborhoods(listing.lat, listing.lng, searchArea.neighborhoods))
+                : listings;
+            })]
           : []),
         captureProviderResult(queryId, "openstreetmap", normalizedKey, {
           section: listingSection,
@@ -1320,26 +1953,50 @@ export function createListingsRouter(
           listingSection,
           requestedBusinessCategories,
           requestedSearchCenter,
+          searchArea,
         ), 1),
       ]);
       const google = outcomes.find((result) => result.provider === "google_places");
       const osm = outcomes.find((result) => result.provider === "openstreetmap");
       const successful = outcomes.filter((result) => !result.error);
-      const merged = mergeBusinessListings(google?.listings ?? [], osm?.listings ?? []);
+      let googleListings = google?.listings ?? [];
+      let osmListings = osm?.listings ?? [];
+      let servedStoredFallback = false;
+      // A provider outage must not blank a neighborhood that already has verified
+      // results. Reuse saved results, but apply the current polygon filter before
+      // returning them; older rows may have been captured from a city-wide query.
+      if (successful.length < providers.length) {
+        const stored = await loadStoredProviderResults(normalizedKey, providers);
+        const filterStored = (listings: Listing[]) => searchArea.neighborhoods.length > 0
+          ? listings.filter((listing) =>
+            isPointInsideNeighborhoods(listing.lat, listing.lng, searchArea.neighborhoods))
+          : listings;
+        if (google?.error && stored.has("google_places")) {
+          googleListings = filterStored(stored.get("google_places") ?? []);
+          servedStoredFallback = googleListings.length > 0;
+        }
+        if (osm?.error && stored.has("openstreetmap")) {
+          osmListings = filterStored(stored.get("openstreetmap") ?? []);
+          servedStoredFallback = servedStoredFallback || osmListings.length > 0;
+        }
+      }
+      const merged = mergeBusinessListings(googleListings, osmListings);
       const partial = successful.length > 0 && successful.length < providers.length;
-      const status = successful.length === 0 ? "failed" : partial ? "partial" : "succeeded";
-      await finalizeListingsQuery(queryId, status, successful.length === 0 ? "All external providers failed." : undefined);
+      const status = successful.length === 0 && !servedStoredFallback ? "failed" : partial || servedStoredFallback ? "partial" : "succeeded";
+      await finalizeListingsQuery(queryId, status, status === "failed" ? "All external providers failed." : undefined);
       if (google?.error) req.log.warn({ err: google.error }, "Google Places listings unavailable");
       if (osm?.error) req.log.warn({ err: osm.error }, "OpenStreetMap listings unavailable");
       res.json({
         listings: merged.listings,
-        source: google?.listings.length ? "google_places" : osm?.listings.length ? "live" : "fallback",
-        message: google?.listings.length
-          ? `${google.listings.length} Haagse ${listingSection === "food-drink" ? "horecazaken" : "bedrijven"} uit Google Places${merged.osmAdded > 0 ? ` en ${merged.osmAdded} aanvullende OpenStreetMap-vermeldingen` : ""}.`
-          : osm?.listings.length
-            ? `${osm.listings.length} Haagse ${listingSection === "food-drink" ? "horecazaken" : "bedrijven"} uit OpenStreetMap.`
-            : "Er zijn tijdelijk geen gecontroleerde resultaten voor deze sectie.",
-        queryId, mode, cacheHit: false, cacheMiss: false, partial,
+        source: servedStoredFallback ? "stored" : googleListings.length ? "google_places" : osmListings.length ? "live" : "fallback",
+        message: servedStoredFallback
+          ? `${merged.listings.length} opgeslagen Haagse resultaten worden getoond terwijl een live bron tijdelijk niet beschikbaar is.`
+          : googleListings.length
+            ? `${googleListings.length} Haagse ${listingSection === "food-drink" ? "horecazaken" : "bedrijven"} uit Google Places${merged.osmAdded > 0 ? ` en ${merged.osmAdded} aanvullende OpenStreetMap-vermeldingen` : ""}.`
+            : osmListings.length
+              ? `${osmListings.length} Haagse ${listingSection === "food-drink" ? "horecazaken" : "bedrijven"} uit OpenStreetMap.`
+              : "Er zijn tijdelijk geen gecontroleerde resultaten voor deze sectie.",
+        queryId, mode, cacheHit: servedStoredFallback, cacheMiss: false, partial: partial || servedStoredFallback,
         providers: successful.map((result) => result.provider),
       });
       return;
@@ -1356,7 +2013,11 @@ export function createListingsRouter(
           gte(discoveredEventsTable.startsAt, today),
         ))
         .orderBy(asc(discoveredEventsTable.startsAt), desc(discoveredEventsTable.lastSeenAt));
-      const localizedEvents = await prepareEventsForMode(discovered, language, mode);
+      const localizedEvents = await prepareEventsForMode(
+        filterEventsByNeighborhoods(discovered, requestedNeighborhoods),
+        language,
+        mode,
+      );
       const discoveredListings = localizedEvents
         .map((event) => {
         const copy = eventCopyForLanguage(event, language);
