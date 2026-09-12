@@ -1959,21 +1959,44 @@ export function createListingsRouter(
       const google = outcomes.find((result) => result.provider === "google_places");
       const osm = outcomes.find((result) => result.provider === "openstreetmap");
       const successful = outcomes.filter((result) => !result.error);
-      const merged = mergeBusinessListings(google?.listings ?? [], osm?.listings ?? []);
+      let googleListings = google?.listings ?? [];
+      let osmListings = osm?.listings ?? [];
+      let servedStoredFallback = false;
+      // A provider outage must not blank a neighborhood that already has verified
+      // results. Reuse saved results, but apply the current polygon filter before
+      // returning them; older rows may have been captured from a city-wide query.
+      if (successful.length < providers.length) {
+        const stored = await loadStoredProviderResults(normalizedKey, providers);
+        const filterStored = (listings: Listing[]) => searchArea.neighborhoods.length > 0
+          ? listings.filter((listing) =>
+            isPointInsideNeighborhoods(listing.lat, listing.lng, searchArea.neighborhoods))
+          : listings;
+        if (google?.error && stored.has("google_places")) {
+          googleListings = filterStored(stored.get("google_places") ?? []);
+          servedStoredFallback = googleListings.length > 0;
+        }
+        if (osm?.error && stored.has("openstreetmap")) {
+          osmListings = filterStored(stored.get("openstreetmap") ?? []);
+          servedStoredFallback = servedStoredFallback || osmListings.length > 0;
+        }
+      }
+      const merged = mergeBusinessListings(googleListings, osmListings);
       const partial = successful.length > 0 && successful.length < providers.length;
-      const status = successful.length === 0 ? "failed" : partial ? "partial" : "succeeded";
-      await finalizeListingsQuery(queryId, status, successful.length === 0 ? "All external providers failed." : undefined);
+      const status = successful.length === 0 && !servedStoredFallback ? "failed" : partial || servedStoredFallback ? "partial" : "succeeded";
+      await finalizeListingsQuery(queryId, status, status === "failed" ? "All external providers failed." : undefined);
       if (google?.error) req.log.warn({ err: google.error }, "Google Places listings unavailable");
       if (osm?.error) req.log.warn({ err: osm.error }, "OpenStreetMap listings unavailable");
       res.json({
         listings: merged.listings,
-        source: google?.listings.length ? "google_places" : osm?.listings.length ? "live" : "fallback",
-        message: google?.listings.length
-          ? `${google.listings.length} Haagse ${listingSection === "food-drink" ? "horecazaken" : "bedrijven"} uit Google Places${merged.osmAdded > 0 ? ` en ${merged.osmAdded} aanvullende OpenStreetMap-vermeldingen` : ""}.`
-          : osm?.listings.length
-            ? `${osm.listings.length} Haagse ${listingSection === "food-drink" ? "horecazaken" : "bedrijven"} uit OpenStreetMap.`
-            : "Er zijn tijdelijk geen gecontroleerde resultaten voor deze sectie.",
-        queryId, mode, cacheHit: false, cacheMiss: false, partial,
+        source: servedStoredFallback ? "stored" : googleListings.length ? "google_places" : osmListings.length ? "live" : "fallback",
+        message: servedStoredFallback
+          ? `${merged.listings.length} opgeslagen Haagse resultaten worden getoond terwijl een live bron tijdelijk niet beschikbaar is.`
+          : googleListings.length
+            ? `${googleListings.length} Haagse ${listingSection === "food-drink" ? "horecazaken" : "bedrijven"} uit Google Places${merged.osmAdded > 0 ? ` en ${merged.osmAdded} aanvullende OpenStreetMap-vermeldingen` : ""}.`
+            : osmListings.length
+              ? `${osmListings.length} Haagse ${listingSection === "food-drink" ? "horecazaken" : "bedrijven"} uit OpenStreetMap.`
+              : "Er zijn tijdelijk geen gecontroleerde resultaten voor deze sectie.",
+        queryId, mode, cacheHit: servedStoredFallback, cacheMiss: false, partial: partial || servedStoredFallback,
         providers: successful.map((result) => result.provider),
       });
       return;
