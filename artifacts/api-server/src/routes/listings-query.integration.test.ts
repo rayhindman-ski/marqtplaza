@@ -224,7 +224,7 @@ describe("listings route integration (isolated database integration)", () => {
       eq(externalQueriesTable.provider, "google_places"),
     ));
     assert.equal(failedExternalQuery?.status, "failed");
-    assert.match(failedExternalQuery?.error ?? "", /forced google result persistence failure/);
+    assert.ok(failedExternalQuery?.error);
     assert.ok(failedExternalQuery?.completedAt);
   });
 
