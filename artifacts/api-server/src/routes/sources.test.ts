@@ -9,6 +9,7 @@ import {
   eventPriceEvidenceFromHtml,
   eventMetadata,
   parseVisibleEventPrice,
+  nextSourceScanAt,
   sourceScanStatus,
   structuredEventsFromPage,
   structuredIndoorStatus,
@@ -57,6 +58,32 @@ describe("source scan outcomes", () => {
       pagesFailed: 0,
       crawlLimitReached: false,
     }), "no_events");
+    assert.equal(sourceScanStatus({
+      eventCount: 0,
+      sourceDenied: false,
+      pagesFailed: 0,
+      crawlLimitReached: true,
+    }), "partial");
+  });
+
+  it("uses a longer refresh cadence for checked sources and controlled retries for failures", () => {
+    const scannedAt = new Date("2026-09-12T10:00:00.000Z");
+    assert.equal(
+      nextSourceScanAt("found", scannedAt).toISOString(),
+      "2026-09-12T22:00:00.000Z",
+    );
+    assert.equal(
+      nextSourceScanAt("partial", scannedAt).toISOString(),
+      "2026-09-12T22:00:00.000Z",
+    );
+    assert.equal(
+      nextSourceScanAt("blocked", scannedAt).toISOString(),
+      "2026-09-12T16:00:00.000Z",
+    );
+    assert.equal(
+      nextSourceScanAt("error", scannedAt).toISOString(),
+      "2026-09-12T12:00:00.000Z",
+    );
   });
 });
 
