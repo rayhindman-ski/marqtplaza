@@ -57,6 +57,7 @@ interface GoogleMapViewProps {
   showNeighborhoodLabels?: boolean;
   highlightedNeighborhood?: string | null;
   onNeighborhoodClick?: (name: string) => void;
+  onNeighborhoodHover?: (name: string | null) => void;
   markers: MarkerData[];
   selectedMarkerId: string | null;
   savedIds: Set<string>;
@@ -384,6 +385,7 @@ function CoordinateMapFallback({
   showNeighborhoodLabels = true,
   highlightedNeighborhood = null,
   onNeighborhoodClick,
+  onNeighborhoodHover,
   markers,
   selectedMarkerId,
   onMarkerClick,
@@ -395,6 +397,7 @@ function CoordinateMapFallback({
   | 'showNeighborhoodLabels'
   | 'highlightedNeighborhood'
   | 'onNeighborhoodClick'
+   | 'onNeighborhoodHover'
   | 'markers'
   | 'selectedMarkerId'
   | 'onMarkerClick'
@@ -458,32 +461,39 @@ function CoordinateMapFallback({
               className="pointer-events-none absolute inset-0 z-[5] h-full w-full overflow-visible"
               viewBox="0 0 100 100"
               preserveAspectRatio="none"
-              aria-hidden={!onNeighborhoodClick}
+              aria-hidden={!onNeighborhoodClick && !onNeighborhoodHover}
             >
               {area.boundary.map((ring, ringIndex) => (
                 <polygon
                   key={`${area.name}-${ringIndex}`}
                   data-neighborhood-boundary
-                  role={onNeighborhoodClick ? 'button' : undefined}
-                  tabIndex={onNeighborhoodClick ? 0 : undefined}
-                  aria-label={onNeighborhoodClick ? `Select neighborhood: ${area.name}` : undefined}
+                  role={onNeighborhoodClick || onNeighborhoodHover ? 'button' : undefined}
+                  tabIndex={onNeighborhoodClick || onNeighborhoodHover ? 0 : undefined}
+                  aria-label={onNeighborhoodClick ? `Select neighborhood: ${area.name}` : `Neighborhood: ${area.name}`}
                   points={ring.map((point) => {
                     const projected = projectCoordinatePoint(point, bounds);
                     return `${projected.x},${projected.y}`;
                   }).join(' ')}
                   onClick={() => onNeighborhoodClick?.(area.name)}
+                   onMouseEnter={() => onNeighborhoodHover?.(area.name)}
+                   onMouseLeave={() => onNeighborhoodHover?.(null)}
+                   onFocus={() => onNeighborhoodHover?.(area.name)}
+                   onBlur={() => onNeighborhoodHover?.(null)}
                   onKeyDown={(event) => handleNeighborhoodKeyDown(event, area.name, onNeighborhoodClick)}
                   className={mapClassNames(
-                    onNeighborhoodClick && "pointer-events-auto cursor-pointer focus-visible:outline-none",
+                     (onNeighborhoodClick || onNeighborhoodHover) && "pointer-events-auto cursor-pointer focus-visible:outline-none",
                     highlightedNeighborhood === area.name
                       ? "fill-primary/20 stroke-primary"
                       : "fill-teal-400/10 stroke-teal-700/85",
                   )}
-                  style={{ strokeWidth: 0.35, vectorEffect: 'non-scaling-stroke' }}
+                   style={{
+                     strokeWidth: highlightedNeighborhood === area.name ? 0.8 : 0.35,
+                     vectorEffect: 'non-scaling-stroke',
+                   }}
                 />
               ))}
             </svg>
-            {showNeighborhoodLabels && (
+            {(showNeighborhoodLabels || highlightedNeighborhood === area.name) && (
               <span
                 data-neighborhood-label
                 className="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-1/2 whitespace-nowrap rounded-full border-2 border-teal-700/85 bg-white/95 px-2.5 py-1 text-[11px] font-black text-teal-900 shadow-md"
@@ -566,6 +576,7 @@ function TileMapView({
   showNeighborhoodLabels = true,
   highlightedNeighborhood = null,
   onNeighborhoodClick,
+  onNeighborhoodHover,
   markers,
   selectedMarkerId,
   savedIds,
@@ -783,39 +794,52 @@ function TileMapView({
           className="pointer-events-none absolute inset-0 z-[5] h-full w-full overflow-visible"
           viewBox={`0 0 ${size.width} ${size.height}`}
           preserveAspectRatio="none"
-          aria-hidden={!onNeighborhoodClick}
+           aria-hidden={!onNeighborhoodClick && !onNeighborhoodHover}
         >
           {neighborhoodAreas.flatMap((area) => area.boundary.map((ring, ringIndex) => (
             <polygon
               key={`${area.name}-${ringIndex}`}
               data-neighborhood-boundary
-              role={onNeighborhoodClick ? 'button' : undefined}
-              tabIndex={onNeighborhoodClick ? 0 : undefined}
-              aria-label={onNeighborhoodClick ? `Select neighborhood: ${area.name}` : undefined}
+              role={onNeighborhoodClick || onNeighborhoodHover ? 'button' : undefined}
+              tabIndex={onNeighborhoodClick || onNeighborhoodHover ? 0 : undefined}
+              aria-label={onNeighborhoodClick ? `Select neighborhood: ${area.name}` : `Neighborhood: ${area.name}`}
               points={ring.map(([lat, lng]) => {
                 const world = latLngToWorld({ lat, lng }, viewport.zoom);
                 return `${world.x - mapLeft},${world.y - mapTop}`;
               }).join(' ')}
               onClick={() => onNeighborhoodClick?.(area.name)}
+              onMouseEnter={() => onNeighborhoodHover?.(area.name)}
+              onMouseLeave={() => onNeighborhoodHover?.(null)}
+              onFocus={() => onNeighborhoodHover?.(area.name)}
+              onBlur={() => onNeighborhoodHover?.(null)}
               onKeyDown={(event) => handleNeighborhoodKeyDown(event, area.name, onNeighborhoodClick)}
               className={mapClassNames(
-                onNeighborhoodClick && "pointer-events-auto cursor-pointer focus-visible:outline-none",
+                (onNeighborhoodClick || onNeighborhoodHover) && "pointer-events-auto cursor-pointer focus-visible:outline-none",
                 highlightedNeighborhood === area.name
                   ? "fill-primary/20 stroke-primary"
                   : "fill-teal-400/10 stroke-teal-700/85",
               )}
-              style={{ strokeWidth: 2.5, vectorEffect: 'non-scaling-stroke' }}
+               style={{
+                 strokeWidth: highlightedNeighborhood === area.name ? 5 : 2.5,
+                 vectorEffect: 'non-scaling-stroke',
+               }}
             />
           )))}
         </svg>
       )}
-      {showNeighborhoodLabels && neighborhoodAreas.map((area) => {
+      {neighborhoodAreas.map((area) => {
+        if (!showNeighborhoodLabels && highlightedNeighborhood !== area.name) return null;
         const world = latLngToWorld(area, viewport.zoom);
         return (
           <span
             key={`neighborhood-label-${area.name}`}
             data-neighborhood-label
-            className="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-1/2 whitespace-nowrap rounded-full border-2 border-teal-700/85 bg-white/95 px-2.5 py-1 text-[11px] font-black text-teal-900 shadow-md"
+            className={mapClassNames(
+              "pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-1/2 whitespace-nowrap rounded-full border-2 px-2.5 py-1 text-[11px] font-black shadow-md",
+              highlightedNeighborhood === area.name
+                ? "border-primary bg-card text-primary shadow-lg"
+                : "border-teal-700/85 bg-white/95 text-teal-900",
+            )}
             style={{ left: world.x - mapLeft, top: world.y - mapTop }}
           >
             {area.name}
@@ -938,6 +962,7 @@ function GoogleMapCanvas({
   showNeighborhoodLabels = true,
   highlightedNeighborhood = null,
   onNeighborhoodClick,
+  onNeighborhoodHover,
   markers,
   selectedMarkerId,
   savedIds,
@@ -1194,20 +1219,21 @@ function GoogleMapCanvas({
         existing.polygon.setPaths(paths);
         existing.polygon.setOptions({
           strokeColor: highlightedNeighborhood === area.name ? '#f36c21' : '#0f766e',
+           strokeWeight: highlightedNeighborhood === area.name ? 5 : 3,
           fillColor: highlightedNeighborhood === area.name ? '#f36c21' : '#2dd4bf',
           fillOpacity: highlightedNeighborhood === area.name ? 0.2 : 0.1,
         });
-        if (showNeighborhoodLabels && existing.label) {
+        if ((showNeighborhoodLabels || highlightedNeighborhood === area.name) && existing.label) {
           existing.label.setPosition({ lat: area.lat, lng: area.lng });
           existing.label.setContent(createNeighborhoodLabelElement(area.name));
-        } else if (showNeighborhoodLabels && !existing.label) {
+        } else if ((showNeighborhoodLabels || highlightedNeighborhood === area.name) && !existing.label) {
           existing.label = createHtmlMarkerOverlay(
             mapRef.current,
             { lat: area.lat, lng: area.lng },
             createNeighborhoodLabelElement(area.name),
             5,
           );
-        } else if (!showNeighborhoodLabels && existing.label) {
+        } else if (!showNeighborhoodLabels && highlightedNeighborhood !== area.name && existing.label) {
           existing.label.setMap(null);
           existing.label = undefined;
         }
@@ -1218,17 +1244,21 @@ function GoogleMapCanvas({
         map: mapRef.current,
         paths: area.boundary.map((ring) => ring.map(([lat, lng]) => ({ lat, lng }))),
         strokeColor: highlightedNeighborhood === area.name ? '#f36c21' : '#0f766e',
-        strokeOpacity: 0.9,
-        strokeWeight: 3,
+         strokeOpacity: 0.9,
+         strokeWeight: highlightedNeighborhood === area.name ? 5 : 3,
         fillColor: highlightedNeighborhood === area.name ? '#f36c21' : '#2dd4bf',
         fillOpacity: highlightedNeighborhood === area.name ? 0.2 : 0.1,
-        clickable: Boolean(onNeighborhoodClick),
+         clickable: Boolean(onNeighborhoodClick || onNeighborhoodHover),
         zIndex: 1,
       });
       if (onNeighborhoodClick) {
         polygon.addListener('click', () => onNeighborhoodClick(area.name));
       }
-      const label = showNeighborhoodLabels
+      if (onNeighborhoodHover) {
+        polygon.addListener('mouseover', () => onNeighborhoodHover(area.name));
+        polygon.addListener('mouseout', () => onNeighborhoodHover(null));
+      }
+      const label = showNeighborhoodLabels || highlightedNeighborhood === area.name
         ? createHtmlMarkerOverlay(
             mapRef.current,
             { lat: area.lat, lng: area.lng },
@@ -1244,6 +1274,7 @@ function GoogleMapCanvas({
      highlightedNeighborhood,
      mapReady,
      onNeighborhoodClick,
+      onNeighborhoodHover,
      selectedNeighborhoods,
      showNeighborhoodLabels,
    ]);

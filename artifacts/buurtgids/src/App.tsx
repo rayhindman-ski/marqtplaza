@@ -896,6 +896,7 @@ function SearchState({
   const [error, setError] = useState('');
   const [selectedCityId, setSelectedCityId] = useState<string | null>(null);
   const [selectedMapNeighborhood, setSelectedMapNeighborhood] = useState<string | null>(null);
+  const [hoveredMapNeighborhood, setHoveredMapNeighborhood] = useState<string | null>(null);
   const [includeExternalSources, setIncludeExternalSources] = useState(readIncludeExternalSources);
   const t = translations[language];
   const mapLocation = LOCATIONS.find((location) => location.id === selectedCityId) ?? LOCATIONS[0];
@@ -904,7 +905,10 @@ function SearchState({
     if (!mapLocation.neighborhoods.includes(selectedMapNeighborhood ?? '')) {
       setSelectedMapNeighborhood(null);
     }
-  }, [mapLocation, selectedMapNeighborhood]);
+    if (!mapLocation.neighborhoods.includes(hoveredMapNeighborhood ?? '')) {
+      setHoveredMapNeighborhood(null);
+    }
+  }, [hoveredMapNeighborhood, mapLocation, selectedMapNeighborhood]);
 
   useEffect(() => {
     window.localStorage.setItem(
@@ -1035,8 +1039,9 @@ function SearchState({
                 locationId={mapLocation.id}
                 selectedNeighborhoods={mapLocation.neighborhoods}
                 showNeighborhoodLabels={false}
-                highlightedNeighborhood={selectedMapNeighborhood}
+                highlightedNeighborhood={hoveredMapNeighborhood ?? selectedMapNeighborhood}
                 onNeighborhoodClick={setSelectedMapNeighborhood}
+                onNeighborhoodHover={setHoveredMapNeighborhood}
                 markers={[]}
                 selectedMarkerId={null}
                 savedIds={new Set()}
@@ -1095,6 +1100,7 @@ function SearchState({
                       onClick={() => {
                         setSelectedCityId(loc.id);
                         setSelectedMapNeighborhood(null);
+                        setHoveredMapNeighborhood(null);
                       }}
                       className={cn(
                         "px-4 py-2 backdrop-blur-sm border rounded-full text-sm font-semibold transition-all shadow-sm hover:shadow-md",
@@ -1133,6 +1139,10 @@ function SearchState({
                             key={neighborhood}
                             type="button"
                             onClick={() => onSearch(loc.id, neighborhood, DEFAULT_START_SECTION)}
+                            onMouseEnter={() => selectedCityId === loc.id && setHoveredMapNeighborhood(neighborhood)}
+                            onMouseLeave={() => setHoveredMapNeighborhood(null)}
+                            onFocus={() => selectedCityId === loc.id && setHoveredMapNeighborhood(neighborhood)}
+                            onBlur={() => setHoveredMapNeighborhood(null)}
                             className="min-h-10 rounded-xl border border-border/50 bg-card/80 px-3 py-2 text-left text-xs font-semibold text-muted-foreground transition-all hover:border-primary/50 hover:bg-primary/5 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                           >
                             {neighborhood}
