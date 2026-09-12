@@ -11,6 +11,12 @@ Source scans must accept source IDs, not arbitrary URLs. The server resolves tho
 
 **How to apply:** Keep the allowlist in the server scan route, fetch robots.txt before crawl admission, handle redirects manually, stream response bodies with page-size and redirect limits, reject duplicate selections, and cap concurrent scans. Bound links, index pages, detail pages, and sitemaps separately; report budget-skipped and robots-protected pages truthfully. For every selected source, return a distinct status for events found, no detectable events, automated access blocked, or fetch error. Never silently collapse blocked and failed scans into an empty result.
 
+The event scan endpoint completes selected sources synchronously and persists their status only after the selected batch finishes; run long source passes in bounded individual requests so a client timeout does not discard the status evidence for the whole batch.
+
+**Why:** A broad multi-source scan can exceed the request window even when individual source scans are making progress, leaving the public evidence table empty and hiding which sources were actually checked.
+
+**How to apply:** Prefer one approved source ID per request (or a small bounded batch), then verify the persisted per-source status and the public listing response.
+
 For periodic curated-listing checks, record a redirect as editorial review work and do not fetch its target.
 
 **Why:** A trusted source can be changed or compromised and redirect to an internal service. The redirect target is useful evidence for an editor, but does not need a server-side request to determine that the public link has changed.
