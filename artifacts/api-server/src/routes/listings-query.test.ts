@@ -151,6 +151,13 @@ describe("listings query persistence inputs", () => {
     );
   });
 
+  it("shares a listings key for equivalent neighborhood whitespace and casing", () => {
+    assert.equal(
+      normalizedListingsKey("dhg", "businesses", "nl", ["Laak Centraal", "Centrum"]),
+      normalizedListingsKey(" DHG ", "businesses", "nl", ["  laak   centraal  ", " centrum "]),
+    );
+  });
+
   it("matches event neighborhoods without formatting-sensitive exclusions", () => {
     const events = [
       { id: 1, neighborhood: "  Laak   Centraal  " },
