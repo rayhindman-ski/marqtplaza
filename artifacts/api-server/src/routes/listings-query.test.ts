@@ -5,6 +5,7 @@ import {
   allowsExternalQueries,
   fetchOpenStreetMapBusinesses,
   filterEventsByNeighborhoods,
+  filterListingsByBusinessCategories,
   normalizeNeighborhoods,
   normalizedListingsKey,
   parseAnonymousId,
@@ -274,5 +275,26 @@ describe("listings query persistence inputs", () => {
     );
     assert.equal(listings.length, 200);
     assert.ok(listings.some((listing) => listing.name === "Nearby Theresiastraat Beauty"));
+  });
+});
+describe("stored business subcategory narrowing", () => {
+  const listings = [
+    { id: "a", businessCategory: "Retail & Shopping" },
+    { id: "b", businessCategory: "Arts, Culture & Entertainment" },
+    { id: "c", businessCategory: "Home & Repair" },
+    { id: "d" },
+  ] as Parameters<typeof filterListingsByBusinessCategories>[0];
+
+  it("returns every listing when no subcategory is selected", () => {
+    assert.equal(filterListingsByBusinessCategories(listings, []).length, 4);
+  });
+
+  it("keeps only listings in the selected subcategories, including comma-containing names", () => {
+    const narrowed = filterListingsByBusinessCategories(listings, ["Arts, Culture & Entertainment", "Retail & Shopping"]);
+    assert.deepEqual(narrowed.map((listing) => listing.id), ["a", "b"]);
+  });
+
+  it("drops listings without a business category when a subset is selected", () => {
+    assert.deepEqual(filterListingsByBusinessCategories(listings, ["Home & Repair"]).map((l) => l.id), ["c"]);
   });
 });

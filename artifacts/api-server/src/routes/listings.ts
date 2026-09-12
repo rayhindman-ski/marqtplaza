@@ -1291,7 +1291,10 @@ export function fetchOpenStreetMapBusinesses(
     if (hasForeignOsmLocality(tags) || !hasHagueOsmEvidence(tags)) continue;
 
     const isFood = isFoodOsmTags(tags);
-    if (!tags.name || (section === "food-drink" ? !isFood : isFood || !Boolean(tags.shop || tags.amenity))) continue;
+    // Non-food businesses are not only shops/amenities: gyms are leisure=*,
+    // hotels/museums tourism=*, and firms/tradespeople office=*/craft=*.
+    const isBusinessTagged = Boolean(tags.shop || tags.amenity || tags.leisure || tags.tourism || tags.office || tags.craft);
+    if (!tags.name || (section === "food-drink" ? !isFood : isFood || !isBusinessTagged)) continue;
 
     const address = osmAddressFromTags(tags);
     const { x, y } = toXY(element.lat, element.lon, bounds);
@@ -1472,6 +1475,13 @@ function isNarrowedBounds(bounds: GeographicBounds): boolean {
   );
 }
 
+export const OVERPASS_ENDPOINTS = [
+  "https://overpass-api.de/api/interpreter",
+  "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
+  "https://overpass.kumi.systems/api/interpreter",
+  "https://overpass.private.coffee/api/interpreter",
+] as const;
+
 export async function fetchCityListingsFromOverpass(
   bounds: { s: number; w: number; n: number; e: number },
   dependencies: OverpassRequestDependencies = defaultOverpassRequestDependencies,
@@ -1495,18 +1505,23 @@ export async function fetchCityListingsFromOverpass(
 out center 2000;`
     : `[out:json][timeout:20];
 (
-  node[amenity][name](${bbox});
-  node[shop][name](${bbox});
-  node[leisure][name](${bbox});
-  node[tourism][name](${bbox});
+  nwr[amenity][name](${bbox});
+  nwr[shop][name](${bbox});
+  nwr[leisure][name](${bbox});
+  nwr[tourism][name](${bbox});
+  nwr[office][name](${bbox});
+  nwr[craft][name](${bbox});
 );
-out 2000;`;
+out center 2000;`;
 
-  const url =
-    "https://overpass-api.de/api/interpreter?data=" + encodeURIComponent(query);
+  const encodedQuery = encodeURIComponent(query);
 
   let lastError: unknown;
   for (let attempt = 0; attempt < PROVIDER_MAX_ATTEMPTS; attempt += 1) {
+    // Rotate through public Overpass instances: the primary host is regularly
+    // unreachable or overloaded while the mirrors keep serving the same data.
+    const endpoint = OVERPASS_ENDPOINTS[attempt % OVERPASS_ENDPOINTS.length]!;
+    const url = `${endpoint}?data=${encodedQuery}`;
     await dependencies.waitForSlot();
     let res: Response;
     try {
@@ -1533,7 +1548,7 @@ out 2000;`;
         return [{ id: element.id, lat, lon, tags: element.tags ?? {} }];
       });
     }
-    lastError = new Error(`Overpass HTTP ${res.status}`);
+    lastError = new Error(`Overpass HTTP ${res.status} (${new URL(endpoint).host})`);
     if (res.status !== 429 && res.status < 500) throw lastError;
     if (attempt + 1 < PROVIDER_MAX_ATTEMPTS) {
       await dependencies.sleep(retryDelayMs(attempt, res.headers.get("retry-after")));
@@ -1729,6 +1744,41 @@ function storedMissMessage(language: EventLanguage): string {
     : "No stored results are available for this query. Refresh in live mode.";
 }
 
+export function filterListingsByBusinessCategories(
+  listings: Listing[],
+  businessCategories: BusinessCategory[],
+): Listing[] {
+  if (businessCategories.length === 0) return listings;
+  const selected = new Set(businessCategories);
+  return listings.filter((listing) => listing.businessCategory && selected.has(listing.businessCategory));
+}
+
+// Stored results are keyed by the exact category set. A subcategory selection
+// rarely matches a stored scope of its own, so fall back to the broader
+// all-categories scope for the same area and narrow it by listing category.
+async function loadStoredBusinessResults(
+  normalizedKey: string,
+  providers: ExternalProvider[],
+  scope: {
+    cityId: string;
+    section: ListingSection;
+    language: EventLanguage;
+    neighborhoods: string[];
+    businessCategories: BusinessCategory[];
+  },
+): Promise<Map<ExternalProvider, Listing[]>> {
+  const exact = await loadStoredProviderResults(normalizedKey, providers);
+  if (scope.section !== "businesses" || scope.businessCategories.length === 0) return exact;
+  const missing = providers.filter((provider) => !exact.has(provider));
+  if (missing.length === 0) return exact;
+  const broadKey = normalizedListingsKey(scope.cityId, scope.section, scope.language, scope.neighborhoods, []);
+  const broad = await loadStoredProviderResults(broadKey, missing);
+  for (const [provider, listings] of broad) {
+    exact.set(provider, filterListingsByBusinessCategories(listings, scope.businessCategories));
+  }
+  return exact;
+}
+
 export interface ListingsRouterDependencies {
   getUserId: (req: Parameters<typeof getAuth>[0]) => string | null;
   googlePlacesEnabled?: boolean;
@@ -1907,7 +1957,7 @@ export function createListingsRouter(
         ? ["google_places", "openstreetmap"]
         : ["openstreetmap"];
       if (!allowsExternalQueries(mode)) {
-        const stored = await loadStoredProviderResults(normalizedKey, providers);
+        const stored = await loadStoredBusinessResults(normalizedKey, providers, { cityId, section: listingSection, language, neighborhoods: requestedNeighborhoods, businessCategories: requestedBusinessCategories });
         const googleListings = dependencies.googlePlacesEnabled
           ? stored.get("google_places") ?? []
           : [];
@@ -1966,7 +2016,7 @@ export function createListingsRouter(
       // results. Reuse saved results, but apply the current polygon filter before
       // returning them; older rows may have been captured from a city-wide query.
       if (successful.length < providers.length) {
-        const stored = await loadStoredProviderResults(normalizedKey, providers);
+        const stored = await loadStoredBusinessResults(normalizedKey, providers, { cityId, section: listingSection, language, neighborhoods: requestedNeighborhoods, businessCategories: requestedBusinessCategories });
         const filterStored = (listings: Listing[]) => searchArea.neighborhoods.length > 0
           ? listings.filter((listing) =>
             isPointInsideNeighborhoods(listing.lat, listing.lng, searchArea.neighborhoods))
@@ -2115,7 +2165,7 @@ export function createListingsRouter(
   }
 
   if (!allowsExternalQueries(mode)) {
-    const stored = await loadStoredProviderResults(normalizedKey, ["openstreetmap"]);
+    const stored = await loadStoredBusinessResults(normalizedKey, ["openstreetmap"], { cityId, section: listingSection, language, neighborhoods: requestedNeighborhoods, businessCategories: requestedBusinessCategories });
     const listings = stored.get("openstreetmap") ?? [];
     const hit = stored.has("openstreetmap");
     await finalizeListingsQuery(queryId, "succeeded");
