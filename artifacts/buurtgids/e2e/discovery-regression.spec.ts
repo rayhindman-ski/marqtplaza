@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { NEIGHBORHOOD_BOUNDARIES } from '../src/lib/neighborhood-boundaries';
 
 const transparentPng = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M/wHwAF/gL+X8XnWQAAAABJRU5ErkJggg==',
@@ -74,6 +75,19 @@ async function stubBoundaryDiscovery(page: Page, tilesAvailable: boolean) {
   await page.goto('/activiteiten/den-haag?neighborhood=Centrum');
 }
 
+function pointOutsideNeighborhood(name: string) {
+  const boundary = NEIGHBORHOOD_BOUNDARIES[name];
+  if (!boundary) return { lat: 53, lng: 3 };
+  const points = boundary.flat();
+  const minLat = Math.min(...points.map(([lat]) => lat));
+  const minLng = Math.min(...points.map(([, lng]) => lng));
+  const maxLng = Math.max(...points.map(([, lng]) => lng));
+  return {
+    lat: minLat - 0.002,
+    lng: (minLng + maxLng) / 2,
+  };
+}
+
 test('keeps discovery filters, map pins, routes, and translations in sync', async ({ page }) => {
   const listingsRequests: URL[] = [];
   await page.addInitScript(() => {
@@ -129,6 +143,13 @@ test('keeps discovery filters, map pins, routes, and translations in sync', asyn
         activityKind: 'family', priceType: 'free', isIndoor: true, openNow: true,
         isApproximateLocation: true,
       },
+      {
+        id: 'outside-boundary-event', locationId: 'dhg', category: 'Family',
+        name: 'Outside Centrum boundary', description: 'Outside the official boundary',
+        details: 'Today', startsAt: todayAt(14), x: 49, y: 49,
+        lat: 52.076, lng: 4.29, address: '2511 AB Den Haag',
+        activityKind: 'family', priceType: 'free', isIndoor: true, openNow: true,
+      },
     ];
     await route.fulfill({
       contentType: 'application/json',
@@ -175,6 +196,7 @@ test('keeps discovery filters, map pins, routes, and translations in sync', asyn
   await expect(eventList.getByText('Outdoor event')).toHaveCount(0);
   await expect(eventList.getByText('Far family workshop')).toHaveCount(0);
   await expect(eventList.getByText('Scheveningen family workshop')).toHaveCount(0);
+  await expect(eventList.getByText('Outside Centrum boundary')).toHaveCount(0);
 
   const listIds = (await eventList.locator('[data-event-id]').evaluateAll(
     (nodes) => nodes.map((node) => node.getAttribute('data-event-id')).sort(),
@@ -216,15 +238,18 @@ for (const [mapPath, tilesAvailable] of [['tile map', true], ['coordinate fallba
     await expect(centrumBoundary).toHaveCount(1);
     await expect(scheveningenBoundary).toHaveCount(1);
     await expect(centrumBoundary).toHaveClass(/stroke-teal-700/);
+    await expect(centrumBoundary).toHaveCSS('stroke-opacity', '0.2');
 
     await centrumBoundary.dispatchEvent('mouseover');
     await expect(centrumBoundary).toHaveClass(/stroke-primary/);
+    await expect(centrumBoundary).toHaveCSS('stroke-opacity', '1');
     await expect(neighborhoodLabel('Centrum')).toBeVisible();
     await expect(neighborhoodLabel('Centrum')).toHaveText('Centrum');
 
     await centrumBoundary.dispatchEvent('mouseout');
     await expect(neighborhoodLabel('Centrum')).toHaveCount(0);
     await expect(centrumBoundary).toHaveClass(/stroke-teal-700/);
+    await expect(centrumBoundary).toHaveCSS('stroke-opacity', '0.2');
 
     await centrumBoundary.click();
     await expect(neighborhoodLabel('Centrum')).toBeVisible();
@@ -239,12 +264,14 @@ for (const [mapPath, tilesAvailable] of [['tile map', true], ['coordinate fallba
     await expect(neighborhoodLabel('Scheveningen')).toHaveCount(0);
     await expect(neighborhoodLabel('Centrum')).toBeVisible();
     await expect(centrumBoundary).toHaveClass(/stroke-primary/);
+    await expect(centrumBoundary).toHaveCSS('stroke-opacity', '1');
 
     await page.getByRole('button', { name: 'Select neighborhood', exact: true }).click();
     await expect(page).toHaveURL(/\/activiteiten\/den-haag\?neighborhood=Centrum/);
     await expect(page.getByRole('checkbox', { name: 'Centrum', exact: true })).toBeChecked();
     await expect(page.getByRole('button', { name: 'Select neighborhood: Centrum', exact: true })).toHaveCount(1);
-    await expect(page.locator('[data-neighborhood-boundary]')).toHaveCount(1);
+    await expect(page.locator('[data-neighborhood-boundary]')).toHaveCountGreaterThan(1);
+    await expect(page.locator('[data-neighborhood-boundary]').filter({ has: undefined })).toHaveCountGreaterThan(1);
   });
 
   test(`keeps neighborhood polygon selection aligned in the ${mapPath}`, async ({ page }) => {
@@ -361,4 +388,92 @@ test('main search external-source setting controls discovery mode and persists',
   // The single top-level setting persists when returning to the main search page.
   await page.goto('/');
   await expect(page.getByRole('checkbox', { name: 'Include external sources' })).not.toBeChecked();
+});
+
+test('keeps every selected neighborhood free of out-of-boundary listings', async ({ page }) => {
+  await page.route('**/api/listings*', async (route) => {
+    const url = new URL(route.request().url());
+    const requestedNeighborhoods = url.searchParams.get('neighborhoods');
+    const requestedName = requestedNeighborhoods?.split(',')[0];
+    const point = requestedName ? pointOutsideNeighborhood(requestedName) : { lat: 53, lng: 3 };
+    await route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({
+        source: 'curated',
+        listings: [{
+          id: 'outside-boundary-event',
+          locationId: 'dhg',
+          category: 'Family',
+          name: 'Outside selected boundary',
+          description: 'This item must never be displayed.',
+          details: 'Today',
+          startsAt: todayAt(14),
+          x: 50,
+          y: 50,
+          lat: point.lat,
+          lng: point.lng,
+          activityKind: 'family',
+          priceType: 'free',
+          isIndoor: true,
+          openNow: true,
+        }],
+      }),
+    });
+  });
+  await page.route('**/api/weather*', async (route) => {
+    await route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({
+        cityId: 'dhg',
+        locationName: 'Den Haag',
+        fetchedAt: new Date().toISOString(),
+        current: {
+          temperature: 18,
+          apparentTemperature: 18,
+          precipitation: 0,
+          windSpeed: 5,
+          weatherCode: 0,
+          condition: 'clear',
+          isDay: true,
+        },
+        forecast: [],
+        provider: 'open-meteo',
+      }),
+    });
+  });
+  await page.route('https://tile.openstreetmap.org/**', async (route) => {
+    await route.fulfill({ contentType: 'image/png', body: transparentPng });
+  });
+
+  await page.goto('/activiteiten/den-haag');
+  const neighborhoodNames = await page.locator('[data-neighborhood-list] label').evaluateAll((labels) =>
+    labels
+      .map((label) => label.textContent?.trim() ?? '')
+      .filter((name) => name && !name.toLowerCase().includes('all neighborhoods')),
+  );
+
+  let previousName: string | null = null;
+  for (const name of neighborhoodNames) {
+    if (previousName) {
+      const previousCheckbox = page.getByRole('checkbox', { name: previousName, exact: true });
+      const responsePromise = page.waitForResponse((response) => {
+        const url = new URL(response.url());
+        return url.pathname.includes('/api/listings') && !url.searchParams.get('neighborhoods');
+      });
+      await previousCheckbox.uncheck();
+      await responsePromise;
+    }
+
+    const checkbox = page.getByRole('checkbox', { name, exact: true });
+    const responsePromise = page.waitForResponse((response) => {
+      const url = new URL(response.url());
+      return url.pathname.includes('/api/listings') && url.searchParams.get('neighborhoods') === name;
+    });
+    await checkbox.check();
+    await responsePromise;
+    await expect(page.locator('[data-event-list]')).toBeVisible();
+    await expect(page.locator('[data-event-id="outside-boundary-event"]')).toHaveCount(0);
+    await expect(page.locator('[data-map-pin][data-event-id="outside-boundary-event"]')).toHaveCount(0);
+    previousName = name;
+  }
 });
