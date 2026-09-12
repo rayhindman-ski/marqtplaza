@@ -1,0 +1,423 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e2]:
+  - generic [ref=e3]:
+    - generic [ref=e4]:
+      - img [ref=e5]
+      - generic [ref=e10]: Language
+      - combobox "Language" [ref=e11] [cursor=pointer]:
+        - option "Nederlands"
+        - option "English" [selected]
+    - generic [ref=e12]:
+      - generic [ref=e13]:
+        - generic [ref=e14]:
+          - button "Back to search" [ref=e15]:
+            - img [ref=e16]
+          - generic [ref=e18]:
+            - heading "The Hague" [level=2] [ref=e19]
+            - paragraph [ref=e20]: 0 discoveries nearby
+          - button "Saved Places" [ref=e21]:
+            - img [ref=e22]
+        - generic [ref=e25]:
+          - generic [ref=e26]:
+            - button "Quick choices" [expanded] [ref=e27]:
+              - generic [ref=e28]: Quick choices
+              - img [ref=e29]
+            - group "Quick filters" [ref=e32]:
+              - button "Nearby" [ref=e33]:
+                - img [ref=e34]
+                - text: Nearby
+              - button "Family" [ref=e36]
+              - button "Indoor" [ref=e37]
+          - generic [ref=e38]:
+            - button "Top-level categories" [expanded] [ref=e39]:
+              - generic [ref=e40]: Top-level categories
+              - img [ref=e41]
+            - generic [ref=e43]:
+              - generic [ref=e45]:
+                - button "Select all" [ref=e46]
+                - button "Deselect all" [ref=e47]
+              - group "Top-level categories" [ref=e48]:
+                - generic [ref=e49] [cursor=pointer]:
+                  - checkbox "Events" [checked] [ref=e50]
+                  - generic [ref=e51] [cursor=pointer]: Events
+                - generic [ref=e52] [cursor=pointer]:
+                  - checkbox "Food & drink" [ref=e53]
+                  - generic [ref=e54] [cursor=pointer]: Food & drink
+                - generic [ref=e55] [cursor=pointer]:
+                  - checkbox "Social map" [ref=e56]
+                  - generic [ref=e57] [cursor=pointer]: Social map
+                - generic [ref=e58] [cursor=pointer]:
+                  - checkbox "Businesses" [ref=e59]
+                  - generic [ref=e60] [cursor=pointer]: Businesses
+          - generic [ref=e61]:
+            - button "Subcategories" [expanded] [ref=e62]:
+              - generic [ref=e63]: Subcategories
+              - img [ref=e64]
+            - generic [ref=e66]:
+              - generic [ref=e68]:
+                - button "All subcategories" [ref=e69]
+                - button "No subcategories" [ref=e70]
+              - group "Subcategories" [ref=e71]:
+                - generic [ref=e72] [cursor=pointer]:
+                  - checkbox "Museums" [checked] [ref=e73]
+                  - generic [ref=e74] [cursor=pointer]: Museums
+                - generic [ref=e75] [cursor=pointer]:
+                  - checkbox "Tours" [checked] [ref=e76]
+                  - generic [ref=e77] [cursor=pointer]: Tours
+                - generic [ref=e78] [cursor=pointer]:
+                  - checkbox "Family & Kids" [checked] [ref=e79]
+                  - generic [ref=e80] [cursor=pointer]: Family & Kids
+                - generic [ref=e81] [cursor=pointer]:
+                  - checkbox "Entertainment" [checked] [ref=e82]
+                  - generic [ref=e83] [cursor=pointer]: Entertainment
+                - generic [ref=e84] [cursor=pointer]:
+                  - checkbox "Outdoors" [checked] [ref=e85]
+                  - generic [ref=e86] [cursor=pointer]: Outdoors
+                - generic [ref=e87] [cursor=pointer]:
+                  - checkbox "Food & Markets" [checked] [ref=e88]
+                  - generic [ref=e89] [cursor=pointer]: Food & Markets
+          - generic [ref=e90]:
+            - button "Activity calendar" [expanded] [ref=e91]:
+              - generic [ref=e92]: Activity calendar
+              - img [ref=e93]
+            - generic [ref=e95]:
+              - group "Calendar filters" [ref=e96]:
+                - button "All dates" [ref=e97]
+                - button "Today" [ref=e98]
+                - button "This week" [ref=e99]
+                - button "Free" [ref=e100]
+                - button "Low cost" [ref=e101]
+                - button "Meals" [ref=e102]
+              - paragraph [ref=e103]: Free, low-cost, and meal labels appear only when the source states them explicitly.
+          - generic [ref=e104]:
+            - button "Neighborhoods / Postcode" [expanded] [ref=e105]:
+              - generic [ref=e106]: Neighborhoods / Postcode
+              - img [ref=e107]
+            - generic [ref=e109]:
+              - generic [ref=e110]:
+                - generic [ref=e111]: Postcode
+                - searchbox "Postcode" [ref=e112]
+              - generic [ref=e113]:
+                - generic [ref=e114]: Search neighborhood
+                - searchbox "Search neighborhood" [ref=e115]
+              - generic [ref=e117]:
+                - button "Select all" [ref=e118]
+                - button "Deselect all" [ref=e119]
+              - group "Neighborhoods" [ref=e120]:
+                - generic [ref=e121]:
+                  - generic [ref=e122] [cursor=pointer]:
+                    - checkbox "All neighborhoods" [ref=e123]
+                    - generic [ref=e124] [cursor=pointer]: All neighborhoods
+                  - 'generic "Neighborhood: Centrum" [ref=e125] [cursor=pointer]':
+                    - checkbox "Centrum" [ref=e126]
+                    - generic [ref=e127] [cursor=pointer]: Centrum
+                  - 'generic "Neighborhood: Archipelbuurt" [ref=e128] [cursor=pointer]':
+                    - checkbox "Archipelbuurt" [ref=e129]
+                    - generic [ref=e130] [cursor=pointer]: Archipelbuurt
+                  - 'generic "Neighborhood: Belgisch Park" [ref=e131] [cursor=pointer]':
+                    - checkbox "Belgisch Park" [ref=e132]
+                    - generic [ref=e133] [cursor=pointer]: Belgisch Park
+                  - 'generic "Neighborhood: Benoordenhout" [ref=e134] [cursor=pointer]':
+                    - checkbox "Benoordenhout" [ref=e135]
+                    - generic [ref=e136] [cursor=pointer]: Benoordenhout
+                  - 'generic "Neighborhood: Bezuidenhout" [ref=e137] [cursor=pointer]':
+                    - checkbox "Bezuidenhout" [ref=e138]
+                    - generic [ref=e139] [cursor=pointer]: Bezuidenhout
+                  - 'generic "Neighborhood: Binckhorst" [ref=e140] [cursor=pointer]':
+                    - checkbox "Binckhorst" [ref=e141]
+                    - generic [ref=e142] [cursor=pointer]: Binckhorst
+                  - 'generic "Neighborhood: Bloemenbuurt" [ref=e143] [cursor=pointer]':
+                    - checkbox "Bloemenbuurt" [ref=e144]
+                    - generic [ref=e145] [cursor=pointer]: Bloemenbuurt
+                  - 'generic "Neighborhood: Bohemen en Meer en Bos" [ref=e146] [cursor=pointer]':
+                    - checkbox "Bohemen en Meer en Bos" [ref=e147]
+                    - generic [ref=e148] [cursor=pointer]: Bohemen en Meer en Bos
+                  - 'generic "Neighborhood: Bomenbuurt" [ref=e149] [cursor=pointer]':
+                    - checkbox "Bomenbuurt" [ref=e150]
+                    - generic [ref=e151] [cursor=pointer]: Bomenbuurt
+                  - 'generic "Neighborhood: Bouwlust en Vrederust" [ref=e152] [cursor=pointer]':
+                    - checkbox "Bouwlust en Vrederust" [ref=e153]
+                    - generic [ref=e154] [cursor=pointer]: Bouwlust en Vrederust
+                  - 'generic "Neighborhood: Duindorp" [ref=e155] [cursor=pointer]':
+                    - checkbox "Duindorp" [ref=e156]
+                    - generic [ref=e157] [cursor=pointer]: Duindorp
+                  - 'generic "Neighborhood: Duinoord" [ref=e158] [cursor=pointer]':
+                    - checkbox "Duinoord" [ref=e159]
+                    - generic [ref=e160] [cursor=pointer]: Duinoord
+                  - 'generic "Neighborhood: Forepark" [ref=e161] [cursor=pointer]':
+                    - checkbox "Forepark" [ref=e162]
+                    - generic [ref=e163] [cursor=pointer]: Forepark
+                  - 'generic "Neighborhood: Haagse Bos" [ref=e164] [cursor=pointer]':
+                    - checkbox "Haagse Bos" [ref=e165]
+                    - generic [ref=e166] [cursor=pointer]: Haagse Bos
+                  - 'generic "Neighborhood: Kijkduin en Ockenburgh" [ref=e167] [cursor=pointer]':
+                    - checkbox "Kijkduin en Ockenburgh" [ref=e168]
+                    - generic [ref=e169] [cursor=pointer]: Kijkduin en Ockenburgh
+                  - 'generic "Neighborhood: Kortenbos" [ref=e170] [cursor=pointer]':
+                    - checkbox "Kortenbos" [ref=e171]
+                    - generic [ref=e172] [cursor=pointer]: Kortenbos
+                  - 'generic "Neighborhood: Kraayenstein en Vroondaal" [ref=e173] [cursor=pointer]':
+                    - checkbox "Kraayenstein en Vroondaal" [ref=e174]
+                    - generic [ref=e175] [cursor=pointer]: Kraayenstein en Vroondaal
+                  - 'generic "Neighborhood: Laakkwartier en Spoorwijk" [ref=e176] [cursor=pointer]':
+                    - checkbox "Laakkwartier en Spoorwijk" [ref=e177]
+                    - generic [ref=e178] [cursor=pointer]: Laakkwartier en Spoorwijk
+                  - 'generic "Neighborhood: Leidschenveen" [ref=e179] [cursor=pointer]':
+                    - checkbox "Leidschenveen" [ref=e180]
+                    - generic [ref=e181] [cursor=pointer]: Leidschenveen
+                  - 'generic "Neighborhood: Leyenburg" [ref=e182] [cursor=pointer]':
+                    - checkbox "Leyenburg" [ref=e183]
+                    - generic [ref=e184] [cursor=pointer]: Leyenburg
+                  - 'generic "Neighborhood: Loosduinen" [ref=e185] [cursor=pointer]':
+                    - checkbox "Loosduinen" [ref=e186]
+                    - generic [ref=e187] [cursor=pointer]: Loosduinen
+                  - 'generic "Neighborhood: Mariahoeve en Marlot" [ref=e188] [cursor=pointer]':
+                    - checkbox "Mariahoeve en Marlot" [ref=e189]
+                    - generic [ref=e190] [cursor=pointer]: Mariahoeve en Marlot
+                  - 'generic "Neighborhood: Moerwijk" [ref=e191] [cursor=pointer]':
+                    - checkbox "Moerwijk" [ref=e192]
+                    - generic [ref=e193] [cursor=pointer]: Moerwijk
+                  - 'generic "Neighborhood: Morgenstond" [ref=e194] [cursor=pointer]':
+                    - checkbox "Morgenstond" [ref=e195]
+                    - generic [ref=e196] [cursor=pointer]: Morgenstond
+                  - 'generic "Neighborhood: Regentessekwartier" [ref=e197] [cursor=pointer]':
+                    - checkbox "Regentessekwartier" [ref=e198]
+                    - generic [ref=e199] [cursor=pointer]: Regentessekwartier
+                  - 'generic "Neighborhood: Rivierenbuurt" [ref=e200] [cursor=pointer]':
+                    - checkbox "Rivierenbuurt" [ref=e201]
+                    - generic [ref=e202] [cursor=pointer]: Rivierenbuurt
+                  - 'generic "Neighborhood: Rustenburg en Oostbroek" [ref=e203] [cursor=pointer]':
+                    - checkbox "Rustenburg en Oostbroek" [ref=e204]
+                    - generic [ref=e205] [cursor=pointer]: Rustenburg en Oostbroek
+                  - 'generic "Neighborhood: Scheveningen" [ref=e206] [cursor=pointer]':
+                    - checkbox "Scheveningen" [ref=e207]
+                    - generic [ref=e208] [cursor=pointer]: Scheveningen
+                  - 'generic "Neighborhood: Schilderswijk" [ref=e209] [cursor=pointer]':
+                    - checkbox "Schilderswijk" [ref=e210]
+                    - generic [ref=e211] [cursor=pointer]: Schilderswijk
+                  - 'generic "Neighborhood: Statenkwartier" [ref=e212] [cursor=pointer]':
+                    - checkbox "Statenkwartier" [ref=e213]
+                    - generic [ref=e214] [cursor=pointer]: Statenkwartier
+                  - 'generic "Neighborhood: Stationsbuurt" [ref=e215] [cursor=pointer]':
+                    - checkbox "Stationsbuurt" [ref=e216]
+                    - generic [ref=e217] [cursor=pointer]: Stationsbuurt
+                  - 'generic "Neighborhood: Transvaal" [ref=e218] [cursor=pointer]':
+                    - checkbox "Transvaal" [ref=e219]
+                    - generic [ref=e220] [cursor=pointer]: Transvaal
+                  - 'generic "Neighborhood: Valkenboskwartier" [ref=e221] [cursor=pointer]':
+                    - checkbox "Valkenboskwartier" [ref=e222]
+                    - generic [ref=e223] [cursor=pointer]: Valkenboskwartier
+                  - 'generic "Neighborhood: Van Stolkpark en Scheveningse Bosjes" [ref=e224] [cursor=pointer]':
+                    - checkbox "Van Stolkpark en Scheveningse Bosjes" [ref=e225]
+                    - generic [ref=e226] [cursor=pointer]: Van Stolkpark en Scheveningse Bosjes
+                  - 'generic "Neighborhood: Vogelwijk" [ref=e227] [cursor=pointer]':
+                    - checkbox "Vogelwijk" [ref=e228]
+                    - generic [ref=e229] [cursor=pointer]: Vogelwijk
+                  - 'generic "Neighborhood: Vruchtenbuurt" [ref=e230] [cursor=pointer]':
+                    - checkbox "Vruchtenbuurt" [ref=e231]
+                    - generic [ref=e232] [cursor=pointer]: Vruchtenbuurt
+                  - 'generic "Neighborhood: Wateringse Veld" [ref=e233] [cursor=pointer]':
+                    - checkbox "Wateringse Veld" [ref=e234]
+                    - generic [ref=e235] [cursor=pointer]: Wateringse Veld
+                  - 'generic "Neighborhood: Westbroekpark en Duttendel" [ref=e236] [cursor=pointer]':
+                    - checkbox "Westbroekpark en Duttendel" [ref=e237]
+                    - generic [ref=e238] [cursor=pointer]: Westbroekpark en Duttendel
+                  - 'generic "Neighborhood: Willemspark" [ref=e239] [cursor=pointer]':
+                    - checkbox "Willemspark" [ref=e240]
+                    - generic [ref=e241] [cursor=pointer]: Willemspark
+                  - 'generic "Neighborhood: Ypenburg" [ref=e242] [cursor=pointer]':
+                    - checkbox "Ypenburg" [ref=e243]
+                    - generic [ref=e244] [cursor=pointer]: Ypenburg
+                  - 'generic "Neighborhood: Zeeheldenkwartier" [ref=e245] [cursor=pointer]':
+                    - checkbox "Zeeheldenkwartier" [ref=e246]
+                    - generic [ref=e247] [cursor=pointer]: Zeeheldenkwartier
+                  - 'generic "Neighborhood: Zorgvliet" [ref=e248] [cursor=pointer]':
+                    - checkbox "Zorgvliet" [ref=e249]
+                    - generic [ref=e250] [cursor=pointer]: Zorgvliet
+              - paragraph [ref=e251]: No neighborhoods selected
+      - generic [ref=e253]:
+        - img [ref=e254]
+        - text: Curated selection
+      - generic [ref=e257]:
+        - button "Results (0)" [expanded] [ref=e258]:
+          - generic [ref=e259]: Results (0)
+          - img [ref=e260]
+        - generic [ref=e264]:
+          - img [ref=e266]
+          - heading "No discoveries found" [level=3] [ref=e272]
+          - paragraph [ref=e273]: Try enabling more categories to see what's happening around here.
+      - separator "Resize filter panel" [ref=e274]
+    - generic [ref=e275]:
+      - navigation "Categories" [ref=e276]:
+        - generic [ref=e277]:
+          - generic [ref=e278]:
+            - link "News" [ref=e279] [cursor=pointer]:
+              - /url: /nieuws
+              - img [ref=e280] [cursor=pointer]
+            - generic: News
+          - generic [ref=e283]:
+            - button "Things to do" [ref=e284]:
+              - img [ref=e285]
+            - generic: Things to do
+          - generic [ref=e287]:
+            - button "Businesses" [ref=e288]:
+              - img [ref=e289]
+            - generic: Businesses
+          - generic [ref=e293]:
+            - button "Food & drink" [ref=e294]:
+              - img [ref=e295]
+            - generic: Food & drink
+          - generic [ref=e298]:
+            - button "Social map" [ref=e299]:
+              - img [ref=e300]
+            - generic: Social map
+          - generic [ref=e305]:
+            - button "Deals" [ref=e306]:
+              - img [ref=e307]
+            - generic: Deals
+          - generic [ref=e310]:
+            - link "Community" [ref=e311] [cursor=pointer]:
+              - /url: /buurt
+              - img [ref=e312] [cursor=pointer]
+            - generic: Community
+          - generic [ref=e317]:
+            - link "Deals" [ref=e318] [cursor=pointer]:
+              - /url: /deals
+              - img [ref=e319] [cursor=pointer]
+            - generic: Deals
+          - generic [ref=e322]:
+            - link "My business" [ref=e323] [cursor=pointer]:
+              - /url: /mijn-bedrijf
+              - img [ref=e324] [cursor=pointer]
+            - generic: My business
+          - generic [ref=e328]:
+            - link "List a business" [ref=e329] [cursor=pointer]:
+              - /url: /bedrijf-aanmelden
+              - img [ref=e330] [cursor=pointer]
+            - generic: List a business
+          - generic [ref=e334]:
+            - link "My account" [ref=e335] [cursor=pointer]:
+              - /url: /account
+              - img [ref=e336] [cursor=pointer]
+            - generic: My account
+          - generic "UserRole" [ref=e339]:
+            - generic [ref=e340]: UserRole
+            - combobox "UserRole" [ref=e341] [cursor=pointer]:
+              - option "designer"
+              - option "user" [selected]
+          - generic [ref=e342]:
+            - img "Explore" [ref=e343]
+            - generic: Explore
+      - region "Weather in The Hague" [ref=e346]:
+        - generic [ref=e347]:
+          - generic [ref=e348]:
+            - img [ref=e349]
+            - generic [ref=e355]:
+              - paragraph [ref=e356]: The Hague
+              - paragraph [ref=e357]: Clear · 18° · feels like 18°
+          - generic [ref=e358]:
+            - generic "Chance of precipitation" [ref=e359]:
+              - img [ref=e360]
+              - text: 0%
+            - generic "Wind" [ref=e363]:
+              - img [ref=e364]
+              - text: 5 km/u
+            - generic [ref=e368]: Updated 09:06
+      - generic "Interactive activity map" [ref=e370]:
+        - img:
+          - 'button "Select neighborhood: Centrum" [active] [ref=e371] [cursor=pointer]'
+          - 'button "Select neighborhood: Archipelbuurt" [ref=e372] [cursor=pointer]'
+          - 'button "Select neighborhood: Belgisch Park" [ref=e373] [cursor=pointer]'
+          - 'button "Select neighborhood: Benoordenhout" [ref=e374] [cursor=pointer]'
+          - 'button "Select neighborhood: Bezuidenhout" [ref=e375] [cursor=pointer]'
+          - 'button "Select neighborhood: Binckhorst" [ref=e376] [cursor=pointer]'
+          - 'button "Select neighborhood: Bloemenbuurt" [ref=e377] [cursor=pointer]'
+          - 'button "Select neighborhood: Bloemenbuurt" [ref=e378] [cursor=pointer]'
+          - 'button "Select neighborhood: Bohemen en Meer en Bos" [ref=e379] [cursor=pointer]'
+          - 'button "Select neighborhood: Bomenbuurt" [ref=e380] [cursor=pointer]'
+          - 'button "Select neighborhood: Bouwlust en Vrederust" [ref=e381] [cursor=pointer]'
+          - 'button "Select neighborhood: Duindorp" [ref=e382] [cursor=pointer]'
+          - 'button "Select neighborhood: Duinoord" [ref=e383] [cursor=pointer]'
+          - 'button "Select neighborhood: Forepark" [ref=e384] [cursor=pointer]'
+          - 'button "Select neighborhood: Haagse Bos" [ref=e385] [cursor=pointer]'
+          - 'button "Select neighborhood: Kijkduin en Ockenburgh" [ref=e386] [cursor=pointer]'
+          - 'button "Select neighborhood: Kijkduin en Ockenburgh" [ref=e387] [cursor=pointer]'
+          - 'button "Select neighborhood: Kortenbos" [ref=e388] [cursor=pointer]'
+          - 'button "Select neighborhood: Kraayenstein en Vroondaal" [ref=e389] [cursor=pointer]'
+          - 'button "Select neighborhood: Laakkwartier en Spoorwijk" [ref=e390] [cursor=pointer]'
+          - 'button "Select neighborhood: Leidschenveen" [ref=e391] [cursor=pointer]'
+          - 'button "Select neighborhood: Leyenburg" [ref=e392] [cursor=pointer]'
+          - 'button "Select neighborhood: Loosduinen" [ref=e393] [cursor=pointer]'
+          - 'button "Select neighborhood: Mariahoeve en Marlot" [ref=e394] [cursor=pointer]'
+          - 'button "Select neighborhood: Moerwijk" [ref=e395] [cursor=pointer]'
+          - 'button "Select neighborhood: Morgenstond" [ref=e396] [cursor=pointer]'
+          - 'button "Select neighborhood: Regentessekwartier" [ref=e397] [cursor=pointer]'
+          - 'button "Select neighborhood: Rivierenbuurt" [ref=e398] [cursor=pointer]'
+          - 'button "Select neighborhood: Rivierenbuurt" [ref=e399] [cursor=pointer]'
+          - 'button "Select neighborhood: Rustenburg en Oostbroek" [ref=e400] [cursor=pointer]'
+          - 'button "Select neighborhood: Scheveningen" [ref=e401] [cursor=pointer]'
+          - 'button "Select neighborhood: Schilderswijk" [ref=e402] [cursor=pointer]'
+          - 'button "Select neighborhood: Statenkwartier" [ref=e403] [cursor=pointer]'
+          - 'button "Select neighborhood: Stationsbuurt" [ref=e404] [cursor=pointer]'
+          - 'button "Select neighborhood: Transvaal" [ref=e405] [cursor=pointer]'
+          - 'button "Select neighborhood: Valkenboskwartier" [ref=e406] [cursor=pointer]'
+          - 'button "Select neighborhood: Van Stolkpark en Scheveningse Bosjes" [ref=e407] [cursor=pointer]'
+          - 'button "Select neighborhood: Vogelwijk" [ref=e408] [cursor=pointer]'
+          - 'button "Select neighborhood: Vruchtenbuurt" [ref=e409] [cursor=pointer]'
+          - 'button "Select neighborhood: Wateringse Veld" [ref=e410] [cursor=pointer]'
+          - 'button "Select neighborhood: Westbroekpark en Duttendel" [ref=e411] [cursor=pointer]'
+          - 'button "Select neighborhood: Willemspark" [ref=e412] [cursor=pointer]'
+          - 'button "Select neighborhood: Ypenburg" [ref=e413] [cursor=pointer]'
+          - 'button "Select neighborhood: Zeeheldenkwartier" [ref=e414] [cursor=pointer]'
+          - 'button "Select neighborhood: Zorgvliet" [ref=e415] [cursor=pointer]'
+        - generic: Centrum
+        - generic: Archipelbuurt
+        - generic: Belgisch Park
+        - generic: Benoordenhout
+        - generic: Bezuidenhout
+        - generic: Binckhorst
+        - generic: Bloemenbuurt
+        - generic: Bohemen en Meer en Bos
+        - generic: Bomenbuurt
+        - generic: Bouwlust en Vrederust
+        - generic: Duindorp
+        - generic: Duinoord
+        - generic: Forepark
+        - generic: Haagse Bos
+        - generic: Kijkduin en Ockenburgh
+        - generic: Kortenbos
+        - generic: Kraayenstein en Vroondaal
+        - generic: Laakkwartier en Spoorwijk
+        - generic: Leidschenveen
+        - generic: Leyenburg
+        - generic: Loosduinen
+        - generic: Mariahoeve en Marlot
+        - generic: Moerwijk
+        - generic: Morgenstond
+        - generic: Regentessekwartier
+        - generic: Rivierenbuurt
+        - generic: Rustenburg en Oostbroek
+        - generic: Scheveningen
+        - generic: Schilderswijk
+        - generic: Statenkwartier
+        - generic: Stationsbuurt
+        - generic: Transvaal
+        - generic: Valkenboskwartier
+        - generic: Van Stolkpark en Scheveningse Bosjes
+        - generic: Vogelwijk
+        - generic: Vruchtenbuurt
+        - generic: Wateringse Veld
+        - generic: Westbroekpark en Duttendel
+        - generic: Willemspark
+        - generic: Ypenburg
+        - generic: Zeeheldenkwartier
+        - generic: Zorgvliet
+        - generic [ref=e416]:
+          - button "Zoom in" [ref=e417]: +
+          - button "Zoom out" [ref=e418]: −
+        - link "© OpenStreetMap contributors" [ref=e419] [cursor=pointer]:
+          - /url: https://www.openstreetmap.org/copyright
+  - region "Notifications alt+T"
+```
