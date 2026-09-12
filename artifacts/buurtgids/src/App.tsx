@@ -1763,7 +1763,10 @@ function DiscoveryState({
   // narrow it correctly, so the user never sees a false "0 results" state.
   const businessesQuery = useGetListings(
     { cityId: locationId, section: 'businesses', language, neighborhoods: requestedNeighborhoods, businessCategories: requestedBusinessCategories, searchLat: requestedSearchCenter?.lat, searchLng: requestedSearchCenter?.lng, mode, anonymousId },
-    { query: { enabled: topLevelCategories.businesses && hasSearchArea && selectedBusinessCategories.length > 0, placeholderData: keepPreviousData, queryKey: getGetListingsQueryKey({ cityId: locationId, section: 'businesses', language, neighborhoods: requestedNeighborhoods, businessCategories: requestedBusinessCategories, searchLat: requestedSearchCenter?.lat, searchLng: requestedSearchCenter?.lng, mode, anonymousId }) } },
+    // Keep the query enabled even when the final subcategory is unchecked.
+    // The empty category value is a real request for the current area; the
+    // client-side filter keeps the map empty until the response settles.
+    { query: { enabled: topLevelCategories.businesses && hasSearchArea, placeholderData: keepPreviousData, queryKey: getGetListingsQueryKey({ cityId: locationId, section: 'businesses', language, neighborhoods: requestedNeighborhoods, businessCategories: requestedBusinessCategories, searchLat: requestedSearchCenter?.lat, searchLng: requestedSearchCenter?.lng, mode, anonymousId }) } },
   );
   const foodDrinkQuery = useGetListings(
     { cityId: locationId, section: 'food-drink', language, neighborhoods: requestedNeighborhoods, searchLat: requestedSearchCenter?.lat, searchLng: requestedSearchCenter?.lng, mode, anonymousId },
@@ -2698,6 +2701,7 @@ function DiscoveryState({
             selectedNeighborhoods={selectedNeighborhoods}
             showAllNeighborhoods
             highlightedNeighborhood={selectedNeighborhoods.length === 1 ? selectedNeighborhoods[0] : null}
+            isDataLoading={topLevelCategories.businesses && businessesQuery.isFetching}
             onNeighborhoodClick={toggleNeighborhood}
             markers={filteredMarkers}
             selectedMarkerId={selectedMarker}

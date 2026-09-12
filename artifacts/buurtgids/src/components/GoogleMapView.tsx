@@ -57,6 +57,7 @@ interface GoogleMapViewProps {
   showAllNeighborhoods?: boolean;
   showNeighborhoodLabels?: boolean;
   highlightedNeighborhood?: string | null;
+  isDataLoading?: boolean;
   onNeighborhoodClick?: (name: string) => void;
   onNeighborhoodHover?: (name: string | null) => void;
   markers: MarkerData[];
@@ -405,6 +406,7 @@ function CoordinateMapFallback({
   showAllNeighborhoods = false,
   showNeighborhoodLabels = true,
   highlightedNeighborhood = null,
+  isDataLoading = false,
   onNeighborhoodClick,
   onNeighborhoodHover,
   markers,
@@ -418,6 +420,7 @@ function CoordinateMapFallback({
   | 'showAllNeighborhoods'
   | 'showNeighborhoodLabels'
   | 'highlightedNeighborhood'
+   | 'isDataLoading'
   | 'onNeighborhoodClick'
    | 'onNeighborhoodHover'
   | 'markers'
@@ -519,9 +522,14 @@ function CoordinateMapFallback({
                   style={{
                     strokeWidth: highlightedNeighborhood === area.name ? 0.8 : 0.35,
                     strokeOpacity: highlightedNeighborhood === area.name ? 1 : 0.2,
-                    transition: 'stroke 180ms ease, stroke-opacity 180ms ease',
+                     fillOpacity: highlightedNeighborhood === area.name ? 0.2 : 0.1,
+                     animation: isDataLoading && highlightedNeighborhood === area.name
+                       ? 'buurtplaza-neighborhood-pulse 1200ms ease-in-out infinite'
+                       : undefined,
+                     transition: 'stroke 180ms ease, stroke-opacity 180ms ease, fill-opacity 180ms ease',
                     vectorEffect: 'non-scaling-stroke',
                   }}
+                   data-neighborhood-loading={isDataLoading && highlightedNeighborhood === area.name ? 'true' : undefined}
                 />
               ))}
             </svg>
@@ -608,6 +616,7 @@ function TileMapView({
   showAllNeighborhoods = false,
   showNeighborhoodLabels = true,
   highlightedNeighborhood = null,
+  isDataLoading = false,
   onNeighborhoodClick,
   onNeighborhoodHover,
   markers,
@@ -871,9 +880,14 @@ function TileMapView({
               style={{
                 strokeWidth: highlightedNeighborhood === area.name ? 5 : 2.5,
                 strokeOpacity: highlightedNeighborhood === area.name ? 1 : 0.2,
-                transition: 'stroke 180ms ease, stroke-opacity 180ms ease',
+                 fillOpacity: highlightedNeighborhood === area.name ? 0.2 : 0.1,
+                 animation: isDataLoading && highlightedNeighborhood === area.name
+                   ? 'buurtplaza-neighborhood-pulse 1200ms ease-in-out infinite'
+                   : undefined,
+                 transition: 'stroke 180ms ease, stroke-opacity 180ms ease, fill-opacity 180ms ease',
                 vectorEffect: 'non-scaling-stroke',
               }}
+               data-neighborhood-loading={isDataLoading && highlightedNeighborhood === area.name ? 'true' : undefined}
             />
           )))}
         </svg>
@@ -1013,6 +1027,7 @@ function GoogleMapCanvas({
   showAllNeighborhoods = false,
   showNeighborhoodLabels = true,
   highlightedNeighborhood = null,
+  isDataLoading = false,
   onNeighborhoodClick,
   onNeighborhoodHover,
   markers,
@@ -1355,6 +1370,7 @@ function GoogleMapCanvas({
      location,
      locationId,
      highlightedNeighborhood,
+      isDataLoading,
      mapReady,
      onNeighborhoodClick,
       onNeighborhoodHover,
@@ -1362,6 +1378,31 @@ function GoogleMapCanvas({
       showAllNeighborhoods,
       showNeighborhoodLabels,
    ]);
+
+  // Google polygons are canvas-rendered, so CSS animation cannot change their
+  // fill. Pulse the selected boundary directly while the filtered request is
+  // in flight, then restore the normal selected opacity on cleanup.
+  useEffect(() => {
+    if (!mapReady || !highlightedNeighborhood || !isDataLoading) return;
+
+    const startedAt = performance.now();
+    let frame = 0;
+    const animate = (now: number) => {
+      const overlay = neighborhoodOverlaysRef.current.get(highlightedNeighborhood);
+      if (overlay) {
+        const phase = (Math.sin(((now - startedAt) / 420) * Math.PI * 2) + 1) / 2;
+        overlay.polygon.setOptions({ fillOpacity: 0.2 + phase * 0.22 });
+      }
+      frame = requestAnimationFrame(animate);
+    };
+    frame = requestAnimationFrame(animate);
+
+    return () => {
+      cancelAnimationFrame(frame);
+      const overlay = neighborhoodOverlaysRef.current.get(highlightedNeighborhood);
+      overlay?.polygon.setOptions({ fillOpacity: 0.2 });
+    };
+  }, [highlightedNeighborhood, isDataLoading, mapReady]);
 
   useEffect(() => {
     if (!mapReady || !mapRef.current) return;
