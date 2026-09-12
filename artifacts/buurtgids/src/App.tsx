@@ -79,7 +79,7 @@ import {
   type DiscoveryQuickFilter,
   type RouteMode,
 } from './lib/listingPresentation';
-import { NEIGHBORHOOD_BOUNDARIES, type NeighborhoodBoundary } from './lib/neighborhood-boundaries';
+import { NEIGHBORHOOD_BOUNDARIES, type NeighborhoodBoundary } from '@workspace/geo';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -1792,8 +1792,8 @@ function DiscoveryState({
     { query: { enabled: topLevelCategories.businesses && hasSearchArea && selectedBusinessCategories.length > 0, queryKey: getGetListingsQueryKey({ cityId: locationId, section: 'businesses', language, neighborhoods: requestedNeighborhoods, businessCategories: requestedBusinessCategories, searchLat: requestedSearchCenter?.lat, searchLng: requestedSearchCenter?.lng, mode, anonymousId }) } },
   );
   const foodDrinkQuery = useGetListings(
-    { cityId: locationId, section: 'food-drink', language, neighborhoods: requestedNeighborhoods, mode, anonymousId },
-    { query: { enabled: topLevelCategories['food-drink'] && hasSearchArea, queryKey: getGetListingsQueryKey({ cityId: locationId, section: 'food-drink', language, neighborhoods: requestedNeighborhoods, mode, anonymousId }) } },
+    { cityId: locationId, section: 'food-drink', language, neighborhoods: requestedNeighborhoods, searchLat: requestedSearchCenter?.lat, searchLng: requestedSearchCenter?.lng, mode, anonymousId },
+    { query: { enabled: topLevelCategories['food-drink'] && hasSearchArea, queryKey: getGetListingsQueryKey({ cityId: locationId, section: 'food-drink', language, neighborhoods: requestedNeighborhoods, searchLat: requestedSearchCenter?.lat, searchLng: requestedSearchCenter?.lng, mode, anonymousId }) } },
   );
   const socialMapQuery = useGetListings(
     { cityId: locationId, section: 'social-map', language, neighborhoods: requestedNeighborhoods, mode, anonymousId },

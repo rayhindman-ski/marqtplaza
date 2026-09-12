@@ -3,7 +3,7 @@ import { importLibrary, setOptions } from '@googlemaps/js-api-loader';
 import { Baby, Coffee, Gamepad2, HandHeart, Landmark, MapPin as MapPinIcon, Route, ShoppingBag, Waves, type LucideIcon } from 'lucide-react';
 import { type Marker as MarkerData, LOCATIONS, type Category } from '../lib/data';
 import { getMarkerCopy, translations, type Language } from '../lib/i18n';
-import { NEIGHBORHOOD_BOUNDARIES, type BoundaryPoint, type NeighborhoodBoundary } from '../lib/neighborhood-boundaries';
+import { NEIGHBORHOOD_BOUNDARIES, type BoundaryPoint, type NeighborhoodBoundary } from '@workspace/geo';
 
 type MapCategory = Category;
 

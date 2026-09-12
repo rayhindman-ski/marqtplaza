@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { NEIGHBORHOOD_BOUNDARIES } from '../src/lib/neighborhood-boundaries';
+import { NEIGHBORHOOD_BOUNDARIES } from '@workspace/geo';
 
 const transparentPng = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M/wHwAF/gL+X8XnWQAAAABJRU5ErkJggg==',

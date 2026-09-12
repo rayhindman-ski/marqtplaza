@@ -12,6 +12,11 @@ import {
   type DiscoveredEvent,
   userQueriesTable,
 } from "@workspace/db";
+import {
+  getNeighborhoodsBoundingBox,
+  getNeighborhoodsCenter,
+  isPointInsideNeighborhoods,
+} from "@workspace/geo";
 import { MARKERS } from "../lib/static-listings.js";
 import {
   SOCIAL_MAP_LISTINGS,
@@ -244,7 +249,9 @@ const CITY_BOUNDS: Record<string, { s: number; w: number; n: number; e: number }
   utr: { s: 52.07, w: 5.09, n: 52.12, e: 5.17 },
   // Include the Hague's outer neighbourhoods. Provider locality evidence
   // below rejects nearby municipalities inside this safe discovery rectangle.
-  dhg: { s: 52.025, w: 4.235, n: 52.125, e: 4.42 },
+  // Must enclose every official polygon in @workspace/geo (outer areas such as
+  // Kijkduin, Wateringse Veld, and Leidschenveen reach beyond the old rectangle).
+  dhg: { s: 52.01, w: 4.185, n: 52.125, e: 4.43 },
   ein: { s: 51.41, w: 5.43, n: 51.47, e: 5.52 },
 };
 
@@ -473,11 +480,24 @@ export function filterEventsByNeighborhoods(
 
 export function parseBusinessCategories(value: unknown): BusinessCategory[] {
   const raw = Array.isArray(value) ? value.join(",") : String(value ?? "");
-  return [...new Set(
-    raw.split(",")
-      .map((category) => category.replaceAll("&amp;", "&").trim())
-      .filter((category): category is BusinessCategory => BUSINESS_CATEGORY_SET.has(category)),
-  )].sort((a, b) => a.localeCompare(b, "en"));
+  const tokens = raw.split(",").map((token) => token.replaceAll("&amp;", "&").trim());
+  const categories = new Set<BusinessCategory>();
+  // Category names may themselves contain a comma ("Arts, Culture & Entertainment"),
+  // so rejoin adjacent tokens until they form a known category.
+  for (let index = 0; index < tokens.length; index += 1) {
+    let matched = false;
+    for (let end = tokens.length; end > index; end -= 1) {
+      const candidate = tokens.slice(index, end).join(", ");
+      if (BUSINESS_CATEGORY_SET.has(candidate)) {
+        categories.add(candidate as BusinessCategory);
+        index = end - 1;
+        matched = true;
+        break;
+      }
+    }
+    if (!matched) continue;
+  }
+  return [...categories].sort((a, b) => a.localeCompare(b, "en"));
 }
 
 export function normalizedListingsKey(
@@ -553,7 +573,7 @@ function isInHagueBounds(lat: number, lng: number): boolean {
 function hasHagueEvidence(address: string): boolean {
   const value = address.toLowerCase();
   if (/\b(delft|oegstgeest|wassenaar|rijswijk|zoetermeer|leidschendam|voorburg|westland)\b/.test(value)) return false;
-  return /\bden haag\b|\bthe hague\b|\bscheveningen\b|\bs?-?gravenhage\b|\b25\d{2}\s?[a-z]{2}\b/i.test(address);
+  return /\bden haag\b|\bthe hague\b|\bscheveningen\b|\bs?-?gravenhage\b|\b(?:25\d{2}|249\d)\s?[a-z]{2}\b/i.test(address);
 }
 
 type GooglePlace = {
@@ -701,6 +721,41 @@ const overpassRequests = new Map<string, Promise<OsmElement[]>>();
 
 type GeographicBounds = { s: number; w: number; n: number; e: number };
 type SearchCenter = { lat: number; lng: number };
+
+/**
+ * The geographic scope of a provider query. When neighborhoods are requested,
+ * the query is bounded by their official polygons: providers search the padded
+ * bounding box and results outside the polygons are discarded.
+ */
+export interface SearchArea {
+  bounds: GeographicBounds;
+  center?: SearchCenter;
+  neighborhoods: string[];
+}
+
+const NEIGHBORHOOD_QUERY_PADDING_DEGREES = 0.002;
+
+export function resolveSearchArea(
+  cityBounds: GeographicBounds,
+  neighborhoods: string[],
+  requestedCenter?: SearchCenter,
+): SearchArea {
+  const box = getNeighborhoodsBoundingBox(neighborhoods);
+  if (!box) {
+    return { bounds: cityBounds, ...(requestedCenter ? { center: requestedCenter } : {}), neighborhoods: [] };
+  }
+  const center = getNeighborhoodsCenter(neighborhoods);
+  return {
+    bounds: {
+      s: Math.max(cityBounds.s, box.s - NEIGHBORHOOD_QUERY_PADDING_DEGREES),
+      w: Math.max(cityBounds.w, box.w - NEIGHBORHOOD_QUERY_PADDING_DEGREES),
+      n: Math.min(cityBounds.n, box.n + NEIGHBORHOOD_QUERY_PADDING_DEGREES),
+      e: Math.min(cityBounds.e, box.e + NEIGHBORHOOD_QUERY_PADDING_DEGREES),
+    },
+    ...(center ? { center } : {}),
+    neighborhoods: neighborhoods.filter((name) => getNeighborhoodsBoundingBox([name])),
+  };
+}
 type GoogleSearchSpec = { textQuery: string; bounds: GeographicBounds };
 
 function distanceFromSearchCenterSquared(lat: number, lng: number, center: SearchCenter): number {
@@ -1144,7 +1199,7 @@ function hasForeignOsmLocality(tags: Record<string, string>): boolean {
   const city = normalizedTitle(tags["addr:city"] ?? tags["addr:place"]);
   if (city && !["den haag", "the hague", "s gravenhage", "scheveningen"].includes(city)) return true;
   const postcode = tags["addr:postcode"];
-  return Boolean(postcode && !/^25\d{2}/.test(postcode.replace(/\s/g, "")));
+  return Boolean(postcode && !/^(?:25\d{2}|249\d)/.test(postcode.replace(/\s/g, "")));
 }
 
 function hasHagueOsmEvidence(tags: Record<string, string>): boolean {
@@ -1223,6 +1278,7 @@ export function fetchOpenStreetMapBusinesses(
   bounds: { s: number; w: number; n: number; e: number },
   businessCategories: BusinessCategory[] = [],
   searchCenter?: SearchCenter,
+  neighborhoods: string[] = [],
 ): Listing[] {
   const listings: Listing[] = [];
   const seen = new Set<string>();
@@ -1230,6 +1286,7 @@ export function fetchOpenStreetMapBusinesses(
 
   for (const element of elements) {
     if (!isInHagueBounds(element.lat, element.lon)) continue;
+    if (neighborhoods.length > 0 && !isPointInsideNeighborhoods(element.lat, element.lon, neighborhoods)) continue;
     const tags = element.tags ?? {};
     if (hasForeignOsmLocality(tags) || !hasHagueOsmEvidence(tags)) continue;
 
@@ -1409,6 +1466,12 @@ const defaultOverpassRequestDependencies: OverpassRequestDependencies = {
   sleep: (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds)),
 };
 
+function isNarrowedBounds(bounds: GeographicBounds): boolean {
+  return Object.values(CITY_BOUNDS).every((city) =>
+    city.s !== bounds.s || city.w !== bounds.w || city.n !== bounds.n || city.e !== bounds.e,
+  );
+}
+
 export async function fetchCityListingsFromOverpass(
   bounds: { s: number; w: number; n: number; e: number },
   dependencies: OverpassRequestDependencies = defaultOverpassRequestDependencies,
@@ -1416,7 +1479,9 @@ export async function fetchCityListingsFromOverpass(
   searchCenter?: SearchCenter,
 ): Promise<OsmElement[]> {
   const bbox = `${bounds.s},${bounds.w},${bounds.n},${bounds.e}`;
-  const searchArea = searchCenter
+  // A narrowed bounding box (neighborhood scope) is authoritative; the radius
+  // is only a fallback for free-form searches without polygon geometry.
+  const searchArea = searchCenter && !isNarrowedBounds(bounds)
     ? `(around:3000,${searchCenter.lat},${searchCenter.lng})`
     : `(${bbox})`;
   const targetedSelectors = businessCategories
@@ -1558,12 +1623,17 @@ export async function refreshNeighborhoodDiscoveryScope(scope: NeighborhoodRefre
       neighborhoods,
       businessCategories,
       scheduled: true,
-    }, async () => fetchOpenStreetMapBusinesses(
-      await fetchCityListings(bounds, businessCategories),
-      scope.section,
-      bounds,
-      businessCategories,
-    ), 1),
+    }, async () => {
+      const searchArea = resolveSearchArea(bounds, neighborhoods);
+      return fetchOpenStreetMapBusinesses(
+        await fetchCityListings(searchArea.bounds, businessCategories, searchArea.center),
+        scope.section,
+        bounds,
+        businessCategories,
+        searchArea.center,
+        searchArea.neighborhoods,
+      );
+    }, 1),
   ));
   const successful = outcomes.filter((outcome) => !outcome.error);
   const status = successful.length === 0 ? "failed" : "succeeded";
@@ -1673,6 +1743,7 @@ export interface ListingsRouterDependencies {
     section: Exclude<ListingSection, "events" | "social-map">,
     businessCategories: BusinessCategory[],
     searchCenter?: SearchCenter,
+    searchArea?: SearchArea,
   ) => Promise<Listing[]>;
 }
 
@@ -1680,13 +1751,14 @@ const defaultListingsRouterDependencies: ListingsRouterDependencies = {
   getUserId: (req) => getAuth(req).userId,
   googlePlacesEnabled: GOOGLE_PLACES_QUERIES_ENABLED,
   loadGooglePlaces: fetchGooglePlaces,
-  loadOpenStreetMapBusinesses: async (bounds, section, businessCategories, searchCenter) =>
+  loadOpenStreetMapBusinesses: async (bounds, section, businessCategories, searchCenter, searchArea) =>
     fetchOpenStreetMapBusinesses(
-      await fetchCityListings(bounds, businessCategories, searchCenter),
+      await fetchCityListings(searchArea?.bounds ?? bounds, businessCategories, searchCenter),
       section,
       bounds,
       businessCategories,
       searchCenter,
+      searchArea?.neighborhoods ?? [],
     ),
 };
 
@@ -1721,11 +1793,15 @@ export function createListingsRouter(
     res.status(400).json({ listings: [], source: "fallback", message: `Unknown city: ${cityId}` });
     return;
   }
-  const requestedSearchCenter = Number.isFinite(requestedSearchLat)
+  const clientSearchCenter = Number.isFinite(requestedSearchLat)
     && Number.isFinite(requestedSearchLng)
     && isInHagueBounds(requestedSearchLat, requestedSearchLng)
     ? { lat: requestedSearchLat, lng: requestedSearchLng }
     : undefined;
+  // Official polygon geometry defines the local scope; a client-supplied centre
+  // only matters for free-form searches without neighborhood geometry.
+  const searchArea = resolveSearchArea(bounds, requestedNeighborhoods, clientSearchCenter);
+  const requestedSearchCenter = searchArea.center;
   const normalizedKey = normalizedListingsKey(
     cityId,
     listingSection,
@@ -1853,12 +1929,20 @@ export function createListingsRouter(
               section: listingSection,
               neighborhoods: requestedNeighborhoods,
               businessCategories: requestedBusinessCategories,
-            }, () => dependencies.loadGooglePlaces(
-              bounds,
-              listingSection,
-              requestedNeighborhoods,
-              requestedBusinessCategories,
-            ))]
+            }, async () => {
+              const listings = await dependencies.loadGooglePlaces(
+                bounds,
+                listingSection,
+                requestedNeighborhoods,
+                requestedBusinessCategories,
+              );
+              // Google text search is neighborhood-hinted, not geometry-bound;
+              // enforce the official polygon before results are persisted.
+              return searchArea.neighborhoods.length > 0
+                ? listings.filter((listing) =>
+                  isPointInsideNeighborhoods(listing.lat, listing.lng, searchArea.neighborhoods))
+                : listings;
+            })]
           : []),
         captureProviderResult(queryId, "openstreetmap", normalizedKey, {
           section: listingSection,
@@ -1869,6 +1953,7 @@ export function createListingsRouter(
           listingSection,
           requestedBusinessCategories,
           requestedSearchCenter,
+          searchArea,
         ), 1),
       ]);
       const google = outcomes.find((result) => result.provider === "google_places");

@@ -851,7 +851,7 @@ function preferredVenue(...values: Array<string | undefined>): string | undefine
   const usable = present.filter((value) => !/^(walking|spazieren)$/i.test(value));
   if (usable.length === 0) return present[0];
   const score = (value: string) => {
-    const hasHaagEvidence = /\b(den haag|the hague|scheveningen|kijkduin|loosduinen|leyweg|strandslag\s*8|kneuterdijk|elandstraat\s*47|25\d{2}[a-z]{2})\b/i.test(value);
+    const hasHaagEvidence = /\b(den haag|the hague|scheveningen|kijkduin|loosduinen|leyweg|strandslag\s*8|kneuterdijk|elandstraat\s*47|(?:25\d{2}|249\d)[a-z]{2})\b/i.test(value);
     return (hasHaagEvidence ? 1_000 : 0) + Math.min(value.length, 240);
   };
   return usable.reduce((best, candidate) => score(candidate) > score(best) ? candidate : best);
@@ -1216,7 +1216,7 @@ function publicationStatus(event: SourceScanEvent): PublicationStatus {
     return "eligible";
   }
   const evidence = `${event.title} ${event.venue ?? ""} ${event.description ?? ""}`;
-  if (/\b(den haag|the hague|scheveningen|kijkduin|loosduinen|leyweg|haagse markt|the hague market|strandslag\s*8|kneuterdijk|ultramarijn|elandstraat\s*47|25\d{2}\s?[a-z]{2})\b/i.test(evidence)) {
+  if (/\b(den haag|the hague|scheveningen|kijkduin|loosduinen|leyweg|haagse markt|the hague market|strandslag\s*8|kneuterdijk|ultramarijn|elandstraat\s*47|(?:25\d{2}|249\d)\s?[a-z]{2})\b/i.test(evidence)) {
     return "eligible";
   }
   return isForeignLocation(event) ? "foreign_location" : "missing_locality";

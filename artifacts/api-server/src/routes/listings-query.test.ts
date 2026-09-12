@@ -193,6 +193,15 @@ describe("listings query persistence inputs", () => {
     );
   });
 
+  it("keeps business subcategories whose names contain a comma", () => {
+    assert.deepEqual(parseBusinessCategories("Arts, Culture & Entertainment"), ["Arts, Culture & Entertainment"]);
+    assert.deepEqual(
+      parseBusinessCategories("Retail & Shopping,Arts, Culture & Entertainment,Fitness & Sports"),
+      ["Arts, Culture & Entertainment", "Fitness & Sports", "Retail & Shopping"],
+    );
+    assert.deepEqual(parseBusinessCategories("Arts,Bogus,Retail &amp; Shopping"), ["Retail & Shopping"]);
+  });
+
   it("filters OSM business categories before applying the provider result cap", () => {
     const retail = Array.from({ length: 200 }, (_, index) => ({
       id: index + 1,
