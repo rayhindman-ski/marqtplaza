@@ -1,10 +1,10 @@
 ---
-name: Neighborhood highlight radius
-description: The map’s visual neighborhood emphasis should not reuse the larger radius used to find nearby listings.
+name: Neighborhood boundaries
+description: Homepage neighborhood selection uses official polygon geometry rather than centroid circles or discovery radii.
 ---
 
-Use a dedicated, smaller visual radius for a selected neighborhood and keep the provider/filter radius unchanged. A centroid-based circle is only an approximation, so it should communicate focus without implying an exact administrative boundary.
+Use official CBS/PDOK boundary polygons for visual neighborhood emphasis and selection. Keep provider/search distance logic separate; it is not a substitute for the administrative boundary.
 
-**Why:** Reusing the 2.5 km discovery radius made a single selected neighborhood appear to cover much of The Hague and made the map selection look incorrect.
+**Why:** The centroid-circle approximation did not follow the actual neighborhood shapes and made map selection look incorrect, especially for irregular or combined app neighborhoods.
 
-**How to apply:** When changing neighborhood discovery distance, review the map overlay separately; do not automatically use the provider search radius for the visual boundary.
+**How to apply:** Update the shared boundary dataset when official geometry changes, and render its rings consistently in Google Maps, tile-map, and coordinate-fallback providers.

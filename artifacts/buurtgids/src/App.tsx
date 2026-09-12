@@ -1034,7 +1034,6 @@ function SearchState({
                 language={language}
                 locationId={mapLocation.id}
                 selectedNeighborhoods={mapLocation.neighborhoods}
-                neighborhoodRadiusMeters={320}
                 showNeighborhoodLabels={false}
                 highlightedNeighborhood={selectedMapNeighborhood}
                 onNeighborhoodClick={setSelectedMapNeighborhood}
