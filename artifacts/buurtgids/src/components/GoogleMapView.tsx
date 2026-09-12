@@ -37,6 +37,7 @@ const MAP_STYLES: google.maps.MapTypeStyle[] = [
   { elementType: 'labels.icon', stylers: [{ visibility: 'on' }] },
 ];
 const MARQTPLAZA_MARKER_GRADIENT = 'linear-gradient(135deg, #ff9a52 0%, #f36c21 48%, #c94d12 100%)';
+const NEIGHBORHOOD_PULSE_DURATION_MS = 2_400;
 
 const TILE_SIZE = 256;
 const MIN_TILE_ZOOM = 10;
@@ -182,6 +183,25 @@ const MAP_COPY = {
     contributors: '© OpenStreetMap contributors',
   },
 } as const;
+
+function DataLoadingNotice({ isDataLoading }: { isDataLoading: boolean }) {
+  if (!isDataLoading) return null;
+
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      data-testid="map-fetching-notice"
+      className="pointer-events-none absolute left-1/2 top-4 z-30 -translate-x-1/2 rounded-full border border-primary/30 bg-card/95 px-4 py-2 text-xs font-extrabold text-primary shadow-lg backdrop-blur-sm"
+    >
+      <span
+        aria-hidden="true"
+        className="mr-2 inline-block h-2 w-2 animate-pulse rounded-full bg-primary align-middle"
+      />
+      Fetching data please wait
+    </div>
+  );
+}
 
 type MapPoint = Pick<MarkerData, 'id' | 'name' | 'category' | 'description' | 'details' | 'lat' | 'lng'> & {
   category: MapCategory;
@@ -524,7 +544,7 @@ function CoordinateMapFallback({
                     strokeOpacity: highlightedNeighborhood === area.name ? 1 : 0.2,
                      fillOpacity: highlightedNeighborhood === area.name ? 0.2 : 0.1,
                      animation: isDataLoading && highlightedNeighborhood === area.name
-                       ? 'buurtplaza-neighborhood-pulse 1200ms ease-in-out infinite'
+                       ? `buurtplaza-neighborhood-pulse ${NEIGHBORHOOD_PULSE_DURATION_MS}ms ease-in-out infinite`
                        : undefined,
                      transition: 'stroke 180ms ease, stroke-opacity 180ms ease, fill-opacity 180ms ease',
                     vectorEffect: 'non-scaling-stroke',
@@ -545,6 +565,7 @@ function CoordinateMapFallback({
           </div>
         );
       })}
+      <DataLoadingNotice isDataLoading={isDataLoading} />
       {points.map((point) => {
         const left = ((point.lng - minLng) / (maxLng - minLng)) * 100;
         const top = ((maxLat - point.lat) / (maxLat - minLat)) * 100;
@@ -882,7 +903,7 @@ function TileMapView({
                 strokeOpacity: highlightedNeighborhood === area.name ? 1 : 0.2,
                  fillOpacity: highlightedNeighborhood === area.name ? 0.2 : 0.1,
                  animation: isDataLoading && highlightedNeighborhood === area.name
-                   ? 'buurtplaza-neighborhood-pulse 1200ms ease-in-out infinite'
+                 ? `buurtplaza-neighborhood-pulse ${NEIGHBORHOOD_PULSE_DURATION_MS}ms ease-in-out infinite`
                    : undefined,
                  transition: 'stroke 180ms ease, stroke-opacity 180ms ease, fill-opacity 180ms ease',
                 vectorEffect: 'non-scaling-stroke',
@@ -892,6 +913,7 @@ function TileMapView({
           )))}
         </svg>
       )}
+      <DataLoadingNotice isDataLoading={isDataLoading} />
       {neighborhoodAreas.map((area) => {
         if (!shouldShowNeighborhoodLabel(area.name, { showNeighborhoodLabels, showAllNeighborhoods, selectedNeighborhoods, highlightedNeighborhood })) return null;
         const world = latLngToWorld(area, viewport.zoom);
@@ -1390,7 +1412,7 @@ function GoogleMapCanvas({
     const animate = (now: number) => {
       const overlay = neighborhoodOverlaysRef.current.get(highlightedNeighborhood);
       if (overlay) {
-        const phase = (Math.sin(((now - startedAt) / 420) * Math.PI * 2) + 1) / 2;
+        const phase = (Math.sin(((now - startedAt) / NEIGHBORHOOD_PULSE_DURATION_MS) * Math.PI * 2) + 1) / 2;
         overlay.polygon.setOptions({ fillOpacity: 0.2 + phase * 0.22 });
       }
       frame = requestAnimationFrame(animate);
@@ -1472,7 +1494,12 @@ function GoogleMapCanvas({
     neighborhoodOverlaysRef.current.clear();
   }, []);
 
-  return <div ref={containerRef} className="absolute inset-0 z-0" aria-label={MAP_COPY[language].googleMap} />;
+  return (
+    <div className="absolute inset-0 z-0">
+      <div ref={containerRef} className="absolute inset-0" aria-label={MAP_COPY[language].googleMap} />
+      <DataLoadingNotice isDataLoading={isDataLoading} />
+    </div>
+  );
 }
 
 type MapProvider = 'google' | 'tiles' | 'fallback';
