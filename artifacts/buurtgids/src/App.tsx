@@ -1780,15 +1780,11 @@ function DiscoveryState({
   };
 
   const toggleNeighborhood = (neighborhood: string) => {
-    if (neighborhoodSelection === 'all') {
-      setNeighborhoodSelection('some');
-      setSelectedNeighborhoods([neighborhood]);
-    } else if (selectedNeighborhoods.includes(neighborhood)) {
-      const next = selectedNeighborhoods.filter((item) => item !== neighborhood);
-      setSelectedNeighborhoods(next);
-      setNeighborhoodSelection(next.length > 0 ? 'some' : 'none');
+    if (selectedNeighborhoods.includes(neighborhood)) {
+      setSelectedNeighborhoods([]);
+      setNeighborhoodSelection('none');
     } else {
-      setSelectedNeighborhoods([...selectedNeighborhoods, neighborhood]);
+      setSelectedNeighborhoods([neighborhood]);
       setNeighborhoodSelection('some');
     }
     setSelectedMarker(null);

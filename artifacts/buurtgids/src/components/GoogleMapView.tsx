@@ -41,6 +41,7 @@ const TILE_SIZE = 256;
 const MIN_TILE_ZOOM = 10;
 const MAX_TILE_ZOOM = 18;
 const NEIGHBORHOOD_FILTER_RADIUS_METERS = 2500;
+const NEIGHBORHOOD_HIGHLIGHT_RADIUS_METERS = 650;
 const GOOGLE_MAPS_LOAD_TIMEOUT_MS = 4_000;
 const googleMapsApiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string | undefined;
 const googleMapsBrowserKeyPattern = /^AIza[0-9A-Za-z_-]{35}$/;
@@ -248,10 +249,14 @@ function getNeighborhoodAreas(locationId: string, neighborhoodNames: string[]): 
     .filter((area): area is NeighborhoodArea => Boolean(area));
 }
 
-function getProjectedNeighborhoodRadius(area: NeighborhoodArea, zoom: number) {
+function getProjectedNeighborhoodRadius(
+  area: NeighborhoodArea,
+  zoom: number,
+  radiusMeters = NEIGHBORHOOD_HIGHLIGHT_RADIUS_METERS,
+) {
   const center = latLngToWorld(area, zoom);
-  const latitudeRadius = NEIGHBORHOOD_FILTER_RADIUS_METERS / 111_320;
-  const longitudeRadius = NEIGHBORHOOD_FILTER_RADIUS_METERS
+  const latitudeRadius = radiusMeters / 111_320;
+  const longitudeRadius = radiusMeters
     / (111_320 * Math.max(0.2, Math.cos((area.lat * Math.PI) / 180)));
   const east = latLngToWorld({ lat: area.lat, lng: area.lng + longitudeRadius }, zoom);
   const north = latLngToWorld({ lat: area.lat + latitudeRadius, lng: area.lng }, zoom);
@@ -395,8 +400,8 @@ function CoordinateMapFallback({
 
   const selectedPoint = points.find((point) => point.id === selectedMarkerId);
   const neighborhoodCoordinates = neighborhoodAreas.flatMap((area) => {
-    const latitudeRadius = NEIGHBORHOOD_FILTER_RADIUS_METERS / 111_320;
-    const longitudeRadius = NEIGHBORHOOD_FILTER_RADIUS_METERS
+    const latitudeRadius = NEIGHBORHOOD_HIGHLIGHT_RADIUS_METERS / 111_320;
+    const longitudeRadius = NEIGHBORHOOD_HIGHLIGHT_RADIUS_METERS
       / (111_320 * Math.max(0.2, Math.cos((area.lat * Math.PI) / 180)));
     return [
       { lat: area.lat - latitudeRadius, lng: area.lng - longitudeRadius },
@@ -1139,7 +1144,7 @@ function GoogleMapCanvas({
       const circle = new google.maps.Circle({
         map: mapRef.current,
         center: { lat: area.lat, lng: area.lng },
-        radius: NEIGHBORHOOD_FILTER_RADIUS_METERS,
+        radius: NEIGHBORHOOD_HIGHLIGHT_RADIUS_METERS,
         strokeColor: '#0f766e',
         strokeOpacity: 0.9,
         strokeWeight: 3,

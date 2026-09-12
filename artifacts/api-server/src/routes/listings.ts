@@ -450,7 +450,7 @@ export function parseBusinessCategories(value: unknown): BusinessCategory[] {
   const raw = Array.isArray(value) ? value.join(",") : String(value ?? "");
   return [...new Set(
     raw.split(",")
-      .map((category) => category.trim())
+      .map((category) => category.replaceAll("&amp;", "&").trim())
       .filter((category): category is BusinessCategory => BUSINESS_CATEGORY_SET.has(category)),
   )].sort((a, b) => a.localeCompare(b, "en"));
 }
@@ -1498,7 +1498,22 @@ export async function refreshNeighborhoodDiscoveryScope(scope: NeighborhoodRefre
   const bounds = CITY_BOUNDS[scope.cityId];
   if (!bounds) throw new Error(`Unknown city: ${scope.cityId}`);
   const neighborhoods = normalizeNeighborhoods(scope.neighborhoods);
-  const normalizedKey = normalizedListingsKey(scope.cityId, scope.section, scope.language, neighborhoods);
+  let businessCategories: BusinessCategory[] = [];
+  try {
+    const keyFields = JSON.parse(scope.normalizedKey) as { businessCategories?: unknown };
+    businessCategories = scope.section === "businesses"
+      ? parseBusinessCategories(keyFields.businessCategories)
+      : [];
+  } catch {
+    // The key mismatch below remains the explicit guard for malformed refresh scopes.
+  }
+  const normalizedKey = normalizedListingsKey(
+    scope.cityId,
+    scope.section,
+    scope.language,
+    neighborhoods,
+    businessCategories,
+  );
   if (normalizedKey !== scope.normalizedKey) throw new Error("Refresh scope normalized key does not match its fields.");
 
   const queryId = await createListingsQuery({
@@ -1515,8 +1530,15 @@ export async function refreshNeighborhoodDiscoveryScope(scope: NeighborhoodRefre
   const outcomes = await Promise.all(SCHEDULED_DISCOVERY_PROVIDERS.map((provider) =>
     captureProviderResult(queryId, provider, normalizedKey, {
       section: scope.section,
+      neighborhoods,
+      businessCategories,
       scheduled: true,
-    }, async () => fetchOpenStreetMapBusinesses(await fetchCityListings(bounds), scope.section, bounds), 1),
+    }, async () => fetchOpenStreetMapBusinesses(
+      await fetchCityListings(bounds, businessCategories),
+      scope.section,
+      bounds,
+      businessCategories,
+    ), 1),
   ));
   const successful = outcomes.filter((outcome) => !outcome.error);
   const status = successful.length === 0 ? "failed" : "succeeded";
