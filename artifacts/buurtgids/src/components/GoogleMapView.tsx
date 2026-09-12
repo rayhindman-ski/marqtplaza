@@ -1386,7 +1386,11 @@ export function GoogleMapView(props: GoogleMapViewProps) {
   const useTileMap = useCallback(() => setProvider('tiles'), []);
   const useCoordinateFallback = useCallback(() => setProvider('fallback'), []);
 
-  if (props.markers.length === 0 && props.selectedNeighborhoods.length === 0) {
+  if (
+    props.markers.length === 0
+    && props.selectedNeighborhoods.length === 0
+    && !props.showAllNeighborhoods
+  ) {
     return (
       <div
         className="absolute inset-0 grid place-items-center bg-muted/40 p-6 text-center"
