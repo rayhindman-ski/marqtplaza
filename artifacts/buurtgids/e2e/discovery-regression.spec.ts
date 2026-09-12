@@ -18,49 +18,64 @@ test('keeps discovery filters, map pins, routes, and translations in sync', asyn
   });
 
   await page.route('**/api/listings*', async (route) => {
-    listingsRequests.push(new URL(route.request().url()));
+    const requestUrl = new URL(route.request().url());
+    listingsRequests.push(requestUrl);
+    const requestedNeighborhoods = requestUrl.searchParams.get('neighborhoods');
+    const listings = [
+      {
+        id: 'qualifying-event', locationId: 'dhg', category: 'Family',
+        name: 'Qualifying family workshop', description: 'Indoor family workshop',
+        details: 'Today', startsAt: todayAt(14), x: 50, y: 50,
+        lat: 52.071, lng: 4.301, address: '2511 AB Den Haag',
+        activityKind: 'family', priceType: 'free', isIndoor: true, openNow: true,
+      },
+      {
+        id: 'assigned-elsewhere-event', locationId: 'dhg', category: 'Family',
+        name: 'Scheveningen family workshop', description: 'Assigned to another neighborhood',
+        details: 'Today', startsAt: todayAt(14), x: 51, y: 51,
+        lat: 52.071, lng: 4.301, address: '2511 AB Den Haag',
+        neighborhood: 'Scheveningen',
+        activityKind: 'family', priceType: 'free', isIndoor: true, openNow: true,
+      },
+      {
+        id: 'paid-event', locationId: 'dhg', category: 'Family',
+        name: 'Paid family workshop', description: 'Paid event',
+        details: 'Today', startsAt: todayAt(14), x: 52, y: 52,
+        lat: 52.071, lng: 4.301, address: '2511 AB Den Haag',
+        activityKind: 'family', priceType: 'paid', isIndoor: true, openNow: true,
+      },
+      {
+        id: 'outdoor-event', locationId: 'dhg', category: 'Outdoors',
+        name: 'Outdoor event', description: 'Outdoor event',
+        details: 'Today', startsAt: todayAt(14), x: 55, y: 55,
+        lat: 52.071, lng: 4.301, address: '2511 AB Den Haag',
+        activityKind: 'outdoor', priceType: 'free', isIndoor: false, openNow: true,
+      },
+      {
+        id: 'far-event', locationId: 'dhg', category: 'Family',
+        name: 'Far family workshop', description: 'Far event',
+        details: 'Today', startsAt: todayAt(14), x: 70, y: 70,
+        lat: 52.11, lng: 4.35, address: '2511 AB Den Haag',
+        activityKind: 'family', priceType: 'free', isIndoor: true, openNow: true,
+      },
+      {
+        id: 'approximate-event', locationId: 'dhg', category: 'Family',
+        name: 'Approximate family workshop', description: 'Approximate event',
+        details: 'Today', startsAt: todayAt(14), x: 48, y: 48,
+        lat: 52.071, lng: 4.301, address: '2511 AB Den Haag',
+        activityKind: 'family', priceType: 'free', isIndoor: true, openNow: true,
+        isApproximateLocation: true,
+      },
+    ];
     await route.fulfill({
       contentType: 'application/json',
       body: JSON.stringify({
         source: 'curated',
-        listings: [
-          {
-            id: 'qualifying-event', locationId: 'dhg', category: 'Family',
-            name: 'Qualifying family workshop', description: 'Indoor family workshop',
-            details: 'Today', startsAt: todayAt(14), x: 50, y: 50,
-            lat: 52.071, lng: 4.301, address: '2511 AB Den Haag',
-            activityKind: 'family', priceType: 'free', isIndoor: true, openNow: true,
-          },
-          {
-            id: 'paid-event', locationId: 'dhg', category: 'Family',
-            name: 'Paid family workshop', description: 'Paid event',
-            details: 'Today', startsAt: todayAt(14), x: 52, y: 52,
-            lat: 52.071, lng: 4.301, address: '2511 AB Den Haag',
-            activityKind: 'family', priceType: 'paid', isIndoor: true, openNow: true,
-          },
-          {
-            id: 'outdoor-event', locationId: 'dhg', category: 'Outdoors',
-            name: 'Outdoor event', description: 'Outdoor event',
-            details: 'Today', startsAt: todayAt(14), x: 55, y: 55,
-            lat: 52.071, lng: 4.301, address: '2511 AB Den Haag',
-            activityKind: 'outdoor', priceType: 'free', isIndoor: false, openNow: true,
-          },
-          {
-            id: 'far-event', locationId: 'dhg', category: 'Family',
-            name: 'Far family workshop', description: 'Far event',
-            details: 'Today', startsAt: todayAt(14), x: 70, y: 70,
-            lat: 52.11, lng: 4.35, address: '2511 AB Den Haag',
-            activityKind: 'family', priceType: 'free', isIndoor: true, openNow: true,
-          },
-          {
-            id: 'approximate-event', locationId: 'dhg', category: 'Family',
-            name: 'Approximate family workshop', description: 'Approximate event',
-            details: 'Today', startsAt: todayAt(14), x: 48, y: 48,
-            lat: 52.071, lng: 4.301, address: '2511 AB Den Haag',
-            activityKind: 'family', priceType: 'free', isIndoor: true, openNow: true,
-            isApproximateLocation: true,
-          },
-        ],
+        // Model the API contract: an explicitly assigned event from another
+        // neighborhood is removed before coordinate filtering reaches the UI.
+        listings: requestedNeighborhoods === 'Centrum'
+          ? listings.filter((listing) => listing.id !== 'assigned-elsewhere-event')
+          : listings,
       }),
     });
   });
@@ -78,9 +93,9 @@ test('keeps discovery filters, map pins, routes, and translations in sync', asyn
     await route.fulfill({ contentType: 'image/png', body: transparentPng });
   });
 
-  await page.goto('/activiteiten/den-haag?neighborhood=Centrum');
+  await page.goto('/activiteiten/den-haag');
   await expect(page.getByText('Quick choices')).toBeVisible();
-  await expect(page.getByRole('checkbox', { name: 'Centrum', exact: true })).toBeChecked();
+  await page.getByRole('checkbox', { name: 'Centrum', exact: true }).check();
   await expect.poll(() => listingsRequests.some((request) => request.searchParams.get('neighborhoods') === 'Centrum')).toBe(true);
   for (const label of ['Family', 'Indoor', 'Today', 'Free']) {
     await page.getByRole('button', { name: label, exact: true }).click();
@@ -96,15 +111,17 @@ test('keeps discovery filters, map pins, routes, and translations in sync', asyn
   await expect(eventList.getByText('Paid family workshop')).toHaveCount(0);
   await expect(eventList.getByText('Outdoor event')).toHaveCount(0);
   await expect(eventList.getByText('Far family workshop')).toHaveCount(0);
+  await expect(eventList.getByText('Scheveningen family workshop')).toHaveCount(0);
 
-  const listIds = (await eventList.locator('[id^="event-"]').evaluateAll(
-    (nodes) => nodes.map((node) => node.id.replace(/^event-/, '')).sort(),
+  const listIds = (await eventList.locator('[data-event-id]').evaluateAll(
+    (nodes) => nodes.map((node) => node.getAttribute('data-event-id')).sort(),
   ));
   await expect(page.locator('[data-map-pin]')).toHaveCount(2, { timeout: 10_000 });
   const pinIds = await page.locator('[data-map-pin]').evaluateAll(
     (nodes) => nodes.map((node) => node.getAttribute('data-event-id')).sort(),
   );
   expect(pinIds).toEqual(listIds);
+  await expect(page.locator('[data-map-pin][data-event-id="assigned-elsewhere-event"]')).toHaveCount(0);
 
   const exactCard = page.locator('#event-qualifying-event');
   const routeLinks = exactCard.locator('a[href*="google.com/maps/dir"]');

@@ -2560,6 +2560,7 @@ function DiscoveryState({
               <div 
                 key={m.id} 
                 id={`event-${m.id}`}
+                data-event-id={m.id}
                 data-selected={selectedMarker === m.id || undefined}
                 className="animate-in fade-in slide-in-from-bottom-4 duration-500 fill-mode-both"
                 style={{ animationDelay: `${i * 50}ms` }}
