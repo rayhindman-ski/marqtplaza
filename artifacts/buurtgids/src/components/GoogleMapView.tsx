@@ -833,12 +833,14 @@ function TileMapView({
                 (onNeighborhoodClick || onNeighborhoodHover) && "pointer-events-auto cursor-pointer focus-visible:outline-none",
                 highlightedNeighborhood === area.name
                   ? "fill-primary/20 stroke-primary"
-                  : "fill-teal-400/10 stroke-teal-700/85",
+                  : "fill-teal-400/10 stroke-teal-700/20",
               )}
-               style={{
-                 strokeWidth: highlightedNeighborhood === area.name ? 5 : 2.5,
-                 vectorEffect: 'non-scaling-stroke',
-               }}
+              style={{
+                strokeWidth: highlightedNeighborhood === area.name ? 5 : 2.5,
+                strokeOpacity: highlightedNeighborhood === area.name ? 1 : 0.2,
+                transition: 'stroke 180ms ease, stroke-opacity 180ms ease',
+                vectorEffect: 'non-scaling-stroke',
+              }}
             />
           )))}
         </svg>
@@ -975,6 +977,7 @@ function GoogleMapCanvas({
   language,
   locationId,
   selectedNeighborhoods,
+  showAllNeighborhoods = false,
   showNeighborhoodLabels = true,
   highlightedNeighborhood = null,
   onNeighborhoodClick,
@@ -1191,7 +1194,10 @@ function GoogleMapCanvas({
 
   useEffect(() => {
     if (!mapReady || !mapRef.current || !location) return;
-    const neighborhoods = getNeighborhoodAreas(locationId, selectedNeighborhoods);
+    const neighborhoods = getNeighborhoodAreas(
+      locationId,
+      showAllNeighborhoods ? (location.neighborhoods ?? selectedNeighborhoods) : selectedNeighborhoods,
+    );
     if (neighborhoods.length === 0 && markers.length === 1) {
       mapRef.current.panTo({ lat: markers[0].lat, lng: markers[0].lng });
       mapRef.current.setZoom(15);
@@ -1213,12 +1219,15 @@ function GoogleMapCanvas({
       });
       mapRef.current.fitBounds(bounds, 64);
     }
-  }, [location, mapReady, markers, selectedNeighborhoods]);
+  }, [location, mapReady, markers, selectedNeighborhoods, showAllNeighborhoods]);
 
   useEffect(() => {
     if (!mapReady || !mapRef.current || !location) return;
 
-    const areas = getNeighborhoodAreas(locationId, selectedNeighborhoods);
+    const areas = getNeighborhoodAreas(
+      locationId,
+      showAllNeighborhoods ? (location.neighborhoods ?? selectedNeighborhoods) : selectedNeighborhoods,
+    );
     const activeNames = new Set(areas.map((area) => area.name));
 
     for (const [name, overlay] of neighborhoodOverlaysRef.current) {
@@ -1235,7 +1244,8 @@ function GoogleMapCanvas({
         existing.polygon.setPaths(paths);
         existing.polygon.setOptions({
           strokeColor: highlightedNeighborhood === area.name ? '#f36c21' : '#0f766e',
-           strokeWeight: highlightedNeighborhood === area.name ? 5 : 3,
+          strokeOpacity: highlightedNeighborhood === area.name ? 1 : 0.2,
+          strokeWeight: highlightedNeighborhood === area.name ? 5 : 3,
           fillColor: highlightedNeighborhood === area.name ? '#f36c21' : '#2dd4bf',
           fillOpacity: highlightedNeighborhood === area.name ? 0.2 : 0.1,
         });
@@ -1260,8 +1270,8 @@ function GoogleMapCanvas({
         map: mapRef.current,
         paths: area.boundary.map((ring) => ring.map(([lat, lng]) => ({ lat, lng }))),
         strokeColor: highlightedNeighborhood === area.name ? '#f36c21' : '#0f766e',
-         strokeOpacity: 0.9,
-         strokeWeight: highlightedNeighborhood === area.name ? 5 : 3,
+        strokeOpacity: highlightedNeighborhood === area.name ? 1 : 0.2,
+        strokeWeight: highlightedNeighborhood === area.name ? 5 : 3,
         fillColor: highlightedNeighborhood === area.name ? '#f36c21' : '#2dd4bf',
         fillOpacity: highlightedNeighborhood === area.name ? 0.2 : 0.1,
          clickable: Boolean(onNeighborhoodClick || onNeighborhoodHover),
@@ -1292,7 +1302,8 @@ function GoogleMapCanvas({
      onNeighborhoodClick,
       onNeighborhoodHover,
      selectedNeighborhoods,
-     showNeighborhoodLabels,
+      showAllNeighborhoods,
+      showNeighborhoodLabels,
    ]);
 
   useEffect(() => {
