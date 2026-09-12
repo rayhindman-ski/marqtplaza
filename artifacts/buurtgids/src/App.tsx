@@ -895,9 +895,16 @@ function SearchState({
   const [query, setQuery] = useState('');
   const [error, setError] = useState('');
   const [selectedCityId, setSelectedCityId] = useState<string | null>(null);
+  const [selectedMapNeighborhood, setSelectedMapNeighborhood] = useState<string | null>(null);
   const [includeExternalSources, setIncludeExternalSources] = useState(readIncludeExternalSources);
   const t = translations[language];
   const mapLocation = LOCATIONS.find((location) => location.id === selectedCityId) ?? LOCATIONS[0];
+
+  useEffect(() => {
+    if (!mapLocation.neighborhoods.includes(selectedMapNeighborhood ?? '')) {
+      setSelectedMapNeighborhood(null);
+    }
+  }, [mapLocation, selectedMapNeighborhood]);
 
   useEffect(() => {
     window.localStorage.setItem(
@@ -1029,6 +1036,8 @@ function SearchState({
                 selectedNeighborhoods={mapLocation.neighborhoods}
                 neighborhoodRadiusMeters={320}
                 showNeighborhoodLabels={false}
+                highlightedNeighborhood={selectedMapNeighborhood}
+                onNeighborhoodClick={setSelectedMapNeighborhood}
                 markers={[]}
                 selectedMarkerId={null}
                 savedIds={new Set()}
@@ -1046,6 +1055,23 @@ function SearchState({
                     : 'Each neighborhood is outlined; names are listed alongside.'}
                 </p>
               </div>
+              {selectedMapNeighborhood && (
+                <div className="absolute bottom-4 left-4 right-4 z-10 flex items-center justify-between gap-3 rounded-2xl border border-primary/30 bg-card/95 px-4 py-3 text-left shadow-lg backdrop-blur-sm">
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-muted-foreground">
+                      {language === 'nl' ? 'Geselecteerde buurt' : 'Selected neighborhood'}
+                    </p>
+                    <p className="truncate text-sm font-extrabold text-foreground">{selectedMapNeighborhood}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => onSearch(mapLocation.id, selectedMapNeighborhood, DEFAULT_START_SECTION)}
+                    className="shrink-0 rounded-xl bg-primary px-3 py-2 text-xs font-extrabold text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  >
+                    {language === 'nl' ? 'Selecteer buurt' : 'Select neighborhood'}
+                  </button>
+                </div>
+              )}
             </div>
 
             <div>
@@ -1067,7 +1093,10 @@ function SearchState({
                     <button
                       type="button"
                       aria-pressed={selectedCityId === loc.id}
-                      onClick={() => setSelectedCityId(loc.id)}
+                      onClick={() => {
+                        setSelectedCityId(loc.id);
+                        setSelectedMapNeighborhood(null);
+                      }}
                       className={cn(
                         "px-4 py-2 backdrop-blur-sm border rounded-full text-sm font-semibold transition-all shadow-sm hover:shadow-md",
                         selectedCityId === loc.id
