@@ -2660,6 +2660,8 @@ function DiscoveryState({
             language={language}
             locationId={location.id}
             selectedNeighborhoods={selectedNeighborhoods}
+            highlightedNeighborhood={selectedNeighborhoods.length === 1 ? selectedNeighborhoods[0] : null}
+            onNeighborhoodClick={toggleNeighborhood}
             markers={filteredMarkers}
             selectedMarkerId={selectedMarker}
             savedIds={savedIds}

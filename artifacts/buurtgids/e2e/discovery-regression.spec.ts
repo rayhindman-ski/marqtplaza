@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 
 const transparentPng = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M/wHwAF/gL+X8XnWQAAAABJRU5ErkJggg==',
@@ -9,6 +9,69 @@ function todayAt(hour: number) {
   const date = new Date();
   date.setHours(hour, 0, 0, 0);
   return date.toISOString();
+}
+
+async function stubBoundaryDiscovery(page: Page, tilesAvailable: boolean) {
+  // Keep this regression focused on the app-owned polygon layer. When a
+  // browser key is available, block the Google loader so the same assertions
+  // exercise the tile path and the coordinate fallback deterministically.
+  await page.route('https://maps.googleapis.com/**', async (route) => {
+    await route.abort('failed');
+  });
+  await page.route('**/api/listings*', async (route) => {
+    await route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({
+        source: 'curated',
+        listings: [{
+          id: 'boundary-event',
+          locationId: 'dhg',
+          category: 'Family',
+          name: 'Boundary test event',
+          description: 'Event used to keep neighborhood map coverage stable.',
+          details: 'Today',
+          startsAt: todayAt(14),
+          x: 50,
+          y: 50,
+          lat: 52.071,
+          lng: 4.301,
+          activityKind: 'family',
+          priceType: 'free',
+          isIndoor: true,
+          openNow: true,
+        }],
+      }),
+    });
+  });
+  await page.route('**/api/weather*', async (route) => {
+    await route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({
+        cityId: 'dhg',
+        locationName: 'Den Haag',
+        fetchedAt: new Date().toISOString(),
+        current: {
+          temperature: 18,
+          apparentTemperature: 18,
+          precipitation: 0,
+          windSpeed: 5,
+          weatherCode: 0,
+          condition: 'clear',
+          isDay: true,
+        },
+        forecast: [],
+        provider: 'open-meteo',
+      }),
+    });
+  });
+  await page.route('https://tile.openstreetmap.org/**', async (route) => {
+    if (!tilesAvailable) {
+      await route.abort('failed');
+      return;
+    }
+    await route.fulfill({ contentType: 'image/png', body: transparentPng });
+  });
+  await page.goto('/activiteiten/den-haag?neighborhood=Centrum');
 }
 
 test('keeps discovery filters, map pins, routes, and translations in sync', async ({ page }) => {
@@ -140,6 +203,52 @@ test('keeps discovery filters, map pins, routes, and translations in sync', asyn
   }
   await expect(page.getByText('Route niet beschikbaar: dit kaartpunt is een benadering.')).toBeVisible();
 });
+
+for (const [mapPath, tilesAvailable] of [['tile map', true], ['coordinate fallback', false]] as const) {
+  test(`keeps neighborhood polygon selection aligned in the ${mapPath}`, async ({ page }) => {
+    await stubBoundaryDiscovery(page, tilesAvailable);
+
+    const neighborhoodControl = page.getByRole('checkbox', { name: 'Centrum', exact: true });
+    await expect(neighborhoodControl).toBeChecked();
+
+    const boundary = page.getByRole('button', { name: 'Select neighborhood: Centrum', exact: true });
+    await expect(boundary).toHaveCount(1);
+    await expect(boundary).toBeVisible();
+
+    const geometry = await boundary.evaluate((node) => {
+      const polygon = node as SVGPolygonElement;
+      const points = Array.from(polygon.points).map((point) => ({ x: point.x, y: point.y }));
+      const viewBox = polygon.ownerSVGElement?.viewBox.baseVal;
+      return {
+        pointCount: points.length,
+        firstPoint: points[0],
+        lastPoint: points.at(-1),
+        minX: Math.min(...points.map((point) => point.x)),
+        maxX: Math.max(...points.map((point) => point.x)),
+        minY: Math.min(...points.map((point) => point.y)),
+        maxY: Math.max(...points.map((point) => point.y)),
+        viewBox: viewBox
+          ? { x: viewBox.x, y: viewBox.y, width: viewBox.width, height: viewBox.height }
+          : null,
+      };
+    });
+
+    expect(geometry.pointCount).toBeGreaterThan(20);
+    expect(geometry.firstPoint).toEqual(geometry.lastPoint);
+    expect(geometry.viewBox).not.toBeNull();
+    expect(geometry.minX).toBeGreaterThanOrEqual((geometry.viewBox?.x ?? 0) - 1);
+    expect(geometry.maxX).toBeLessThanOrEqual((geometry.viewBox?.x ?? 0) + (geometry.viewBox?.width ?? 0) + 1);
+    expect(geometry.minY).toBeGreaterThanOrEqual((geometry.viewBox?.y ?? 0) - 1);
+    expect(geometry.maxY).toBeLessThanOrEqual((geometry.viewBox?.y ?? 0) + (geometry.viewBox?.height ?? 0) + 1);
+
+    await boundary.click();
+    await expect(neighborhoodControl).not.toBeChecked();
+    await expect(page.getByRole('button', { name: 'Select neighborhood: Centrum', exact: true })).toHaveCount(0);
+    await neighborhoodControl.check();
+    await expect(neighborhoodControl).toBeChecked();
+    await expect(page.getByRole('button', { name: 'Select neighborhood: Centrum', exact: true })).toHaveCount(1);
+  });
+}
 
 test('main search external-source setting controls discovery mode and persists', async ({ page }) => {
   let listingsRequests: URL[] = [];

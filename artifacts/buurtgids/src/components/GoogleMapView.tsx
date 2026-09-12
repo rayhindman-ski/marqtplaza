@@ -807,6 +807,7 @@ function TileMapView({
                 const world = latLngToWorld({ lat, lng }, viewport.zoom);
                 return `${world.x - mapLeft},${world.y - mapTop}`;
               }).join(' ')}
+              onPointerDown={(event) => event.stopPropagation()}
               onClick={() => onNeighborhoodClick?.(area.name)}
               onMouseEnter={() => onNeighborhoodHover?.(area.name)}
               onMouseLeave={() => onNeighborhoodHover?.(null)}
