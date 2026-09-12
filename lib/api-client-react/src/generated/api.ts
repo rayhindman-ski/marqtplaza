@@ -63,6 +63,8 @@ import type {
   OwnedBusinessProfile,
   PersistOutcome,
   PublicBusinessProfile,
+  RegistrationInput,
+  RegistrationStatus,
   RunSocialMapReview502,
   SavedEventsResponse,
   SavedEventsSyncRequest,
@@ -177,6 +179,154 @@ export function useHealthCheck<TData = Awaited<ReturnType<typeof healthCheck>>, 
 
 
 
+
+export const getGetRegistrationUrl = () => {
+
+
+
+
+  return `/api/registration`
+}
+
+/**
+ * @summary Get the signed-in user's registration profile
+ */
+export const getRegistration = async ( options?: Parameters<typeof customFetch>[1]): Promise<RegistrationStatus> => {
+
+  return customFetch<RegistrationStatus>(getGetRegistrationUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetRegistrationQueryKey = () => {
+    return [
+    `/api/registration`
+    ] as const;
+    }
+
+
+export const getGetRegistrationQueryOptions = <TData = Awaited<ReturnType<typeof getRegistration>>, TError = ErrorType<void>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getRegistration>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetRegistrationQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getRegistration>>> = ({ signal }) => getRegistration({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getRegistration>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetRegistrationQueryResult = NonNullable<Awaited<ReturnType<typeof getRegistration>>>
+export type GetRegistrationQueryError = ErrorType<void>
+
+
+/**
+ * @summary Get the signed-in user's registration profile
+ */
+
+export function useGetRegistration<TData = Awaited<ReturnType<typeof getRegistration>>, TError = ErrorType<void>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getRegistration>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetRegistrationQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getSaveRegistrationUrl = () => {
+
+
+
+
+  return `/api/registration`
+}
+
+/**
+ * @summary Create or update the signed-in user's registration profile
+ */
+export const saveRegistration = async (registrationInput: RegistrationInput, options?: Parameters<typeof customFetch>[1]): Promise<RegistrationStatus> => {
+
+  return customFetch<RegistrationStatus>(getSaveRegistrationUrl(),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(registrationInput)
+  }
+);}
+
+
+
+
+
+export const getSaveRegistrationMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof saveRegistration>>, TError,{data: BodyType<RegistrationInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof saveRegistration>>, TError,{data: BodyType<RegistrationInput>}, TContext> => {
+
+const mutationKey = ['saveRegistration'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof saveRegistration>>, {data: BodyType<RegistrationInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  saveRegistration(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SaveRegistrationMutationResult = NonNullable<Awaited<ReturnType<typeof saveRegistration>>>
+    export type SaveRegistrationMutationBody = BodyType<RegistrationInput>
+    export type SaveRegistrationMutationError = ErrorType<void>
+
+    /**
+ * @summary Create or update the signed-in user's registration profile
+ */
+export const useSaveRegistration = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof saveRegistration>>, TError,{data: BodyType<RegistrationInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof saveRegistration>>,
+        TError,
+        {data: BodyType<RegistrationInput>},
+        TContext
+      > => {
+      return useMutation(getSaveRegistrationMutationOptions(options));
+    }
 
 export const getGetWeatherUrl = (params: GetWeatherParams,) => {
   const normalizedParams = new URLSearchParams();

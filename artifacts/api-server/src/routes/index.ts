@@ -9,6 +9,7 @@ import weatherRouter from "./weather";
 import communityPostsRouter from "./community-posts";
 import businessesRouter from "./businesses";
 import savedEventsRouter from "./saved-events";
+import registrationRouter from "./registration";
 
 const router: IRouter = Router();
 
@@ -22,5 +23,6 @@ router.use(weatherRouter);
 router.use(communityPostsRouter);
 router.use(businessesRouter);
 router.use(savedEventsRouter);
+router.use(registrationRouter);
 
 export default router;

@@ -18,6 +18,88 @@ export const HealthCheckResponse = zod.object({
 
 
 /**
+ * @summary Get the signed-in user's registration profile
+ */
+export const getRegistrationResponseRegistrationOneOneNameMax = 160;
+
+export const getRegistrationResponseRegistrationOneOneEmailRegExp = new RegExp('^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$');
+export const getRegistrationResponseRegistrationOneOneUsefulnessRatingMax = 5;
+
+export const getRegistrationResponseRegistrationOneOneReferralLikelihoodMax = 5;
+
+export const getRegistrationResponseRegistrationOneOneDesiredFeaturesMax = 2000;
+
+
+
+export const GetRegistrationResponse = zod.object({
+  "registered": zod.boolean(),
+  "canParticipate": zod.boolean(),
+  "registration": zod.union([zod.object({
+  "name": zod.string().min(1).max(getRegistrationResponseRegistrationOneOneNameMax),
+  "registrationType": zod.enum(['consumer', 'business']),
+  "email": zod.string().regex(getRegistrationResponseRegistrationOneOneEmailRegExp),
+  "usefulnessRating": zod.number().min(1).max(getRegistrationResponseRegistrationOneOneUsefulnessRatingMax),
+  "referralLikelihood": zod.number().min(1).max(getRegistrationResponseRegistrationOneOneReferralLikelihoodMax),
+  "desiredFeatures": zod.string().min(1).max(getRegistrationResponseRegistrationOneOneDesiredFeaturesMax)
+}).and(zod.object({
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})),zod.null()])
+})
+
+
+/**
+ * @summary Create or update the signed-in user's registration profile
+ */
+export const saveRegistrationBodyNameMax = 160;
+
+export const saveRegistrationBodyEmailRegExp = new RegExp('^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$');
+export const saveRegistrationBodyUsefulnessRatingMax = 5;
+
+export const saveRegistrationBodyReferralLikelihoodMax = 5;
+
+export const saveRegistrationBodyDesiredFeaturesMax = 2000;
+
+
+
+export const SaveRegistrationBody = zod.object({
+  "name": zod.string().min(1).max(saveRegistrationBodyNameMax),
+  "registrationType": zod.enum(['consumer', 'business']),
+  "email": zod.string().regex(saveRegistrationBodyEmailRegExp),
+  "usefulnessRating": zod.number().min(1).max(saveRegistrationBodyUsefulnessRatingMax),
+  "referralLikelihood": zod.number().min(1).max(saveRegistrationBodyReferralLikelihoodMax),
+  "desiredFeatures": zod.string().min(1).max(saveRegistrationBodyDesiredFeaturesMax)
+})
+
+export const saveRegistrationResponseRegistrationOneOneNameMax = 160;
+
+export const saveRegistrationResponseRegistrationOneOneEmailRegExp = new RegExp('^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$');
+export const saveRegistrationResponseRegistrationOneOneUsefulnessRatingMax = 5;
+
+export const saveRegistrationResponseRegistrationOneOneReferralLikelihoodMax = 5;
+
+export const saveRegistrationResponseRegistrationOneOneDesiredFeaturesMax = 2000;
+
+
+
+export const SaveRegistrationResponse = zod.object({
+  "registered": zod.boolean(),
+  "canParticipate": zod.boolean(),
+  "registration": zod.union([zod.object({
+  "name": zod.string().min(1).max(saveRegistrationResponseRegistrationOneOneNameMax),
+  "registrationType": zod.enum(['consumer', 'business']),
+  "email": zod.string().regex(saveRegistrationResponseRegistrationOneOneEmailRegExp),
+  "usefulnessRating": zod.number().min(1).max(saveRegistrationResponseRegistrationOneOneUsefulnessRatingMax),
+  "referralLikelihood": zod.number().min(1).max(saveRegistrationResponseRegistrationOneOneReferralLikelihoodMax),
+  "desiredFeatures": zod.string().min(1).max(saveRegistrationResponseRegistrationOneOneDesiredFeaturesMax)
+}).and(zod.object({
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})),zod.null()])
+})
+
+
+/**
  * @summary Get a short city weather forecast
  */
 export const GetWeatherQueryParams = zod.object({

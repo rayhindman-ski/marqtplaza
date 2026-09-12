@@ -23,3 +23,4 @@
 - [Spec Kit workflow](speckit-workflow.md) — use the project-local constitution → spec → plan → tasks → implement → converge flow for non-trivial changes.
 - [Connected GitHub branch publishing](github-branch-publishing.md) — when no git remote is available, diff the workspace tree against the remote branch and publish through Git Data API objects.
 - [Database error assertions](database-error-assertions.md) — Drizzle/pg may expose wrapped SQL errors without the server trigger message; assert stable failure state instead of exact text.
+- [OpenAPI email validation](openapi-email-validation.md) — use a regex pattern instead of format email because this workspace's generated Zod client runs on Zod 3.

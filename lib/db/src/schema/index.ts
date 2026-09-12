@@ -30,3 +30,4 @@ export * from "./socialMapReviewReports";
 export * from "./userQueries";
 export * from "./externalQueries";
 export * from "./externalResults";
+export * from "./userRegistrations";

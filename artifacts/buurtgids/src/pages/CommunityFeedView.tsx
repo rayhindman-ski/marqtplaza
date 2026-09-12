@@ -13,8 +13,10 @@ import * as z from 'zod';
 import { toast } from 'sonner';
 
 import {
+  getGetRegistrationQueryKey,
   useGetCommunityPosts,
   getGetCommunityPostsQueryKey,
+  useGetRegistration,
   useCreateCommunityPost,
   useToggleCommunityPostParticipation,
   type CommunityPost,
@@ -140,6 +142,12 @@ const CITIES = ['dhg', 'ams', 'rot', 'utr', 'ein'] as const;
 export default function CommunityFeedView() {
   const [_, setLocation] = useLocation();
   const { isSignedIn, isLoaded } = useAuth();
+  const registrationQuery = useGetRegistration({
+    query: {
+      enabled: Boolean(isLoaded && isSignedIn),
+      queryKey: getGetRegistrationQueryKey(),
+    },
+  });
   const queryClient = useQueryClient();
   
   const [language, setLanguage] = useState<Language>(() => {
@@ -175,6 +183,11 @@ export default function CommunityFeedView() {
     if (!isLoaded) return;
     if (!isSignedIn) {
       setLocation('/sign-in');
+      return;
+    }
+    if (registrationQuery.isLoading) return;
+    if (!registrationQuery.data?.registered) {
+      setLocation('/onboarding');
       return;
     }
 
@@ -216,6 +229,10 @@ export default function CommunityFeedView() {
     if (!isLoaded) return;
     if (!isSignedIn) {
       setLocation('/sign-in');
+    } else if (registrationQuery.isLoading) {
+      return;
+    } else if (!registrationQuery.data?.registered) {
+      setLocation('/onboarding');
     } else {
       setIsPostDialogOpen(true);
     }
