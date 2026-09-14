@@ -343,7 +343,7 @@ export interface AccountCapabilities {
 }
 
 /**
- * Optional controlled preferences owned by exactly one account. Updates require expectedRevision and return 409 VERSION_CONFLICT on mismatch.
+ * Optional controlled preferences owned by exactly one account. Updates require expectedRevision and return 409 VERSION_CONFLICT on mismatch. Unresolved IDs are stored legacy choices that no longer occur in the current taxonomy; they remain in the ID arrays until the user removes them.
  */
 export interface ConsumerPreferences {
   revision: number;
@@ -351,6 +351,16 @@ export interface ConsumerPreferences {
   neighborhoodIds: string[];
   /** @maxItems 20 */
   interestIds: string[];
+  /**
+     * Subset of neighborhoodIds that no longer resolves in the current account option taxonomy.
+     * @maxItems 20
+     */
+  unresolvedNeighborhoodIds: string[];
+  /**
+     * Subset of interestIds that no longer resolves in the current account option taxonomy.
+     * @maxItems 20
+     */
+  unresolvedInterestIds: string[];
   updatedAt: string;
 }
 

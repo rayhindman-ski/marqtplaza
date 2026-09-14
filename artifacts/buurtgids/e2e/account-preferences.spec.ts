@@ -1,6 +1,13 @@
 import { expect, test, type Page, type Route } from '@playwright/test';
 
-type Preferences = { revision: number; neighborhoodIds: string[]; interestIds: string[]; updatedAt: string };
+type Preferences = {
+  revision: number;
+  neighborhoodIds: string[];
+  interestIds: string[];
+  unresolvedNeighborhoodIds?: string[];
+  unresolvedInterestIds?: string[];
+  updatedAt: string;
+};
 type Me = {
   id: number;
   status: 'active';
@@ -120,6 +127,12 @@ async function installAccountServer(page: Page, initial: Partial<Me> = {}): Prom
           revision: current + 1,
           neighborhoodIds: body.neighborhoodIds ?? state.me.preferences?.neighborhoodIds ?? [],
           interestIds: body.interestIds ?? state.me.preferences?.interestIds ?? [],
+          unresolvedNeighborhoodIds: (body.neighborhoodIds ?? state.me.preferences?.neighborhoodIds ?? []).filter(
+            (id: string) => !OPTIONS.neighborhoods.some((option) => option.id === id),
+          ),
+          unresolvedInterestIds: (body.interestIds ?? state.me.preferences?.interestIds ?? []).filter(
+            (id: string) => !OPTIONS.interests.some((option) => option.id === id),
+          ),
           updatedAt: new Date().toISOString(),
         },
       };
@@ -257,6 +270,35 @@ test.describe('consumer account journey', () => {
     const patches = server.requests.filter((request) => request.method === 'PATCH');
     expect(patches.map((request) => (request.body as any).expectedRevision)).toEqual([2, 3]);
     expect(server.me.preferences?.interestIds).toEqual(['category:family']);
+  });
+
+  test('shows legacy choices as unavailable and removes them explicitly', async ({ page }) => {
+    await signIn(page);
+    const server = await installAccountServer(page, {
+      onboardingCompleted: true,
+      onboardingCompletedAt: '2026-09-02T00:00:00.000Z',
+      preferences: {
+        revision: 4,
+        neighborhoodIds: ['dhg:retired-neighborhood', 'dhg:statenkwartier'],
+        interestIds: ['category:retired-interest'],
+        unresolvedNeighborhoodIds: ['dhg:retired-neighborhood'],
+        unresolvedInterestIds: ['category:retired-interest'],
+        updatedAt: '2026-09-02T00:00:00.000Z',
+      },
+    });
+    await page.goto('/account/voorkeuren?e2eAccountAuth=1');
+
+    await expect(page.getByRole('checkbox', { name: /No longer available|Niet meer beschikbaar/ })).toHaveCount(2);
+    await page.locator('input[value="dhg:retired-neighborhood"]').evaluate((element) => (element as HTMLInputElement).click());
+    await expect(page.locator('input[value="dhg:retired-neighborhood"]')).toHaveCount(0);
+    await page.getByTestId('button-preferences-save').click();
+    await expect(page.getByTestId('status-preferences-saved')).toBeVisible();
+    await expect(page.getByTestId('summary-neighborhoods')).toContainText('Statenkwartier');
+    await expect(page.getByTestId('summary-neighborhoods')).not.toContainText('No longer available');
+    await expect(page.getByTestId('summary-interests')).toContainText('No longer available');
+
+    expect(server.me.preferences?.neighborhoodIds).toEqual(['dhg:statenkwartier']);
+    expect(server.me.preferences?.interestIds).toEqual(['category:retired-interest']);
   });
 
   test('failed saves keep input and move focus to a localized error', async ({ page }) => {

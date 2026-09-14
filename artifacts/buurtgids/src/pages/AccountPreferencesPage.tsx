@@ -74,6 +74,16 @@ function draftFromAccount(me: AccountMe): Draft {
   };
 }
 
+function unresolvedPreferenceIds(
+  selected: string[],
+  options: AccountOption[],
+  explicit: string[] | undefined,
+): string[] {
+  if (explicit) return explicit.filter((id) => selected.includes(id));
+  const known = new Set(options.map((option) => option.id));
+  return selected.filter((id) => !known.has(id));
+}
+
 function toggle(list: string[], id: string, checked: boolean): string[] {
   if (checked) return list.includes(id) || list.length >= MAX_SELECTION ? list : [...list, id];
   return list.filter((item) => item !== id);
@@ -350,6 +360,8 @@ export default function AccountPreferencesPage() {
                 clearLabel={copy.preferences.clear}
                 options={options.neighborhoods}
                 selected={draft.neighborhoodIds}
+                unresolvedIds={unresolvedPreferenceIds(draft.neighborhoodIds, options.neighborhoods, me.preferences?.unresolvedNeighborhoodIds)}
+                unavailableLabel={copy.account.noLongerAvailable}
                 language={language}
                 onToggle={(id, checked) => setDraft({ ...draft, neighborhoodIds: toggle(draft.neighborhoodIds, id, checked) })}
                 onClear={() => setDraft({ ...draft, neighborhoodIds: [] })}
@@ -362,6 +374,8 @@ export default function AccountPreferencesPage() {
                 clearLabel={copy.preferences.clear}
                 options={options.interests}
                 selected={draft.interestIds}
+                unresolvedIds={unresolvedPreferenceIds(draft.interestIds, options.interests, me.preferences?.unresolvedInterestIds)}
+                unavailableLabel={copy.account.noLongerAvailable}
                 language={language}
                 onToggle={(id, checked) => setDraft({ ...draft, interestIds: toggle(draft.interestIds, id, checked) })}
                 onClear={() => setDraft({ ...draft, interestIds: [] })}
@@ -403,14 +417,16 @@ type OptionGroupProps = {
   clearLabel: string;
   options: AccountOption[];
   selected: string[];
+  unresolvedIds: string[];
+  unavailableLabel: string;
   language: Language;
   onToggle: (id: string, checked: boolean) => void;
   onClear: () => void;
 };
 
-function OptionGroup({ name, legend, help, selectedLabel, clearLabel, options, selected, language, onToggle, onClear }: OptionGroupProps) {
-  const known = new Set(options.map((option) => option.id));
-  const unknownSelected = selected.filter((id) => !known.has(id));
+function OptionGroup({ name, legend, help, selectedLabel, clearLabel, options, selected, unresolvedIds, unavailableLabel, language, onToggle, onClear }: OptionGroupProps) {
+  const unresolved = new Set(unresolvedIds);
+  const unknownSelected = selected.filter((id) => unresolved.has(id));
   const full = selected.length >= MAX_SELECTION;
   return (
     <fieldset data-testid={`group-${name}`} className="rounded-3xl border border-border/80 bg-card p-5 shadow-sm">
@@ -442,9 +458,18 @@ function OptionGroup({ name, legend, help, selectedLabel, clearLabel, options, s
           );
         })}
         {unknownSelected.map((id) => (
-          <label key={id} className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-dashed border-border px-3 py-1.5 text-sm font-semibold text-muted-foreground">
-            <input type="checkbox" name={name} value={id} checked onChange={() => onToggle(id, false)} className="h-4 w-4" />
-            <span className="font-mono text-xs">{id}</span>
+          <label key={id} title={`${unavailableLabel}: ${id}`} className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-dashed border-border px-3 py-1.5 text-sm font-semibold text-muted-foreground">
+            <input
+              type="checkbox"
+              name={name}
+              value={id}
+              checked
+              aria-label={`${unavailableLabel}: ${id}`}
+              onChange={() => onToggle(id, false)}
+              className="h-4 w-4"
+            />
+            <span>{unavailableLabel}</span>
+            <span className="font-mono text-xs">({id})</span>
           </label>
         ))}
       </div>
@@ -459,8 +484,11 @@ function OptionGroup({ name, legend, help, selectedLabel, clearLabel, options, s
 
 export function PreferenceSummary({ me, options, language }: { me: AccountMe; options: { neighborhoods: AccountOption[]; interests: AccountOption[] } | null; language: Language }) {
   const copy = accountTranslations[language].account;
-  const labelFor = (list: AccountOption[] | undefined, id: string) => list?.find((option) => option.id === id)?.label[language] ?? id;
   const preferences = me.preferences;
+  const labelFor = (list: AccountOption[] | undefined, unresolvedIds: string[] | undefined, id: string) => {
+    if (unresolvedIds?.includes(id)) return `${copy.noLongerAvailable} (${id})`;
+    return list?.find((option) => option.id === id)?.label[language] ?? id;
+  };
   const hasChoices = Boolean(preferences && (preferences.neighborhoodIds.length > 0 || preferences.interestIds.length > 0));
   return (
     <dl data-testid="preference-summary" className="mt-4 grid gap-4 text-sm sm:grid-cols-3">
@@ -471,13 +499,13 @@ export function PreferenceSummary({ me, options, language }: { me: AccountMe; op
       <div>
         <dt className="font-bold text-foreground">{copy.summaryNeighborhoods}</dt>
         <dd data-testid="summary-neighborhoods" className="mt-1 text-muted-foreground">
-          {preferences && preferences.neighborhoodIds.length > 0 ? preferences.neighborhoodIds.map((id) => labelFor(options?.neighborhoods, id)).join(', ') : '—'}
+          {preferences && preferences.neighborhoodIds.length > 0 ? preferences.neighborhoodIds.map((id) => labelFor(options?.neighborhoods, preferences.unresolvedNeighborhoodIds, id)).join(', ') : '—'}
         </dd>
       </div>
       <div>
         <dt className="font-bold text-foreground">{copy.summaryInterests}</dt>
         <dd data-testid="summary-interests" className="mt-1 text-muted-foreground">
-          {preferences && preferences.interestIds.length > 0 ? preferences.interestIds.map((id) => labelFor(options?.interests, id)).join(', ') : '—'}
+          {preferences && preferences.interestIds.length > 0 ? preferences.interestIds.map((id) => labelFor(options?.interests, preferences.unresolvedInterestIds, id)).join(', ') : '—'}
         </dd>
       </div>
       {!hasChoices ? <div data-testid="summary-none" className="text-muted-foreground sm:col-span-3">{copy.summaryNone}</div> : null}

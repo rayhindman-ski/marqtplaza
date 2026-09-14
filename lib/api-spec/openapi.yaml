@@ -2725,8 +2725,8 @@ components:
 
     ConsumerPreferences:
       type: object
-      description: Optional controlled preferences owned by exactly one account. Updates require expectedRevision and return 409 VERSION_CONFLICT on mismatch.
-      required: [revision, neighborhoodIds, interestIds, updatedAt]
+      description: Optional controlled preferences owned by exactly one account. Updates require expectedRevision and return 409 VERSION_CONFLICT on mismatch. Unresolved IDs are stored legacy choices that no longer occur in the current taxonomy; they remain in the ID arrays until the user removes them.
+      required: [revision, neighborhoodIds, interestIds, unresolvedNeighborhoodIds, unresolvedInterestIds, updatedAt]
       properties:
         revision:
           type: number
@@ -2740,6 +2740,18 @@ components:
           maxItems: 20
           items:
             type: string
+        unresolvedNeighborhoodIds:
+          type: array
+          maxItems: 20
+          items:
+            type: string
+          description: Subset of neighborhoodIds that no longer resolves in the current account option taxonomy.
+        unresolvedInterestIds:
+          type: array
+          maxItems: 20
+          items:
+            type: string
+          description: Subset of interestIds that no longer resolves in the current account option taxonomy.
         updatedAt:
           type: string
 

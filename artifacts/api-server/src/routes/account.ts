@@ -154,10 +154,15 @@ async function buildAccountConsents(userId: number) {
 
 function serialisePreferences(preferences: ConsumerPreferences | undefined) {
   if (!preferences) return null;
+  const options = getAccountOptions();
+  const neighborhoodIds = new Set(options.neighborhoods.map((option) => option.id));
+  const interestIds = new Set(options.interests.map((option) => option.id));
   return {
     revision: preferences.revision,
     neighborhoodIds: preferences.neighborhoodIds,
     interestIds: preferences.interestIds,
+    unresolvedNeighborhoodIds: preferences.neighborhoodIds.filter((id) => !neighborhoodIds.has(id)),
+    unresolvedInterestIds: preferences.interestIds.filter((id) => !interestIds.has(id)),
     updatedAt: preferences.updatedAt.toISOString(),
   };
 }
@@ -240,14 +245,6 @@ export function createAccountRouter(options: AccountRouterOptions = {}): IRouter
     }
     const neighborhoodIds = input.neighborhoodIds ? uniqueIds(input.neighborhoodIds) : undefined;
     const interestIds = input.interestIds ? uniqueIds(input.interestIds) : undefined;
-    const fieldErrors = [
-      ...controlledListErrors("neighborhoodIds", neighborhoodIds ?? [], isKnownNeighborhoodId),
-      ...controlledListErrors("interestIds", interestIds ?? [], isKnownInterestId),
-    ];
-    if (fieldErrors.length > 0) {
-      sendApiError(req, res, "VALIDATION_FAILED", { fieldErrors });
-      return;
-    }
 
     const outcome = await db.transaction(async (tx) => {
       // Lock the account row first: a preference row may not exist yet, and
@@ -265,8 +262,24 @@ export function createAccountRouter(options: AccountRouterOptions = {}): IRouter
         .limit(1);
       const currentRevision = current?.revision ?? 0;
       if (currentRevision !== input.expectedRevision) {
-        return { conflict: currentRevision };
+        return { conflict: currentRevision, fieldErrors: [] as ApiFieldError[] };
       }
+      // A taxonomy can change after a choice is stored. An unresolved ID may
+      // stay in an authoritative replacement list only when it was already
+      // stored for this account; newly introduced unknown IDs remain invalid.
+      const fieldErrors = [
+        ...controlledListErrors(
+          "neighborhoodIds",
+          neighborhoodIds ?? [],
+          (id) => isKnownNeighborhoodId(id) || Boolean(current?.neighborhoodIds.includes(id)),
+        ),
+        ...controlledListErrors(
+          "interestIds",
+          interestIds ?? [],
+          (id) => isKnownInterestId(id) || Boolean(current?.interestIds.includes(id)),
+        ),
+      ];
+      if (fieldErrors.length > 0) return { conflict: null, fieldErrors };
       if (current) {
         await tx
           .update(consumerPreferencesTable)
@@ -296,7 +309,7 @@ export function createAccountRouter(options: AccountRouterOptions = {}): IRouter
           .set({ locale: input.locale, updatedAt: new Date() })
           .where(eq(appUsersTable.id, account.user.id));
       }
-      return { conflict: null };
+      return { conflict: null, fieldErrors: [] as ApiFieldError[] };
     });
 
     if (outcome.conflict !== null) {
@@ -305,6 +318,10 @@ export function createAccountRouter(options: AccountRouterOptions = {}): IRouter
         "Preference update rejected on stale revision",
       );
       sendApiError(req, res, "VERSION_CONFLICT", { expectedVersion: outcome.conflict });
+      return;
+    }
+    if (outcome.fieldErrors.length > 0) {
+      sendApiError(req, res, "VALIDATION_FAILED", { fieldErrors: outcome.fieldErrors });
       return;
     }
     const [user] = await db.select().from(appUsersTable).where(eq(appUsersTable.id, account.user.id)).limit(1);

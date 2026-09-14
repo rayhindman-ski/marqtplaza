@@ -29,6 +29,10 @@ export const getAccountMeResponsePreferencesOneNeighborhoodIdsMax = 20;
 
 export const getAccountMeResponsePreferencesOneInterestIdsMax = 20;
 
+export const getAccountMeResponsePreferencesOneUnresolvedNeighborhoodIdsMax = 20;
+
+export const getAccountMeResponsePreferencesOneUnresolvedInterestIdsMax = 20;
+
 
 
 export const GetAccountMeResponse = zod.object({
@@ -52,8 +56,10 @@ export const GetAccountMeResponse = zod.object({
   "revision": zod.number(),
   "neighborhoodIds": zod.array(zod.string()).max(getAccountMeResponsePreferencesOneNeighborhoodIdsMax),
   "interestIds": zod.array(zod.string()).max(getAccountMeResponsePreferencesOneInterestIdsMax),
+  "unresolvedNeighborhoodIds": zod.array(zod.string()).max(getAccountMeResponsePreferencesOneUnresolvedNeighborhoodIdsMax).describe('Subset of neighborhoodIds that no longer resolves in the current account option taxonomy.'),
+  "unresolvedInterestIds": zod.array(zod.string()).max(getAccountMeResponsePreferencesOneUnresolvedInterestIdsMax).describe('Subset of interestIds that no longer resolves in the current account option taxonomy.'),
   "updatedAt": zod.string()
-}).describe('Optional controlled preferences owned by exactly one account. Updates require expectedRevision and return 409 VERSION_CONFLICT on mismatch.'),zod.null()]),
+}).describe('Optional controlled preferences owned by exactly one account. Updates require expectedRevision and return 409 VERSION_CONFLICT on mismatch. Unresolved IDs are stored legacy choices that no longer occur in the current taxonomy; they remain in the ID arrays until the user removes them.'),zod.null()]),
   "createdAt": zod.string()
 }).describe('Private account summary for the signed-in user only. Never served on public routes.')
 
@@ -117,6 +123,10 @@ export const updateAccountPreferencesResponsePreferencesOneNeighborhoodIdsMax = 
 
 export const updateAccountPreferencesResponsePreferencesOneInterestIdsMax = 20;
 
+export const updateAccountPreferencesResponsePreferencesOneUnresolvedNeighborhoodIdsMax = 20;
+
+export const updateAccountPreferencesResponsePreferencesOneUnresolvedInterestIdsMax = 20;
+
 
 
 export const UpdateAccountPreferencesResponse = zod.object({
@@ -140,8 +150,10 @@ export const UpdateAccountPreferencesResponse = zod.object({
   "revision": zod.number(),
   "neighborhoodIds": zod.array(zod.string()).max(updateAccountPreferencesResponsePreferencesOneNeighborhoodIdsMax),
   "interestIds": zod.array(zod.string()).max(updateAccountPreferencesResponsePreferencesOneInterestIdsMax),
+  "unresolvedNeighborhoodIds": zod.array(zod.string()).max(updateAccountPreferencesResponsePreferencesOneUnresolvedNeighborhoodIdsMax).describe('Subset of neighborhoodIds that no longer resolves in the current account option taxonomy.'),
+  "unresolvedInterestIds": zod.array(zod.string()).max(updateAccountPreferencesResponsePreferencesOneUnresolvedInterestIdsMax).describe('Subset of interestIds that no longer resolves in the current account option taxonomy.'),
   "updatedAt": zod.string()
-}).describe('Optional controlled preferences owned by exactly one account. Updates require expectedRevision and return 409 VERSION_CONFLICT on mismatch.'),zod.null()]),
+}).describe('Optional controlled preferences owned by exactly one account. Updates require expectedRevision and return 409 VERSION_CONFLICT on mismatch. Unresolved IDs are stored legacy choices that no longer occur in the current taxonomy; they remain in the ID arrays until the user removes them.'),zod.null()]),
   "createdAt": zod.string()
 }).describe('Private account summary for the signed-in user only. Never served on public routes.')
 
@@ -155,6 +167,10 @@ export const UpdateAccountPreferencesResponse = zod.object({
 export const completeAccountOnboardingResponsePreferencesOneNeighborhoodIdsMax = 20;
 
 export const completeAccountOnboardingResponsePreferencesOneInterestIdsMax = 20;
+
+export const completeAccountOnboardingResponsePreferencesOneUnresolvedNeighborhoodIdsMax = 20;
+
+export const completeAccountOnboardingResponsePreferencesOneUnresolvedInterestIdsMax = 20;
 
 
 
@@ -179,8 +195,10 @@ export const CompleteAccountOnboardingResponse = zod.object({
   "revision": zod.number(),
   "neighborhoodIds": zod.array(zod.string()).max(completeAccountOnboardingResponsePreferencesOneNeighborhoodIdsMax),
   "interestIds": zod.array(zod.string()).max(completeAccountOnboardingResponsePreferencesOneInterestIdsMax),
+  "unresolvedNeighborhoodIds": zod.array(zod.string()).max(completeAccountOnboardingResponsePreferencesOneUnresolvedNeighborhoodIdsMax).describe('Subset of neighborhoodIds that no longer resolves in the current account option taxonomy.'),
+  "unresolvedInterestIds": zod.array(zod.string()).max(completeAccountOnboardingResponsePreferencesOneUnresolvedInterestIdsMax).describe('Subset of interestIds that no longer resolves in the current account option taxonomy.'),
   "updatedAt": zod.string()
-}).describe('Optional controlled preferences owned by exactly one account. Updates require expectedRevision and return 409 VERSION_CONFLICT on mismatch.'),zod.null()]),
+}).describe('Optional controlled preferences owned by exactly one account. Updates require expectedRevision and return 409 VERSION_CONFLICT on mismatch. Unresolved IDs are stored legacy choices that no longer occur in the current taxonomy; they remain in the ID arrays until the user removes them.'),zod.null()]),
   "createdAt": zod.string()
 }).describe('Private account summary for the signed-in user only. Never served on public routes.')
 

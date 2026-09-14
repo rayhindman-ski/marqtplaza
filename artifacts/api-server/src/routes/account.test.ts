@@ -33,6 +33,7 @@ const users = {
   other: `account-test-${runId}-other`,
   firstwriters: `account-test-${runId}-firstwriters`,
   ledger: `account-test-${runId}-ledger`,
+  legacy: `account-test-${runId}-legacy`,
 };
 const allUserIds = Object.values(users);
 
@@ -337,6 +338,31 @@ describe("account routes", () => {
     });
     assert.equal(otherStale.status, 409, "revisions are scoped per account");
     assert.equal(otherStale.body.expectedVersion, 0);
+  });
+
+  it("reports legacy IDs explicitly and lets the account remove them", async () => {
+    const me = await request("/api/account/me", { userId: users.legacy });
+    await db.insert(consumerPreferencesTable).values({
+      userId: me.body.id,
+      revision: 4,
+      neighborhoodIds: ["dhg:retired-neighborhood"],
+      interestIds: ["category:retired-interest"],
+    });
+
+    const loaded = await request("/api/account/me", { userId: users.legacy });
+    assert.deepEqual(loaded.body.preferences.unresolvedNeighborhoodIds, ["dhg:retired-neighborhood"]);
+    assert.deepEqual(loaded.body.preferences.unresolvedInterestIds, ["category:retired-interest"]);
+
+    const removed = await request("/api/account/preferences", {
+      method: "PATCH",
+      userId: users.legacy,
+      body: JSON.stringify({ expectedRevision: 4, neighborhoodIds: [], interestIds: [] }),
+    });
+    assert.equal(removed.status, 200);
+    assert.deepEqual(removed.body.preferences.neighborhoodIds, []);
+    assert.deepEqual(removed.body.preferences.interestIds, []);
+    assert.deepEqual(removed.body.preferences.unresolvedNeighborhoodIds, []);
+    assert.deepEqual(removed.body.preferences.unresolvedInterestIds, []);
   });
 
   it("refuses preference and consent writes from unverified identities", async () => {
