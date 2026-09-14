@@ -32,6 +32,8 @@ tags:
     description: Account-backed saved event snapshots and alerts
   - name: registration
     description: Authenticated community registration and participation eligibility
+  - name: account
+    description: Server-derived account identity, capabilities, and controlled preference options (disabled until the accounts readiness gate is met)
 paths:
   /healthz:
     get:
@@ -46,6 +48,92 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /account/me:
+    get:
+      operationId: getAccountMe
+      tags: [account]
+      summary: Get the signed-in user's server-derived account summary
+      description: |
+        Provisions a local account for the trusted identity-provider subject on first call
+        (idempotent and race-safe) and returns the account status, locale, onboarding state,
+        server-derived capabilities, and whether a separate research registration exists.
+        Identity, roles, and capabilities are never taken from the request; any request body
+        or query parameter is ignored. Returns 404 while the accounts readiness gate is off.
+      responses:
+        "200":
+          description: Account summary for the signed-in user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountMe"
+        "401":
+          description: Authentication is required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: The account is suspended or deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Accounts are not available yet
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "503":
+          description: The account could not be provisioned right now
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /account/options:
+    get:
+      operationId: getAccountOptions
+      tags: [account]
+      summary: Get the controlled neighbourhood and interest lists for account preferences
+      description: |
+        Returns the server-controlled option lists that preference updates are validated
+        against. Preferences are never inferred. Returns 404 while the accounts readiness
+        gate is off.
+      responses:
+        "200":
+          description: Controlled option lists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountOptions"
+        "401":
+          description: Authentication is required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Accounts are not available yet
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /readiness:
+    get:
+      operationId: getReadiness
+      tags: [health]
+      summary: Get the rollout readiness state of gated entry points
+      description: Reports which gated feature areas are enabled for this deployment. Flags are read-only and set by the operator environment.
+      responses:
+        "200":
+          description: Readiness flags
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FeatureReadiness"
 
   /registration:
     get:
@@ -998,10 +1086,403 @@ paths:
           description: Deal has already been decided
 
 components:
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      description: |
+        Client-generated key (8-128 characters) for mutating lifecycle operations. Replaying the same key
+        with the same payload returns the original result; the same key with a different payload
+        returns 409 IDEMPOTENCY_CONFLICT.
+      schema:
+        type: string
+        minLength: 8
+        maxLength: 128
+    PageCursor:
+      name: cursor
+      in: query
+      required: false
+      description: Opaque cursor from a previous PageInfo.nextCursor.
+      schema:
+        type: string
+        maxLength: 200
+    PageLimit:
+      name: limit
+      in: query
+      required: false
+      description: Page size for cursor-paginated lists.
+      schema:
+        type: number
+        minimum: 1
+        maximum: 50
+        default: 20
+  responses:
+    VersionConflict:
+      description: The expectedVersion or expectedRevision did not match the current server version. Reload and retry with the returned expectedVersion.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiError"
+    FeatureDisabled:
+      description: This entry point is disabled until its readiness gate is met.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiError"
   schemas:
     ClaimStatus:
       type: string
-      enum: [pending, approved, rejected]
+      description: |
+        Claim lifecycle. `pending` is the legacy alias of `submitted` (awaiting review).
+        Open states that hold the one-open-claim-per-listing slot: pending, submitted,
+        changes_requested, disputed. Transitions: pending|submitted -> approved | rejected |
+        changes_requested | withdrawn; changes_requested -> submitted | withdrawn;
+        approved -> disputed; disputed -> approved | rejected.
+      enum: [pending, submitted, changes_requested, approved, rejected, disputed, withdrawn]
+
+    ClaimNextAction:
+      type: string
+      description: What the claimant can do next; derived server-side from the claim status.
+      enum: [wait_for_review, provide_changes, none]
+
+    PublicationStatus:
+      type: string
+      description: |
+        Business publication lifecycle. Existing profiles are `published`.
+        draft -> published (explicit reviewer publication); published <-> unpublished;
+        published -> suspended (reviewer); any -> archived (terminal). Only `published`
+        profiles and their deals are served on public routes.
+      enum: [draft, unpublished, published, suspended, archived]
+
+    ApiError:
+      type: object
+      description: |
+        Stable, safe error shape for account and lifecycle operations. `code` is machine-readable,
+        `messageKey` maps to a localized message on the client, and `correlationId` matches the
+        server log entry. Never contains personal data or provider details. Existing operations
+        keep their `{ error }` string responses for compatibility.
+      required: [code, messageKey, correlationId]
+      properties:
+        code:
+          $ref: "#/components/schemas/ApiErrorCode"
+        messageKey:
+          type: string
+          description: Localization key, e.g. `errors.auth_required`.
+        fieldErrors:
+          type: array
+          items:
+            $ref: "#/components/schemas/ApiFieldError"
+        correlationId:
+          type: string
+        expectedVersion:
+          type: number
+          description: Present on VERSION_CONFLICT responses; the current server version the client must reload before retrying.
+
+    ApiErrorCode:
+      type: string
+      enum:
+        - AUTH_REQUIRED
+        - EMAIL_UNVERIFIED
+        - ACCOUNT_SUSPENDED
+        - ACCOUNT_DELETED
+        - FORBIDDEN
+        - SELF_REVIEW_FORBIDDEN
+        - NOT_FOUND
+        - FEATURE_DISABLED
+        - VALIDATION_FAILED
+        - UNKNOWN_FIELD
+        - VERSION_CONFLICT
+        - IDEMPOTENCY_CONFLICT
+        - RATE_LIMITED
+        - PROVISIONING_UNAVAILABLE
+        - DEPENDENCY_UNAVAILABLE
+
+    ApiFieldError:
+      type: object
+      required: [field, code]
+      properties:
+        field:
+          type: string
+        code:
+          type: string
+          description: Machine-readable per-field reason, e.g. `required`, `unknown`, `not_in_controlled_list`.
+
+    PageInfo:
+      type: object
+      description: Cursor pagination envelope shared by list operations added after this contract version.
+      required: [nextCursor, hasMore]
+      properties:
+        nextCursor:
+          type: ["string", "null"]
+        hasMore:
+          type: boolean
+
+    FeatureReadiness:
+      type: object
+      description: Read-only rollout flags; each entry point stays disabled (404) until its gate is met.
+      required: [accounts, businessIntake, businessPublication]
+      properties:
+        accounts:
+          type: boolean
+        businessIntake:
+          type: boolean
+        businessPublication:
+          type: boolean
+
+    AccountStatus:
+      type: string
+      description: |
+        Persisted account state, changed only server-side: active <-> suspended (operator),
+        active|suspended -> deleted (approved deletion request; terminal). Email verification is
+        not an account state; it is derived from the identity provider per request.
+      enum: [active, suspended, deleted]
+
+    AccountLocale:
+      type: string
+      enum: [nl, en]
+
+    AccountRole:
+      type: string
+      description: The single highest server-derived role for the current request.
+      enum: [unverified, user, business_member, reviewer]
+
+    AccountCapabilities:
+      type: object
+      description: Server-derived capabilities. Clients must never send these; they are recomputed on every request.
+      required: [isVerified, isEditor, isBusinessMember, canClaimBusiness, canPublishBusiness, canReview]
+      properties:
+        isVerified:
+          type: boolean
+          description: The identity provider reports a verified primary email for this session.
+        isEditor:
+          type: boolean
+          description: The session carries the trusted editor or admin role claim.
+        isBusinessMember:
+          type: boolean
+          description: The user has at least one business membership.
+        canClaimBusiness:
+          type: boolean
+          description: Verified, active, and the business intake gate is on.
+        canPublishBusiness:
+          type: boolean
+          description: Editor and the business publication gate is on.
+        canReview:
+          type: boolean
+          description: Editor; self-review of the user's own businesses or claims is still refused per request.
+
+    AccountMe:
+      type: object
+      description: Private account summary for the signed-in user only. Never served on public routes.
+      required:
+        - id
+        - status
+        - role
+        - locale
+        - onboardingCompleted
+        - capabilities
+        - hasResearchRegistration
+        - businessMembershipCount
+        - preferences
+        - createdAt
+      properties:
+        id:
+          type: number
+          description: Local account id (never the identity-provider subject).
+        status:
+          $ref: "#/components/schemas/AccountStatus"
+        role:
+          $ref: "#/components/schemas/AccountRole"
+        locale:
+          $ref: "#/components/schemas/AccountLocale"
+        onboardingCompleted:
+          type: boolean
+        onboardingCompletedAt:
+          type: ["string", "null"]
+        capabilities:
+          $ref: "#/components/schemas/AccountCapabilities"
+        hasResearchRegistration:
+          type: boolean
+          description: Whether the separate campaign-style research registration exists. Never merged into account data.
+        businessMembershipCount:
+          type: number
+        preferences:
+          oneOf:
+            - $ref: "#/components/schemas/ConsumerPreferences"
+            - type: "null"
+        createdAt:
+          type: string
+
+    ConsumerPreferences:
+      type: object
+      description: Optional controlled preferences owned by exactly one account. Updates require expectedRevision and return 409 VERSION_CONFLICT on mismatch.
+      required: [revision, neighborhoodIds, interestIds, updatedAt]
+      properties:
+        revision:
+          type: number
+        neighborhoodIds:
+          type: array
+          maxItems: 20
+          items:
+            type: string
+        interestIds:
+          type: array
+          maxItems: 20
+          items:
+            type: string
+        updatedAt:
+          type: string
+
+    ConsentEvent:
+      type: object
+      description: One append-only consent ledger entry. Entries are never edited; the latest entry per consentType is the current state.
+      required: [id, consentType, noticeVersion, granted, source, createdAt]
+      properties:
+        id:
+          type: number
+        consentType:
+          type: string
+        noticeVersion:
+          type: string
+        granted:
+          type: boolean
+        source:
+          type: string
+          enum: [onboarding, account_settings, support, system]
+        createdAt:
+          type: string
+
+    AccountOption:
+      type: object
+      required: [id, label]
+      properties:
+        id:
+          type: string
+        label:
+          type: object
+          required: [nl, en]
+          properties:
+            nl:
+              type: string
+            en:
+              type: string
+
+    AccountOptions:
+      type: object
+      required: [neighborhoods, interests, taxonomyVersion]
+      properties:
+        taxonomyVersion:
+          type: string
+          description: Identifier of the controlled list version; stored IDs that no longer resolve are shown as no longer available, never dropped.
+        neighborhoods:
+          type: array
+          items:
+            $ref: "#/components/schemas/AccountOption"
+        interests:
+          type: array
+          items:
+            $ref: "#/components/schemas/AccountOption"
+
+    BusinessRevisionStatus:
+      type: string
+      description: |
+        draft -> submitted (owner); submitted -> approved | changes_requested | rejected (reviewer);
+        changes_requested -> submitted (owner, new version); approved -> superseded (later approval);
+        draft -> discarded (owner). A business has at most one approved revision.
+      enum: [draft, submitted, changes_requested, approved, rejected, superseded, discarded]
+
+    BusinessRevisionSummary:
+      type: object
+      description: Owner- and reviewer-visible revision metadata. Draft content is never served on public routes.
+      required: [id, businessProfileId, version, status, createdAt, updatedAt]
+      properties:
+        id:
+          type: number
+        businessProfileId:
+          type: number
+        version:
+          type: number
+        status:
+          $ref: "#/components/schemas/BusinessRevisionStatus"
+        submittedAt:
+          type: ["string", "null"]
+        decidedAt:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+
+    ReviewDecisionRecord:
+      type: object
+      description: Immutable audit entry for a reviewer decision. The reviewer is derived from the session and must not own the target (self-review is refused with SELF_REVIEW_FORBIDDEN).
+      required: [id, targetType, targetId, targetVersion, decision, createdAt]
+      properties:
+        id:
+          type: number
+        targetType:
+          type: string
+          enum: [claim, revision, publication]
+        targetId:
+          type: number
+        targetVersion:
+          type: number
+        decision:
+          type: string
+          enum: [approve, reject, request_changes, publish, unpublish, suspend]
+        reasonCode:
+          type: ["string", "null"]
+        reason:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+
+    AccountRequestStatus:
+      type: string
+      description: |
+        received -> blocked | in_review | withdrawn; blocked -> received | withdrawn;
+        in_review -> completed | rejected. Deletion requests are blocked while the user is the
+        sole owner of a published business.
+      enum: [received, blocked, in_review, completed, rejected, withdrawn]
+
+    AccountRequest:
+      type: object
+      description: Private to the requesting account.
+      required: [id, scope, type, status, version, createdAt, updatedAt]
+      properties:
+        id:
+          type: number
+        scope:
+          type: string
+          enum: [account, business]
+        type:
+          type: string
+          enum: [deletion, export, suspension_appeal]
+        status:
+          $ref: "#/components/schemas/AccountRequestStatus"
+        version:
+          type: number
+        deadlineAt:
+          type: ["string", "null"]
+        blockerCode:
+          type: ["string", "null"]
+        resolutionCode:
+          type: ["string", "null"]
+        resolvedAt:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+
+    LifecycleMessageStatus:
+      type: string
+      description: |
+        Outbox state of a lifecycle message, distinct from the business or account state it describes.
+        queued -> sending -> sent | failed; sending -> queued on transient failure with a retry time;
+        queued -> cancelled when the triggering state is reverted. Without a configured provider
+        messages stay queued and the UI may only say "message pending".
+      enum: [queued, sending, sent, failed, cancelled]
 
     DealStatus:
       type: string
@@ -1079,6 +1560,11 @@ components:
           type: boolean
         claimedAt:
           type: ["string", "null"]
+        publicationStatus:
+          $ref: "#/components/schemas/PublicationStatus"
+        approvedRevisionVersion:
+          type: ["number", "null"]
+          description: Version of the approved revision when publication review is enabled; null when the profile is served from its columns.
         createdAt:
           type: string
         updatedAt:
@@ -1110,6 +1596,11 @@ components:
           type: ["string", "null"]
         reviewedAt:
           type: ["string", "null"]
+        version:
+          type: number
+          description: Optimistic-concurrency version; send it back as expectedVersion on later claim updates.
+        nextAction:
+          $ref: "#/components/schemas/ClaimNextAction"
         createdAt:
           type: string
         updatedAt:

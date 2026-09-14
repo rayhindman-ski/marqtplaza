@@ -5,13 +5,381 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+/**
+ * Claim lifecycle. `pending` is the legacy alias of `submitted` (awaiting review).
+ * Open states that hold the one-open-claim-per-listing slot: pending, submitted,
+ * changes_requested, disputed. Transitions: pending|submitted -> approved | rejected |
+ * changes_requested | withdrawn; changes_requested -> submitted | withdrawn;
+ * approved -> disputed; disputed -> approved | rejected.
+ */
 export type ClaimStatus = typeof ClaimStatus[keyof typeof ClaimStatus];
 
 
 export const ClaimStatus = {
   pending: 'pending',
+  submitted: 'submitted',
+  changes_requested: 'changes_requested',
   approved: 'approved',
   rejected: 'rejected',
+  disputed: 'disputed',
+  withdrawn: 'withdrawn',
+} as const;
+
+/**
+ * What the claimant can do next; derived server-side from the claim status.
+ */
+export type ClaimNextAction = typeof ClaimNextAction[keyof typeof ClaimNextAction];
+
+
+export const ClaimNextAction = {
+  wait_for_review: 'wait_for_review',
+  provide_changes: 'provide_changes',
+  none: 'none',
+} as const;
+
+/**
+ * Business publication lifecycle. Existing profiles are `published`.
+ * draft -> published (explicit reviewer publication); published <-> unpublished;
+ * published -> suspended (reviewer); any -> archived (terminal). Only `published`
+ * profiles and their deals are served on public routes.
+ */
+export type PublicationStatus = typeof PublicationStatus[keyof typeof PublicationStatus];
+
+
+export const PublicationStatus = {
+  draft: 'draft',
+  unpublished: 'unpublished',
+  published: 'published',
+  suspended: 'suspended',
+  archived: 'archived',
+} as const;
+
+export type ApiErrorCode = typeof ApiErrorCode[keyof typeof ApiErrorCode];
+
+
+export const ApiErrorCode = {
+  AUTH_REQUIRED: 'AUTH_REQUIRED',
+  EMAIL_UNVERIFIED: 'EMAIL_UNVERIFIED',
+  ACCOUNT_SUSPENDED: 'ACCOUNT_SUSPENDED',
+  ACCOUNT_DELETED: 'ACCOUNT_DELETED',
+  FORBIDDEN: 'FORBIDDEN',
+  SELF_REVIEW_FORBIDDEN: 'SELF_REVIEW_FORBIDDEN',
+  NOT_FOUND: 'NOT_FOUND',
+  FEATURE_DISABLED: 'FEATURE_DISABLED',
+  VALIDATION_FAILED: 'VALIDATION_FAILED',
+  UNKNOWN_FIELD: 'UNKNOWN_FIELD',
+  VERSION_CONFLICT: 'VERSION_CONFLICT',
+  IDEMPOTENCY_CONFLICT: 'IDEMPOTENCY_CONFLICT',
+  RATE_LIMITED: 'RATE_LIMITED',
+  PROVISIONING_UNAVAILABLE: 'PROVISIONING_UNAVAILABLE',
+  DEPENDENCY_UNAVAILABLE: 'DEPENDENCY_UNAVAILABLE',
+} as const;
+
+export interface ApiFieldError {
+  field: string;
+  /** Machine-readable per-field reason, e.g. `required`, `unknown`, `not_in_controlled_list`. */
+  code: string;
+}
+
+/**
+ * Stable, safe error shape for account and lifecycle operations. `code` is machine-readable,
+ * `messageKey` maps to a localized message on the client, and `correlationId` matches the
+ * server log entry. Never contains personal data or provider details. Existing operations
+ * keep their `{ error }` string responses for compatibility.
+ */
+export interface ApiError {
+  code: ApiErrorCode;
+  /** Localization key, e.g. `errors.auth_required`. */
+  messageKey: string;
+  fieldErrors?: ApiFieldError[];
+  correlationId: string;
+  /** Present on VERSION_CONFLICT responses; the current server version the client must reload before retrying. */
+  expectedVersion?: number;
+}
+
+/**
+ * Cursor pagination envelope shared by list operations added after this contract version.
+ */
+export interface PageInfo {
+  /** @nullable */
+  nextCursor: string | null;
+  hasMore: boolean;
+}
+
+/**
+ * Read-only rollout flags; each entry point stays disabled (404) until its gate is met.
+ */
+export interface FeatureReadiness {
+  accounts: boolean;
+  businessIntake: boolean;
+  businessPublication: boolean;
+}
+
+/**
+ * Persisted account state, changed only server-side: active <-> suspended (operator),
+ * active|suspended -> deleted (approved deletion request; terminal). Email verification is
+ * not an account state; it is derived from the identity provider per request.
+ */
+export type AccountStatus = typeof AccountStatus[keyof typeof AccountStatus];
+
+
+export const AccountStatus = {
+  active: 'active',
+  suspended: 'suspended',
+  deleted: 'deleted',
+} as const;
+
+export type AccountLocale = typeof AccountLocale[keyof typeof AccountLocale];
+
+
+export const AccountLocale = {
+  nl: 'nl',
+  en: 'en',
+} as const;
+
+/**
+ * The single highest server-derived role for the current request.
+ */
+export type AccountRole = typeof AccountRole[keyof typeof AccountRole];
+
+
+export const AccountRole = {
+  unverified: 'unverified',
+  user: 'user',
+  business_member: 'business_member',
+  reviewer: 'reviewer',
+} as const;
+
+/**
+ * Server-derived capabilities. Clients must never send these; they are recomputed on every request.
+ */
+export interface AccountCapabilities {
+  /** The identity provider reports a verified primary email for this session. */
+  isVerified: boolean;
+  /** The session carries the trusted editor or admin role claim. */
+  isEditor: boolean;
+  /** The user has at least one business membership. */
+  isBusinessMember: boolean;
+  /** Verified, active, and the business intake gate is on. */
+  canClaimBusiness: boolean;
+  /** Editor and the business publication gate is on. */
+  canPublishBusiness: boolean;
+  /** Editor; self-review of the user's own businesses or claims is still refused per request. */
+  canReview: boolean;
+}
+
+/**
+ * Optional controlled preferences owned by exactly one account. Updates require expectedRevision and return 409 VERSION_CONFLICT on mismatch.
+ */
+export interface ConsumerPreferences {
+  revision: number;
+  /** @maxItems 20 */
+  neighborhoodIds: string[];
+  /** @maxItems 20 */
+  interestIds: string[];
+  updatedAt: string;
+}
+
+/**
+ * Private account summary for the signed-in user only. Never served on public routes.
+ */
+export interface AccountMe {
+  /** Local account id (never the identity-provider subject). */
+  id: number;
+  status: AccountStatus;
+  role: AccountRole;
+  locale: AccountLocale;
+  onboardingCompleted: boolean;
+  /** @nullable */
+  onboardingCompletedAt?: string | null;
+  capabilities: AccountCapabilities;
+  /** Whether the separate campaign-style research registration exists. Never merged into account data. */
+  hasResearchRegistration: boolean;
+  businessMembershipCount: number;
+  preferences: ConsumerPreferences | null;
+  createdAt: string;
+}
+
+export type ConsentEventSource = typeof ConsentEventSource[keyof typeof ConsentEventSource];
+
+
+export const ConsentEventSource = {
+  onboarding: 'onboarding',
+  account_settings: 'account_settings',
+  support: 'support',
+  system: 'system',
+} as const;
+
+/**
+ * One append-only consent ledger entry. Entries are never edited; the latest entry per consentType is the current state.
+ */
+export interface ConsentEvent {
+  id: number;
+  consentType: string;
+  noticeVersion: string;
+  granted: boolean;
+  source: ConsentEventSource;
+  createdAt: string;
+}
+
+export type AccountOptionLabel = {
+  nl: string;
+  en: string;
+};
+
+export interface AccountOption {
+  id: string;
+  label: AccountOptionLabel;
+}
+
+export interface AccountOptions {
+  /** Identifier of the controlled list version; stored IDs that no longer resolve are shown as no longer available, never dropped. */
+  taxonomyVersion: string;
+  neighborhoods: AccountOption[];
+  interests: AccountOption[];
+}
+
+/**
+ * draft -> submitted (owner); submitted -> approved | changes_requested | rejected (reviewer);
+ * changes_requested -> submitted (owner, new version); approved -> superseded (later approval);
+ * draft -> discarded (owner). A business has at most one approved revision.
+ */
+export type BusinessRevisionStatus = typeof BusinessRevisionStatus[keyof typeof BusinessRevisionStatus];
+
+
+export const BusinessRevisionStatus = {
+  draft: 'draft',
+  submitted: 'submitted',
+  changes_requested: 'changes_requested',
+  approved: 'approved',
+  rejected: 'rejected',
+  superseded: 'superseded',
+  discarded: 'discarded',
+} as const;
+
+/**
+ * Owner- and reviewer-visible revision metadata. Draft content is never served on public routes.
+ */
+export interface BusinessRevisionSummary {
+  id: number;
+  businessProfileId: number;
+  version: number;
+  status: BusinessRevisionStatus;
+  /** @nullable */
+  submittedAt?: string | null;
+  /** @nullable */
+  decidedAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type ReviewDecisionRecordTargetType = typeof ReviewDecisionRecordTargetType[keyof typeof ReviewDecisionRecordTargetType];
+
+
+export const ReviewDecisionRecordTargetType = {
+  claim: 'claim',
+  revision: 'revision',
+  publication: 'publication',
+} as const;
+
+export type ReviewDecisionRecordDecision = typeof ReviewDecisionRecordDecision[keyof typeof ReviewDecisionRecordDecision];
+
+
+export const ReviewDecisionRecordDecision = {
+  approve: 'approve',
+  reject: 'reject',
+  request_changes: 'request_changes',
+  publish: 'publish',
+  unpublish: 'unpublish',
+  suspend: 'suspend',
+} as const;
+
+/**
+ * Immutable audit entry for a reviewer decision. The reviewer is derived from the session and must not own the target (self-review is refused with SELF_REVIEW_FORBIDDEN).
+ */
+export interface ReviewDecisionRecord {
+  id: number;
+  targetType: ReviewDecisionRecordTargetType;
+  targetId: number;
+  targetVersion: number;
+  decision: ReviewDecisionRecordDecision;
+  /** @nullable */
+  reasonCode?: string | null;
+  /** @nullable */
+  reason?: string | null;
+  createdAt: string;
+}
+
+/**
+ * received -> blocked | in_review | withdrawn; blocked -> received | withdrawn;
+ * in_review -> completed | rejected. Deletion requests are blocked while the user is the
+ * sole owner of a published business.
+ */
+export type AccountRequestStatus = typeof AccountRequestStatus[keyof typeof AccountRequestStatus];
+
+
+export const AccountRequestStatus = {
+  received: 'received',
+  blocked: 'blocked',
+  in_review: 'in_review',
+  completed: 'completed',
+  rejected: 'rejected',
+  withdrawn: 'withdrawn',
+} as const;
+
+export type AccountRequestScope = typeof AccountRequestScope[keyof typeof AccountRequestScope];
+
+
+export const AccountRequestScope = {
+  account: 'account',
+  business: 'business',
+} as const;
+
+export type AccountRequestType = typeof AccountRequestType[keyof typeof AccountRequestType];
+
+
+export const AccountRequestType = {
+  deletion: 'deletion',
+  export: 'export',
+  suspension_appeal: 'suspension_appeal',
+} as const;
+
+/**
+ * Private to the requesting account.
+ */
+export interface AccountRequest {
+  id: number;
+  scope: AccountRequestScope;
+  type: AccountRequestType;
+  status: AccountRequestStatus;
+  version: number;
+  /** @nullable */
+  deadlineAt?: string | null;
+  /** @nullable */
+  blockerCode?: string | null;
+  /** @nullable */
+  resolutionCode?: string | null;
+  /** @nullable */
+  resolvedAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * Outbox state of a lifecycle message, distinct from the business or account state it describes.
+ * queued -> sending -> sent | failed; sending -> queued on transient failure with a retry time;
+ * queued -> cancelled when the triggering state is reverted. Without a configured provider
+ * messages stay queued and the UI may only say "message pending".
+ */
+export type LifecycleMessageStatus = typeof LifecycleMessageStatus[keyof typeof LifecycleMessageStatus];
+
+
+export const LifecycleMessageStatus = {
+  queued: 'queued',
+  sending: 'sending',
+  sent: 'sent',
+  failed: 'failed',
+  cancelled: 'cancelled',
 } as const;
 
 export type DealStatus = typeof DealStatus[keyof typeof DealStatus];
@@ -79,6 +447,12 @@ export interface BusinessProfile {
   isClaimed: boolean;
   /** @nullable */
   claimedAt?: string | null;
+  publicationStatus?: PublicationStatus;
+  /**
+     * Version of the approved revision when publication review is enabled; null when the profile is served from its columns.
+     * @nullable
+     */
+  approvedRevisionVersion?: number | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -99,6 +473,9 @@ export interface BusinessClaim {
   reviewNote?: string | null;
   /** @nullable */
   reviewedAt?: string | null;
+  /** Optimistic-concurrency version; send it back as expectedVersion on later claim updates. */
+  version?: number;
+  nextAction?: ClaimNextAction;
   createdAt: string;
   updatedAt: string;
   profile: BusinessProfile;
@@ -1339,6 +1716,33 @@ export interface NewsScanResponse {
   scans: NewsSourceScan[];
   error?: string;
 }
+
+/**
+ * The expectedVersion or expectedRevision did not match the current server version. Reload and retry with the returned expectedVersion.
+ */
+export type VersionConflictResponse = ApiError;
+
+/**
+ * This entry point is disabled until its readiness gate is met.
+ */
+export type FeatureDisabledResponse = ApiError;
+
+/**
+ * Client-generated key (8-128 characters) for mutating lifecycle operations. Replaying the same key
+ * with the same payload returns the original result; the same key with a different payload
+ * returns 409 IDEMPOTENCY_CONFLICT.
+ */
+export type IdempotencyKeyParameter = string;
+
+/**
+ * Opaque cursor from a previous PageInfo.nextCursor.
+ */
+export type PageCursorParameter = string;
+
+/**
+ * Page size for cursor-paginated lists.
+ */
+export type PageLimitParameter = number;
 
 export type GetWeatherParams = {
 /**

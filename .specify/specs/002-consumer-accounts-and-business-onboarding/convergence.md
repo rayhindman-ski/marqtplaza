@@ -75,7 +75,11 @@ runner + Playwright.
    its implementation behind the outbox).
 2. No migration tooling beyond `drizzle-kit push`; every schema change needs
    an isolated-database rehearsal and a production backup.
-3. No feature-flag mechanism exists; it is the first implementation task.
+3. ~~No feature-flag mechanism exists; it is the first implementation task.~~
+   Done 2026-09-14: `ACCOUNTS_ENABLED`, `BUSINESS_INTAKE_ENABLED`,
+   `BUSINESS_PUBLICATION_ENABLED` (server) and `VITE_*` mirrors (web), all
+   default off; `GET /api/readiness` reports them; gated routes answer 404
+   `FEATURE_DISABLED`.
 4. Reviewer, support owner, legal wording, and retention periods are
    unassigned (Q3, Q6).
 
@@ -83,7 +87,7 @@ runner + Playwright.
 
 | Scenario | Implementation evidence | Verification |
 | --- | --- | --- |
-| US1 identity and capabilities | — | — |
+| US1 identity and capabilities | Foundation landed 2026-09-14: additive `app_users`/`consumer_preferences`/`account_consent_events`, `business_profile_revisions`/`business_reviews`/`business_fact_checks`, `lifecycle_outbox`/`account_requests`; additive columns on `business_profiles` (`publication_status` default `published`, `approved_revision_id`, `created_by_user_id`) and `business_claims` (`authority_declaration`, `evidence_reference`, `version`, `withdrawn_at`); open-claim partial unique index renamed to `business_claims_one_open_claim_per_profile_unique` covering `pending, submitted, changes_requested, disputed`. Server: `lib/featureFlags.ts`, `lib/apiError.ts`, `lib/permissions.ts` (Clerk-derived identity, editor role, capabilities, self-review guard), `middlewares/requireFlag.ts`, `middlewares/requireAppUser.ts` (INSERT … ON CONFLICT DO NOTHING + read), `routes/account.ts` (`GET /account/me`, `GET /account/options`), `GET /readiness`. Contract: `ApiError`, `FeatureReadiness`, `AccountMe`, `AccountCapabilities`, `ConsumerPreferences`, `ConsentEvent`, `AccountOptions`, `PublicationStatus`, `BusinessRevisionStatus`/`BusinessRevisionSummary`, `ReviewDecisionRecord`, `AccountRequest`, `LifecycleMessageStatus`, `PageInfo`, `Idempotency-Key`/cursor parameters, `VersionConflict` response; `ClaimStatus` extended additively. No UI, no backfill, flags off. | `pnpm --filter @workspace/api-server run test:account-foundation` → 18 pass, 0 fail (provisioning idempotent under 8 concurrent first calls; 401/403/404 error shape; forged `role` query rejected as `UNKNOWN_FIELD`; suspended account refused; registration kept separate; editor/business-member roles server-derived). `pnpm run typecheck` clean. Live dev server: `/api/readiness` → all false, `/api/account/me` → 404 `FEATURE_DISABLED`. |
 | US2 preferences | — | — |
 | US3 intake | — | — |
 | US4 review and publication | — | — |
@@ -91,8 +95,24 @@ runner + Playwright.
 
 ## Verification commands
 
-See `plan.md` → Verification plan. Baseline run before Phase 1 (T005) to be
-recorded here with date and results.
+See `plan.md` → Verification plan.
+
+Baseline (2026-09-14, before the foundation change): `pnpm run typecheck`
+clean; `tsx --test src/routes/registration.test.ts` 2 pass.
+
+Schema push rehearsal (2026-09-14): development schema cloned with
+`pg_dump --schema-only` into the disposable database
+`buurtplaza_schema_rehearsal`; `drizzle-kit push --verbose` against it produced
+only `CREATE TABLE` (8 new tables), `ADD COLUMN` (7 nullable or defaulted
+columns), `DROP INDEX business_claims_one_pending_per_profile_unique` +
+`CREATE UNIQUE INDEX business_claims_one_open_claim_per_profile_unique`, new
+FKs and indexes. No `DROP TABLE`, no `DROP COLUMN`, no type change. A second
+push reported "No changes detected" (idempotent). The same push was then
+applied to the development database. Two lessons for the next schema change:
+drizzle-kit push does not detect a changed `WHERE` clause on an existing
+partial index (rename the index instead), and FK names longer than 63
+characters get truncated by PostgreSQL and are recreated on every push
+(name them explicitly with `foreignKey({ name })`).
 
 ## Deviations and follow-up
 

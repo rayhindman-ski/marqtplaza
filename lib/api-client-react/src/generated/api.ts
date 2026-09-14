@@ -20,6 +20,9 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
+  AccountMe,
+  AccountOptions,
+  ApiError,
   BusinessClaim,
   BusinessClaimInput,
   BusinessClaimList,
@@ -42,6 +45,7 @@ import type {
   EventReviewDecision,
   EventReviewDecisionResult,
   EventReviewList,
+  FeatureReadiness,
   GetBusinessClaimModerationParams,
   GetCommunityModerationPostsParams,
   GetCommunityPostsParams,
@@ -168,6 +172,246 @@ export function useHealthCheck<TData = Awaited<ReturnType<typeof healthCheck>>, 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getHealthCheckQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetAccountMeUrl = () => {
+
+
+
+
+  return `/api/account/me`
+}
+
+/**
+ * Provisions a local account for the trusted identity-provider subject on first call
+ * (idempotent and race-safe) and returns the account status, locale, onboarding state,
+ * server-derived capabilities, and whether a separate research registration exists.
+ * Identity, roles, and capabilities are never taken from the request; any request body
+ * or query parameter is ignored. Returns 404 while the accounts readiness gate is off.
+ * @summary Get the signed-in user's server-derived account summary
+ */
+export const getAccountMe = async ( options?: Parameters<typeof customFetch>[1]): Promise<AccountMe> => {
+
+  return customFetch<AccountMe>(getGetAccountMeUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetAccountMeQueryKey = () => {
+    return [
+    `/api/account/me`
+    ] as const;
+    }
+
+
+export const getGetAccountMeQueryOptions = <TData = Awaited<ReturnType<typeof getAccountMe>>, TError = ErrorType<ApiError>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAccountMe>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetAccountMeQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAccountMe>>> = ({ signal }) => getAccountMe({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAccountMe>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetAccountMeQueryResult = NonNullable<Awaited<ReturnType<typeof getAccountMe>>>
+export type GetAccountMeQueryError = ErrorType<ApiError>
+
+
+/**
+ * @summary Get the signed-in user's server-derived account summary
+ */
+
+export function useGetAccountMe<TData = Awaited<ReturnType<typeof getAccountMe>>, TError = ErrorType<ApiError>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAccountMe>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetAccountMeQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetAccountOptionsUrl = () => {
+
+
+
+
+  return `/api/account/options`
+}
+
+/**
+ * Returns the server-controlled option lists that preference updates are validated
+ * against. Preferences are never inferred. Returns 404 while the accounts readiness
+ * gate is off.
+ * @summary Get the controlled neighbourhood and interest lists for account preferences
+ */
+export const getAccountOptions = async ( options?: Parameters<typeof customFetch>[1]): Promise<AccountOptions> => {
+
+  return customFetch<AccountOptions>(getGetAccountOptionsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetAccountOptionsQueryKey = () => {
+    return [
+    `/api/account/options`
+    ] as const;
+    }
+
+
+export const getGetAccountOptionsQueryOptions = <TData = Awaited<ReturnType<typeof getAccountOptions>>, TError = ErrorType<ApiError>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAccountOptions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetAccountOptionsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAccountOptions>>> = ({ signal }) => getAccountOptions({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAccountOptions>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetAccountOptionsQueryResult = NonNullable<Awaited<ReturnType<typeof getAccountOptions>>>
+export type GetAccountOptionsQueryError = ErrorType<ApiError>
+
+
+/**
+ * @summary Get the controlled neighbourhood and interest lists for account preferences
+ */
+
+export function useGetAccountOptions<TData = Awaited<ReturnType<typeof getAccountOptions>>, TError = ErrorType<ApiError>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAccountOptions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetAccountOptionsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetReadinessUrl = () => {
+
+
+
+
+  return `/api/readiness`
+}
+
+/**
+ * Reports which gated feature areas are enabled for this deployment. Flags are read-only and set by the operator environment.
+ * @summary Get the rollout readiness state of gated entry points
+ */
+export const getReadiness = async ( options?: Parameters<typeof customFetch>[1]): Promise<FeatureReadiness> => {
+
+  return customFetch<FeatureReadiness>(getGetReadinessUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetReadinessQueryKey = () => {
+    return [
+    `/api/readiness`
+    ] as const;
+    }
+
+
+export const getGetReadinessQueryOptions = <TData = Awaited<ReturnType<typeof getReadiness>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getReadiness>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetReadinessQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getReadiness>>> = ({ signal }) => getReadiness({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getReadiness>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetReadinessQueryResult = NonNullable<Awaited<ReturnType<typeof getReadiness>>>
+export type GetReadinessQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get the rollout readiness state of gated entry points
+ */
+
+export function useGetReadiness<TData = Awaited<ReturnType<typeof getReadiness>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getReadiness>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetReadinessQueryOptions(options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

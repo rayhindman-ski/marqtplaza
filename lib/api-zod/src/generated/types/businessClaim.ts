@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { BusinessProfile } from './businessProfile';
+import type { ClaimNextAction } from './claimNextAction';
 import type { ClaimStatus } from './claimStatus';
 
 export interface BusinessClaim {
@@ -24,6 +25,9 @@ export interface BusinessClaim {
   reviewNote?: string | null;
   /** @nullable */
   reviewedAt?: string | null;
+  /** Optimistic-concurrency version; send it back as expectedVersion on later claim updates. */
+  version?: number;
+  nextAction?: ClaimNextAction;
   createdAt: string;
   updatedAt: string;
   profile: BusinessProfile;

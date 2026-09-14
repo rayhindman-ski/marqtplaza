@@ -18,6 +18,83 @@ export const HealthCheckResponse = zod.object({
 
 
 /**
+ * Provisions a local account for the trusted identity-provider subject on first call
+ * (idempotent and race-safe) and returns the account status, locale, onboarding state,
+ * server-derived capabilities, and whether a separate research registration exists.
+ * Identity, roles, and capabilities are never taken from the request; any request body
+ * or query parameter is ignored. Returns 404 while the accounts readiness gate is off.
+ * @summary Get the signed-in user's server-derived account summary
+ */
+export const getAccountMeResponsePreferencesOneNeighborhoodIdsMax = 20;
+
+export const getAccountMeResponsePreferencesOneInterestIdsMax = 20;
+
+
+
+export const GetAccountMeResponse = zod.object({
+  "id": zod.number().describe('Local account id (never the identity-provider subject).'),
+  "status": zod.enum(['active', 'suspended', 'deleted']).describe('Persisted account state, changed only server-side: active <-> suspended (operator),\nactive|suspended -> deleted (approved deletion request; terminal). Email verification is\nnot an account state; it is derived from the identity provider per request.\n'),
+  "role": zod.enum(['unverified', 'user', 'business_member', 'reviewer']).describe('The single highest server-derived role for the current request.'),
+  "locale": zod.enum(['nl', 'en']),
+  "onboardingCompleted": zod.boolean(),
+  "onboardingCompletedAt": zod.string().nullish(),
+  "capabilities": zod.object({
+  "isVerified": zod.boolean().describe('The identity provider reports a verified primary email for this session.'),
+  "isEditor": zod.boolean().describe('The session carries the trusted editor or admin role claim.'),
+  "isBusinessMember": zod.boolean().describe('The user has at least one business membership.'),
+  "canClaimBusiness": zod.boolean().describe('Verified, active, and the business intake gate is on.'),
+  "canPublishBusiness": zod.boolean().describe('Editor and the business publication gate is on.'),
+  "canReview": zod.boolean().describe('Editor; self-review of the user\'s own businesses or claims is still refused per request.')
+}).describe('Server-derived capabilities. Clients must never send these; they are recomputed on every request.'),
+  "hasResearchRegistration": zod.boolean().describe('Whether the separate campaign-style research registration exists. Never merged into account data.'),
+  "businessMembershipCount": zod.number(),
+  "preferences": zod.union([zod.object({
+  "revision": zod.number(),
+  "neighborhoodIds": zod.array(zod.string()).max(getAccountMeResponsePreferencesOneNeighborhoodIdsMax),
+  "interestIds": zod.array(zod.string()).max(getAccountMeResponsePreferencesOneInterestIdsMax),
+  "updatedAt": zod.string()
+}).describe('Optional controlled preferences owned by exactly one account. Updates require expectedRevision and return 409 VERSION_CONFLICT on mismatch.'),zod.null()]),
+  "createdAt": zod.string()
+}).describe('Private account summary for the signed-in user only. Never served on public routes.')
+
+
+/**
+ * Returns the server-controlled option lists that preference updates are validated
+ * against. Preferences are never inferred. Returns 404 while the accounts readiness
+ * gate is off.
+ * @summary Get the controlled neighbourhood and interest lists for account preferences
+ */
+export const GetAccountOptionsResponse = zod.object({
+  "taxonomyVersion": zod.string().describe('Identifier of the controlled list version; stored IDs that no longer resolve are shown as no longer available, never dropped.'),
+  "neighborhoods": zod.array(zod.object({
+  "id": zod.string(),
+  "label": zod.object({
+  "nl": zod.string(),
+  "en": zod.string()
+})
+})),
+  "interests": zod.array(zod.object({
+  "id": zod.string(),
+  "label": zod.object({
+  "nl": zod.string(),
+  "en": zod.string()
+})
+}))
+})
+
+
+/**
+ * Reports which gated feature areas are enabled for this deployment. Flags are read-only and set by the operator environment.
+ * @summary Get the rollout readiness state of gated entry points
+ */
+export const GetReadinessResponse = zod.object({
+  "accounts": zod.boolean(),
+  "businessIntake": zod.boolean(),
+  "businessPublication": zod.boolean()
+}).describe('Read-only rollout flags; each entry point stays disabled (404) until its gate is met.')
+
+
+/**
  * @summary Get the signed-in user's registration profile
  */
 export const getRegistrationResponseRegistrationOneOneNameMax = 160;
@@ -924,9 +1001,11 @@ export const GetMyBusinessClaimsResponseItem = zod.object({
   "relationship": zod.string(),
   "evidenceUrl": zod.string().nullish(),
   "message": zod.string().nullish(),
-  "status": zod.enum(['pending', 'approved', 'rejected']),
+  "status": zod.enum(['pending', 'submitted', 'changes_requested', 'approved', 'rejected', 'disputed', 'withdrawn']).describe('Claim lifecycle. `pending` is the legacy alias of `submitted` (awaiting review).\nOpen states that hold the one-open-claim-per-listing slot: pending, submitted,\nchanges_requested, disputed. Transitions: pending|submitted -> approved | rejected |\nchanges_requested | withdrawn; changes_requested -> submitted | withdrawn;\napproved -> disputed; disputed -> approved | rejected.\n'),
   "reviewNote": zod.string().nullish(),
   "reviewedAt": zod.string().nullish(),
+  "version": zod.number().optional().describe('Optimistic-concurrency version; send it back as expectedVersion on later claim updates.'),
+  "nextAction": zod.enum(['wait_for_review', 'provide_changes', 'none']).optional().describe('What the claimant can do next; derived server-side from the claim status.'),
   "createdAt": zod.string(),
   "updatedAt": zod.string(),
   "profile": zod.object({
@@ -949,6 +1028,8 @@ export const GetMyBusinessClaimsResponseItem = zod.object({
   "coverUrl": zod.string().nullish(),
   "isClaimed": zod.boolean(),
   "claimedAt": zod.string().nullish(),
+  "publicationStatus": zod.enum(['draft', 'unpublished', 'published', 'suspended', 'archived']).optional().describe('Business publication lifecycle. Existing profiles are `published`.\ndraft -> published (explicit reviewer publication); published <-> unpublished;\npublished -> suspended (reviewer); any -> archived (terminal). Only `published`\nprofiles and their deals are served on public routes.\n'),
+  "approvedRevisionVersion": zod.number().nullish().describe('Version of the approved revision when publication review is enabled; null when the profile is served from its columns.'),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
 })
@@ -1006,9 +1087,11 @@ export const CreateBusinessClaimResponse = zod.object({
   "relationship": zod.string(),
   "evidenceUrl": zod.string().nullish(),
   "message": zod.string().nullish(),
-  "status": zod.enum(['pending', 'approved', 'rejected']),
+  "status": zod.enum(['pending', 'submitted', 'changes_requested', 'approved', 'rejected', 'disputed', 'withdrawn']).describe('Claim lifecycle. `pending` is the legacy alias of `submitted` (awaiting review).\nOpen states that hold the one-open-claim-per-listing slot: pending, submitted,\nchanges_requested, disputed. Transitions: pending|submitted -> approved | rejected |\nchanges_requested | withdrawn; changes_requested -> submitted | withdrawn;\napproved -> disputed; disputed -> approved | rejected.\n'),
   "reviewNote": zod.string().nullish(),
   "reviewedAt": zod.string().nullish(),
+  "version": zod.number().optional().describe('Optimistic-concurrency version; send it back as expectedVersion on later claim updates.'),
+  "nextAction": zod.enum(['wait_for_review', 'provide_changes', 'none']).optional().describe('What the claimant can do next; derived server-side from the claim status.'),
   "createdAt": zod.string(),
   "updatedAt": zod.string(),
   "profile": zod.object({
@@ -1031,6 +1114,8 @@ export const CreateBusinessClaimResponse = zod.object({
   "coverUrl": zod.string().nullish(),
   "isClaimed": zod.boolean(),
   "claimedAt": zod.string().nullish(),
+  "publicationStatus": zod.enum(['draft', 'unpublished', 'published', 'suspended', 'archived']).optional().describe('Business publication lifecycle. Existing profiles are `published`.\ndraft -> published (explicit reviewer publication); published <-> unpublished;\npublished -> suspended (reviewer); any -> archived (terminal). Only `published`\nprofiles and their deals are served on public routes.\n'),
+  "approvedRevisionVersion": zod.number().nullish().describe('Version of the approved revision when publication review is enabled; null when the profile is served from its columns.'),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
 })
@@ -1055,9 +1140,11 @@ export const GetBusinessClaimModerationResponseItem = zod.object({
   "relationship": zod.string(),
   "evidenceUrl": zod.string().nullish(),
   "message": zod.string().nullish(),
-  "status": zod.enum(['pending', 'approved', 'rejected']),
+  "status": zod.enum(['pending', 'submitted', 'changes_requested', 'approved', 'rejected', 'disputed', 'withdrawn']).describe('Claim lifecycle. `pending` is the legacy alias of `submitted` (awaiting review).\nOpen states that hold the one-open-claim-per-listing slot: pending, submitted,\nchanges_requested, disputed. Transitions: pending|submitted -> approved | rejected |\nchanges_requested | withdrawn; changes_requested -> submitted | withdrawn;\napproved -> disputed; disputed -> approved | rejected.\n'),
   "reviewNote": zod.string().nullish(),
   "reviewedAt": zod.string().nullish(),
+  "version": zod.number().optional().describe('Optimistic-concurrency version; send it back as expectedVersion on later claim updates.'),
+  "nextAction": zod.enum(['wait_for_review', 'provide_changes', 'none']).optional().describe('What the claimant can do next; derived server-side from the claim status.'),
   "createdAt": zod.string(),
   "updatedAt": zod.string(),
   "profile": zod.object({
@@ -1080,6 +1167,8 @@ export const GetBusinessClaimModerationResponseItem = zod.object({
   "coverUrl": zod.string().nullish(),
   "isClaimed": zod.boolean(),
   "claimedAt": zod.string().nullish(),
+  "publicationStatus": zod.enum(['draft', 'unpublished', 'published', 'suspended', 'archived']).optional().describe('Business publication lifecycle. Existing profiles are `published`.\ndraft -> published (explicit reviewer publication); published <-> unpublished;\npublished -> suspended (reviewer); any -> archived (terminal). Only `published`\nprofiles and their deals are served on public routes.\n'),
+  "approvedRevisionVersion": zod.number().nullish().describe('Version of the approved revision when publication review is enabled; null when the profile is served from its columns.'),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
 })
@@ -1112,9 +1201,11 @@ export const DecideBusinessClaimResponse = zod.object({
   "relationship": zod.string(),
   "evidenceUrl": zod.string().nullish(),
   "message": zod.string().nullish(),
-  "status": zod.enum(['pending', 'approved', 'rejected']),
+  "status": zod.enum(['pending', 'submitted', 'changes_requested', 'approved', 'rejected', 'disputed', 'withdrawn']).describe('Claim lifecycle. `pending` is the legacy alias of `submitted` (awaiting review).\nOpen states that hold the one-open-claim-per-listing slot: pending, submitted,\nchanges_requested, disputed. Transitions: pending|submitted -> approved | rejected |\nchanges_requested | withdrawn; changes_requested -> submitted | withdrawn;\napproved -> disputed; disputed -> approved | rejected.\n'),
   "reviewNote": zod.string().nullish(),
   "reviewedAt": zod.string().nullish(),
+  "version": zod.number().optional().describe('Optimistic-concurrency version; send it back as expectedVersion on later claim updates.'),
+  "nextAction": zod.enum(['wait_for_review', 'provide_changes', 'none']).optional().describe('What the claimant can do next; derived server-side from the claim status.'),
   "createdAt": zod.string(),
   "updatedAt": zod.string(),
   "profile": zod.object({
@@ -1137,6 +1228,8 @@ export const DecideBusinessClaimResponse = zod.object({
   "coverUrl": zod.string().nullish(),
   "isClaimed": zod.boolean(),
   "claimedAt": zod.string().nullish(),
+  "publicationStatus": zod.enum(['draft', 'unpublished', 'published', 'suspended', 'archived']).optional().describe('Business publication lifecycle. Existing profiles are `published`.\ndraft -> published (explicit reviewer publication); published <-> unpublished;\npublished -> suspended (reviewer); any -> archived (terminal). Only `published`\nprofiles and their deals are served on public routes.\n'),
+  "approvedRevisionVersion": zod.number().nullish().describe('Version of the approved revision when publication review is enabled; null when the profile is served from its columns.'),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
 })
@@ -1166,6 +1259,8 @@ export const GetMyBusinessProfilesResponseItem = zod.object({
   "coverUrl": zod.string().nullish(),
   "isClaimed": zod.boolean(),
   "claimedAt": zod.string().nullish(),
+  "publicationStatus": zod.enum(['draft', 'unpublished', 'published', 'suspended', 'archived']).optional().describe('Business publication lifecycle. Existing profiles are `published`.\ndraft -> published (explicit reviewer publication); published <-> unpublished;\npublished -> suspended (reviewer); any -> archived (terminal). Only `published`\nprofiles and their deals are served on public routes.\n'),
+  "approvedRevisionVersion": zod.number().nullish().describe('Version of the approved revision when publication review is enabled; null when the profile is served from its columns.'),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
 }).and(zod.object({
@@ -1246,6 +1341,8 @@ export const UpdateBusinessProfileResponse = zod.object({
   "coverUrl": zod.string().nullish(),
   "isClaimed": zod.boolean(),
   "claimedAt": zod.string().nullish(),
+  "publicationStatus": zod.enum(['draft', 'unpublished', 'published', 'suspended', 'archived']).optional().describe('Business publication lifecycle. Existing profiles are `published`.\ndraft -> published (explicit reviewer publication); published <-> unpublished;\npublished -> suspended (reviewer); any -> archived (terminal). Only `published`\nprofiles and their deals are served on public routes.\n'),
+  "approvedRevisionVersion": zod.number().nullish().describe('Version of the approved revision when publication review is enabled; null when the profile is served from its columns.'),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
 })
@@ -1396,6 +1493,8 @@ export const GetBusinessProfileResponse = zod.object({
   "coverUrl": zod.string().nullish(),
   "isClaimed": zod.boolean(),
   "claimedAt": zod.string().nullish(),
+  "publicationStatus": zod.enum(['draft', 'unpublished', 'published', 'suspended', 'archived']).optional().describe('Business publication lifecycle. Existing profiles are `published`.\ndraft -> published (explicit reviewer publication); published <-> unpublished;\npublished -> suspended (reviewer); any -> archived (terminal). Only `published`\nprofiles and their deals are served on public routes.\n'),
+  "approvedRevisionVersion": zod.number().nullish().describe('Version of the approved revision when publication review is enabled; null when the profile is served from its columns.'),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
 }).and(zod.object({

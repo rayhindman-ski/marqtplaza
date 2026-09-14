@@ -10,6 +10,7 @@ import communityPostsRouter from "./community-posts";
 import businessesRouter from "./businesses";
 import savedEventsRouter from "./saved-events";
 import registrationRouter from "./registration";
+import accountRouter from "./account";
 
 const router: IRouter = Router();
 
@@ -24,5 +25,6 @@ router.use(communityPostsRouter);
 router.use(businessesRouter);
 router.use(savedEventsRouter);
 router.use(registrationRouter);
+router.use(accountRouter);
 
 export default router;

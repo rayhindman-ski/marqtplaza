@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { PublicationStatus } from './publicationStatus';
 
 export interface BusinessProfile {
   id: number;
@@ -40,6 +41,12 @@ export interface BusinessProfile {
   isClaimed: boolean;
   /** @nullable */
   claimedAt?: string | null;
+  publicationStatus?: PublicationStatus;
+  /**
+     * Version of the approved revision when publication review is enabled; null when the profile is served from its columns.
+     * @nullable
+     */
+  approvedRevisionVersion?: number | null;
   createdAt: string;
   updatedAt: string;
 }
