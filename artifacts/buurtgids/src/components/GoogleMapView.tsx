@@ -43,7 +43,7 @@ const TILE_SIZE = 256;
 const MIN_TILE_ZOOM = 10;
 const MAX_TILE_ZOOM = 18;
 const MAP_CLUSTER_RADIUS_PX = 56;
-const COORDINATE_CLUSTER_RADIUS_PERCENT = 7;
+const CLUSTER_DRAG_THRESHOLD_PX = 6;
 const GOOGLE_MAPS_LOAD_TIMEOUT_MS = 4_000;
 const googleMapsApiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string | undefined;
 const googleMapsBrowserKeyPattern = /^AIza[0-9A-Za-z_-]{35}$/;
@@ -319,10 +319,17 @@ function clusterMapPoints(
   points: MapPoint[],
   getPosition: (point: MapPoint) => { x: number; y: number },
   radius: number,
+  selectedMarkerId: string | null = null,
 ): MapPointCluster[] {
   const clusters: MapPointCluster[] = [];
+  // The selected listing is always rendered on its own so it can never be
+  // hidden inside a count badge; cluster only the remaining points.
+  const selectedPoint = selectedMarkerId
+    ? points.find((point) => point.id === selectedMarkerId)
+    : undefined;
 
   for (const point of points) {
+    if (point === selectedPoint) continue;
     const position = getPosition(point);
     const cluster = clusters.find((candidate) => (
       Math.hypot(candidate.x - position.x, candidate.y - position.y) <= radius
@@ -349,7 +356,68 @@ function clusterMapPoints(
     cluster.id = `cluster-${cluster.points.map(({ id }) => id).sort().join('-')}`;
   }
 
+  if (selectedPoint) {
+    const position = getPosition(selectedPoint);
+    clusters.push({
+      id: `cluster-${selectedPoint.id}`,
+      points: [selectedPoint],
+      lat: selectedPoint.lat,
+      lng: selectedPoint.lng,
+      x: position.x,
+      y: position.y,
+    });
+  }
+
   return clusters;
+}
+
+function useElementSize<T extends HTMLElement>() {
+  const ref = useRef<T>(null);
+  const [size, setSize] = useState({ width: 0, height: 0 });
+  useEffect(() => {
+    const element = ref.current;
+    if (!element) return;
+    const update = () => {
+      const rect = element.getBoundingClientRect();
+      setSize((current) => (
+        current.width === rect.width && current.height === rect.height
+          ? current
+          : { width: rect.width, height: rect.height }
+      ));
+    };
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+  return [ref, size] as const;
+}
+
+/** Runs onActivate only for a stationary pointer release, so a map drag that
+ *  starts or ends on a cluster badge does not zoom. */
+function attachStationaryActivation(element: HTMLElement, onActivate: () => void) {
+  let down: { x: number; y: number } | null = null;
+  let dragged = false;
+  element.addEventListener('pointerdown', (event) => {
+    down = { x: event.clientX, y: event.clientY };
+    dragged = false;
+    event.stopPropagation();
+    element.setPointerCapture(event.pointerId);
+  });
+  element.addEventListener('pointermove', (event) => {
+    if (!down) return;
+    if (Math.hypot(event.clientX - down.x, event.clientY - down.y) > CLUSTER_DRAG_THRESHOLD_PX) {
+      dragged = true;
+    }
+  });
+  element.addEventListener('click', (event) => {
+    event.stopPropagation();
+    const wasDragged = dragged;
+    down = null;
+    dragged = false;
+    if (wasDragged) return;
+    onActivate();
+  });
 }
 
 function ClusterSummaryMarker({
@@ -364,6 +432,11 @@ function ClusterSummaryMarker({
   const count = cluster.points.length;
   const size = count >= 100 ? 62 : count >= 10 ? 56 : 50;
   const isInteractive = Boolean(onClick);
+  const downRef = useRef<{ x: number; y: number } | null>(null);
+  const draggedRef = useRef(false);
+  const label = isInteractive
+    ? `${count} listings in this area. Zoom in to expand.`
+    : `${count} listings in this area`;
 
   return (
     <div
@@ -371,14 +444,33 @@ function ClusterSummaryMarker({
       data-map-cluster
       role={isInteractive ? 'button' : 'img'}
       tabIndex={isInteractive ? 0 : undefined}
-      aria-label={`${count} listings in this area`}
+      aria-label={label}
       title={`${count} listings in this area`}
       className="absolute z-30 -translate-x-1/2 -translate-y-1/2"
       style={style}
       onPointerDown={(event) => {
-        if (isInteractive) event.stopPropagation();
+        downRef.current = { x: event.clientX, y: event.clientY };
+        draggedRef.current = false;
+        if (isInteractive) {
+          // Keep the map from starting a pan (and capturing the pointer, which
+          // would swallow our click); the badge tracks its own movement.
+          event.stopPropagation();
+          event.currentTarget.setPointerCapture(event.pointerId);
+        }
       }}
-      onClick={onClick}
+      onPointerMove={(event) => {
+        const down = downRef.current;
+        if (down && Math.hypot(event.clientX - down.x, event.clientY - down.y) > CLUSTER_DRAG_THRESHOLD_PX) {
+          draggedRef.current = true;
+        }
+      }}
+      onClick={(event) => {
+        event.stopPropagation();
+        const wasDragged = draggedRef.current;
+        downRef.current = null;
+        draggedRef.current = false;
+        if (!wasDragged) onClick?.();
+      }}
       onKeyDown={(event) => {
         if (isInteractive && (event.key === 'Enter' || event.key === ' ')) {
           event.preventDefault();
@@ -430,10 +522,7 @@ function createHtmlClusterElement(
     'padding:0',
   ].join(';');
   button.textContent = String(count);
-  button.addEventListener('click', (event) => {
-    event.stopPropagation();
-    onClick();
-  });
+  attachStationaryActivation(button, onClick);
   return button;
 }
 
@@ -585,6 +674,7 @@ function CoordinateMapFallback({
   const neighborhoodAreas = getNeighborhoodAreas(locationId, displayedNeighborhoods);
   const mapCopy = MAP_COPY[language];
   const [hoveredMarkerId, setHoveredMarkerId] = useState<string | null>(null);
+  const [containerRef, containerSize] = useElementSize<HTMLDivElement>();
 
   if (points.length === 0 && neighborhoodAreas.length === 0) {
     return (
@@ -624,17 +714,24 @@ function CoordinateMapFallback({
   const minLng = Math.min(...longitudes) - longitudePadding;
   const maxLng = Math.max(...longitudes) + longitudePadding;
   const bounds = { minLat, maxLat, minLng, maxLng };
+  // Cluster in CSS pixels (percent × measured size) so grouping matches the
+  // other providers regardless of the container's aspect ratio. Until the
+  // container is measured, assume a square so the first paint is stable.
+  const pixelWidth = containerSize.width || 100;
+  const pixelHeight = containerSize.height || 100;
   const pointClusters = clusterMapPoints(
     points,
     (point) => ({
-      x: ((point.lng - minLng) / (maxLng - minLng)) * 100,
-      y: ((maxLat - point.lat) / (maxLat - minLat)) * 100,
+      x: ((point.lng - minLng) / (maxLng - minLng)) * pixelWidth,
+      y: ((maxLat - point.lat) / (maxLat - minLat)) * pixelHeight,
     }),
-    COORDINATE_CLUSTER_RADIUS_PERCENT,
+    MAP_CLUSTER_RADIUS_PX,
+    selectedMarkerId,
   );
 
   return (
     <div
+      ref={containerRef}
       className="absolute inset-0 overflow-hidden bg-[linear-gradient(135deg,_#e8f0e9_0%,_#f7f4ed_46%,_#dceaf0_100%)]"
       aria-label={mapCopy.coordinateMap}
     >
@@ -713,8 +810,8 @@ function CoordinateMapFallback({
               key={cluster.id}
               cluster={cluster}
               style={{
-                left: `${cluster.x}%`,
-                top: `${cluster.y}%`,
+                left: `${(cluster.x / pixelWidth) * 100}%`,
+                top: `${(cluster.y / pixelHeight) * 100}%`,
               }}
             />
           );
@@ -961,6 +1058,7 @@ function TileMapView({
       return { x: world.x - mapLeft, y: world.y - mapTop };
     },
     MAP_CLUSTER_RADIUS_PX,
+    selectedMarkerId,
   );
 
   const changeZoom = (amount: number) => {
@@ -1650,6 +1748,7 @@ function GoogleMapCanvas({
         return { x: world.x, y: world.y };
       },
       MAP_CLUSTER_RADIUS_PX,
+      selectedMarkerId,
     );
     const newIds = new Set(pointClusters.map((cluster) => cluster.id));
     for (const [id, mapMarker] of markersRef.current) {

@@ -5,6 +5,7 @@
 - [External source scanning](source-scanning.md) — server-side scans only allow approved source IDs and must report blocked sources instead of treating them as empty.
 - [DenHaag calendar markup](denhaag-calendar-markup.md) — generic UI “walking” can masquerade as venue; prefer event-specific location data and richer local evidence.
 - [OpenAPI numeric counts](openapi-numeric-counts.md) — use `number`, not `integer`, for generated count schemas in this workspace’s Orval/Zod toolchain.
+- [Map marker clustering](map-marker-clustering.md) — cluster in screen pixels, never hide the selected listing in a badge, badges capture their own pointer with a drag threshold.
 - [Map marker anchoring](map-marker-anchoring.md) — custom pin wrappers own coordinates once; multi-neighborhood tile viewports must use live canvas dimensions.
 - [Neighborhood boundaries](neighborhood-highlight-radius.md) — use official polygon geometry for visual neighborhood selection; never represent administrative areas with centroid circles.
 - [Business filter hierarchy](business-filter-hierarchy.md) — Businesses owns non-food subcategories; Food & Drink owns its matching one, and children only show when their parent is selected.

@@ -205,9 +205,17 @@ test('keeps discovery filters, map pins, routes, and translations in sync', asyn
   await expect(page.locator('[data-map-cluster]')).toHaveText('2');
   await expect(page.locator('[data-map-cluster]')).toHaveAttribute(
     'aria-label',
-    '2 listings in this area. Zoom in to expand.',
+    /^2 listings in this area/,
   );
   await expect(page.locator('[data-map-pin]')).toHaveCount(0);
+
+  // Selecting a listing must pull it out of the cluster so it is always visible.
+  await page.locator('#event-qualifying-event').click();
+  await expect(page.locator('[data-map-pin][data-event-id="qualifying-event"]')).toHaveCount(1, { timeout: 10_000 });
+  // The remaining listing is alone, so it is drawn as a normal pin too.
+  await expect(page.locator('[data-map-pin]')).toHaveCount(2);
+  await expect(page.locator('[data-map-cluster]')).toHaveCount(0);
+  expect(listIds).toContain('qualifying-event');
 
   const exactCard = page.locator('#event-qualifying-event');
   const routeLinks = exactCard.locator('a[href*="google.com/maps/dir"]');
