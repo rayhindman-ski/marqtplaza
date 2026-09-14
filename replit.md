@@ -28,7 +28,10 @@ _Populate as you build — short repo map plus pointers to the source-of-truth f
 
 ## Architecture decisions
 
-_Populate as you build — non-obvious choices a reader couldn't infer from the code (3-5 bullets)._
+- Consumer accounts are gated by `ACCOUNTS_ENABLED` (API) and `VITE_ACCOUNTS_ENABLED` (web). Both are off in production until the Spec Kit gates Q1/Q6/Q7 in `.specify/specs/002-consumer-accounts-and-business-onboarding/convergence.md` are recorded; development has them on for preview.
+- An account (Clerk login + optional controlled preferences on `app_users`/`consumer_preferences`), the research registration (`user_registrations`), saved events, and purpose-specific consents (`account_consent_events`, append-only) are separate scopes. Creating an account never writes to the other three.
+- Preference writes use optimistic revisions (`expectedRevision`, 409 `VERSION_CONFLICT`); all neighbourhood/interest IDs must come from `GET /account/options`. Nothing is inferred and unset stays unset.
+- Post-auth return targets go through `artifacts/buurtgids/src/lib/returnPath.ts` (`terug` query param, local allowlist, default `/account`).
 
 ## Product
 
@@ -40,7 +43,8 @@ _Populate as you build — explicit user instructions worth remembering across s
 
 ## Gotchas
 
-_Populate as you build — sharp edges, "always run X before Y" rules._
+- Account e2e specs drive auth with `?e2eAccountAuth=1` plus `window.__accountTestAuth` (dev builds only) and mock `/api/account/**`; the Playwright web server runs with `VITE_ACCOUNTS_ENABLED=1`.
+- Account route tests need the account tables: run `pnpm --filter @workspace/db run push` on a fresh database first.
 
 ## Pointers
 

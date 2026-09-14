@@ -121,6 +121,166 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
 
+  /account/preferences:
+    patch:
+      operationId: updateAccountPreferences
+      tags: [account]
+      summary: Save controlled account preferences with optimistic concurrency
+      description: |
+        Creates or updates the signed-in user's optional preferences. `expectedRevision` must equal
+        the current stored revision (use 0 when no preferences exist yet); a mismatch returns
+        409 VERSION_CONFLICT with the current `expectedVersion` so the client can reload while keeping
+        its draft. Every neighbourhood and interest ID is validated against `GET /account/options`;
+        unknown IDs return 400 VALIDATION_FAILED with `not_in_controlled_list` field errors. Omitted
+        fields stay unchanged; empty arrays clear a list. `locale` updates the account locale. Nothing
+        is inferred, and this operation never touches the research registration or saved events.
+        Requires a verified identity (403 EMAIL_UNVERIFIED otherwise).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateAccountPreferencesInput"
+      responses:
+        "200":
+          description: Updated account summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountMe"
+        "400":
+          description: Unknown field or a choice outside the controlled lists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Authentication is required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: Unverified, suspended, or deleted account
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          $ref: "#/components/responses/FeatureDisabled"
+        "409":
+          $ref: "#/components/responses/VersionConflict"
+
+  /account/onboarding/complete:
+    post:
+      operationId: completeAccountOnboarding
+      tags: [account]
+      summary: Mark the optional onboarding step as completed on the server
+      description: |
+        Records onboarding completion for the signed-in user independently of whether any
+        preference exists (skipping is a valid completion). Idempotent: a repeat call keeps the
+        original completion time. Creates no preference row, no research registration, and no consent.
+      responses:
+        "200":
+          description: Updated account summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountMe"
+        "400":
+          description: Unknown field
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Authentication is required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: Unverified, suspended, or deleted account
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          $ref: "#/components/responses/FeatureDisabled"
+
+  /account/consents:
+    get:
+      operationId: getAccountConsents
+      tags: [account]
+      summary: Get the current state and history of purpose-specific consents
+      description: |
+        Returns the current notice version, the derived current state per consent purpose (latest
+        ledger entry wins; absent means never asked), and the append-only history. Account creation
+        never grants any consent.
+      responses:
+        "200":
+          description: Consent state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountConsents"
+        "401":
+          description: Authentication is required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: Suspended or deleted account
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          $ref: "#/components/responses/FeatureDisabled"
+    post:
+      operationId: recordAccountConsent
+      tags: [account]
+      summary: Grant or withdraw one purpose-specific consent
+      description: |
+        Appends one ledger entry for exactly one consent purpose. Entries are never edited or
+        deleted. `noticeVersion` must match the current notice version served by
+        `GET /account/consents` (400 VALIDATION_FAILED with `stale_notice_version` otherwise), so a
+        user never agrees to text they have not seen. Requires a verified identity.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RecordAccountConsentInput"
+      responses:
+        "200":
+          description: Consent state after the entry was appended
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountConsents"
+        "400":
+          description: Unknown field, unknown purpose, or stale notice version
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Authentication is required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: Unverified, suspended, or deleted account
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          $ref: "#/components/responses/FeatureDisabled"
+
   /readiness:
     get:
       operationId: getReadiness
@@ -1332,6 +1492,89 @@ components:
             type: string
         updatedAt:
           type: string
+
+    ConsentPurpose:
+      type: string
+      description: |
+        Purpose-specific consents that are asked separately from account creation and from
+        the research registration. `marketing_updates`: occasional product and neighbourhood
+        updates by e-mail. `research_contact`: may be contacted about product research.
+      enum: [marketing_updates, research_contact]
+
+    UpdateAccountPreferencesInput:
+      type: object
+      additionalProperties: false
+      required: [expectedRevision]
+      properties:
+        expectedRevision:
+          type: number
+          minimum: 0
+          description: Current stored revision, or 0 when no preferences exist yet.
+        locale:
+          $ref: "#/components/schemas/AccountLocale"
+        neighborhoodIds:
+          type: array
+          maxItems: 20
+          items:
+            type: string
+            maxLength: 120
+        interestIds:
+          type: array
+          maxItems: 20
+          items:
+            type: string
+            maxLength: 120
+
+    RecordAccountConsentInput:
+      type: object
+      additionalProperties: false
+      required: [consentType, noticeVersion, granted, source]
+      properties:
+        consentType:
+          $ref: "#/components/schemas/ConsentPurpose"
+        noticeVersion:
+          type: string
+          maxLength: 80
+        granted:
+          type: boolean
+        source:
+          type: string
+          description: Where the user made the choice; support and system entries are never accepted from clients.
+          enum: [onboarding, account_settings]
+
+    ConsentState:
+      type: object
+      required: [consentType, granted, noticeVersion, recordedAt]
+      properties:
+        consentType:
+          $ref: "#/components/schemas/ConsentPurpose"
+        granted:
+          type: boolean
+        noticeVersion:
+          type: string
+        recordedAt:
+          type: string
+
+    AccountConsents:
+      type: object
+      required: [currentNoticeVersion, purposes, current, history]
+      properties:
+        currentNoticeVersion:
+          type: string
+          description: Version of the consent notice text the client must show before recording a choice.
+        purposes:
+          type: array
+          description: All purposes that can be asked; a purpose without a current entry has never been asked.
+          items:
+            $ref: "#/components/schemas/ConsentPurpose"
+        current:
+          type: array
+          items:
+            $ref: "#/components/schemas/ConsentState"
+        history:
+          type: array
+          items:
+            $ref: "#/components/schemas/ConsentEvent"
 
     ConsentEvent:
       type: object

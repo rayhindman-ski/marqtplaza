@@ -19,3 +19,7 @@ duplicate existing surfaces.
 Keep new entry points behind disabled-by-default flags; treat owner/legal/
 operator questions (Q1–Q8 in convergence.md) as gates, not defaults. Existing
 `business_profiles` rows must stay published when revisions are introduced.
+
+**Flag state decision:** "on in development" is a preview convenience and
+never evidence that a gate (Q1–Q8) was approved. Approval exists only when
+convergence.md records an approver and date; until then production stays off.

@@ -1,7 +1,7 @@
 # Convergence: Consumer accounts and business onboarding
 
 **Date**: 2026-09-14  
-**Status**: Specified — no implementation started
+**Status**: In progress — US1 foundation and US2 consumer preferences implemented; all release gates still open, production flags off
 
 This record is created with the specification so that release gates, flag
 state, and baseline evidence are tracked from the first day. Update it at the
@@ -46,8 +46,11 @@ end of every phase in `tasks.md`.
 | `BUSINESS_PUBLICATION_ENABLED` / `VITE_BUSINESS_PUBLICATION_ENABLED` | off | revision review, explicit publication, owner edits become drafts | Q4 |
 | Lifecycle dispatch (provider loader configured) | not configured | real message sending | Q5, Q6, Q8 |
 
-Current state per environment: development off, production off (nothing
-implemented yet).
+Current state per environment (2026-09-14): `ACCOUNTS_ENABLED` /
+`VITE_ACCOUNTS_ENABLED` are **on in development only** so the consumer journey
+can be previewed and verified against the real API; production stays off until
+Q1, Q6, and Q7 are recorded. Business intake, publication, and lifecycle
+dispatch remain off everywhere.
 
 ## Release gates (approvals required; no defaults invented)
 
@@ -88,7 +91,7 @@ runner + Playwright.
 | Scenario | Implementation evidence | Verification |
 | --- | --- | --- |
 | US1 identity and capabilities | Foundation landed 2026-09-14: additive `app_users`/`consumer_preferences`/`account_consent_events`, `business_profile_revisions`/`business_reviews`/`business_fact_checks`, `lifecycle_outbox`/`account_requests`; additive columns on `business_profiles` (`publication_status` default `published`, `approved_revision_id`, `created_by_user_id`) and `business_claims` (`authority_declaration`, `evidence_reference`, `version`, `withdrawn_at`); open-claim partial unique index renamed to `business_claims_one_open_claim_per_profile_unique` covering `pending, submitted, changes_requested, disputed`. Server: `lib/featureFlags.ts`, `lib/apiError.ts`, `lib/permissions.ts` (Clerk-derived identity, editor role, capabilities, self-review guard), `middlewares/requireFlag.ts`, `middlewares/requireAppUser.ts` (INSERT … ON CONFLICT DO NOTHING + read), `routes/account.ts` (`GET /account/me`, `GET /account/options`), `GET /readiness`. Contract: `ApiError`, `FeatureReadiness`, `AccountMe`, `AccountCapabilities`, `ConsumerPreferences`, `ConsentEvent`, `AccountOptions`, `PublicationStatus`, `BusinessRevisionStatus`/`BusinessRevisionSummary`, `ReviewDecisionRecord`, `AccountRequest`, `LifecycleMessageStatus`, `PageInfo`, `Idempotency-Key`/cursor parameters, `VersionConflict` response; `ClaimStatus` extended additively. No UI, no backfill, flags off. | `pnpm --filter @workspace/api-server run test:account-foundation` → 18 pass, 0 fail (provisioning idempotent under 8 concurrent first calls; 401/403/404 error shape; forged `role` query rejected as `UNKNOWN_FIELD`; suspended account refused; registration kept separate; editor/business-member roles server-derived). `pnpm run typecheck` clean. Live dev server: `/api/readiness` → all false, `/api/account/me` → 404 `FEATURE_DISABLED`. |
-| US2 preferences | — | — |
+| US2 preferences | Implemented 2026-09-14: `PATCH /account/preferences` (expectedRevision, controlled-ID validation → 400 `VALIDATION_FAILED` with `not_in_controlled_list`, 409 `VERSION_CONFLICT` with `expectedVersion`, omitted fields unchanged / empty arrays clear, locale on `app_users`), `POST /account/onboarding/complete` (idempotent, skip creates no preference row), `GET`/`POST /account/consents` (append-only ledger, purposes `marketing_updates` and `research_contact`, client must echo the current notice version `draft-2026-09`, `support`/`system` sources rejected from clients, writes require a verified identity). Web: `/account/voorkeuren` (checkbox groups from `/account/options`, save/skip/cancel, draft kept in session storage across refresh, conflict keeps draft and reloads revision, error summary receives focus, NL/EN switch keeps the draft), `AccountPage` with preference summary, per-purpose consent controls, explicit account / research registration / saved data / consent scopes, `returnPath.ts` allowlist (`terug`), Clerk sign-in/sign-up redirects derive from the sanitised return path, `OnboardingPage` marker mirrors server state and points to the separate preference step. Account creation still writes no registration, subscription, or consent. | `pnpm --filter @workspace/api-server run test:account-foundation` → 24 pass, 0 fail (incl. six concurrent revision-0 writers → one 200, five 409; consent `current` derived from the newest row beyond a 200-entry history page). `tsx --test src/lib/returnPath.test.ts` → 5 pass. `playwright test` → 20 pass (8 new in `e2e/account-preferences.spec.ts`: anonymous discovery prompt-free, signed-out redirect with safe `terug`, save + language switch + refresh + resume, skip with external URL rejected, stale revision conflict, failed save keeps input and focuses the error, account page scopes and consent recording, disabled gate state; discovery and saved-events regressions unchanged). `pnpm run typecheck` clean. Live dev: `/api/readiness` → accounts true, unauthenticated `PATCH /api/account/preferences` → 401 `AUTH_REQUIRED`. Gates: Q1 taxonomy still `provisional-2026-09`; Q6 consent notice is a draft version; Q7 unresolved — the research registration remains a separate, voluntary step and sign-up lands on the optional preference step only while the flag is on. |
 | US3 intake | — | — |
 | US4 review and publication | — | — |
 | US5 lifecycle | — | — |

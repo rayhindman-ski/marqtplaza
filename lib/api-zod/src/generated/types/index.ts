@@ -7,6 +7,7 @@
  */
 
 export * from './accountCapabilities';
+export * from './accountConsents';
 export * from './accountLocale';
 export * from './accountMe';
 export * from './accountOption';
@@ -53,6 +54,8 @@ export * from './communityPostSubmission';
 export * from './communityPostType';
 export * from './consentEvent';
 export * from './consentEventSource';
+export * from './consentPurpose';
+export * from './consentState';
 export * from './consumerPreferences';
 export * from './deal';
 export * from './dealInput';
@@ -123,6 +126,8 @@ export * from './pageLimitParameter';
 export * from './persistOutcome';
 export * from './publicationStatus';
 export * from './publicBusinessProfile';
+export * from './recordAccountConsentInput';
+export * from './recordAccountConsentInputSource';
 export * from './registration';
 export * from './registrationInput';
 export * from './registrationStatus';
@@ -156,6 +161,7 @@ export * from './sourceScanRequest';
 export * from './sourceScanResponse';
 export * from './sourceScanResult';
 export * from './sourceScanResultStatus';
+export * from './updateAccountPreferencesInput';
 export * from './versionConflictResponse';
 export * from './weatherCondition';
 export * from './weatherCurrent';

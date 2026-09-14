@@ -84,6 +84,172 @@ export const GetAccountOptionsResponse = zod.object({
 
 
 /**
+ * Creates or updates the signed-in user's optional preferences. `expectedRevision` must equal
+ * the current stored revision (use 0 when no preferences exist yet); a mismatch returns
+ * 409 VERSION_CONFLICT with the current `expectedVersion` so the client can reload while keeping
+ * its draft. Every neighbourhood and interest ID is validated against `GET /account/options`;
+ * unknown IDs return 400 VALIDATION_FAILED with `not_in_controlled_list` field errors. Omitted
+ * fields stay unchanged; empty arrays clear a list. `locale` updates the account locale. Nothing
+ * is inferred, and this operation never touches the research registration or saved events.
+ * Requires a verified identity (403 EMAIL_UNVERIFIED otherwise).
+ * @summary Save controlled account preferences with optimistic concurrency
+ */
+export const updateAccountPreferencesBodyExpectedRevisionMin = 0;
+
+export const updateAccountPreferencesBodyNeighborhoodIdsItemMax = 120;
+
+export const updateAccountPreferencesBodyNeighborhoodIdsMax = 20;
+
+export const updateAccountPreferencesBodyInterestIdsItemMax = 120;
+
+export const updateAccountPreferencesBodyInterestIdsMax = 20;
+
+
+
+export const UpdateAccountPreferencesBody = zod.object({
+  "expectedRevision": zod.number().min(updateAccountPreferencesBodyExpectedRevisionMin).describe('Current stored revision, or 0 when no preferences exist yet.'),
+  "locale": zod.enum(['nl', 'en']).optional(),
+  "neighborhoodIds": zod.array(zod.string().max(updateAccountPreferencesBodyNeighborhoodIdsItemMax)).max(updateAccountPreferencesBodyNeighborhoodIdsMax).optional(),
+  "interestIds": zod.array(zod.string().max(updateAccountPreferencesBodyInterestIdsItemMax)).max(updateAccountPreferencesBodyInterestIdsMax).optional()
+})
+
+export const updateAccountPreferencesResponsePreferencesOneNeighborhoodIdsMax = 20;
+
+export const updateAccountPreferencesResponsePreferencesOneInterestIdsMax = 20;
+
+
+
+export const UpdateAccountPreferencesResponse = zod.object({
+  "id": zod.number().describe('Local account id (never the identity-provider subject).'),
+  "status": zod.enum(['active', 'suspended', 'deleted']).describe('Persisted account state, changed only server-side: active <-> suspended (operator),\nactive|suspended -> deleted (approved deletion request; terminal). Email verification is\nnot an account state; it is derived from the identity provider per request.\n'),
+  "role": zod.enum(['unverified', 'user', 'business_member', 'reviewer']).describe('The single highest server-derived role for the current request.'),
+  "locale": zod.enum(['nl', 'en']),
+  "onboardingCompleted": zod.boolean(),
+  "onboardingCompletedAt": zod.string().nullish(),
+  "capabilities": zod.object({
+  "isVerified": zod.boolean().describe('The identity provider reports a verified primary email for this session.'),
+  "isEditor": zod.boolean().describe('The session carries the trusted editor or admin role claim.'),
+  "isBusinessMember": zod.boolean().describe('The user has at least one business membership.'),
+  "canClaimBusiness": zod.boolean().describe('Verified, active, and the business intake gate is on.'),
+  "canPublishBusiness": zod.boolean().describe('Editor and the business publication gate is on.'),
+  "canReview": zod.boolean().describe('Editor; self-review of the user\'s own businesses or claims is still refused per request.')
+}).describe('Server-derived capabilities. Clients must never send these; they are recomputed on every request.'),
+  "hasResearchRegistration": zod.boolean().describe('Whether the separate campaign-style research registration exists. Never merged into account data.'),
+  "businessMembershipCount": zod.number(),
+  "preferences": zod.union([zod.object({
+  "revision": zod.number(),
+  "neighborhoodIds": zod.array(zod.string()).max(updateAccountPreferencesResponsePreferencesOneNeighborhoodIdsMax),
+  "interestIds": zod.array(zod.string()).max(updateAccountPreferencesResponsePreferencesOneInterestIdsMax),
+  "updatedAt": zod.string()
+}).describe('Optional controlled preferences owned by exactly one account. Updates require expectedRevision and return 409 VERSION_CONFLICT on mismatch.'),zod.null()]),
+  "createdAt": zod.string()
+}).describe('Private account summary for the signed-in user only. Never served on public routes.')
+
+
+/**
+ * Records onboarding completion for the signed-in user independently of whether any
+ * preference exists (skipping is a valid completion). Idempotent: a repeat call keeps the
+ * original completion time. Creates no preference row, no research registration, and no consent.
+ * @summary Mark the optional onboarding step as completed on the server
+ */
+export const completeAccountOnboardingResponsePreferencesOneNeighborhoodIdsMax = 20;
+
+export const completeAccountOnboardingResponsePreferencesOneInterestIdsMax = 20;
+
+
+
+export const CompleteAccountOnboardingResponse = zod.object({
+  "id": zod.number().describe('Local account id (never the identity-provider subject).'),
+  "status": zod.enum(['active', 'suspended', 'deleted']).describe('Persisted account state, changed only server-side: active <-> suspended (operator),\nactive|suspended -> deleted (approved deletion request; terminal). Email verification is\nnot an account state; it is derived from the identity provider per request.\n'),
+  "role": zod.enum(['unverified', 'user', 'business_member', 'reviewer']).describe('The single highest server-derived role for the current request.'),
+  "locale": zod.enum(['nl', 'en']),
+  "onboardingCompleted": zod.boolean(),
+  "onboardingCompletedAt": zod.string().nullish(),
+  "capabilities": zod.object({
+  "isVerified": zod.boolean().describe('The identity provider reports a verified primary email for this session.'),
+  "isEditor": zod.boolean().describe('The session carries the trusted editor or admin role claim.'),
+  "isBusinessMember": zod.boolean().describe('The user has at least one business membership.'),
+  "canClaimBusiness": zod.boolean().describe('Verified, active, and the business intake gate is on.'),
+  "canPublishBusiness": zod.boolean().describe('Editor and the business publication gate is on.'),
+  "canReview": zod.boolean().describe('Editor; self-review of the user\'s own businesses or claims is still refused per request.')
+}).describe('Server-derived capabilities. Clients must never send these; they are recomputed on every request.'),
+  "hasResearchRegistration": zod.boolean().describe('Whether the separate campaign-style research registration exists. Never merged into account data.'),
+  "businessMembershipCount": zod.number(),
+  "preferences": zod.union([zod.object({
+  "revision": zod.number(),
+  "neighborhoodIds": zod.array(zod.string()).max(completeAccountOnboardingResponsePreferencesOneNeighborhoodIdsMax),
+  "interestIds": zod.array(zod.string()).max(completeAccountOnboardingResponsePreferencesOneInterestIdsMax),
+  "updatedAt": zod.string()
+}).describe('Optional controlled preferences owned by exactly one account. Updates require expectedRevision and return 409 VERSION_CONFLICT on mismatch.'),zod.null()]),
+  "createdAt": zod.string()
+}).describe('Private account summary for the signed-in user only. Never served on public routes.')
+
+
+/**
+ * Returns the current notice version, the derived current state per consent purpose (latest
+ * ledger entry wins; absent means never asked), and the append-only history. Account creation
+ * never grants any consent.
+ * @summary Get the current state and history of purpose-specific consents
+ */
+export const GetAccountConsentsResponse = zod.object({
+  "currentNoticeVersion": zod.string().describe('Version of the consent notice text the client must show before recording a choice.'),
+  "purposes": zod.array(zod.enum(['marketing_updates', 'research_contact']).describe('Purpose-specific consents that are asked separately from account creation and from\nthe research registration. `marketing_updates`: occasional product and neighbourhood\nupdates by e-mail. `research_contact`: may be contacted about product research.\n')).describe('All purposes that can be asked; a purpose without a current entry has never been asked.'),
+  "current": zod.array(zod.object({
+  "consentType": zod.enum(['marketing_updates', 'research_contact']).describe('Purpose-specific consents that are asked separately from account creation and from\nthe research registration. `marketing_updates`: occasional product and neighbourhood\nupdates by e-mail. `research_contact`: may be contacted about product research.\n'),
+  "granted": zod.boolean(),
+  "noticeVersion": zod.string(),
+  "recordedAt": zod.string()
+})),
+  "history": zod.array(zod.object({
+  "id": zod.number(),
+  "consentType": zod.string(),
+  "noticeVersion": zod.string(),
+  "granted": zod.boolean(),
+  "source": zod.enum(['onboarding', 'account_settings', 'support', 'system']),
+  "createdAt": zod.string()
+}).describe('One append-only consent ledger entry. Entries are never edited; the latest entry per consentType is the current state.'))
+})
+
+
+/**
+ * Appends one ledger entry for exactly one consent purpose. Entries are never edited or
+ * deleted. `noticeVersion` must match the current notice version served by
+ * `GET /account/consents` (400 VALIDATION_FAILED with `stale_notice_version` otherwise), so a
+ * user never agrees to text they have not seen. Requires a verified identity.
+ * @summary Grant or withdraw one purpose-specific consent
+ */
+export const recordAccountConsentBodyNoticeVersionMax = 80;
+
+
+
+export const RecordAccountConsentBody = zod.object({
+  "consentType": zod.enum(['marketing_updates', 'research_contact']).describe('Purpose-specific consents that are asked separately from account creation and from\nthe research registration. `marketing_updates`: occasional product and neighbourhood\nupdates by e-mail. `research_contact`: may be contacted about product research.\n'),
+  "noticeVersion": zod.string().max(recordAccountConsentBodyNoticeVersionMax),
+  "granted": zod.boolean(),
+  "source": zod.enum(['onboarding', 'account_settings']).describe('Where the user made the choice; support and system entries are never accepted from clients.')
+})
+
+export const RecordAccountConsentResponse = zod.object({
+  "currentNoticeVersion": zod.string().describe('Version of the consent notice text the client must show before recording a choice.'),
+  "purposes": zod.array(zod.enum(['marketing_updates', 'research_contact']).describe('Purpose-specific consents that are asked separately from account creation and from\nthe research registration. `marketing_updates`: occasional product and neighbourhood\nupdates by e-mail. `research_contact`: may be contacted about product research.\n')).describe('All purposes that can be asked; a purpose without a current entry has never been asked.'),
+  "current": zod.array(zod.object({
+  "consentType": zod.enum(['marketing_updates', 'research_contact']).describe('Purpose-specific consents that are asked separately from account creation and from\nthe research registration. `marketing_updates`: occasional product and neighbourhood\nupdates by e-mail. `research_contact`: may be contacted about product research.\n'),
+  "granted": zod.boolean(),
+  "noticeVersion": zod.string(),
+  "recordedAt": zod.string()
+})),
+  "history": zod.array(zod.object({
+  "id": zod.number(),
+  "consentType": zod.string(),
+  "noticeVersion": zod.string(),
+  "granted": zod.boolean(),
+  "source": zod.enum(['onboarding', 'account_settings', 'support', 'system']),
+  "createdAt": zod.string()
+}).describe('One append-only consent ledger entry. Entries are never edited; the latest entry per consentType is the current state.'))
+})
+
+
+/**
  * Reports which gated feature areas are enabled for this deployment. Flags are read-only and set by the operator environment.
  * @summary Get the rollout readiness state of gated entry points
  */

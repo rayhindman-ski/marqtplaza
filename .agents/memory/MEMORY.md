@@ -25,5 +25,5 @@
 - [Database error assertions](database-error-assertions.md) — Drizzle/pg may expose wrapped SQL errors without the server trigger message; assert stable failure state instead of exact text.
 - [Playwright browser executable](playwright-chromium.md) — set PLAYWRIGHT_CHROMIUM_EXECUTABLE to system chromium; boundary tests assert opacity, not polygon removal.
 - [OpenAPI email validation](openapi-email-validation.md) — use a regex pattern instead of format email because this workspace's generated Zod client runs on Zod 3.
-- [Onboarding spec baseline](onboarding-spec-baseline.md) — use the 002 Spec Kit package, not the archived v.03 plan, for account/business onboarding work; gates stay open, flags stay off.
+- [Onboarding spec baseline](onboarding-spec-baseline.md) — use the 002 Spec Kit package, not the archived v.03 plan; a dev-enabled flag is never gate approval — only convergence.md records it.
 - [drizzle-kit push diff limits](drizzle-push-diff-limits.md) — push misses partial-index WHERE changes (rename the index) and re-applies FKs whose generated names exceed 63 chars (name them).

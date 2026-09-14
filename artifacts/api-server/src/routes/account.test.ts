@@ -5,8 +5,10 @@ import express from "express";
 import { eq, inArray } from "drizzle-orm";
 
 import {
+  accountConsentEventsTable,
   appUsersTable,
   businessMembersTable,
+  consumerPreferencesTable,
   businessProfilesTable,
   db,
   pool,
@@ -26,6 +28,11 @@ const users = {
   suspended: `account-test-${runId}-suspended`,
   member: `account-test-${runId}-member`,
   racer: `account-test-${runId}-racer`,
+  skipper: `account-test-${runId}-skipper`,
+  saver: `account-test-${runId}-saver`,
+  other: `account-test-${runId}-other`,
+  firstwriters: `account-test-${runId}-firstwriters`,
+  ledger: `account-test-${runId}-ledger`,
 };
 const allUserIds = Object.values(users);
 
@@ -228,5 +235,227 @@ describe("account routes", () => {
     assert.ok(options.body.interests.some((option: any) => option.id === "category:food-and-drink"));
     assert.equal(typeof options.body.taxonomyVersion, "string");
     assert.ok(options.body.neighborhoods.every((option: any) => option.label.nl && option.label.en));
+  });
+  it("marks onboarding complete on skip without creating preference rows", async () => {
+    const skipped = await request("/api/account/onboarding/complete", { method: "POST", userId: users.skipper });
+    assert.equal(skipped.status, 200);
+    assert.equal(skipped.body.onboardingCompleted, true);
+    assert.equal(skipped.body.preferences, null);
+    const firstCompletedAt = skipped.body.onboardingCompletedAt;
+
+    const again = await request("/api/account/onboarding/complete", { method: "POST", userId: users.skipper });
+    assert.equal(again.body.onboardingCompletedAt, firstCompletedAt, "completion is idempotent");
+
+    const rows = await db
+      .select()
+      .from(consumerPreferencesTable)
+      .where(eq(consumerPreferencesTable.userId, skipped.body.id));
+    assert.equal(rows.length, 0);
+    const [registration] = await db
+      .select()
+      .from(userRegistrationsTable)
+      .where(eq(userRegistrationsTable.userId, users.skipper));
+    assert.equal(registration, undefined, "skip never creates a research registration");
+    const consents = await request("/api/account/consents", { userId: users.skipper });
+    assert.equal(consents.status, 200);
+    assert.deepEqual(consents.body.current, [], "account creation grants no consent");
+  });
+
+  it("saves controlled preferences with optimistic revisions and rejects unknown IDs", async () => {
+    const options = await request("/api/account/options", { userId: users.saver });
+    const [hood1, hood2] = options.body.neighborhoods.map((option: any) => option.id);
+    const interest = "category:food-and-drink";
+
+    const invalid = await request("/api/account/preferences", {
+      method: "PATCH",
+      userId: users.saver,
+      body: JSON.stringify({ expectedRevision: 0, neighborhoodIds: ["dhg:nowhere"], interestIds: [interest] }),
+    });
+    assert.equal(invalid.status, 400);
+    assert.equal(invalid.body.code, "VALIDATION_FAILED");
+    assert.deepEqual(invalid.body.fieldErrors, [
+      { field: "neighborhoodIds.dhg:nowhere", code: "not_in_controlled_list" },
+    ]);
+
+    const forged = await request("/api/account/preferences", {
+      method: "PATCH",
+      userId: users.saver,
+      body: JSON.stringify({ expectedRevision: 0, role: "admin" }),
+    });
+    assert.equal(forged.status, 400);
+    assert.equal(forged.body.code, "UNKNOWN_FIELD");
+
+    const saved = await request("/api/account/preferences", {
+      method: "PATCH",
+      userId: users.saver,
+      body: JSON.stringify({
+        expectedRevision: 0,
+        locale: "en",
+        neighborhoodIds: [hood1, hood2, hood1],
+        interestIds: [interest],
+      }),
+    });
+    assert.equal(saved.status, 200, JSON.stringify(saved.body));
+    assert.equal(saved.body.locale, "en");
+    assert.equal(saved.body.preferences.revision, 1);
+    assert.deepEqual(saved.body.preferences.neighborhoodIds, [hood1, hood2]);
+    assert.deepEqual(saved.body.preferences.interestIds, [interest]);
+    assert.equal(saved.body.onboardingCompleted, false, "saving preferences does not complete onboarding by itself");
+
+    const stale = await request("/api/account/preferences", {
+      method: "PATCH",
+      userId: users.saver,
+      body: JSON.stringify({ expectedRevision: 0, interestIds: [] }),
+    });
+    assert.equal(stale.status, 409);
+    assert.equal(stale.body.code, "VERSION_CONFLICT");
+    assert.equal(stale.body.expectedVersion, 1);
+
+    const partial = await request("/api/account/preferences", {
+      method: "PATCH",
+      userId: users.saver,
+      body: JSON.stringify({ expectedRevision: 1, interestIds: [] }),
+    });
+    assert.equal(partial.status, 200);
+    assert.equal(partial.body.preferences.revision, 2);
+    assert.deepEqual(partial.body.preferences.neighborhoodIds, [hood1, hood2], "omitted fields stay unchanged");
+    assert.deepEqual(partial.body.preferences.interestIds, [], "empty arrays clear a list");
+    assert.equal(partial.body.locale, "en", "locale persists on the account");
+
+    const [registration] = await db
+      .select()
+      .from(userRegistrationsTable)
+      .where(eq(userRegistrationsTable.userId, users.saver));
+    assert.equal(registration, undefined, "preferences never touch user_registrations");
+
+    const other = await request("/api/account/me", { userId: users.other });
+    assert.equal(other.body.preferences, null, "another user's preferences are not readable");
+    const otherStale = await request("/api/account/preferences", {
+      method: "PATCH",
+      userId: users.other,
+      body: JSON.stringify({ expectedRevision: 2, interestIds: [interest] }),
+    });
+    assert.equal(otherStale.status, 409, "revisions are scoped per account");
+    assert.equal(otherStale.body.expectedVersion, 0);
+  });
+
+  it("refuses preference and consent writes from unverified identities", async () => {
+    const write = await request("/api/account/preferences", {
+      method: "PATCH",
+      headers: { "x-test-unverified": "1" },
+      userId: users.unverified,
+      body: JSON.stringify({ expectedRevision: 0, interestIds: [] }),
+    });
+    assert.equal(write.status, 403);
+    assert.equal(write.body.code, "EMAIL_UNVERIFIED");
+    const read = await request("/api/account/consents", {
+      headers: { "x-test-unverified": "1" },
+      userId: users.unverified,
+    });
+    assert.equal(read.status, 200, "reads stay available so the client can explain the next step");
+  });
+
+  it("records purpose-specific consents append-only against the current notice version", async () => {
+    const before = await request("/api/account/consents", { userId: users.saver });
+    assert.equal(before.status, 200);
+    assert.deepEqual(before.body.purposes, ["marketing_updates", "research_contact"]);
+    assert.deepEqual(before.body.current, []);
+    const noticeVersion = before.body.currentNoticeVersion;
+
+    const stale = await request("/api/account/consents", {
+      method: "POST",
+      userId: users.saver,
+      body: JSON.stringify({ consentType: "marketing_updates", noticeVersion: "old", granted: true, source: "account_settings" }),
+    });
+    assert.equal(stale.status, 400);
+    assert.deepEqual(stale.body.fieldErrors, [{ field: "noticeVersion", code: "stale_notice_version" }]);
+
+    const system = await request("/api/account/consents", {
+      method: "POST",
+      userId: users.saver,
+      body: JSON.stringify({ consentType: "marketing_updates", noticeVersion, granted: true, source: "system" }),
+    });
+    assert.equal(system.status, 400, "clients cannot claim system or support sources");
+
+    const granted = await request("/api/account/consents", {
+      method: "POST",
+      userId: users.saver,
+      body: JSON.stringify({ consentType: "marketing_updates", noticeVersion, granted: true, source: "account_settings" }),
+    });
+    assert.equal(granted.status, 200);
+    assert.deepEqual(
+      granted.body.current.map((state: any) => [state.consentType, state.granted]),
+      [["marketing_updates", true]],
+    );
+
+    const withdrawn = await request("/api/account/consents", {
+      method: "POST",
+      userId: users.saver,
+      body: JSON.stringify({ consentType: "marketing_updates", noticeVersion, granted: false, source: "account_settings" }),
+    });
+    assert.equal(withdrawn.body.current[0].granted, false);
+    assert.equal(withdrawn.body.history.length, 2, "ledger entries are appended, never replaced");
+    assert.equal(withdrawn.body.current.length, 1, "the other purpose was never asked");
+
+    const [account] = await db.select().from(appUsersTable).where(eq(appUsersTable.clerkUserId, users.saver));
+    const ledger = await db
+      .select()
+      .from(accountConsentEventsTable)
+      .where(eq(accountConsentEventsTable.userId, account!.id));
+    assert.equal(ledger.length, 2);
+    const otherConsents = await request("/api/account/consents", { userId: users.other });
+    assert.deepEqual(otherConsents.body.history, [], "consent history is private to the account");
+  });
+  it("lets exactly one concurrent first writer create preferences and answers the rest with 409", async () => {
+    await request("/api/account/me", { userId: users.firstwriters });
+    const results = await Promise.all(
+      Array.from({ length: 6 }, (_, index) =>
+        request("/api/account/preferences", {
+          method: "PATCH",
+          userId: users.firstwriters,
+          body: JSON.stringify({ expectedRevision: 0, interestIds: index % 2 ? ["category:food-and-drink"] : [] }),
+        })),
+    );
+    const statuses = results.map((result) => result.status).sort();
+    assert.deepEqual(statuses, [200, 409, 409, 409, 409, 409], JSON.stringify(results.map((r) => r.body)));
+    assert.ok(results.filter((r) => r.status === 409).every((r) => r.body.code === "VERSION_CONFLICT" && r.body.expectedVersion === 1));
+    const [account] = await db.select().from(appUsersTable).where(eq(appUsersTable.clerkUserId, users.firstwriters));
+    const rows = await db.select().from(consumerPreferencesTable).where(eq(consumerPreferencesTable.userId, account!.id));
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0]!.revision, 1);
+  });
+
+  it("derives the current consent state from the newest entry even beyond the history page", async () => {
+    const me = await request("/api/account/me", { userId: users.ledger });
+    const base = Date.now() - 400_000;
+    await db.insert(accountConsentEventsTable).values(
+      Array.from({ length: 205 }, (_, index) => ({
+        userId: me.body.id,
+        consentType: "marketing_updates",
+        noticeVersion: "draft-2026-09",
+        granted: index % 2 === 0,
+        source: "account_settings",
+        createdAt: new Date(base + index * 1000),
+      })),
+    );
+    const noticeVersion = (await request("/api/account/consents", { userId: users.ledger })).body.currentNoticeVersion;
+    const withdrawn = await request("/api/account/consents", {
+      method: "POST",
+      userId: users.ledger,
+      body: JSON.stringify({ consentType: "marketing_updates", noticeVersion, granted: false, source: "account_settings" }),
+    });
+    assert.equal(withdrawn.status, 200);
+    assert.deepEqual(withdrawn.body.current.map((s: any) => [s.consentType, s.granted]), [["marketing_updates", false]]);
+    assert.equal(withdrawn.body.history.length, 200, "history is a bounded page");
+    assert.equal(withdrawn.body.history.at(-1).granted, false, "the page ends with the newest entry");
+    const research = await request("/api/account/consents", {
+      method: "POST",
+      userId: users.ledger,
+      body: JSON.stringify({ consentType: "research_contact", noticeVersion, granted: true, source: "account_settings" }),
+    });
+    assert.deepEqual(
+      research.body.current.map((s: any) => [s.consentType, s.granted]),
+      [["marketing_updates", false], ["research_contact", true]],
+    );
   });
 });

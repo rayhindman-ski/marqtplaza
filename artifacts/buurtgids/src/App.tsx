@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { Route, Switch, Router as WouterRouter, Link, Redirect, useLocation, useRoute } from 'wouter';
+import { Route, Switch, Router as WouterRouter, Link, Redirect, useLocation, useRoute, useSearch } from 'wouter';
 import { QueryClient, QueryClientProvider, keepPreviousData } from '@tanstack/react-query';
 import { ClerkProvider, SignIn, SignUp, useAuth } from '@clerk/react';
 import { publishableKeyFromHost } from '@clerk/react/internal';
@@ -58,6 +58,10 @@ import MyBusinessWorkspace from './pages/MyBusinessWorkspace';
 import BusinessModerationView from './pages/BusinessModerationView';
 import OnboardingPage from './pages/OnboardingPage';
 import AccountPage from './pages/AccountPage';
+import AccountPreferencesPage from './pages/AccountPreferencesPage';
+import { useAccountAuth } from './lib/accountAuth';
+import { featureFlags } from './lib/featureFlags';
+import { resolveReturnPath, withReturnPath } from './lib/returnPath';
 import BusinessOnboardingPage from './pages/BusinessOnboardingPage';
 import { useEditorAccess } from './lib/editorAccess';
 import {
@@ -3075,6 +3079,7 @@ export default function App() {
           <Route path="/sign-in/*?" component={SignInPage} />
           <Route path="/sign-up/*?" component={SignUpPage} />
           <Route path="/onboarding" component={OnboardingPage} />
+          <Route path="/account/voorkeuren" component={AccountPreferencesPage} />
           <Route path="/account/*?" component={AccountPage} />
           <Route path="/bedrijf-aanmelden" component={BusinessOnboardingPage} />
           <Route path="/nieuws" component={NewsFeedView} />
@@ -3741,14 +3746,39 @@ const clerkAppearance = {
   },
 };
 
+/**
+ * Where Clerk sends a user after it finishes sign-in, sign-up, or verification.
+ * The `terug` parameter is validated against a local allowlist, so an external
+ * or unknown destination silently becomes the account page. New accounts go
+ * through the optional preference step first when accounts are enabled;
+ * otherwise the legacy research registration stays the landing step.
+ */
+function useClerkRedirects() {
+  const search = useSearch();
+  const returnPath = resolveReturnPath(search, '');
+  const signInTarget = `${basePath}${returnPath}`;
+  const signUpTarget = featureFlags.accounts
+    ? `${basePath}${withReturnPath('/account/voorkeuren', returnPath)}`
+    : `${basePath}/onboarding`;
+  const carry = search ? `?${search}` : '';
+  return {
+    signInTarget,
+    signUpTarget,
+    signInUrl: `${basePath}/sign-in${carry}`,
+    signUpUrl: `${basePath}/sign-up${carry}`,
+  };
+}
+
 function SignUpPage() {
+  const redirects = useClerkRedirects();
   return (
     <div className="flex min-h-[100dvh] items-center justify-center bg-background px-4">
       <SignUp
         routing="path"
         path={`${basePath}/sign-up`}
-        signInUrl={`${basePath}/sign-in`}
-        forceRedirectUrl={`${basePath}/onboarding`}
+        signInUrl={redirects.signInUrl}
+        forceRedirectUrl={redirects.signUpTarget}
+        signInForceRedirectUrl={redirects.signInTarget}
       />
     </div>
   );
@@ -3760,7 +3790,7 @@ const clerkPubKey = publishableKeyFromHost(
 );
 
 function ApiAuthTokenBridge() {
-  const { getToken, isSignedIn } = useAuth();
+  const { getToken, isSignedIn, userId } = useAccountAuth();
 
   useEffect(() => {
     if (!isSignedIn) {
@@ -3770,7 +3800,7 @@ function ApiAuthTokenBridge() {
 
     setAuthTokenGetter(() => getToken());
     return () => setAuthTokenGetter(null);
-  }, [getToken, isSignedIn]);
+  }, [getToken, isSignedIn, userId]);
 
   return null;
 }
@@ -3794,9 +3824,16 @@ function ClerkProviderWithRouter({ children }: { children: React.ReactNode }) {
 }
 
 function SignInPage() {
+  const redirects = useClerkRedirects();
   return (
     <div className="flex min-h-[100dvh] items-center justify-center bg-background px-4">
-      <SignIn routing="path" path={`${basePath}/sign-in`} signUpUrl={`${basePath}/sign-up`} />
+      <SignIn
+        routing="path"
+        path={`${basePath}/sign-in`}
+        signUpUrl={redirects.signUpUrl}
+        forceRedirectUrl={redirects.signInTarget}
+        signUpForceRedirectUrl={redirects.signUpTarget}
+      />
     </div>
   );
 }

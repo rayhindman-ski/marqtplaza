@@ -20,6 +20,7 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
+  AccountConsents,
   AccountMe,
   AccountOptions,
   ApiError,
@@ -45,6 +46,7 @@ import type {
   EventReviewDecision,
   EventReviewDecisionResult,
   EventReviewList,
+  FeatureDisabledResponse,
   FeatureReadiness,
   GetBusinessClaimModerationParams,
   GetCommunityModerationPostsParams,
@@ -67,6 +69,7 @@ import type {
   OwnedBusinessProfile,
   PersistOutcome,
   PublicBusinessProfile,
+  RecordAccountConsentInput,
   RegistrationInput,
   RegistrationStatus,
   RunSocialMapReview502,
@@ -76,6 +79,8 @@ import type {
   SocialMapReviewResponse,
   SourceScanRequest,
   SourceScanResponse,
+  UpdateAccountPreferencesInput,
+  VersionConflictResponse,
   WeatherResponse
 } from './api.schemas';
 
@@ -345,6 +350,314 @@ export function useGetAccountOptions<TData = Awaited<ReturnType<typeof getAccoun
 
 
 
+
+export const getUpdateAccountPreferencesUrl = () => {
+
+
+
+
+  return `/api/account/preferences`
+}
+
+/**
+ * Creates or updates the signed-in user's optional preferences. `expectedRevision` must equal
+ * the current stored revision (use 0 when no preferences exist yet); a mismatch returns
+ * 409 VERSION_CONFLICT with the current `expectedVersion` so the client can reload while keeping
+ * its draft. Every neighbourhood and interest ID is validated against `GET /account/options`;
+ * unknown IDs return 400 VALIDATION_FAILED with `not_in_controlled_list` field errors. Omitted
+ * fields stay unchanged; empty arrays clear a list. `locale` updates the account locale. Nothing
+ * is inferred, and this operation never touches the research registration or saved events.
+ * Requires a verified identity (403 EMAIL_UNVERIFIED otherwise).
+ * @summary Save controlled account preferences with optimistic concurrency
+ */
+export const updateAccountPreferences = async (updateAccountPreferencesInput: UpdateAccountPreferencesInput, options?: Parameters<typeof customFetch>[1]): Promise<AccountMe> => {
+
+  return customFetch<AccountMe>(getUpdateAccountPreferencesUrl(),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(updateAccountPreferencesInput)
+  }
+);}
+
+
+
+
+
+export const getUpdateAccountPreferencesMutationOptions = <TError = ErrorType<ApiError | FeatureDisabledResponse | VersionConflictResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAccountPreferences>>, TError,{data: BodyType<UpdateAccountPreferencesInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateAccountPreferences>>, TError,{data: BodyType<UpdateAccountPreferencesInput>}, TContext> => {
+
+const mutationKey = ['updateAccountPreferences'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateAccountPreferences>>, {data: BodyType<UpdateAccountPreferencesInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  updateAccountPreferences(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateAccountPreferencesMutationResult = NonNullable<Awaited<ReturnType<typeof updateAccountPreferences>>>
+    export type UpdateAccountPreferencesMutationBody = BodyType<UpdateAccountPreferencesInput>
+    export type UpdateAccountPreferencesMutationError = ErrorType<ApiError | FeatureDisabledResponse | VersionConflictResponse>
+
+    /**
+ * @summary Save controlled account preferences with optimistic concurrency
+ */
+export const useUpdateAccountPreferences = <TError = ErrorType<ApiError | FeatureDisabledResponse | VersionConflictResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAccountPreferences>>, TError,{data: BodyType<UpdateAccountPreferencesInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateAccountPreferences>>,
+        TError,
+        {data: BodyType<UpdateAccountPreferencesInput>},
+        TContext
+      > => {
+      return useMutation(getUpdateAccountPreferencesMutationOptions(options));
+    }
+
+export const getCompleteAccountOnboardingUrl = () => {
+
+
+
+
+  return `/api/account/onboarding/complete`
+}
+
+/**
+ * Records onboarding completion for the signed-in user independently of whether any
+ * preference exists (skipping is a valid completion). Idempotent: a repeat call keeps the
+ * original completion time. Creates no preference row, no research registration, and no consent.
+ * @summary Mark the optional onboarding step as completed on the server
+ */
+export const completeAccountOnboarding = async ( options?: Parameters<typeof customFetch>[1]): Promise<AccountMe> => {
+
+  return customFetch<AccountMe>(getCompleteAccountOnboardingUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getCompleteAccountOnboardingMutationOptions = <TError = ErrorType<ApiError | FeatureDisabledResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof completeAccountOnboarding>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof completeAccountOnboarding>>, TError,void, TContext> => {
+
+const mutationKey = ['completeAccountOnboarding'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof completeAccountOnboarding>>, void> = () => {
+
+
+          return  completeAccountOnboarding(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CompleteAccountOnboardingMutationResult = NonNullable<Awaited<ReturnType<typeof completeAccountOnboarding>>>
+
+    export type CompleteAccountOnboardingMutationError = ErrorType<ApiError | FeatureDisabledResponse>
+
+    /**
+ * @summary Mark the optional onboarding step as completed on the server
+ */
+export const useCompleteAccountOnboarding = <TError = ErrorType<ApiError | FeatureDisabledResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof completeAccountOnboarding>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof completeAccountOnboarding>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getCompleteAccountOnboardingMutationOptions(options));
+    }
+
+export const getGetAccountConsentsUrl = () => {
+
+
+
+
+  return `/api/account/consents`
+}
+
+/**
+ * Returns the current notice version, the derived current state per consent purpose (latest
+ * ledger entry wins; absent means never asked), and the append-only history. Account creation
+ * never grants any consent.
+ * @summary Get the current state and history of purpose-specific consents
+ */
+export const getAccountConsents = async ( options?: Parameters<typeof customFetch>[1]): Promise<AccountConsents> => {
+
+  return customFetch<AccountConsents>(getGetAccountConsentsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetAccountConsentsQueryKey = () => {
+    return [
+    `/api/account/consents`
+    ] as const;
+    }
+
+
+export const getGetAccountConsentsQueryOptions = <TData = Awaited<ReturnType<typeof getAccountConsents>>, TError = ErrorType<ApiError | FeatureDisabledResponse>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAccountConsents>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetAccountConsentsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAccountConsents>>> = ({ signal }) => getAccountConsents({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAccountConsents>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetAccountConsentsQueryResult = NonNullable<Awaited<ReturnType<typeof getAccountConsents>>>
+export type GetAccountConsentsQueryError = ErrorType<ApiError | FeatureDisabledResponse>
+
+
+/**
+ * @summary Get the current state and history of purpose-specific consents
+ */
+
+export function useGetAccountConsents<TData = Awaited<ReturnType<typeof getAccountConsents>>, TError = ErrorType<ApiError | FeatureDisabledResponse>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAccountConsents>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetAccountConsentsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getRecordAccountConsentUrl = () => {
+
+
+
+
+  return `/api/account/consents`
+}
+
+/**
+ * Appends one ledger entry for exactly one consent purpose. Entries are never edited or
+ * deleted. `noticeVersion` must match the current notice version served by
+ * `GET /account/consents` (400 VALIDATION_FAILED with `stale_notice_version` otherwise), so a
+ * user never agrees to text they have not seen. Requires a verified identity.
+ * @summary Grant or withdraw one purpose-specific consent
+ */
+export const recordAccountConsent = async (recordAccountConsentInput: RecordAccountConsentInput, options?: Parameters<typeof customFetch>[1]): Promise<AccountConsents> => {
+
+  return customFetch<AccountConsents>(getRecordAccountConsentUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(recordAccountConsentInput)
+  }
+);}
+
+
+
+
+
+export const getRecordAccountConsentMutationOptions = <TError = ErrorType<ApiError | FeatureDisabledResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof recordAccountConsent>>, TError,{data: BodyType<RecordAccountConsentInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof recordAccountConsent>>, TError,{data: BodyType<RecordAccountConsentInput>}, TContext> => {
+
+const mutationKey = ['recordAccountConsent'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof recordAccountConsent>>, {data: BodyType<RecordAccountConsentInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  recordAccountConsent(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RecordAccountConsentMutationResult = NonNullable<Awaited<ReturnType<typeof recordAccountConsent>>>
+    export type RecordAccountConsentMutationBody = BodyType<RecordAccountConsentInput>
+    export type RecordAccountConsentMutationError = ErrorType<ApiError | FeatureDisabledResponse>
+
+    /**
+ * @summary Grant or withdraw one purpose-specific consent
+ */
+export const useRecordAccountConsent = <TError = ErrorType<ApiError | FeatureDisabledResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof recordAccountConsent>>, TError,{data: BodyType<RecordAccountConsentInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof recordAccountConsent>>,
+        TError,
+        {data: BodyType<RecordAccountConsentInput>},
+        TContext
+      > => {
+      return useMutation(getRecordAccountConsentMutationOptions(options));
+    }
 
 export const getGetReadinessUrl = () => {
 

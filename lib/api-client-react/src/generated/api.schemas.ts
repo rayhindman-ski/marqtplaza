@@ -200,6 +200,65 @@ export interface AccountMe {
   createdAt: string;
 }
 
+/**
+ * Purpose-specific consents that are asked separately from account creation and from
+ * the research registration. `marketing_updates`: occasional product and neighbourhood
+ * updates by e-mail. `research_contact`: may be contacted about product research.
+ */
+export type ConsentPurpose = typeof ConsentPurpose[keyof typeof ConsentPurpose];
+
+
+export const ConsentPurpose = {
+  marketing_updates: 'marketing_updates',
+  research_contact: 'research_contact',
+} as const;
+
+export interface UpdateAccountPreferencesInput {
+  /**
+     * Current stored revision, or 0 when no preferences exist yet.
+     * @minimum 0
+     */
+  expectedRevision: number;
+  locale?: AccountLocale;
+  /**
+     * @maxItems 20
+     * @items.maxLength 120
+     */
+  neighborhoodIds?: string[];
+  /**
+     * @maxItems 20
+     * @items.maxLength 120
+     */
+  interestIds?: string[];
+}
+
+/**
+ * Where the user made the choice; support and system entries are never accepted from clients.
+ */
+export type RecordAccountConsentInputSource = typeof RecordAccountConsentInputSource[keyof typeof RecordAccountConsentInputSource];
+
+
+export const RecordAccountConsentInputSource = {
+  onboarding: 'onboarding',
+  account_settings: 'account_settings',
+} as const;
+
+export interface RecordAccountConsentInput {
+  consentType: ConsentPurpose;
+  /** @maxLength 80 */
+  noticeVersion: string;
+  granted: boolean;
+  /** Where the user made the choice; support and system entries are never accepted from clients. */
+  source: RecordAccountConsentInputSource;
+}
+
+export interface ConsentState {
+  consentType: ConsentPurpose;
+  granted: boolean;
+  noticeVersion: string;
+  recordedAt: string;
+}
+
 export type ConsentEventSource = typeof ConsentEventSource[keyof typeof ConsentEventSource];
 
 
@@ -220,6 +279,15 @@ export interface ConsentEvent {
   granted: boolean;
   source: ConsentEventSource;
   createdAt: string;
+}
+
+export interface AccountConsents {
+  /** Version of the consent notice text the client must show before recording a choice. */
+  currentNoticeVersion: string;
+  /** All purposes that can be asked; a purpose without a current entry has never been asked. */
+  purposes: ConsentPurpose[];
+  current: ConsentState[];
+  history: ConsentEvent[];
 }
 
 export type AccountOptionLabel = {

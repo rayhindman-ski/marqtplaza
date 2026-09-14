@@ -40,14 +40,14 @@ Use `T### [P] [US#] description`:
 
 **Goal**: a signed-in resident saves or skips controlled preferences, sees an accurate summary after refresh, and returns to an allowlisted local path.
 
-- [ ] T015 [US2] Add `PATCH /account/preferences` (expectedRevision), `POST /account/onboarding/complete`, `POST /account/consents`, `GET /account/consents` to `openapi.yaml`; codegen
-- [ ] T016 [US2] Implement handlers in `routes/account.ts`: controlled-ID validation against `GET /account/options` source, 409 on revision mismatch, completion independent of preferences, append-only consent write with notice version
-- [ ] T017 [US2] Create `artifacts/buurtgids/src/lib/returnPath.ts` (allowlist of local base-relative paths; default `/account`) with `returnPath.test.ts`
-- [ ] T018 [US2] Create `artifacts/buurtgids/src/pages/AccountPreferencesPage.tsx` (checkbox groups, save/skip, conflict keeps draft, language switch retains state, summary view) and register `/account/voorkeuren` in `App.tsx`
-- [ ] T019 [US2] Update `artifacts/buurtgids/src/pages/OnboardingPage.tsx` so the `localStorage` completion marker is a cache of the server state and the preference step is offered after registration when the flag is on
-- [ ] T020 [US2] Write `routes/account.test.ts` cases: skip creates no preference rows, invalid ID → 422, stale revision → 409, preferences never touch `user_registrations`, another user's preferences unreadable
-- [ ] T021 [US2] Write `artifacts/buurtgids/e2e/account-preferences.spec.ts`: save, refresh, skip, return path, external URL rejected, NL/EN parity
-- [ ] T022 [US2] **GATE Q1/Q6** Owner approves controlled taxonomy; legal approves consent notice text and version; record in `convergence.md`
+- [x] T015 [US2] Add `PATCH /account/preferences` (expectedRevision), `POST /account/onboarding/complete`, `POST /account/consents`, `GET /account/consents` to `openapi.yaml`; codegen
+- [x] T016 [US2] Implement handlers in `routes/account.ts`: controlled-ID validation against `GET /account/options` source, 409 on revision mismatch, completion independent of preferences, append-only consent write with notice version
+- [x] T017 [US2] Create `artifacts/buurtgids/src/lib/returnPath.ts` (allowlist of local base-relative paths; default `/account`) with `returnPath.test.ts`
+- [x] T018 [US2] Create `artifacts/buurtgids/src/pages/AccountPreferencesPage.tsx` (checkbox groups, save/skip, conflict keeps draft, language switch retains state, summary view) and register `/account/voorkeuren` in `App.tsx`
+- [x] T019 [US2] Update `artifacts/buurtgids/src/pages/OnboardingPage.tsx` so the `localStorage` completion marker is a cache of the server state and the preference step is offered after registration when the flag is on
+- [x] T020 [US2] Write `routes/account.test.ts` cases: skip creates no preference rows, invalid ID → 400 `VALIDATION_FAILED` (shared error contract; spec said 422), stale revision → 409, preferences never touch `user_registrations`, another user's preferences unreadable
+- [x] T021 [US2] Write `artifacts/buurtgids/e2e/account-preferences.spec.ts`: save, refresh, skip, return path, external URL rejected, NL/EN parity
+- [ ] T022 [US2] **GATE Q1/Q6** (still open on 2026-09-14; development flag on for preview only) Owner approves controlled taxonomy; legal approves consent notice text and version; record in `convergence.md`
 
 ## Phase 4 — User Story 3 (P3) — Business intake
 
