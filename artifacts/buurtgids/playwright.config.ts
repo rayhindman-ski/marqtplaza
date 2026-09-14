@@ -13,7 +13,7 @@ export default defineConfig({
     },
   },
   webServer: {
-    command: 'env -u REPL_ID PORT=22572 BASE_PATH=/ VITE_ACCOUNTS_ENABLED=1 VITE_BUSINESS_INTAKE_ENABLED=1 pnpm run dev',
+    command: 'env -u REPL_ID PORT=22572 BASE_PATH=/ VITE_ACCOUNTS_ENABLED=1 VITE_BUSINESS_INTAKE_ENABLED=1 VITE_BUSINESS_PUBLICATION_ENABLED=1 pnpm run dev',
     url: 'http://127.0.0.1:22572/activiteiten/den-haag',
     reuseExistingServer: false,
     timeout: 30_000,

@@ -29,3 +29,4 @@
 - [Onboarding spec baseline](onboarding-spec-baseline.md) — use the 002 Spec Kit package, not the archived v.03 plan; a dev-enabled flag is never gate approval — only convergence.md records it.
 - [drizzle-kit push diff limits](drizzle-push-diff-limits.md) — push misses partial-index WHERE changes (rename the index) and re-applies FKs whose generated names exceed 63 chars (name them).
 - [Business intake integrity](business-intake-routing.md) — per-route gating, version-bound reviewer decisions, stored-first listing resolution, race-safe idempotency.
+- [Business publication review](business-publication-review.md) — four independent dimensions, snapshot-only public output (no column fallback), interested-party exclusion incl. active claimants.

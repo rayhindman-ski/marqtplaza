@@ -1,5 +1,5 @@
 import { getAuth } from "@clerk/express";
-import { and, asc, desc, eq, gte, inArray, lte, ne, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, lte } from "drizzle-orm";
 import {
   Router,
   type IRouter,
@@ -11,7 +11,6 @@ import {
   businessClaimsTable,
   businessMembersTable,
   businessProfilesTable,
-  businessReviewsTable,
   db,
   dealsTable,
   type BusinessClaim,
@@ -55,7 +54,18 @@ import {
   serialiseProfile,
   serialiseClaim,
 } from "../lib/businessClaims";
-import { assertNotReviewingOwnBusiness, assertNotSelfReview, SelfReviewError } from "../lib/permissions";
+import { applyClaimDecision } from "../lib/claimDecisions";
+import {
+  approvedRevisionFor,
+  factChecksFor,
+  freshnessFor,
+  latestRevisionFor,
+  normaliseContent,
+  projectApprovedContent,
+  serialisePublicCheck,
+} from "../lib/businessRevisions";
+import { getFeatureFlags, type FeatureFlagSource } from "../lib/featureFlags";
+import { upsertDraftRevision } from "./business-publication";
 import { requireEditor } from "../middlewares/requireEditor.js";
 import { resolveClaimableBusinessListing } from "./listings.js";
 
@@ -64,6 +74,8 @@ export type BusinessesRouterOptions = {
   getUserId?: (req: Request) => string | null;
   /** Editor gate; defaults to the Clerk role check. */
   requireEditor?: RequestHandler;
+  /** Rollout flags; `businessPublication` routes owner edits through draft revisions. */
+  flags?: FeatureFlagSource;
 };
 
 const supportedCities = new Set(["ams", "rot", "utr", "dhg", "ein"]);
@@ -159,11 +171,54 @@ async function claimRows(
     : query.orderBy(desc(businessClaimsTable.createdAt));
 }
 
+/**
+ * Public serialisation. Every editorial field comes from the approved
+ * snapshot only (with contradicted fields withheld); the mutable columns are
+ * never served while publication is on, so unreviewed owner edits and private
+ * drafts cannot appear here. Published profiles get their approved v1 from the
+ * startup backfill; one without a snapshot is treated as unavailable (`null`)
+ * rather than falling back to columns. With publication off the legacy columns
+ * are served unchanged.
+ */
+async function publicProjection(profile: BusinessProfile, publicationEnabled: boolean) {
+  const base = serialiseProfile(profile);
+  // Flag off (or rolled back): the legacy columns are the public truth again, even
+  // when an approved snapshot exists from an earlier enablement.
+  if (!publicationEnabled) return { ...base, approvedRevisionVersion: null, content: null, provenance: null };
+  const approved = await approvedRevisionFor(profile);
+  if (!approved) return null;
+  const checks = await factChecksFor(approved.id);
+  const content = projectApprovedContent(normaliseContent(approved.content), checks);
+  return {
+    ...base,
+    tagline: content.nl.tagline,
+    description: content.nl.description,
+    openingHours: content.nl.openingHours,
+    websiteUrl: content.facts.websiteUrl,
+    phone: content.facts.phone,
+    email: content.facts.email,
+    address: content.facts.address,
+    logoUrl: content.facts.logoUrl,
+    coverUrl: content.facts.coverUrl,
+    approvedRevisionVersion: approved.version,
+    content,
+    provenance: {
+      listingSource: profile.listingSource,
+      sourceUrl: profile.sourceUrl,
+      approvedVersion: approved.version,
+      approvedAt: approved.decidedAt?.toISOString() ?? null,
+      freshness: freshnessFor(checks),
+      checks: checks.map(serialisePublicCheck),
+    },
+  };
+}
+
 export function createBusinessesRouter(
   options: BusinessesRouterOptions = {},
 ): IRouter {
   const getUserId = options.getUserId ?? clerkUserId;
   const requireEditorRole = options.requireEditor ?? requireEditor;
+  const flags = options.flags ?? getFeatureFlags;
   const router: IRouter = Router();
 
   function currentUserId(
@@ -246,7 +301,9 @@ export function createBusinessesRouter(
     let claim: BusinessClaim;
     let profile: BusinessProfile;
     try {
+      const publicationEnabled = flags().businessPublication;
       ({ claim, profile } = await db.transaction(async (tx) => {
+        // Profile row lock first, matching the order used by review decisions.
         let [existingProfile] = await tx
           .select()
           .from(businessProfilesTable)
@@ -256,7 +313,8 @@ export function createBusinessesRouter(
               eq(businessProfilesTable.listingSource, canonicalSource),
               eq(businessProfilesTable.listingId, canonical.id),
             ),
-          );
+          )
+          .for("update");
         if (!existingProfile) {
           await tx
             .insert(businessProfilesTable)
@@ -271,6 +329,7 @@ export function createBusinessesRouter(
               latitude: canonical.lat,
               longitude: canonical.lng,
               sourceUrl: canonical.sourceUrl ?? null,
+              publicationStatus: publicationEnabled ? "draft" : "published",
             })
             .onConflictDoNothing();
           [existingProfile] = await tx
@@ -282,7 +341,8 @@ export function createBusinessesRouter(
                 eq(businessProfilesTable.listingSource, canonicalSource),
                 eq(businessProfilesTable.listingId, canonical.id),
               ),
-            );
+            )
+            .for("update");
         }
         if (!existingProfile || existingProfile.isClaimed) {
           throw new ClaimConflictError(
@@ -358,185 +418,44 @@ export function createBusinessesRouter(
         res.status(400).json({ error: "Invalid claim decision." });
         return;
       }
-      const [row] = await claimRows(eq(businessClaimsTable.id, params.data.id));
-      if (!row) {
-        res.status(404).json({ error: "Business claim not found." });
-        return;
-      }
-      if (!REVIEWABLE_CLAIM_STATUSES.has(row.claim.status)) {
-        res.status(409).json({ error: "This claim has already been decided." });
-        return;
-      }
       // A decision is bound to the exact claim version the reviewer looked at.
-      const reviewedVersion = body.data.expectedVersion;
-      if (reviewedVersion === undefined) {
+      if (body.data.expectedVersion === undefined) {
         res.status(400).json({ error: "expectedVersion is required for claim decisions." });
         return;
       }
-      if (reviewedVersion !== row.claim.version) {
-        res.status(409).json({
-          error: "This claim changed since you reviewed it. Reload and review the current version.",
-          expectedVersion: row.claim.version,
-        });
-        return;
-      }
-      try {
-        assertNotSelfReview(editorId, [
-          row.claim.claimantId,
-          row.profile.createdByUserId,
-        ]);
-        // An editor who already belongs to the business may not decide competing claims on it.
-        await assertNotReviewingOwnBusiness(editorId, row.profile.id);
-      } catch (error) {
-        if (error instanceof SelfReviewError) {
-          res.status(403).json({ error: error.message });
+      const outcome = await applyClaimDecision({
+        claimId: params.data.id,
+        reviewerId: editorId,
+        decision: body.data.decision,
+        expectedVersion: body.data.expectedVersion,
+        reason: body.data.reviewNote?.trim() || null,
+      });
+      switch (outcome.kind) {
+        case "not_found":
+          res.status(404).json({ error: "Business claim not found." });
           return;
-        }
-        throw error;
-      }
-
-      const decision = body.data.decision;
-      const approved = decision === "approve";
-      const nextStatus = approved
-        ? "approved"
-        : decision === "reject"
-          ? "rejected"
-          : "changes_requested";
-      const reviewNote = body.data.reviewNote?.trim() || null;
-      if (decision === "request_changes" && !reviewNote) {
-        res
-          .status(400)
-          .json({
-            error: "Requesting changes requires a reason for the claimant.",
+        case "not_reviewable":
+          res.status(409).json({ error: "This claim has already been decided." });
+          return;
+        case "stale":
+          res.status(409).json({
+            error: "This claim changed since you reviewed it. Reload and review the current version.",
+            expectedVersion: outcome.currentVersion,
           });
-        return;
-      }
-      const previousStatus = row.claim.status;
-      let result: { claim: BusinessClaim; profile: BusinessProfile };
-      try {
-        result = await db.transaction(async (tx) => {
-          // Re-checked inside the transaction so a membership granted concurrently
-          // (e.g. this editor's own claim approved by someone else) still blocks the decision.
-          const [reviewerMembership] = await tx
-            .select({ id: businessMembersTable.id })
-            .from(businessMembersTable)
-            .where(
-              and(
-                eq(businessMembersTable.businessProfileId, row.profile.id),
-                eq(businessMembersTable.userId, editorId),
-              ),
-            )
-            .limit(1);
-          if (reviewerMembership) throw new SelfReviewError();
-          const [claim] = await tx
-            .update(businessClaimsTable)
-            .set({
-              status: nextStatus,
-              reviewNote,
-              reviewedBy: editorId,
-              reviewedAt: new Date(),
-              version: reviewedVersion + 1,
-            })
-            .where(
-              and(
-                eq(businessClaimsTable.id, row.claim.id),
-                eq(businessClaimsTable.status, previousStatus),
-                eq(businessClaimsTable.version, reviewedVersion),
-              ),
-            )
-            .returning();
-          if (!claim)
-            throw new ClaimConflictError(
-              "This claim changed since you reviewed it. Reload and review the current version.",
-            );
-          let profile = row.profile;
-          if (approved) {
-            // Approval creates exactly one owner membership. A business that already has
-            // an owner (a disputed claim) cannot be approved here; ownership transfer is a
-            // separate, explicit process.
-            const [existingOwner] = await tx
-              .select({ userId: businessMembersTable.userId })
-              .from(businessMembersTable)
-              .where(
-                and(
-                  eq(businessMembersTable.businessProfileId, row.profile.id),
-                  eq(businessMembersTable.role, "owner"),
-                ),
-              )
-              .limit(1);
-            if (
-              existingOwner &&
-              existingOwner.userId !== row.claim.claimantId
-            ) {
-              throw new ClaimConflictError(
-                "This business already has a verified owner.",
-              );
-            }
-            [profile] = await tx
-              .update(businessProfilesTable)
-              .set({
-                isClaimed: true,
-                claimedAt: row.profile.claimedAt ?? new Date(),
-              })
-              .where(eq(businessProfilesTable.id, row.profile.id))
-              .returning();
-            if (!profile)
-              throw new ClaimConflictError(
-                "This listing has already been claimed.",
-              );
-            await tx
-              .insert(businessMembersTable)
-              .values({
-                businessProfileId: profile.id,
-                userId: row.claim.claimantId,
-                role: "owner",
-              })
-              .onConflictDoNothing();
-            await tx
-              .update(businessClaimsTable)
-              .set({
-                status: "rejected",
-                reviewNote: "Another claim for this listing was approved.",
-                reviewedBy: editorId,
-                reviewedAt: new Date(),
-                version: sql`${businessClaimsTable.version} + 1`,
-              })
-              .where(
-                and(
-                  eq(businessClaimsTable.businessProfileId, profile.id),
-                  inArray(businessClaimsTable.status, [
-                    "pending",
-                    "submitted",
-                    "changes_requested",
-                    "disputed",
-                  ]),
-                  ne(businessClaimsTable.id, claim.id),
-                ),
-              );
-          }
-          await tx.insert(businessReviewsTable).values({
-            targetType: "claim",
-            targetId: claim.id,
-            // The version whose evidence was reviewed, not the one this decision created.
-            targetVersion: reviewedVersion,
-            reviewerUserId: editorId,
-            decision,
-            reasonCode: decision === "approve" ? null : decision,
-            reason: reviewNote,
-          });
-          return { claim, profile };
-        });
-      } catch (error) {
-        if (error instanceof ClaimConflictError) {
-          res.status(409).json({ error: error.message });
           return;
-        }
-        if (error instanceof SelfReviewError) {
-          res.status(403).json({ error: error.message });
+        case "reason_required":
+          res.status(400).json({ error: "This decision requires a reason for the claimant." });
           return;
-        }
-        throw error;
+        case "self_review":
+          res.status(403).json({ error: outcome.message });
+          return;
+        case "conflict":
+          res.status(409).json({ error: outcome.message });
+          return;
+        case "decided":
+          break;
       }
+      const result = { claim: outcome.claim, profile: outcome.profile };
 
       res.json(
         DecideBusinessClaimResponse.parse(
@@ -619,6 +538,37 @@ export function createBusinessesRouter(
     const owned = await findOwnedProfile(params.data.id, userId);
     if (!owned) {
       res.status(403).json({ error: "Owner access is required." });
+      return;
+    }
+    if (flags().businessPublication) {
+      // With publication review on, owner edits never reach the public columns
+      // directly: they are merged into a draft revision that a reviewer must approve.
+      if (body.data.name !== undefined) {
+        res.status(400).json({ error: "The business name cannot be changed while publication review is enabled." });
+        return;
+      }
+      const latest = await latestRevisionFor(owned.profile.id);
+      const outcome = await upsertDraftRevision(owned.profile, userId, latest?.version ?? 0, {
+        nl: {
+          tagline: body.data.tagline,
+          description: body.data.description,
+          openingHours: body.data.openingHours,
+        },
+        facts: {
+          websiteUrl: body.data.websiteUrl,
+          phone: body.data.phone,
+          email: body.data.email,
+          logoUrl: body.data.logoUrl,
+          coverUrl: body.data.coverUrl,
+        },
+      });
+      if (outcome.kind !== "ok") {
+        res.status(409).json({
+          error: "This profile is under review. Edit it from the profile editor once the review is complete.",
+        });
+        return;
+      }
+      res.json(UpdateBusinessProfileResponse.parse(serialiseProfile(owned.profile)));
       return;
     }
     const [profile] = await db
@@ -815,6 +765,15 @@ export function createBusinessesRouter(
         res.status(404).json({ error: "Profile not found." });
         return;
       }
+      const projection = await publicProjection(profile, flags().businessPublication);
+      if (!projection) {
+        req.log?.warn?.(
+          { event: "business_publication.missing_snapshot", profileId: profile.id },
+          "Published profile has no approved snapshot; run the revision backfill",
+        );
+        res.status(404).json({ error: "Profile not found." });
+        return;
+      }
       const activeDeals = await db
         .select()
         .from(dealsTable)
@@ -829,7 +788,7 @@ export function createBusinessesRouter(
         .orderBy(asc(dealsTable.validUntil));
       res.json(
         GetBusinessProfileResponse.parse({
-          ...serialiseProfile(profile),
+          ...projection,
           deals: activeDeals.map((deal) => serialiseDeal(deal, profile)),
         }),
       );

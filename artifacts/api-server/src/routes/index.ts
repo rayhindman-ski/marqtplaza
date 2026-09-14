@@ -9,6 +9,7 @@ import weatherRouter from "./weather";
 import communityPostsRouter from "./community-posts";
 import businessesRouter from "./businesses";
 import businessIntakeRouter from "./business-intake";
+import businessPublicationRouter from "./business-publication";
 import savedEventsRouter from "./saved-events";
 import registrationRouter from "./registration";
 import accountRouter from "./account";
@@ -26,6 +27,7 @@ router.use(communityPostsRouter);
 router.use(businessesRouter);
 // Mounted after the legacy business routes so `/business-claims/moderation` keeps precedence.
 router.use(businessIntakeRouter);
+router.use(businessPublicationRouter);
 router.use(savedEventsRouter);
 router.use(registrationRouter);
 router.use(accountRouter);

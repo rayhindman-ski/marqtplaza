@@ -14,6 +14,8 @@
     "test:discovery-refresh": "tsx --test src/lib/neighborhood-discovery-refresh.test.ts src/routes/listings-query.test.ts",
     "test:account-foundation": "tsx --test src/lib/permissions.test.ts src/routes/account.test.ts src/routes/registration.test.ts",
     "test:business-intake": "tsx --test src/routes/business-intake.test.ts",
+    "test:business-publication": "tsx --test src/routes/business-publication.test.ts",
+    "backfill:business-revisions": "tsx src/scripts/backfillBusinessRevisions.ts",
     "test:listings-query:integration": "sh -c 'test -n \"$LISTINGS_TEST_DATABASE_URL\" || { echo \"LISTINGS_TEST_DATABASE_URL must point to an isolated test database\" >&2; exit 1; }; DATABASE_URL=\"$LISTINGS_TEST_DATABASE_URL\" pnpm --filter @workspace/db run push && DATABASE_URL=\"$LISTINGS_TEST_DATABASE_URL\" tsx --test src/routes/listings-query.integration.test.ts'",
     "start": "node --enable-source-maps ./dist/index.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",

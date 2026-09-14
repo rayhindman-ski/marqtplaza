@@ -28,6 +28,8 @@ tags:
     description: Resident and organisation community posts
   - name: businesses
     description: Business claims, profiles, and local deals
+  - name: business-publication
+    description: Editorial review, immutable profile revisions, and controlled publication
   - name: saved-events
     description: Account-backed saved event snapshots and alerts
   - name: registration
@@ -1471,6 +1473,443 @@ paths:
         "404":
           description: Claimed profile not found
 
+  /business-profiles/{id}/revision:
+    get:
+      operationId: getBusinessRevisionWorkspace
+      tags: [business-publication]
+      summary: Owner view of the profile's editorial state
+      description: |
+        Returns the latest revision (draft, submitted, or changes requested), the currently
+        approved revision, the last safe reviewer decision, fact-check freshness, and the derived
+        owner state. Requires a membership on the business and the `businessPublication` gate.
+      parameters:
+        - $ref: "#/components/parameters/ProfileId"
+      responses:
+        "200":
+          description: Editorial workspace
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BusinessRevisionWorkspace"
+        "401":
+          description: Authentication is required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Not found, not a member, or the publication gate is off
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+    patch:
+      operationId: updateBusinessRevision
+      tags: [business-publication]
+      summary: Save bilingual draft changes as a revision
+      description: |
+        Merges the given NL/EN text and language-neutral facts into the owner's draft. When the
+        latest revision is a `draft` it is edited in place; otherwise a new draft version is created
+        from the latest revision's content. `expectedVersion` must equal the latest revision's
+        `version` (0 when the business has no revision yet); a mismatch returns 409
+        VERSION_CONFLICT. A `submitted` revision cannot be edited (409 with field `status`). The
+        approved snapshot is never mutated here.
+      parameters:
+        - $ref: "#/components/parameters/ProfileId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BusinessRevisionUpdateInput"
+      responses:
+        "200":
+          description: Updated workspace
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BusinessRevisionWorkspace"
+        "400":
+          description: Invalid input or unknown field
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Authentication is required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: Unverified account or not an owner
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Not found or the publication gate is off
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "409":
+          $ref: "#/components/responses/VersionConflict"
+
+  /business-profiles/{id}/revision/submit:
+    post:
+      operationId: submitBusinessRevision
+      tags: [business-publication]
+      summary: Submit the current draft for editorial review
+      description: |
+        Moves the latest `draft` revision to `submitted`. Content becomes immutable from this point;
+        reviewers decide exactly this version. Requires at least one non-empty Dutch or English
+        text field. `expectedVersion` must equal the draft's `version`.
+      parameters:
+        - $ref: "#/components/parameters/ProfileId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BusinessRevisionTransitionInput"
+      responses:
+        "200":
+          description: Updated workspace
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BusinessRevisionWorkspace"
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Authentication is required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: Unverified account or not an owner
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Not found or the publication gate is off
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "409":
+          $ref: "#/components/responses/VersionConflict"
+
+  /business-profiles/{id}/revision/discard:
+    post:
+      operationId: discardBusinessRevision
+      tags: [business-publication]
+      summary: Discard the current draft
+      description: Marks the latest `draft` revision `discarded`. Submitted and decided revisions are kept as history.
+      parameters:
+        - $ref: "#/components/parameters/ProfileId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BusinessRevisionTransitionInput"
+      responses:
+        "200":
+          description: Updated workspace
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BusinessRevisionWorkspace"
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Authentication is required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: Not an owner
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Not found or the publication gate is off
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "409":
+          $ref: "#/components/responses/VersionConflict"
+
+  /review/claims:
+    get:
+      operationId: getAuthorityQueue
+      tags: [business-publication]
+      summary: Paginated authority (ownership) review queue
+      description: |
+        Claims awaiting an authority decision (`pending`, `submitted`, `disputed`), oldest first.
+        Items carry the relationship and authority evidence needed to decide, never the
+        claimant's e-mail address. `canDecide` is false when the reviewer is the claimant, the
+        creator, or a member of the business.
+      parameters:
+        - $ref: "#/components/parameters/PageCursor"
+        - $ref: "#/components/parameters/PageLimit"
+      responses:
+        "200":
+          description: Queue page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthorityQueuePage"
+        "401":
+          description: Authentication is required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: Reviewer role is required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          $ref: "#/components/responses/FeatureDisabled"
+
+  /review/claims/{id}/decision:
+    post:
+      operationId: reviewBusinessClaim
+      tags: [business-publication]
+      summary: Decide an authority claim at an exact version
+      description: |
+        Approve grants exactly one owner membership atomically and rejects competing open claims;
+        `reject` and `request_changes` require a reason that the claimant will see. The decision is
+        applied only when the claim still has `expectedVersion` and a reviewable status (409
+        VERSION_CONFLICT otherwise). Self-review returns 403 SELF_REVIEW_FORBIDDEN.
+      parameters:
+        - $ref: "#/components/parameters/ClaimId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReviewClaimDecisionInput"
+      responses:
+        "200":
+          description: Decided claim
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BusinessClaim"
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Authentication is required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: Reviewer role required or self-review
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Claim not found or the publication gate is off
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "409":
+          $ref: "#/components/responses/VersionConflict"
+
+  /review/revisions:
+    get:
+      operationId: getEditorialQueue
+      tags: [business-publication]
+      summary: Paginated editorial (profile revision) review queue
+      description: Submitted revisions oldest first, each with the currently approved revision for comparison.
+      parameters:
+        - $ref: "#/components/parameters/PageCursor"
+        - $ref: "#/components/parameters/PageLimit"
+      responses:
+        "200":
+          description: Queue page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EditorialQueuePage"
+        "401":
+          description: Authentication is required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: Reviewer role is required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          $ref: "#/components/responses/FeatureDisabled"
+
+  /review/revisions/{id}/decision:
+    post:
+      operationId: reviewBusinessRevision
+      tags: [business-publication]
+      summary: Decide a submitted revision at an exact version
+      description: |
+        `approve` atomically makes this revision the business's approved snapshot (the previous
+        approved revision becomes `superseded`) and records the supplied fact checks; fields marked
+        `contradicted` are withheld from the public projection. `reject` and `request_changes`
+        require a reason. Applied only while the revision is `submitted` with exactly
+        `expectedVersion` (409 otherwise). Approval never publishes by itself.
+      parameters:
+        - $ref: "#/components/parameters/RevisionId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReviewRevisionDecisionInput"
+      responses:
+        "200":
+          description: Decided revision
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EditorialQueueItem"
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Authentication is required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: Reviewer role required or self-review
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Revision not found or the publication gate is off
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "409":
+          $ref: "#/components/responses/VersionConflict"
+
+  /review/businesses:
+    get:
+      operationId: getPublicationQueue
+      tags: [business-publication]
+      summary: Paginated publication overview
+      description: Businesses that have an approved revision or a non-default publication status, newest change first.
+      parameters:
+        - $ref: "#/components/parameters/PageCursor"
+        - $ref: "#/components/parameters/PageLimit"
+      responses:
+        "200":
+          description: Queue page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublicationQueuePage"
+        "401":
+          description: Authentication is required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: Reviewer role is required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          $ref: "#/components/responses/FeatureDisabled"
+
+  /review/businesses/{id}/publication:
+    post:
+      operationId: setBusinessPublication
+      tags: [business-publication]
+      summary: Publish, unpublish, or suspend a business
+      description: |
+        `publish` requires an approved revision and moves `draft`/`unpublished` to `published`;
+        `unpublish` and `suspend` require a reason and keep the approved snapshot so a later
+        `publish` restores exactly it. `expectedRevisionVersion` must equal the approved
+        revision's version (409 otherwise), so a reviewer never publishes a snapshot they did not
+        see. Every action is recorded as an immutable review entry.
+      parameters:
+        - $ref: "#/components/parameters/ProfileId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PublicationActionInput"
+      responses:
+        "200":
+          description: Updated publication state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublicationQueueItem"
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Authentication is required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: Reviewer role required or self-review
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Business not found or the publication gate is off
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "409":
+          $ref: "#/components/responses/VersionConflict"
+
   /deals:
     get:
       operationId: getDeals
@@ -1564,6 +2003,18 @@ paths:
 components:
   parameters:
     ClaimId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: number
+    ProfileId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: number
+    RevisionId:
       name: id
       in: path
       required: true
@@ -2172,6 +2623,407 @@ components:
         createdAt:
           type: string
 
+    BusinessRevisionText:
+      type: object
+      description: >-
+        Stored editorial text in one language as it was approved or drafted. Null or missing values
+        mean "not provided"; nothing is machine-translated or invented. No length limits apply here:
+        content migrated from the older profile contract is preserved verbatim. New owner input is
+        validated by `BusinessRevisionTextInput`.
+      properties:
+        tagline:
+          type: ["string", "null"]
+        description:
+          type: ["string", "null"]
+        openingHours:
+          type: ["string", "null"]
+          description: Free-text opening hours as stated by the owner; never derived.
+
+    BusinessRevisionFacts:
+      type: object
+      description: >-
+        Stored language-neutral facts. Migrated legacy values are preserved verbatim; new owner input
+        is validated by `BusinessRevisionFactsInput`.
+      properties:
+        websiteUrl:
+          type: ["string", "null"]
+        phone:
+          type: ["string", "null"]
+        email:
+          type: ["string", "null"]
+        address:
+          type: ["string", "null"]
+        logoUrl:
+          type: ["string", "null"]
+        coverUrl:
+          type: ["string", "null"]
+
+    BusinessRevisionTextInput:
+      type: object
+      description: Owner-supplied editorial text in one language. Omitted fields are left untouched; null clears a field.
+      properties:
+        tagline:
+          type: ["string", "null"]
+          maxLength: 160
+        description:
+          type: ["string", "null"]
+          maxLength: 2000
+        openingHours:
+          type: ["string", "null"]
+          maxLength: 500
+
+    BusinessRevisionFactsInput:
+      type: object
+      description: Owner-supplied language-neutral facts. Only http(s) URLs are accepted.
+      properties:
+        websiteUrl:
+          type: ["string", "null"]
+          maxLength: 500
+        phone:
+          type: ["string", "null"]
+          maxLength: 40
+        email:
+          type: ["string", "null"]
+          maxLength: 160
+          pattern: "^$|^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$"
+        address:
+          type: ["string", "null"]
+          maxLength: 240
+        logoUrl:
+          type: ["string", "null"]
+          maxLength: 500
+        coverUrl:
+          type: ["string", "null"]
+          maxLength: 500
+
+    BusinessRevisionContent:
+      type: object
+      required: [nl, en, facts]
+      properties:
+        nl:
+          $ref: "#/components/schemas/BusinessRevisionText"
+        en:
+          $ref: "#/components/schemas/BusinessRevisionText"
+        facts:
+          $ref: "#/components/schemas/BusinessRevisionFacts"
+
+    BusinessRevision:
+      allOf:
+        - $ref: "#/components/schemas/BusinessRevisionSummary"
+        - type: object
+          required: [content]
+          properties:
+            content:
+              $ref: "#/components/schemas/BusinessRevisionContent"
+
+    BusinessRevisionUpdateInput:
+      type: object
+      required: [expectedVersion]
+      properties:
+        expectedVersion:
+          type: number
+          description: Version of the latest revision the owner saw; 0 when the business has none yet.
+        nl:
+          $ref: "#/components/schemas/BusinessRevisionTextInput"
+        en:
+          $ref: "#/components/schemas/BusinessRevisionTextInput"
+        facts:
+          $ref: "#/components/schemas/BusinessRevisionFactsInput"
+
+    BusinessRevisionTransitionInput:
+      type: object
+      required: [expectedVersion]
+      properties:
+        expectedVersion:
+          type: number
+
+    FactCheckStatus:
+      type: string
+      description: Reviewer verdict for one approved field. `contradicted` fields are withheld publicly; `unchecked` and `unavailable` are shown with that provenance.
+      enum: [unchecked, confirmed, contradicted, unavailable]
+
+    BusinessFactCheck:
+      type: object
+      required: [field, status, sourceUrl, checkedOn]
+      properties:
+        field:
+          type: string
+        status:
+          $ref: "#/components/schemas/FactCheckStatus"
+        sourceUrl:
+          type: ["string", "null"]
+        checkedOn:
+          type: ["string", "null"]
+        note:
+          type: ["string", "null"]
+          description: Reviewer note; only served to owners and reviewers, never publicly.
+
+    BusinessFactCheckInput:
+      type: object
+      required: [field, status]
+      properties:
+        field:
+          type: string
+          enum: [tagline, description, openingHours, websiteUrl, phone, email, address, logoUrl, coverUrl]
+        status:
+          $ref: "#/components/schemas/FactCheckStatus"
+        sourceUrl:
+          type: ["string", "null"]
+          maxLength: 500
+        note:
+          type: ["string", "null"]
+          maxLength: 500
+
+    BusinessFreshness:
+      type: object
+      description: Truthful freshness of the approved snapshot. `unverified` when no field was ever confirmed; `stale` when the newest confirmation is older than `staleAfterDays`.
+      required: [status, checkedOn, staleAfterDays]
+      properties:
+        status:
+          type: string
+          enum: [unverified, fresh, stale]
+        checkedOn:
+          type: ["string", "null"]
+        staleAfterDays:
+          type: number
+
+    BusinessOwnerState:
+      type: string
+      description: Derived owner-facing summary; publication and revision states stay independent underneath.
+      enum: [unknown, draft, submitted, changes_requested, approved, published, stale, suspended, unpublished]
+
+    BusinessRevisionWorkspace:
+      type: object
+      required: [profile, role, state, latestRevision, approvedRevision, latestDecision, factChecks, freshness]
+      properties:
+        profile:
+          $ref: "#/components/schemas/BusinessProfile"
+        role:
+          type: string
+        state:
+          $ref: "#/components/schemas/BusinessOwnerState"
+        latestRevision:
+          oneOf:
+            - $ref: "#/components/schemas/BusinessRevision"
+            - type: "null"
+        approvedRevision:
+          oneOf:
+            - $ref: "#/components/schemas/BusinessRevision"
+            - type: "null"
+        latestDecision:
+          oneOf:
+            - $ref: "#/components/schemas/ReviewDecisionRecord"
+            - type: "null"
+        factChecks:
+          type: array
+          description: Fact checks recorded for the approved revision.
+          items:
+            $ref: "#/components/schemas/BusinessFactCheck"
+        freshness:
+          $ref: "#/components/schemas/BusinessFreshness"
+
+    BusinessProfileSummary:
+      type: object
+      description: Non-sensitive business context for reviewer queues.
+      required: [id, slug, name, neighborhood, category, listingSource, sourceUrl, isClaimed, publicationStatus]
+      properties:
+        id:
+          type: number
+        slug:
+          type: string
+        name:
+          type: string
+        neighborhood:
+          type: ["string", "null"]
+        category:
+          type: ["string", "null"]
+        listingSource:
+          type: string
+        sourceUrl:
+          type: ["string", "null"]
+        isClaimed:
+          type: boolean
+        publicationStatus:
+          $ref: "#/components/schemas/PublicationStatus"
+
+    AuthorityQueueItem:
+      type: object
+      required: [id, version, status, kind, relationship, authorityDeclaration, evidenceReference, message, contactName, submittedAt, createdAt, profile, canDecide]
+      properties:
+        id:
+          type: number
+        version:
+          type: number
+        status:
+          $ref: "#/components/schemas/ClaimStatus"
+        kind:
+          $ref: "#/components/schemas/BusinessIntakeKind"
+        relationship:
+          type: string
+        authorityDeclaration:
+          type: ["string", "null"]
+        evidenceReference:
+          type: ["string", "null"]
+        message:
+          type: ["string", "null"]
+        contactName:
+          type: string
+        submittedAt:
+          type: string
+        createdAt:
+          type: string
+        profile:
+          $ref: "#/components/schemas/BusinessProfileSummary"
+        canDecide:
+          type: boolean
+          description: False when deciding would be self-review for the signed-in reviewer.
+
+    AuthorityQueuePage:
+      type: object
+      required: [items, pageInfo]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/AuthorityQueueItem"
+        pageInfo:
+          $ref: "#/components/schemas/PageInfo"
+
+    ReviewClaimDecisionInput:
+      type: object
+      required: [decision, expectedVersion]
+      properties:
+        decision:
+          type: string
+          enum: [approve, reject, request_changes]
+        expectedVersion:
+          type: number
+        reason:
+          type: string
+          maxLength: 500
+          description: Shown to the claimant; required for reject and request_changes.
+
+    EditorialQueueItem:
+      type: object
+      required: [revision, profile, approvedRevision, canDecide]
+      properties:
+        revision:
+          $ref: "#/components/schemas/BusinessRevision"
+        profile:
+          $ref: "#/components/schemas/BusinessProfileSummary"
+        approvedRevision:
+          oneOf:
+            - $ref: "#/components/schemas/BusinessRevision"
+            - type: "null"
+        canDecide:
+          type: boolean
+
+    EditorialQueuePage:
+      type: object
+      required: [items, pageInfo]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/EditorialQueueItem"
+        pageInfo:
+          $ref: "#/components/schemas/PageInfo"
+
+    ReviewRevisionDecisionInput:
+      type: object
+      required: [decision, expectedVersion]
+      properties:
+        decision:
+          type: string
+          enum: [approve, reject, request_changes]
+        expectedVersion:
+          type: number
+        reason:
+          type: string
+          maxLength: 500
+          description: Shown to the owner; required for reject and request_changes.
+        factChecks:
+          type: array
+          maxItems: 20
+          description: Per-field verdicts recorded with an approval. Omitted fields stay `unchecked`.
+          items:
+            $ref: "#/components/schemas/BusinessFactCheckInput"
+
+    PublicationQueueItem:
+      type: object
+      required: [profile, approvedRevision, latestDecision, freshness, canDecide]
+      properties:
+        profile:
+          $ref: "#/components/schemas/BusinessProfileSummary"
+        approvedRevision:
+          oneOf:
+            - $ref: "#/components/schemas/BusinessRevision"
+            - type: "null"
+        latestDecision:
+          oneOf:
+            - $ref: "#/components/schemas/ReviewDecisionRecord"
+            - type: "null"
+        freshness:
+          $ref: "#/components/schemas/BusinessFreshness"
+        canDecide:
+          type: boolean
+
+    PublicationQueuePage:
+      type: object
+      required: [items, pageInfo]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/PublicationQueueItem"
+        pageInfo:
+          $ref: "#/components/schemas/PageInfo"
+
+    PublicationActionInput:
+      type: object
+      required: [action, expectedRevisionVersion]
+      properties:
+        action:
+          type: string
+          enum: [publish, unpublish, suspend]
+        expectedRevisionVersion:
+          type: number
+          description: Version of the approved revision the reviewer saw; 0 when none exists.
+        reason:
+          type: string
+          maxLength: 500
+          description: Required for unpublish and suspend.
+
+    PublicBusinessProvenance:
+      type: object
+      description: Truthful source, check, and freshness metadata for the approved snapshot. Never includes reviewer identities or notes.
+      required: [listingSource, sourceUrl, approvedVersion, approvedAt, freshness, checks]
+      properties:
+        listingSource:
+          type: string
+        sourceUrl:
+          type: ["string", "null"]
+        approvedVersion:
+          type: number
+        approvedAt:
+          type: ["string", "null"]
+        freshness:
+          $ref: "#/components/schemas/BusinessFreshness"
+        checks:
+          type: array
+          items:
+            type: object
+            required: [field, status, sourceUrl, checkedOn]
+            properties:
+              field:
+                type: string
+              status:
+                $ref: "#/components/schemas/FactCheckStatus"
+              sourceUrl:
+                type: ["string", "null"]
+              checkedOn:
+                type: ["string", "null"]
+
     AccountRequestStatus:
       type: string
       description: |
@@ -2561,11 +3413,24 @@ components:
         - $ref: "#/components/schemas/BusinessProfile"
         - type: object
           required: [deals]
+          description: |
+            When the business has an approved revision, editorial fields (tagline, description,
+            openingHours, websiteUrl, phone, email, address, logoUrl, coverUrl) come only from that
+            snapshot via `content`; fields whose fact check is `contradicted` are null. Profiles
+            without a revision are served from their columns and carry `content: null`.
           properties:
             deals:
               type: array
               items:
                 $ref: "#/components/schemas/Deal"
+            content:
+              oneOf:
+                - $ref: "#/components/schemas/BusinessRevisionContent"
+                - type: "null"
+            provenance:
+              oneOf:
+                - $ref: "#/components/schemas/PublicBusinessProvenance"
+                - type: "null"
 
     HealthStatus:
       type: object

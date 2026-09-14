@@ -55,6 +55,7 @@ import DealsView from './pages/DealsView';
 import BusinessProfileView from './pages/BusinessProfileView';
 import BusinessClaimView from './pages/BusinessClaimView';
 import MyBusinessWorkspace from './pages/MyBusinessWorkspace';
+import BusinessRevisionPage from './pages/BusinessRevisionPage';
 import BusinessModerationView from './pages/BusinessModerationView';
 import OnboardingPage from './pages/OnboardingPage';
 import AccountPage from './pages/AccountPage';
@@ -3094,6 +3095,7 @@ export default function App() {
           <Route path="/bedrijf/:slug" component={BusinessProfileView} />
           <Route path="/bedrijf-claim" component={BusinessClaimView} />
           <Route path="/mijn-bedrijf" component={MyBusinessWorkspace} />
+          <Route path="/mijn-bedrijf/:id/profiel" component={BusinessRevisionPage} />
           <Route path="/redactie/bedrijven" component={BusinessModerationView} />
           <Route>
             <div className="min-h-screen flex items-center justify-center bg-background text-foreground">

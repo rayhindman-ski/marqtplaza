@@ -466,6 +466,39 @@ async function findOwnClaim(claimId: number, claimantId: string): Promise<ClaimR
   return row ?? null;
 }
 
+type IntakeTx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+/**
+ * Lock order shared with every review decision: business profile row first,
+ * then the claim. The unlocked preflight read only discovers the profile id;
+ * the claim is re-read under its own lock afterwards so a concurrent reviewer
+ * decision and a claimant mutation serialise instead of deadlocking.
+ */
+async function lockClaimantClaim(
+  tx: IntakeTx,
+  claimId: number,
+  claimantId: string,
+): Promise<{ locked: BusinessClaim; profile: BusinessProfile } | null> {
+  const [preflight] = await tx
+    .select({ businessProfileId: businessClaimsTable.businessProfileId })
+    .from(businessClaimsTable)
+    .where(and(eq(businessClaimsTable.id, claimId), eq(businessClaimsTable.claimantId, claimantId)))
+    .limit(1);
+  if (!preflight) return null;
+  const [profile] = await tx
+    .select()
+    .from(businessProfilesTable)
+    .where(eq(businessProfilesTable.id, preflight.businessProfileId))
+    .for("update");
+  const [locked] = await tx
+    .select()
+    .from(businessClaimsTable)
+    .where(and(eq(businessClaimsTable.id, claimId), eq(businessClaimsTable.claimantId, claimantId)))
+    .for("update");
+  if (!profile || !locked || locked.businessProfileId !== profile.id) return null;
+  return { locked, profile };
+}
+
 export function createBusinessIntakeRouter(options: BusinessIntakeRouterOptions = {}): IRouter {
   const flags = options.flags ?? getFeatureFlags;
   const lookupListings = options.lookupListings ?? lookupStoredListings;
@@ -658,6 +691,7 @@ export function createBusinessIntakeRouter(options: BusinessIntakeRouterOptions 
       idempotencyDigest: digest,
     };
 
+    const publicationEnabled = flags().businessPublication;
     let result: ClaimRow;
     try {
       result = await db.transaction(async (tx) => {
@@ -669,7 +703,9 @@ export function createBusinessIntakeRouter(options: BusinessIntakeRouterOptions 
             eq(businessProfilesTable.listingSource, source),
             eq(businessProfilesTable.listingId, canonical.id),
           );
-          [profile] = await tx.select().from(businessProfilesTable).where(where);
+          // Lock the profile row first (same order as every review decision) so a
+          // claim cannot slip in between a reviewer's interested-party check and commit.
+          [profile] = await tx.select().from(businessProfilesTable).where(where).for("update");
           if (!profile) {
             await tx
               .insert(businessProfilesTable)
@@ -684,9 +720,12 @@ export function createBusinessIntakeRouter(options: BusinessIntakeRouterOptions 
                 latitude: canonical.lat,
                 longitude: canonical.lng,
                 sourceUrl: canonical.sourceUrl ?? null,
+                // Once publication review is live nothing goes public without an explicit
+                // publish decision; before that listing pages keep serving the columns.
+                publicationStatus: publicationEnabled ? "draft" : "published",
               })
               .onConflictDoNothing();
-            [profile] = await tx.select().from(businessProfilesTable).where(where);
+            [profile] = await tx.select().from(businessProfilesTable).where(where).for("update");
           }
           if (!profile) throw new Error("Listing profile was not readable after insert.");
           // One open claim or draft per claimant and business.
@@ -790,20 +829,11 @@ export function createBusinessIntakeRouter(options: BusinessIntakeRouterOptions 
 
     let result: ClaimRow | "not_found" | "not_editable" | { conflict: number };
     result = await db.transaction(async (tx) => {
-      const [locked] = await tx
-        .select()
-        .from(businessClaimsTable)
-        .where(and(eq(businessClaimsTable.id, params.data.id), eq(businessClaimsTable.claimantId, claimantId)))
-        .for("update");
-      if (!locked) return "not_found";
+      const held = await lockClaimantClaim(tx, params.data.id, claimantId);
+      if (!held) return "not_found";
+      const { locked, profile } = held;
       if (locked.version !== input.expectedVersion) return { conflict: locked.version };
       if (!EDITABLE_CLAIM_STATUSES.has(locked.status)) return "not_editable";
-      const [profile] = await tx
-        .select()
-        .from(businessProfilesTable)
-        .where(eq(businessProfilesTable.id, locked.businessProfileId))
-        .for("update");
-      if (!profile) return "not_found";
 
       if (input.business !== undefined) {
         if (profile.listingSource !== SELF_REPORTED_LISTING_SOURCE) return "not_editable";
@@ -894,20 +924,12 @@ export function createBusinessIntakeRouter(options: BusinessIntakeRouterOptions 
     let outcome: Outcome;
     try {
       outcome = await db.transaction(async (tx): Promise<Outcome> => {
-        const [locked] = await tx
-          .select()
-          .from(businessClaimsTable)
-          .where(and(eq(businessClaimsTable.id, params.data.id), eq(businessClaimsTable.claimantId, claimantId)))
-          .for("update");
-        if (!locked) return "not_found";
+        const held = await lockClaimantClaim(tx, params.data.id, claimantId);
+        if (!held) return "not_found";
+        const { locked, profile } = held;
         if (locked.version !== expectedVersion) return { conflict: locked.version };
         if (!EDITABLE_CLAIM_STATUSES.has(locked.status)) return "not_submittable";
-        const [profile] = await tx
-          .select()
-          .from(businessProfilesTable)
-          .where(eq(businessProfilesTable.id, locked.businessProfileId))
-          .for("update");
-        if (!profile || profile.publicationStatus === "archived") return "not_found";
+        if (profile.publicationStatus === "archived") return "not_found";
 
         // Duplicate re-check at submission time: exactly one open claim per business.
         const [otherOpen] = await tx
@@ -993,20 +1015,18 @@ export function createBusinessIntakeRouter(options: BusinessIntakeRouterOptions 
 
     type Outcome = ClaimRow | "not_found" | "not_withdrawable" | { conflict: number };
     const outcome = await db.transaction(async (tx): Promise<Outcome> => {
-      const [locked] = await tx
-        .select()
-        .from(businessClaimsTable)
-        .where(and(eq(businessClaimsTable.id, params.data.id), eq(businessClaimsTable.claimantId, claimantId)))
-        .for("update");
-      if (!locked) return "not_found";
+      const held = await lockClaimantClaim(tx, params.data.id, claimantId);
+      if (!held) return "not_found";
+      const { locked } = held;
+      let profile: BusinessProfile | undefined = held.profile;
       if (locked.version !== expectedVersion) return { conflict: locked.version };
       if (!WITHDRAWABLE_CLAIM_STATUSES.has(locked.status)) return "not_withdrawable";
       const [claim] = await tx
         .update(businessClaimsTable)
         .set({ status: "withdrawn", withdrawnAt: new Date(), version: locked.version + 1 })
-        .where(eq(businessClaimsTable.id, locked.id))
+        .where(and(eq(businessClaimsTable.id, locked.id), eq(businessClaimsTable.version, locked.version)))
         .returning();
-      let [profile] = await tx.select().from(businessProfilesTable).where(eq(businessProfilesTable.id, locked.businessProfileId));
+      if (!claim) return { conflict: locked.version };
       // A withdrawn new-business draft leaves nothing public behind.
       if (profile && profile.listingSource === SELF_REPORTED_LISTING_SOURCE && profile.publicationStatus === "draft") {
         [profile] = await tx

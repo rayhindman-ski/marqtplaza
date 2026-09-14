@@ -446,9 +446,17 @@ export default function MyBusinessWorkspace() {
                               </CardTitle>
                               {activeProfile.tagline && <CardDescription className="text-base mt-1">{activeProfile.tagline}</CardDescription>}
                             </div>
-                            <Button onClick={openProfileEdit} variant="outline" size="sm" className="font-bold gap-1.5 shrink-0">
-                              <Edit3 className="w-4 h-4" /> Bewerken
-                            </Button>
+                            {featureFlags.businessPublication ? (
+                              <Button asChild variant="outline" size="sm" className="font-bold gap-1.5 shrink-0">
+                                <Link href={`/mijn-bedrijf/${activeProfile.id}/profiel`} data-testid="open-revision-editor">
+                                  <Edit3 className="w-4 h-4" /> {language === 'nl' ? 'Profiel bewerken' : 'Edit profile'}
+                                </Link>
+                              </Button>
+                            ) : (
+                              <Button onClick={openProfileEdit} variant="outline" size="sm" className="font-bold gap-1.5 shrink-0">
+                                <Edit3 className="w-4 h-4" /> Bewerken
+                              </Button>
+                            )}
                           </CardHeader>
                           <CardContent className="pt-6 grid sm:grid-cols-2 gap-8">
                             <div className="space-y-6">

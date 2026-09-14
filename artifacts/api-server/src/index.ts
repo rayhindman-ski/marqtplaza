@@ -4,6 +4,8 @@ import { ensureSocialMapReviewStorage, startSocialMapReviewScheduler } from "./l
 import { ensureNewsSourceStatusStorage, startNewsSourceScheduler } from "./routes/news";
 import { ensureEventSourceStatusStorage, startEventSourceScheduler } from "./routes/sources";
 import { startNeighborhoodDiscoveryScheduler } from "./lib/neighborhood-discovery-refresh";
+import { backfillApprovedRevisions } from "./lib/businessRevisionBackfill";
+import { getFeatureFlags } from "./lib/featureFlags";
 
 const rawPort = process.env["PORT"];
 
@@ -23,6 +25,11 @@ async function startServer(): Promise<void> {
   await ensureNewsSourceStatusStorage();
   await ensureEventSourceStatusStorage();
   await ensureSocialMapReviewStorage();
+  if (getFeatureFlags().businessPublication) {
+    // Publication must never run against column-only public profiles: they could
+    // not be republished after a suspension. The backfill is idempotent.
+    await backfillApprovedRevisions();
+  }
   startNewsSourceScheduler();
   startEventSourceScheduler();
   startSocialMapReviewScheduler();

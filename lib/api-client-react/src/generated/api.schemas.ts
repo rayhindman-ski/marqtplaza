@@ -553,6 +553,428 @@ export interface ReviewDecisionRecord {
 }
 
 /**
+ * Stored editorial text in one language as it was approved or drafted. Null or missing values mean "not provided"; nothing is machine-translated or invented. No length limits apply here: content migrated from the older profile contract is preserved verbatim. New owner input is validated by `BusinessRevisionTextInput`.
+ */
+export interface BusinessRevisionText {
+  /** @nullable */
+  tagline?: string | null;
+  /** @nullable */
+  description?: string | null;
+  /**
+     * Free-text opening hours as stated by the owner; never derived.
+     * @nullable
+     */
+  openingHours?: string | null;
+}
+
+/**
+ * Stored language-neutral facts. Migrated legacy values are preserved verbatim; new owner input is validated by `BusinessRevisionFactsInput`.
+ */
+export interface BusinessRevisionFacts {
+  /** @nullable */
+  websiteUrl?: string | null;
+  /** @nullable */
+  phone?: string | null;
+  /** @nullable */
+  email?: string | null;
+  /** @nullable */
+  address?: string | null;
+  /** @nullable */
+  logoUrl?: string | null;
+  /** @nullable */
+  coverUrl?: string | null;
+}
+
+/**
+ * Owner-supplied editorial text in one language. Omitted fields are left untouched; null clears a field.
+ */
+export interface BusinessRevisionTextInput {
+  /**
+     * @maxLength 160
+     * @nullable
+     */
+  tagline?: string | null;
+  /**
+     * @maxLength 2000
+     * @nullable
+     */
+  description?: string | null;
+  /**
+     * @maxLength 500
+     * @nullable
+     */
+  openingHours?: string | null;
+}
+
+/**
+ * Owner-supplied language-neutral facts. Only http(s) URLs are accepted.
+ */
+export interface BusinessRevisionFactsInput {
+  /**
+     * @maxLength 500
+     * @nullable
+     */
+  websiteUrl?: string | null;
+  /**
+     * @maxLength 40
+     * @nullable
+     */
+  phone?: string | null;
+  /**
+     * @maxLength 160
+     * @nullable
+     * @pattern ^$|^[^\s@]+@[^\s@]+\.[^\s@]+$
+     */
+  email?: string | null;
+  /**
+     * @maxLength 240
+     * @nullable
+     */
+  address?: string | null;
+  /**
+     * @maxLength 500
+     * @nullable
+     */
+  logoUrl?: string | null;
+  /**
+     * @maxLength 500
+     * @nullable
+     */
+  coverUrl?: string | null;
+}
+
+export interface BusinessRevisionContent {
+  nl: BusinessRevisionText;
+  en: BusinessRevisionText;
+  facts: BusinessRevisionFacts;
+}
+
+export type BusinessRevision = BusinessRevisionSummary & {
+  content: BusinessRevisionContent;
+};
+
+export interface BusinessRevisionUpdateInput {
+  /** Version of the latest revision the owner saw; 0 when the business has none yet. */
+  expectedVersion: number;
+  nl?: BusinessRevisionTextInput;
+  en?: BusinessRevisionTextInput;
+  facts?: BusinessRevisionFactsInput;
+}
+
+export interface BusinessRevisionTransitionInput {
+  expectedVersion: number;
+}
+
+/**
+ * Reviewer verdict for one approved field. `contradicted` fields are withheld publicly; `unchecked` and `unavailable` are shown with that provenance.
+ */
+export type FactCheckStatus = typeof FactCheckStatus[keyof typeof FactCheckStatus];
+
+
+export const FactCheckStatus = {
+  unchecked: 'unchecked',
+  confirmed: 'confirmed',
+  contradicted: 'contradicted',
+  unavailable: 'unavailable',
+} as const;
+
+export interface BusinessFactCheck {
+  field: string;
+  status: FactCheckStatus;
+  /** @nullable */
+  sourceUrl: string | null;
+  /** @nullable */
+  checkedOn: string | null;
+  /**
+     * Reviewer note; only served to owners and reviewers, never publicly.
+     * @nullable
+     */
+  note?: string | null;
+}
+
+export type BusinessFactCheckInputField = typeof BusinessFactCheckInputField[keyof typeof BusinessFactCheckInputField];
+
+
+export const BusinessFactCheckInputField = {
+  tagline: 'tagline',
+  description: 'description',
+  openingHours: 'openingHours',
+  websiteUrl: 'websiteUrl',
+  phone: 'phone',
+  email: 'email',
+  address: 'address',
+  logoUrl: 'logoUrl',
+  coverUrl: 'coverUrl',
+} as const;
+
+export interface BusinessFactCheckInput {
+  field: BusinessFactCheckInputField;
+  status: FactCheckStatus;
+  /**
+     * @maxLength 500
+     * @nullable
+     */
+  sourceUrl?: string | null;
+  /**
+     * @maxLength 500
+     * @nullable
+     */
+  note?: string | null;
+}
+
+export type BusinessFreshnessStatus = typeof BusinessFreshnessStatus[keyof typeof BusinessFreshnessStatus];
+
+
+export const BusinessFreshnessStatus = {
+  unverified: 'unverified',
+  fresh: 'fresh',
+  stale: 'stale',
+} as const;
+
+/**
+ * Truthful freshness of the approved snapshot. `unverified` when no field was ever confirmed; `stale` when the newest confirmation is older than `staleAfterDays`.
+ */
+export interface BusinessFreshness {
+  status: BusinessFreshnessStatus;
+  /** @nullable */
+  checkedOn: string | null;
+  staleAfterDays: number;
+}
+
+/**
+ * Derived owner-facing summary; publication and revision states stay independent underneath.
+ */
+export type BusinessOwnerState = typeof BusinessOwnerState[keyof typeof BusinessOwnerState];
+
+
+export const BusinessOwnerState = {
+  unknown: 'unknown',
+  draft: 'draft',
+  submitted: 'submitted',
+  changes_requested: 'changes_requested',
+  approved: 'approved',
+  published: 'published',
+  stale: 'stale',
+  suspended: 'suspended',
+  unpublished: 'unpublished',
+} as const;
+
+export interface BusinessProfile {
+  id: number;
+  slug: string;
+  cityId: string;
+  name: string;
+  /** @nullable */
+  address?: string | null;
+  /** @nullable */
+  neighborhood?: string | null;
+  /** @nullable */
+  latitude?: number | null;
+  /** @nullable */
+  longitude?: number | null;
+  /** @nullable */
+  sourceUrl?: string | null;
+  /** @nullable */
+  tagline?: string | null;
+  /** @nullable */
+  description?: string | null;
+  /** @nullable */
+  websiteUrl?: string | null;
+  /** @nullable */
+  phone?: string | null;
+  /** @nullable */
+  email?: string | null;
+  /** @nullable */
+  openingHours?: string | null;
+  /** @nullable */
+  logoUrl?: string | null;
+  /** @nullable */
+  coverUrl?: string | null;
+  isClaimed: boolean;
+  /** @nullable */
+  claimedAt?: string | null;
+  publicationStatus?: PublicationStatus;
+  /**
+     * Self-reported category of a new-business draft; null for listing-derived profiles.
+     * @nullable
+     */
+  category?: string | null;
+  /**
+     * Version of the approved revision when publication review is enabled; null when the profile is served from its columns.
+     * @nullable
+     */
+  approvedRevisionVersion?: number | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface BusinessRevisionWorkspace {
+  profile: BusinessProfile;
+  role: string;
+  state: BusinessOwnerState;
+  latestRevision: BusinessRevision | null;
+  approvedRevision: BusinessRevision | null;
+  latestDecision: ReviewDecisionRecord | null;
+  /** Fact checks recorded for the approved revision. */
+  factChecks: BusinessFactCheck[];
+  freshness: BusinessFreshness;
+}
+
+/**
+ * Non-sensitive business context for reviewer queues.
+ */
+export interface BusinessProfileSummary {
+  id: number;
+  slug: string;
+  name: string;
+  /** @nullable */
+  neighborhood: string | null;
+  /** @nullable */
+  category: string | null;
+  listingSource: string;
+  /** @nullable */
+  sourceUrl: string | null;
+  isClaimed: boolean;
+  publicationStatus: PublicationStatus;
+}
+
+export interface AuthorityQueueItem {
+  id: number;
+  version: number;
+  status: ClaimStatus;
+  kind: BusinessIntakeKind;
+  relationship: string;
+  /** @nullable */
+  authorityDeclaration: string | null;
+  /** @nullable */
+  evidenceReference: string | null;
+  /** @nullable */
+  message: string | null;
+  contactName: string;
+  submittedAt: string;
+  createdAt: string;
+  profile: BusinessProfileSummary;
+  /** False when deciding would be self-review for the signed-in reviewer. */
+  canDecide: boolean;
+}
+
+export interface AuthorityQueuePage {
+  items: AuthorityQueueItem[];
+  pageInfo: PageInfo;
+}
+
+export type ReviewClaimDecisionInputDecision = typeof ReviewClaimDecisionInputDecision[keyof typeof ReviewClaimDecisionInputDecision];
+
+
+export const ReviewClaimDecisionInputDecision = {
+  approve: 'approve',
+  reject: 'reject',
+  request_changes: 'request_changes',
+} as const;
+
+export interface ReviewClaimDecisionInput {
+  decision: ReviewClaimDecisionInputDecision;
+  expectedVersion: number;
+  /**
+     * Shown to the claimant; required for reject and request_changes.
+     * @maxLength 500
+     */
+  reason?: string;
+}
+
+export interface EditorialQueueItem {
+  revision: BusinessRevision;
+  profile: BusinessProfileSummary;
+  approvedRevision: BusinessRevision | null;
+  canDecide: boolean;
+}
+
+export interface EditorialQueuePage {
+  items: EditorialQueueItem[];
+  pageInfo: PageInfo;
+}
+
+export type ReviewRevisionDecisionInputDecision = typeof ReviewRevisionDecisionInputDecision[keyof typeof ReviewRevisionDecisionInputDecision];
+
+
+export const ReviewRevisionDecisionInputDecision = {
+  approve: 'approve',
+  reject: 'reject',
+  request_changes: 'request_changes',
+} as const;
+
+export interface ReviewRevisionDecisionInput {
+  decision: ReviewRevisionDecisionInputDecision;
+  expectedVersion: number;
+  /**
+     * Shown to the owner; required for reject and request_changes.
+     * @maxLength 500
+     */
+  reason?: string;
+  /**
+     * Per-field verdicts recorded with an approval. Omitted fields stay `unchecked`.
+     * @maxItems 20
+     */
+  factChecks?: BusinessFactCheckInput[];
+}
+
+export interface PublicationQueueItem {
+  profile: BusinessProfileSummary;
+  approvedRevision: BusinessRevision | null;
+  latestDecision: ReviewDecisionRecord | null;
+  freshness: BusinessFreshness;
+  canDecide: boolean;
+}
+
+export interface PublicationQueuePage {
+  items: PublicationQueueItem[];
+  pageInfo: PageInfo;
+}
+
+export type PublicationActionInputAction = typeof PublicationActionInputAction[keyof typeof PublicationActionInputAction];
+
+
+export const PublicationActionInputAction = {
+  publish: 'publish',
+  unpublish: 'unpublish',
+  suspend: 'suspend',
+} as const;
+
+export interface PublicationActionInput {
+  action: PublicationActionInputAction;
+  /** Version of the approved revision the reviewer saw; 0 when none exists. */
+  expectedRevisionVersion: number;
+  /**
+     * Required for unpublish and suspend.
+     * @maxLength 500
+     */
+  reason?: string;
+}
+
+export type PublicBusinessProvenanceChecksItem = {
+  field: string;
+  status: FactCheckStatus;
+  /** @nullable */
+  sourceUrl: string | null;
+  /** @nullable */
+  checkedOn: string | null;
+};
+
+/**
+ * Truthful source, check, and freshness metadata for the approved snapshot. Never includes reviewer identities or notes.
+ */
+export interface PublicBusinessProvenance {
+  listingSource: string;
+  /** @nullable */
+  sourceUrl: string | null;
+  approvedVersion: number;
+  /** @nullable */
+  approvedAt: string | null;
+  freshness: BusinessFreshness;
+  checks: PublicBusinessProvenanceChecksItem[];
+}
+
+/**
  * received -> blocked | in_review | withdrawn; blocked -> received | withdrawn;
  * in_review -> completed | rejected. Deletion requests are blocked while the user is the
  * sole owner of a published business.
@@ -653,55 +1075,6 @@ export interface BusinessListingReference {
   latitude?: number;
   longitude?: number;
   sourceUrl?: string;
-}
-
-export interface BusinessProfile {
-  id: number;
-  slug: string;
-  cityId: string;
-  name: string;
-  /** @nullable */
-  address?: string | null;
-  /** @nullable */
-  neighborhood?: string | null;
-  /** @nullable */
-  latitude?: number | null;
-  /** @nullable */
-  longitude?: number | null;
-  /** @nullable */
-  sourceUrl?: string | null;
-  /** @nullable */
-  tagline?: string | null;
-  /** @nullable */
-  description?: string | null;
-  /** @nullable */
-  websiteUrl?: string | null;
-  /** @nullable */
-  phone?: string | null;
-  /** @nullable */
-  email?: string | null;
-  /** @nullable */
-  openingHours?: string | null;
-  /** @nullable */
-  logoUrl?: string | null;
-  /** @nullable */
-  coverUrl?: string | null;
-  isClaimed: boolean;
-  /** @nullable */
-  claimedAt?: string | null;
-  publicationStatus?: PublicationStatus;
-  /**
-     * Self-reported category of a new-business draft; null for listing-derived profiles.
-     * @nullable
-     */
-  category?: string | null;
-  /**
-     * Version of the approved revision when publication review is enabled; null when the profile is served from its columns.
-     * @nullable
-     */
-  approvedRevisionVersion?: number | null;
-  createdAt: string;
-  updatedAt: string;
 }
 
 export interface BusinessClaim {
@@ -905,9 +1278,11 @@ export type OwnedBusinessProfile = BusinessProfile & {
   deals: Deal[];
 };
 
-export type PublicBusinessProfile = BusinessProfile & {
+export type PublicBusinessProfile = BusinessProfile & ({
   deals: Deal[];
-};
+  content?: BusinessRevisionContent | null;
+  provenance?: PublicBusinessProvenance | null;
+});
 
 export interface HealthStatus {
   status: string;
@@ -2160,6 +2535,48 @@ export type LookupBusinessesParams = {
  * @maxLength 80
  */
 q: string;
+};
+
+export type GetAuthorityQueueParams = {
+/**
+ * Opaque cursor from a previous PageInfo.nextCursor.
+ * @maxLength 200
+ */
+cursor?: PageCursorParameter;
+/**
+ * Page size for cursor-paginated lists.
+ * @minimum 1
+ * @maximum 50
+ */
+limit?: PageLimitParameter;
+};
+
+export type GetEditorialQueueParams = {
+/**
+ * Opaque cursor from a previous PageInfo.nextCursor.
+ * @maxLength 200
+ */
+cursor?: PageCursorParameter;
+/**
+ * Page size for cursor-paginated lists.
+ * @minimum 1
+ * @maximum 50
+ */
+limit?: PageLimitParameter;
+};
+
+export type GetPublicationQueueParams = {
+/**
+ * Opaque cursor from a previous PageInfo.nextCursor.
+ * @maxLength 200
+ */
+cursor?: PageCursorParameter;
+/**
+ * Page size for cursor-paginated lists.
+ * @minimum 1
+ * @maximum 50
+ */
+limit?: PageLimitParameter;
 };
 
 export type GetDealsParams = {

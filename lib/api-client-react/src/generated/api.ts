@@ -24,6 +24,7 @@ import type {
   AccountMe,
   AccountOptions,
   ApiError,
+  AuthorityQueuePage,
   BusinessClaim,
   BusinessClaimInput,
   BusinessClaimList,
@@ -34,6 +35,9 @@ import type {
   BusinessLookupResponse,
   BusinessProfile,
   BusinessProfileUpdate,
+  BusinessRevisionTransitionInput,
+  BusinessRevisionUpdateInput,
+  BusinessRevisionWorkspace,
   CapturePersistRequest,
   CaptureScanRequest,
   CaptureSearchRequest,
@@ -47,19 +51,24 @@ import type {
   Deal,
   DealInput,
   DealUpdate,
+  EditorialQueueItem,
+  EditorialQueuePage,
   EventReviewDecision,
   EventReviewDecisionResult,
   EventReviewList,
   FeatureDisabledResponse,
   FeatureReadiness,
+  GetAuthorityQueueParams,
   GetBusinessClaimModerationParams,
   GetCommunityModerationPostsParams,
   GetCommunityPostsParams,
   GetDealModerationParams,
   GetDealsParams,
+  GetEditorialQueueParams,
   GetEventReviewCandidatesParams,
   GetListingsParams,
   GetNewsParams,
+  GetPublicationQueueParams,
   GetWeatherParams,
   GooglePlacesUsage,
   HealthStatus,
@@ -74,9 +83,14 @@ import type {
   OwnedBusinessProfile,
   PersistOutcome,
   PublicBusinessProfile,
+  PublicationActionInput,
+  PublicationQueueItem,
+  PublicationQueuePage,
   RecordAccountConsentInput,
   RegistrationInput,
   RegistrationStatus,
+  ReviewClaimDecisionInput,
+  ReviewRevisionDecisionInput,
   RunSocialMapReview502,
   SavedEventsResponse,
   SavedEventsSyncRequest,
@@ -3791,6 +3805,800 @@ export function useGetBusinessProfile<TData = Awaited<ReturnType<typeof getBusin
 
 
 
+
+export const getGetBusinessRevisionWorkspaceUrl = (id: number,) => {
+
+
+
+
+  return `/api/business-profiles/${id}/revision`
+}
+
+/**
+ * Returns the latest revision (draft, submitted, or changes requested), the currently
+ * approved revision, the last safe reviewer decision, fact-check freshness, and the derived
+ * owner state. Requires a membership on the business and the `businessPublication` gate.
+ * @summary Owner view of the profile's editorial state
+ */
+export const getBusinessRevisionWorkspace = async (id: number, options?: Parameters<typeof customFetch>[1]): Promise<BusinessRevisionWorkspace> => {
+
+  return customFetch<BusinessRevisionWorkspace>(getGetBusinessRevisionWorkspaceUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetBusinessRevisionWorkspaceQueryKey = (id: number,) => {
+    return [
+    `/api/business-profiles/${id}/revision`
+    ] as const;
+    }
+
+
+export const getGetBusinessRevisionWorkspaceQueryOptions = <TData = Awaited<ReturnType<typeof getBusinessRevisionWorkspace>>, TError = ErrorType<ApiError>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getBusinessRevisionWorkspace>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetBusinessRevisionWorkspaceQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getBusinessRevisionWorkspace>>> = ({ signal }) => getBusinessRevisionWorkspace(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getBusinessRevisionWorkspace>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetBusinessRevisionWorkspaceQueryResult = NonNullable<Awaited<ReturnType<typeof getBusinessRevisionWorkspace>>>
+export type GetBusinessRevisionWorkspaceQueryError = ErrorType<ApiError>
+
+
+/**
+ * @summary Owner view of the profile's editorial state
+ */
+
+export function useGetBusinessRevisionWorkspace<TData = Awaited<ReturnType<typeof getBusinessRevisionWorkspace>>, TError = ErrorType<ApiError>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getBusinessRevisionWorkspace>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetBusinessRevisionWorkspaceQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getUpdateBusinessRevisionUrl = (id: number,) => {
+
+
+
+
+  return `/api/business-profiles/${id}/revision`
+}
+
+/**
+ * Merges the given NL/EN text and language-neutral facts into the owner's draft. When the
+ * latest revision is a `draft` it is edited in place; otherwise a new draft version is created
+ * from the latest revision's content. `expectedVersion` must equal the latest revision's
+ * `version` (0 when the business has no revision yet); a mismatch returns 409
+ * VERSION_CONFLICT. A `submitted` revision cannot be edited (409 with field `status`). The
+ * approved snapshot is never mutated here.
+ * @summary Save bilingual draft changes as a revision
+ */
+export const updateBusinessRevision = async (id: number,
+    businessRevisionUpdateInput: BusinessRevisionUpdateInput, options?: Parameters<typeof customFetch>[1]): Promise<BusinessRevisionWorkspace> => {
+
+  return customFetch<BusinessRevisionWorkspace>(getUpdateBusinessRevisionUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(businessRevisionUpdateInput)
+  }
+);}
+
+
+
+
+
+export const getUpdateBusinessRevisionMutationOptions = <TError = ErrorType<ApiError | VersionConflictResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateBusinessRevision>>, TError,{id: number;data: BodyType<BusinessRevisionUpdateInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateBusinessRevision>>, TError,{id: number;data: BodyType<BusinessRevisionUpdateInput>}, TContext> => {
+
+const mutationKey = ['updateBusinessRevision'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateBusinessRevision>>, {id: number;data: BodyType<BusinessRevisionUpdateInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateBusinessRevision(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateBusinessRevisionMutationResult = NonNullable<Awaited<ReturnType<typeof updateBusinessRevision>>>
+    export type UpdateBusinessRevisionMutationBody = BodyType<BusinessRevisionUpdateInput>
+    export type UpdateBusinessRevisionMutationError = ErrorType<ApiError | VersionConflictResponse>
+
+    /**
+ * @summary Save bilingual draft changes as a revision
+ */
+export const useUpdateBusinessRevision = <TError = ErrorType<ApiError | VersionConflictResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateBusinessRevision>>, TError,{id: number;data: BodyType<BusinessRevisionUpdateInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateBusinessRevision>>,
+        TError,
+        {id: number;data: BodyType<BusinessRevisionUpdateInput>},
+        TContext
+      > => {
+      return useMutation(getUpdateBusinessRevisionMutationOptions(options));
+    }
+
+export const getSubmitBusinessRevisionUrl = (id: number,) => {
+
+
+
+
+  return `/api/business-profiles/${id}/revision/submit`
+}
+
+/**
+ * Moves the latest `draft` revision to `submitted`. Content becomes immutable from this point;
+ * reviewers decide exactly this version. Requires at least one non-empty Dutch or English
+ * text field. `expectedVersion` must equal the draft's `version`.
+ * @summary Submit the current draft for editorial review
+ */
+export const submitBusinessRevision = async (id: number,
+    businessRevisionTransitionInput: BusinessRevisionTransitionInput, options?: Parameters<typeof customFetch>[1]): Promise<BusinessRevisionWorkspace> => {
+
+  return customFetch<BusinessRevisionWorkspace>(getSubmitBusinessRevisionUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(businessRevisionTransitionInput)
+  }
+);}
+
+
+
+
+
+export const getSubmitBusinessRevisionMutationOptions = <TError = ErrorType<ApiError | VersionConflictResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitBusinessRevision>>, TError,{id: number;data: BodyType<BusinessRevisionTransitionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof submitBusinessRevision>>, TError,{id: number;data: BodyType<BusinessRevisionTransitionInput>}, TContext> => {
+
+const mutationKey = ['submitBusinessRevision'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof submitBusinessRevision>>, {id: number;data: BodyType<BusinessRevisionTransitionInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  submitBusinessRevision(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SubmitBusinessRevisionMutationResult = NonNullable<Awaited<ReturnType<typeof submitBusinessRevision>>>
+    export type SubmitBusinessRevisionMutationBody = BodyType<BusinessRevisionTransitionInput>
+    export type SubmitBusinessRevisionMutationError = ErrorType<ApiError | VersionConflictResponse>
+
+    /**
+ * @summary Submit the current draft for editorial review
+ */
+export const useSubmitBusinessRevision = <TError = ErrorType<ApiError | VersionConflictResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitBusinessRevision>>, TError,{id: number;data: BodyType<BusinessRevisionTransitionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof submitBusinessRevision>>,
+        TError,
+        {id: number;data: BodyType<BusinessRevisionTransitionInput>},
+        TContext
+      > => {
+      return useMutation(getSubmitBusinessRevisionMutationOptions(options));
+    }
+
+export const getDiscardBusinessRevisionUrl = (id: number,) => {
+
+
+
+
+  return `/api/business-profiles/${id}/revision/discard`
+}
+
+/**
+ * Marks the latest `draft` revision `discarded`. Submitted and decided revisions are kept as history.
+ * @summary Discard the current draft
+ */
+export const discardBusinessRevision = async (id: number,
+    businessRevisionTransitionInput: BusinessRevisionTransitionInput, options?: Parameters<typeof customFetch>[1]): Promise<BusinessRevisionWorkspace> => {
+
+  return customFetch<BusinessRevisionWorkspace>(getDiscardBusinessRevisionUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(businessRevisionTransitionInput)
+  }
+);}
+
+
+
+
+
+export const getDiscardBusinessRevisionMutationOptions = <TError = ErrorType<ApiError | VersionConflictResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof discardBusinessRevision>>, TError,{id: number;data: BodyType<BusinessRevisionTransitionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof discardBusinessRevision>>, TError,{id: number;data: BodyType<BusinessRevisionTransitionInput>}, TContext> => {
+
+const mutationKey = ['discardBusinessRevision'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof discardBusinessRevision>>, {id: number;data: BodyType<BusinessRevisionTransitionInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  discardBusinessRevision(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DiscardBusinessRevisionMutationResult = NonNullable<Awaited<ReturnType<typeof discardBusinessRevision>>>
+    export type DiscardBusinessRevisionMutationBody = BodyType<BusinessRevisionTransitionInput>
+    export type DiscardBusinessRevisionMutationError = ErrorType<ApiError | VersionConflictResponse>
+
+    /**
+ * @summary Discard the current draft
+ */
+export const useDiscardBusinessRevision = <TError = ErrorType<ApiError | VersionConflictResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof discardBusinessRevision>>, TError,{id: number;data: BodyType<BusinessRevisionTransitionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof discardBusinessRevision>>,
+        TError,
+        {id: number;data: BodyType<BusinessRevisionTransitionInput>},
+        TContext
+      > => {
+      return useMutation(getDiscardBusinessRevisionMutationOptions(options));
+    }
+
+export const getGetAuthorityQueueUrl = (params?: GetAuthorityQueueParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/review/claims?${stringifiedParams}` : `/api/review/claims`
+}
+
+/**
+ * Claims awaiting an authority decision (`pending`, `submitted`, `disputed`), oldest first.
+ * Items carry the relationship and authority evidence needed to decide, never the
+ * claimant's e-mail address. `canDecide` is false when the reviewer is the claimant, the
+ * creator, or a member of the business.
+ * @summary Paginated authority (ownership) review queue
+ */
+export const getAuthorityQueue = async (params?: GetAuthorityQueueParams, options?: Parameters<typeof customFetch>[1]): Promise<AuthorityQueuePage> => {
+
+  return customFetch<AuthorityQueuePage>(getGetAuthorityQueueUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetAuthorityQueueQueryKey = (params?: GetAuthorityQueueParams,) => {
+    return [
+    `/api/review/claims`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetAuthorityQueueQueryOptions = <TData = Awaited<ReturnType<typeof getAuthorityQueue>>, TError = ErrorType<ApiError | FeatureDisabledResponse>>(params?: GetAuthorityQueueParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAuthorityQueue>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetAuthorityQueueQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAuthorityQueue>>> = ({ signal }) => getAuthorityQueue(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAuthorityQueue>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetAuthorityQueueQueryResult = NonNullable<Awaited<ReturnType<typeof getAuthorityQueue>>>
+export type GetAuthorityQueueQueryError = ErrorType<ApiError | FeatureDisabledResponse>
+
+
+/**
+ * @summary Paginated authority (ownership) review queue
+ */
+
+export function useGetAuthorityQueue<TData = Awaited<ReturnType<typeof getAuthorityQueue>>, TError = ErrorType<ApiError | FeatureDisabledResponse>>(
+ params?: GetAuthorityQueueParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAuthorityQueue>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetAuthorityQueueQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getReviewBusinessClaimUrl = (id: number,) => {
+
+
+
+
+  return `/api/review/claims/${id}/decision`
+}
+
+/**
+ * Approve grants exactly one owner membership atomically and rejects competing open claims;
+ * `reject` and `request_changes` require a reason that the claimant will see. The decision is
+ * applied only when the claim still has `expectedVersion` and a reviewable status (409
+ * VERSION_CONFLICT otherwise). Self-review returns 403 SELF_REVIEW_FORBIDDEN.
+ * @summary Decide an authority claim at an exact version
+ */
+export const reviewBusinessClaim = async (id: number,
+    reviewClaimDecisionInput: ReviewClaimDecisionInput, options?: Parameters<typeof customFetch>[1]): Promise<BusinessClaim> => {
+
+  return customFetch<BusinessClaim>(getReviewBusinessClaimUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(reviewClaimDecisionInput)
+  }
+);}
+
+
+
+
+
+export const getReviewBusinessClaimMutationOptions = <TError = ErrorType<ApiError | VersionConflictResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reviewBusinessClaim>>, TError,{id: number;data: BodyType<ReviewClaimDecisionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof reviewBusinessClaim>>, TError,{id: number;data: BodyType<ReviewClaimDecisionInput>}, TContext> => {
+
+const mutationKey = ['reviewBusinessClaim'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof reviewBusinessClaim>>, {id: number;data: BodyType<ReviewClaimDecisionInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  reviewBusinessClaim(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ReviewBusinessClaimMutationResult = NonNullable<Awaited<ReturnType<typeof reviewBusinessClaim>>>
+    export type ReviewBusinessClaimMutationBody = BodyType<ReviewClaimDecisionInput>
+    export type ReviewBusinessClaimMutationError = ErrorType<ApiError | VersionConflictResponse>
+
+    /**
+ * @summary Decide an authority claim at an exact version
+ */
+export const useReviewBusinessClaim = <TError = ErrorType<ApiError | VersionConflictResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reviewBusinessClaim>>, TError,{id: number;data: BodyType<ReviewClaimDecisionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof reviewBusinessClaim>>,
+        TError,
+        {id: number;data: BodyType<ReviewClaimDecisionInput>},
+        TContext
+      > => {
+      return useMutation(getReviewBusinessClaimMutationOptions(options));
+    }
+
+export const getGetEditorialQueueUrl = (params?: GetEditorialQueueParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/review/revisions?${stringifiedParams}` : `/api/review/revisions`
+}
+
+/**
+ * Submitted revisions oldest first, each with the currently approved revision for comparison.
+ * @summary Paginated editorial (profile revision) review queue
+ */
+export const getEditorialQueue = async (params?: GetEditorialQueueParams, options?: Parameters<typeof customFetch>[1]): Promise<EditorialQueuePage> => {
+
+  return customFetch<EditorialQueuePage>(getGetEditorialQueueUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetEditorialQueueQueryKey = (params?: GetEditorialQueueParams,) => {
+    return [
+    `/api/review/revisions`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetEditorialQueueQueryOptions = <TData = Awaited<ReturnType<typeof getEditorialQueue>>, TError = ErrorType<ApiError | FeatureDisabledResponse>>(params?: GetEditorialQueueParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getEditorialQueue>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetEditorialQueueQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getEditorialQueue>>> = ({ signal }) => getEditorialQueue(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getEditorialQueue>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetEditorialQueueQueryResult = NonNullable<Awaited<ReturnType<typeof getEditorialQueue>>>
+export type GetEditorialQueueQueryError = ErrorType<ApiError | FeatureDisabledResponse>
+
+
+/**
+ * @summary Paginated editorial (profile revision) review queue
+ */
+
+export function useGetEditorialQueue<TData = Awaited<ReturnType<typeof getEditorialQueue>>, TError = ErrorType<ApiError | FeatureDisabledResponse>>(
+ params?: GetEditorialQueueParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getEditorialQueue>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetEditorialQueueQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getReviewBusinessRevisionUrl = (id: number,) => {
+
+
+
+
+  return `/api/review/revisions/${id}/decision`
+}
+
+/**
+ * `approve` atomically makes this revision the business's approved snapshot (the previous
+ * approved revision becomes `superseded`) and records the supplied fact checks; fields marked
+ * `contradicted` are withheld from the public projection. `reject` and `request_changes`
+ * require a reason. Applied only while the revision is `submitted` with exactly
+ * `expectedVersion` (409 otherwise). Approval never publishes by itself.
+ * @summary Decide a submitted revision at an exact version
+ */
+export const reviewBusinessRevision = async (id: number,
+    reviewRevisionDecisionInput: ReviewRevisionDecisionInput, options?: Parameters<typeof customFetch>[1]): Promise<EditorialQueueItem> => {
+
+  return customFetch<EditorialQueueItem>(getReviewBusinessRevisionUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(reviewRevisionDecisionInput)
+  }
+);}
+
+
+
+
+
+export const getReviewBusinessRevisionMutationOptions = <TError = ErrorType<ApiError | VersionConflictResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reviewBusinessRevision>>, TError,{id: number;data: BodyType<ReviewRevisionDecisionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof reviewBusinessRevision>>, TError,{id: number;data: BodyType<ReviewRevisionDecisionInput>}, TContext> => {
+
+const mutationKey = ['reviewBusinessRevision'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof reviewBusinessRevision>>, {id: number;data: BodyType<ReviewRevisionDecisionInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  reviewBusinessRevision(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ReviewBusinessRevisionMutationResult = NonNullable<Awaited<ReturnType<typeof reviewBusinessRevision>>>
+    export type ReviewBusinessRevisionMutationBody = BodyType<ReviewRevisionDecisionInput>
+    export type ReviewBusinessRevisionMutationError = ErrorType<ApiError | VersionConflictResponse>
+
+    /**
+ * @summary Decide a submitted revision at an exact version
+ */
+export const useReviewBusinessRevision = <TError = ErrorType<ApiError | VersionConflictResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reviewBusinessRevision>>, TError,{id: number;data: BodyType<ReviewRevisionDecisionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof reviewBusinessRevision>>,
+        TError,
+        {id: number;data: BodyType<ReviewRevisionDecisionInput>},
+        TContext
+      > => {
+      return useMutation(getReviewBusinessRevisionMutationOptions(options));
+    }
+
+export const getGetPublicationQueueUrl = (params?: GetPublicationQueueParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/review/businesses?${stringifiedParams}` : `/api/review/businesses`
+}
+
+/**
+ * Businesses that have an approved revision or a non-default publication status, newest change first.
+ * @summary Paginated publication overview
+ */
+export const getPublicationQueue = async (params?: GetPublicationQueueParams, options?: Parameters<typeof customFetch>[1]): Promise<PublicationQueuePage> => {
+
+  return customFetch<PublicationQueuePage>(getGetPublicationQueueUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetPublicationQueueQueryKey = (params?: GetPublicationQueueParams,) => {
+    return [
+    `/api/review/businesses`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetPublicationQueueQueryOptions = <TData = Awaited<ReturnType<typeof getPublicationQueue>>, TError = ErrorType<ApiError | FeatureDisabledResponse>>(params?: GetPublicationQueueParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPublicationQueue>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetPublicationQueueQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getPublicationQueue>>> = ({ signal }) => getPublicationQueue(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getPublicationQueue>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetPublicationQueueQueryResult = NonNullable<Awaited<ReturnType<typeof getPublicationQueue>>>
+export type GetPublicationQueueQueryError = ErrorType<ApiError | FeatureDisabledResponse>
+
+
+/**
+ * @summary Paginated publication overview
+ */
+
+export function useGetPublicationQueue<TData = Awaited<ReturnType<typeof getPublicationQueue>>, TError = ErrorType<ApiError | FeatureDisabledResponse>>(
+ params?: GetPublicationQueueParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPublicationQueue>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetPublicationQueueQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getSetBusinessPublicationUrl = (id: number,) => {
+
+
+
+
+  return `/api/review/businesses/${id}/publication`
+}
+
+/**
+ * `publish` requires an approved revision and moves `draft`/`unpublished` to `published`;
+ * `unpublish` and `suspend` require a reason and keep the approved snapshot so a later
+ * `publish` restores exactly it. `expectedRevisionVersion` must equal the approved
+ * revision's version (409 otherwise), so a reviewer never publishes a snapshot they did not
+ * see. Every action is recorded as an immutable review entry.
+ * @summary Publish, unpublish, or suspend a business
+ */
+export const setBusinessPublication = async (id: number,
+    publicationActionInput: PublicationActionInput, options?: Parameters<typeof customFetch>[1]): Promise<PublicationQueueItem> => {
+
+  return customFetch<PublicationQueueItem>(getSetBusinessPublicationUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(publicationActionInput)
+  }
+);}
+
+
+
+
+
+export const getSetBusinessPublicationMutationOptions = <TError = ErrorType<ApiError | VersionConflictResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof setBusinessPublication>>, TError,{id: number;data: BodyType<PublicationActionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof setBusinessPublication>>, TError,{id: number;data: BodyType<PublicationActionInput>}, TContext> => {
+
+const mutationKey = ['setBusinessPublication'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof setBusinessPublication>>, {id: number;data: BodyType<PublicationActionInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  setBusinessPublication(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SetBusinessPublicationMutationResult = NonNullable<Awaited<ReturnType<typeof setBusinessPublication>>>
+    export type SetBusinessPublicationMutationBody = BodyType<PublicationActionInput>
+    export type SetBusinessPublicationMutationError = ErrorType<ApiError | VersionConflictResponse>
+
+    /**
+ * @summary Publish, unpublish, or suspend a business
+ */
+export const useSetBusinessPublication = <TError = ErrorType<ApiError | VersionConflictResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof setBusinessPublication>>, TError,{id: number;data: BodyType<PublicationActionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof setBusinessPublication>>,
+        TError,
+        {id: number;data: BodyType<PublicationActionInput>},
+        TContext
+      > => {
+      return useMutation(getSetBusinessPublicationMutationOptions(options));
+    }
 
 export const getGetDealsUrl = (params: GetDealsParams,) => {
   const normalizedParams = new URLSearchParams();

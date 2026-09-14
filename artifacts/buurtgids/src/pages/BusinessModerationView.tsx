@@ -26,6 +26,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { useEditorAccess } from '@/lib/editorAccess';
+import { featureFlags } from '@/lib/featureFlags';
+import { BusinessReviewPanel } from './BusinessReviewPanel';
+import { useAppLanguage } from '@/lib/useAppLanguage';
 
 // Minimal editor check based on role - assuming editor access checks are done elsewhere, 
 // but we just render if logged in as per requirement.
@@ -36,6 +39,7 @@ export default function BusinessModerationView() {
   const queryClient = useQueryClient();
 
   const [activeTab, setActiveTab] = useState('claims');
+  const [reviewLanguage] = useAppLanguage();
   
   // Claim Queries & Mutations
   const { data: claims, isLoading: claimsLoading } = useGetBusinessClaimModeration(
@@ -151,14 +155,29 @@ export default function BusinessModerationView() {
 
       <div className="container max-w-6xl mx-auto px-4 sm:px-6 py-8">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full max-w-md grid-cols-2 mb-8 bg-card border-border/50 shadow-sm p-1 rounded-xl h-auto">
+          <TabsList className={`grid w-full ${featureFlags.businessPublication ? 'max-w-3xl grid-cols-5' : 'max-w-md grid-cols-2'} mb-8 bg-card border-border/50 shadow-sm p-1 rounded-xl h-auto`}>
             <TabsTrigger value="claims" className="py-2.5 font-bold data-[state=active]:bg-primary/10 data-[state=active]:text-primary rounded-lg flex gap-2">
               Claims {claims && claims.length > 0 && <Badge variant="secondary" className="bg-primary text-primary-foreground text-[10px] py-0 px-1.5 h-4 min-w-4">{claims.length}</Badge>}
             </TabsTrigger>
             <TabsTrigger value="deals" className="py-2.5 font-bold data-[state=active]:bg-primary/10 data-[state=active]:text-primary rounded-lg flex gap-2">
               Deals {deals && deals.length > 0 && <Badge variant="secondary" className="bg-primary text-primary-foreground text-[10px] py-0 px-1.5 h-4 min-w-4">{deals.length}</Badge>}
             </TabsTrigger>
+            {featureFlags.businessPublication && (
+              <>
+                <TabsTrigger value="authority" className="py-2.5 font-bold data-[state=active]:bg-primary/10 data-[state=active]:text-primary rounded-lg" data-testid="tab-authority">{reviewLanguage === 'nl' ? 'Eigenaarschap' : 'Ownership'}</TabsTrigger>
+                <TabsTrigger value="editorial" className="py-2.5 font-bold data-[state=active]:bg-primary/10 data-[state=active]:text-primary rounded-lg" data-testid="tab-editorial">{reviewLanguage === 'nl' ? 'Profielen' : 'Profiles'}</TabsTrigger>
+                <TabsTrigger value="publication" className="py-2.5 font-bold data-[state=active]:bg-primary/10 data-[state=active]:text-primary rounded-lg" data-testid="tab-publication">{reviewLanguage === 'nl' ? 'Publicatie' : 'Publication'}</TabsTrigger>
+              </>
+            )}
           </TabsList>
+
+          {featureFlags.businessPublication && (
+            <>
+              <TabsContent value="authority" className="mt-0"><BusinessReviewPanel section="authority" enabled={activeTab === 'authority'} /></TabsContent>
+              <TabsContent value="editorial" className="mt-0"><BusinessReviewPanel section="editorial" enabled={activeTab === 'editorial'} /></TabsContent>
+              <TabsContent value="publication" className="mt-0"><BusinessReviewPanel section="publication" enabled={activeTab === 'publication'} /></TabsContent>
+            </>
+          )}
           
           <TabsContent value="claims" className="space-y-6 mt-0">
             {claimsLoading ? (
