@@ -1,7 +1,7 @@
 # Implementation Plan: Consumer accounts and business onboarding
 
 **Spec**: ./spec.md  
-**Status**: Ready for tasks  
+**Status**: Executed; verification recorded in `convergence.md` on 2026-09-14  
 **Date**: 2026-09-14
 
 ## Summary
@@ -242,8 +242,13 @@ pnpm --filter @workspace/api-server exec tsx --test \
   src/routes/registration.test.ts \
   src/routes/account.test.ts \
   src/routes/business-intake.test.ts \
-  src/routes/business-review.test.ts \
+  src/routes/business-publication.test.ts \
   src/routes/account-lifecycle.test.ts
+# run the block above with DATABASE_URL pointing at a disposable database
+# (e.g. buurtplaza_release_rehearsal), never at production
+
+# copy parity (nl/en key trees)
+pnpm --filter @workspace/buurtgids exec tsx --test src/lib/i18n.test.ts
 
 # schema rehearsal on an isolated database
 node lib/db/scripts/run-isolated-database-integration.mjs -- pnpm --filter @workspace/db run push
@@ -254,9 +259,14 @@ PLAYWRIGHT_CHROMIUM_EXECUTABLE=$(command -v chromium) \
   e2e/discovery-regression.spec.ts e2e/saved-events-sync.spec.ts \
   e2e/account-preferences.spec.ts e2e/business-intake.spec.ts e2e/business-review.spec.ts
 
-# manual per changed screen
-- keyboard-only completion, screen-reader labels, error focus
-- NL/EN parity and form state retained on language switch
-- mobile viewport, reduced motion
+# responsive + reduced motion: rerun the account/business specs with a
+# 390x844 viewport, hasTouch and contextOptions.reducedMotion = 'reduce'
+
+# rollback rehearsal: start the production bundle with every flag unset
+# against the disposable database; /api/readiness all false, gated routes 404
+
+# manual per changed screen (still owed before the first production flag)
+- keyboard-only completion with a screen reader, error focus
+- real Clerk test identities through the deployed base path
 - flag off: new routes show unavailable state; existing routes unchanged
 ```

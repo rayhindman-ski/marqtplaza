@@ -28,7 +28,7 @@ _Populate as you build — short repo map plus pointers to the source-of-truth f
 
 ## Architecture decisions
 
-- Consumer accounts are gated by `ACCOUNTS_ENABLED` (API) and `VITE_ACCOUNTS_ENABLED` (web). Both are off in production until the Spec Kit gates Q1/Q6/Q7 in `.specify/specs/002-consumer-accounts-and-business-onboarding/convergence.md` are recorded; development has them on for preview.
+- Consumer accounts, business intake, and business publication are gated by `ACCOUNTS_ENABLED`, `BUSINESS_INTAKE_ENABLED`, `BUSINESS_PUBLICATION_ENABLED` (API) and their `VITE_*` mirrors (web). All are off in production until the matching Spec Kit gates (Q1–Q8) in `.specify/specs/002-consumer-accounts-and-business-onboarding/convergence.md` are recorded; development has them on for preview. Operator flag/rollback notes: `doc/md/onboarding-release.md`.
 - Lifecycle messages (claim/review/publication/deletion) are written to the `lifecycle_outbox` table inside the same transaction as the state change. Real delivery is release configuration: `LIFECYCLE_DELIVERY_PROVIDER` unset keeps rows `queued` (no attempts consumed); `log` is a development-only loader refused in production. Account deletion requests live at `/account/privacy`; support decisions go through `/api/review/account-requests` and never delete claims, memberships, or audit rows. Retention periods and erasure remain open gates (no deadlines are promised in UI copy).
 - An account (Clerk login + optional controlled preferences on `app_users`/`consumer_preferences`), the research registration (`user_registrations`), saved events, and purpose-specific consents (`account_consent_events`, append-only) are separate scopes. Creating an account never writes to the other three.
 - Preference writes use optimistic revisions (`expectedRevision`, 409 `VERSION_CONFLICT`); all neighbourhood/interest IDs must come from `GET /account/options`. Nothing is inferred and unset stays unset.
@@ -45,7 +45,8 @@ _Populate as you build — explicit user instructions worth remembering across s
 ## Gotchas
 
 - Account e2e specs drive auth with `?e2eAccountAuth=1` plus `window.__accountTestAuth` (dev builds only) and mock `/api/account/**`; the Playwright web server runs with `VITE_ACCOUNTS_ENABLED=1`.
-- Account route tests need the account tables: run `pnpm --filter @workspace/db run push` on a fresh database first.
+- Account route tests need the account tables: run `pnpm --filter @workspace/db run push` on a fresh database first. For release verification point `DATABASE_URL` at a disposable database (e.g. `buurtplaza_release_rehearsal`) and set the three feature flags to `1`.
+- `src/lib/i18n.test.ts` fails when a translation table's `nl` and `en` key trees diverge; add keys to both languages together.
 
 ## Pointers
 

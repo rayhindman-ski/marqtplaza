@@ -1,7 +1,7 @@
 # Convergence: Consumer accounts and business onboarding
 
 **Date**: 2026-09-14  
-**Status**: In progress — US1 foundation and US2 consumer preferences implemented; all release gates still open, production flags off
+**Status**: Release candidate, verification incomplete (2026-09-14) — US1–US5 implemented behind flags with automated evidence recorded below; the manual keyboard-only / screen-reader pass (T050) is still owed; every release gate Q1–Q8 still open; production flags off. No wider rollout until T050 is recorded and the gate table below records approvers.
 
 This record is created with the specification so that release gates, flag
 state, and baseline evidence are tracked from the first day. Update it at the
@@ -46,11 +46,14 @@ end of every phase in `tasks.md`.
 | `BUSINESS_PUBLICATION_ENABLED` / `VITE_BUSINESS_PUBLICATION_ENABLED` | off | revision review, explicit publication, owner edits become drafts | Q4 |
 | Lifecycle dispatch (provider loader configured) | not configured | real message sending | Q5, Q6, Q8 |
 
-Current state per environment (2026-09-14): `ACCOUNTS_ENABLED` /
-`VITE_ACCOUNTS_ENABLED` are **on in development only** so the consumer journey
-can be previewed and verified against the real API; production stays off until
-Q1, Q6, and Q7 are recorded. Business intake, publication, and lifecycle
-dispatch remain off everywhere.
+Current state per environment (2026-09-14, release-candidate review):
+`ACCOUNTS_ENABLED`, `BUSINESS_INTAKE_ENABLED`, and
+`BUSINESS_PUBLICATION_ENABLED` (plus their `VITE_*` mirrors) are **on in
+development only** so every journey can be previewed against the real API.
+**Production: all three off; `LIFECYCLE_DELIVERY_PROVIDER` unset everywhere.**
+A development flag is a preview convenience and is never gate evidence; only a
+row in the gate table with an approver and date allows a production flag.
+Operator documentation: `doc/md/onboarding-release.md`.
 
 ## Release gates (approvals required; no defaults invented)
 
@@ -85,6 +88,18 @@ runner + Playwright.
    `FEATURE_DISABLED`.
 4. Reviewer, support owner, legal wording, and retention periods are
    unassigned (Q3, Q6).
+5. Account erasure is intentionally not implemented; deletion requests are
+   tracked and decided but no data is erased until Q6/Q8 record retention
+   periods and exceptions.
+6. Real Clerk sign-up → preferences → account and reviewer approve → publish
+   journeys have automated evidence with injected identities only; a manual
+   pass with configured Clerk test identities in a non-production deployment
+   is still owed before the first production flag is turned on.
+7. Keyboard-only and screen-reader completion of the new screens (T050,
+   FR-017) has not been performed; automated focus/aria/reduced-motion checks
+   do not replace it.
+8. The full browser suite is not yet stable: one pre-existing homepage map
+   zoom test failed once in two full runs (passed on rerun and in isolation).
 
 ## Acceptance evidence
 
@@ -94,7 +109,83 @@ runner + Playwright.
 | US2 preferences | Implemented 2026-09-14: `PATCH /account/preferences` (expectedRevision, controlled-ID validation → 400 `VALIDATION_FAILED` with `not_in_controlled_list`, 409 `VERSION_CONFLICT` with `expectedVersion`, omitted fields unchanged / empty arrays clear, locale on `app_users`), `POST /account/onboarding/complete` (idempotent, skip creates no preference row), `GET`/`POST /account/consents` (append-only ledger, purposes `marketing_updates` and `research_contact`, client must echo the current notice version `draft-2026-09`, `support`/`system` sources rejected from clients, writes require a verified identity). Web: `/account/voorkeuren` (checkbox groups from `/account/options`, save/skip/cancel, draft kept in session storage across refresh, conflict keeps draft and reloads revision, error summary receives focus, NL/EN switch keeps the draft), `AccountPage` with preference summary, per-purpose consent controls, explicit account / research registration / saved data / consent scopes, `returnPath.ts` allowlist (`terug`), Clerk sign-in/sign-up redirects derive from the sanitised return path, `OnboardingPage` marker mirrors server state and points to the separate preference step. Account creation still writes no registration, subscription, or consent. | `pnpm --filter @workspace/api-server run test:account-foundation` → 24 pass, 0 fail (incl. six concurrent revision-0 writers → one 200, five 409; consent `current` derived from the newest row beyond a 200-entry history page). `tsx --test src/lib/returnPath.test.ts` → 5 pass. `playwright test` → 20 pass (8 new in `e2e/account-preferences.spec.ts`: anonymous discovery prompt-free, signed-out redirect with safe `terug`, save + language switch + refresh + resume, skip with external URL rejected, stale revision conflict, failed save keeps input and focuses the error, account page scopes and consent recording, disabled gate state; discovery and saved-events regressions unchanged). `pnpm run typecheck` clean. Live dev: `/api/readiness` → accounts true, unauthenticated `PATCH /api/account/preferences` → 401 `AUTH_REQUIRED`. Gates: Q1 taxonomy still `provisional-2026-09`; Q6 consent notice is a draft version; Q7 unresolved — the research registration remains a separate, voluntary step and sign-up lands on the optional preference step only while the flag is on. |
 | US3 intake | Implemented 2026-09-14 behind `businessIntake` (`BUSINESS_INTAKE_ENABLED` / `VITE_BUSINESS_INTAKE_ENABLED`; enabled in development only — not gate approval). Schema (additive): `business_claims.idempotency_key` + `(claimant_id, idempotency_key)` partial unique index, one-draft-per-claimant-per-business partial unique index, `draft` claim status (private, holds no open slot), `business_profiles.category`, `self_reported` listing source. API: `GET /businesses/lookup` (verified-account-only via `requireVerified`, allowlisted public fields, 8-result cap with `truncated`, per-account 30/min → 429, loader failure → 503), `POST /businesses` (existing listing re-resolved server-side and browser facts rejected as `UNKNOWN_FIELD`; new business creates a `draft` profile that is never public; `Idempotency-Key` replay → 200, same key different body → 409), `GET`/`PATCH /business-claims/{id}` (owner-only, otherwise 404; `expectedVersion` → 409 `VERSION_CONFLICT`; facts editable only for self-reported drafts), `POST …/submit` (new-business drafts are re-checked against public listings and published profiles first: candidates → 409 `DUPLICATE_CANDIDATES` with the public matches until the representative claims one instead or confirms with `confirmNoDuplicate`; then → `submitted`, or `disputed` when the business already has an owner; another open claim → 409), `POST …/withdraw` (archives a self-reported draft profile). Legacy `routes/businesses.ts` now shares serialisers, excludes non-published profiles from `/business-profiles/public/:slug` and `/deals`, and its moderation decision accepts `approve`/`reject`/`request_changes` on `pending|submitted|disputed`, refuses self-review, refuses approval when another owner exists (no dual ownership), creates exactly one owner membership + `business_reviews` audit row + rejects competing open claims in one transaction. Web: `/bedrijf-zoeken` (lookup), `/bedrijf-nieuw` (claim/new draft, resume via `?claim=<id>`, receipt, withdraw, changes-requested edit + resubmit), `MyBusinessWorkspace` status/reason/next action/withdraw, onboarding CTA and map claim link route to the lookup when the flag is on; moderation view gained "request changes" and shows the private declaration/evidence to editors only. Legacy `/bedrijf-claim` + `POST /business-claims` unchanged when the flag is off. | `pnpm --filter @workspace/api-server run test:business-intake` → 14 pass (profile-kind lookup matches resolve from the trusted published profile row — aged-out Google and published self-reported profiles both claimable; an editor who is a member of the business gets 403 on every claim decision, re-checked inside the transaction; claim decisions are bound to the reviewed `expectedVersion` — missing → 400, stale → 409 and no ownership; `business_reviews.targetVersion` records the reviewed version; the raw Idempotency-Key is stored exactly (unique per claimant) with the payload sha256 in a separate column: concurrent same-key/same-payload requests replay the winner (200), concurrent same-key/different-payload requests leave exactly one claim and 409 for the rest, and `key:other` is a distinct key; production lookup+resolver chain claims a stored `google_maps` listing from `external-results` without a live provider call, unknown identity stays 400; flag-off 404 without shadowing moderation; 401/403 unverified/400/`UNKNOWN_FIELD` on lookup; duplicate re-check at new-business submission blocks with public candidates, leaves the draft untouched, submits after explicit confirmation, skips when no candidates, 503 when the check fails; deal moderation refuses `request_changes`; public-only lookup fields; 503; 429 burst; unverified 403; mass assignment; idempotent replay/conflict; cross-user 404; stale version 409; fact redefinition refused; submit blocks a second open claim; withdraw frees the slot; request_changes → edit → resubmit → approve creates one owner + audit rows; later claim becomes `disputed`, approval refused 409, rejection reason visible without competing evidence; new-business draft invisible via public profile and lookup, archived on withdraw). `test:account-foundation` → 14 pass unchanged. `playwright test` → 24 pass (`src/lib/claimPresentation.test.ts` proves every persisted claim status renders its own truthful label with gated actions hidden when the intake flag is rolled back; 4 new in `e2e/business-intake.spec.ts`: lookup → identity-only claim → refresh resumes → submit receipt → withdraw; private new-business draft with duplicate-candidate panel → cancel keeps draft → confirm submits; anonymous claim URL redirects before any fetch; keyboard-only lookup). `pnpm run typecheck` clean. Live dev: `/api/readiness` → businessIntake true, anonymous `/api/businesses/lookup` → 401. Gate T032 (Q2/Q3 evidence policy, reviewer and support owner) remains open. |
 | US4 review and publication | Implemented 2026-09-14 behind `businessPublication` (`BUSINESS_PUBLICATION_ENABLED` / `VITE_BUSINESS_PUBLICATION_ENABLED`; enabled in development only — not gate approval). No schema change (the foundation tables were already pushed; `business_profiles.category` push was re-applied to dev). Existing published/unpublished/suspended profiles are migrated into an approved revision v1 by an idempotent startup backfill (`lib/businessRevisionBackfill.ts`, also `pnpm --filter @workspace/api-server run backfill:business-revisions`), recorded with a system actor and audit row; private intake drafts are not migrated. Reviewer exclusion covers creator, member, author, claimant and anyone with an active claim; claim creation, owner save/submit/discard, and every review decision (claim, revision, publication) lock the profile row first (then the latest revision) and re-check under it; save/submit/discard updates are conditional on revision id + version + `draft` status and treat zero affected rows as a conflict, so a submitted revision can never be rewritten. Every dimension (claim, revision, publication decisions and queue hints) also excludes the author of the currently approved snapshot even after membership removal. Claimant PATCH/submit/withdraw use an unlocked preflight to find the profile, then lock profile → claim, matching the reviewer decision order so withdrawal vs. review cannot deadlock. Listing-derived profiles created while the flag is on start as `draft`, so ownership approval and editorial approval never make them public — only an explicit publish decision does. With the flag off the public route serves the legacy columns unconditionally (snapshot kept for re-enablement). Four dimensions stay independent: ownership (claims/members), editorial approval (`business_profile_revisions.status` + `business_profiles.approved_revision_id`), publication (`publication_status`), freshness (`business_fact_checks`, stale after 180 days, `unverified` until a confirmed check exists). API (`routes/business-publication.ts`, per-route flag + `requireAppUser`): owners `GET/PATCH /business-profiles/{id}/revision` (member-only else 404; owner role else 403; a `draft` is edited in place, any other latest state creates version n+1 seeded from the latest content or the legacy columns; `expectedVersion` → 409 `VERSION_CONFLICT`; URLs must be http(s), control characters stripped, English never invented), `POST …/submit` (draft → `submitted`, immutable afterwards; empty drafts → 400), `POST …/discard`; reviewers (`identity.isEditor` else 403) `GET /review/claims|revisions|businesses` (cursor `PageInfo`, allowlisted profile summary, no e-mail/claimant/author ids, `canDecide` false for creator/member/author), `POST /review/claims/{id}/decision` (shared `applyClaimDecision`: version-bound, self-review re-checked in the transaction, one owner membership, competing claims rejected, audit row), `POST /review/revisions/{id}/decision` (exact `expectedVersion` and newest-version check under `FOR UPDATE`; approve moves `approved_revision_id`, supersedes the previous approved row, inserts fact checks + `business_reviews` row; never publishes), `POST /review/businesses/{id}/publication` (`publish|unpublish|suspend` with `expectedRevisionVersion` = approved snapshot version, reason required except publish, transition table enforced, publish refused without an approved snapshot, audit row targetType `publication`). Public `GET /business-profiles/public/{slug}` serialises only the approved snapshot (contradicted fields withheld, `content` + `provenance` with source/approved version/freshness/checks without reviewer notes or ids); with the flag on a profile without a snapshot is 404 (logged) rather than falling back to mutable columns. Legacy owner `PATCH /business-profiles/{id}` writes a draft revision when the flag is on (name changes refused). Web: `/mijn-bedrijf/:id/profiel` bilingual editor + status dashboard (unknown/draft/submitted/changes_requested/approved/published/stale/suspended/unpublished, reviewer note, fact checks, freshness, resumable draft, locked while submitted/suspended), workspace edit button routes there when the flag is on; `/redactie/bedrijven` gains Eigenaarschap/Profielen/Publicatie tabs (NL/EN, paginated, self-review shown as blocked, decisions confirm the exact version, 409 refreshes the queue); `/bedrijf/:slug` renders localised approved content (EN falls back per field to NL) plus a provenance/verification section. | `pnpm --filter @workspace/api-server run test:business-publication` → 25 pass (flag-off 404 on every route; a profile at the legacy contract limits (2400-char description, 600-char hours, 50-char phone, long URL/email) backfills, serves publicly, opens in the owner workspace and seeds a draft unchanged, while new owner input stays at the stricter input limits — stored/response revision schemas carry no length limits, only `BusinessRevision*Input` does; departed approved-snapshot author gets `canDecide=false` and 403 in the editorial and authority queues; self-reported claim withdrawal racing a reviewer approval on a held profile lock: both wait, exactly one wins (200/409) and the claim, membership and profile state agree; save/discard racing a submit on a held profile lock all wait, submit wins, save and discard get 409 and the submitted content is untouched; the approved snapshot's author with editor rights but no membership sees `canDecide=false` and gets 403 on suspend while another reviewer succeeds; post-rollout claim → ownership approval → revision approval keeps the public page 404 until publish, with a single `publish` audit row; flag rollback after backfill serves edited columns with `content: null` and re-enabling serves the snapshot; claim creation and claim decisions block on a held profile row lock and complete normally after release; claimant-editor on a listing-derived business gets `canDecide=false` and 403 on revision decision and publication until the claim is withdrawn; backfill creates exactly one approved v1 per column-only profile, is a no-op on re-run, leaves profiles with a snapshot untouched, and migrated profiles can be suspended → republished → unpublished from v1; stranger 404 / unverified 403 / unknown fields 400 / `javascript:` URL 400; draft seeded from columns then edited in place; draft invisible publicly; submitted revision immutable and queued without author identity; authority queue paginates by cursor without e-mail, claimant-editor `canDecide=false` and 403 on decision; reason required, stale 409, request_changes → approve grants exactly one owner with audit rows; owner-editor self-approval 403, stale/decided versions 409, bad fact-check URL 400; changes requested → v2 resubmitted → approved with fact checks, second approval 409; public page serves the snapshot with contradicted website withheld, provenance without reviewer notes/ids, no legacy text; newer draft and rejected v3 leave the published snapshot untouched, legacy PATCH lands in a draft, discard drops it; owner self-suspend 403, suspend → public 404 and owner `suspended` with reason, publish restores exactly v2, unpublish → 404, invalid transition 409, audit `suspend,publish,unpublish`; publish without snapshot 409; freshness `stale` after 180 days on a backfilled profile; empty draft cannot be submitted). `test:business-intake` → 14 pass unchanged. `playwright test e2e/business-review.spec.ts` → 3 pass (owner editor prefilled from profile columns, draft → private (v1 snapshot still public) → resume → submit locks → changes requested with note → v2 → approve → public snapshot with provenance, English per-field fallback; stale save shows conflict and keeps server content; suspended business locked for owner and hidden publicly). `tsc --noEmit` clean for api-server and buurtgids. Gate T042/Q4 (editorial policy owner, reviewer roster) remains open. |
-| US5 lifecycle | — | — |
+| US5 lifecycle | Implemented 2026-09-14: `lifecycle_outbox` rows are enqueued inside the same transaction as the state change (legacy claim submission, new-claim decisions, revision and publication transitions, deletion requests) with dedupe on idempotency key; the dispatcher takes an injected loader, records every attempt monotonically, retries transient failures with backoff, fails permanently when the budget is exhausted, cancels messages whose recipient row is gone, and never delivers one row twice across concurrent dispatchers. No provider is configured: rows stay `queued` and consume no attempts; `LIFECYCLE_DELIVERY_PROVIDER=log` is a development-only loader refused in production. `POST /account/deletion-requests` requires the accounts flag, a verified identity, and every scope acknowledgement; sole owners get `blocked_ownership` and an audited support decision path (`/api/review/account-requests`) that never deletes claims, memberships, or audit rows; `/api/review/lifecycle-messages` lists failed rows and allows resend. Web: `/account/privacy` shows consent withdrawal, deletion scope explanation, request status, and message status limited to queued/accepted/failed. Actual erasure is not implemented (gate Q6/Q8). | `pnpm --filter @workspace/api-server run test:account-lifecycle` → 16 pass on the isolated `buurtplaza_release_rehearsal` database (payload allowlist rejects contact data, tokens, and reviewer details; dedupe + recipient provisioning in one transaction; rollback with the parent state change; queued-without-attempts when unconfigured; recipient-gone cancellation; backoff, attempt records, exhaustion → `failed`; receipts idempotent; concurrent dispatchers deliver once; recipient status view without payload/address/error; claimant messages without reviewer notes; deletion request gate + acknowledgements; request filed/tracked/withdrawn with messages committed alongside; sole-owner block → audited support decision keeps history; legacy claim submission enqueues in-transaction; support-closed business excluded from live ownership). `playwright test e2e/account-privacy.spec.ts` → 3 pass (scope acknowledgements + truthful tracking, sole-owner block with pending decision, unverified account refused). |
+
+## Release verification (2026-09-14, release-candidate review)
+
+All commands ran against non-production data. API suites used the disposable
+database `buurtplaza_release_rehearsal` (created from the development
+connection, schema pushed by `drizzle-kit push`); browser suites used the
+Playwright dev server with mocked `/api/account/**`, `/api/business*`,
+`/api/review/**` responses and `?e2eAccountAuth=1` test identities. No real
+consumer, reviewer, or production row was touched.
+
+| Check | Command | Result |
+| --- | --- | --- |
+| Contracts | `pnpm --filter @workspace/api-spec run codegen` then `git status lib/api-client-react lib/api-zod` | regenerated output identical to the committed client and Zod schemas (no diff) |
+| Static + builds | `pnpm run typecheck`; `pnpm --filter @workspace/buurtgids run build`; `pnpm --filter @workspace/api-server run build` | typecheck clean (libs, api-server, buurtgids, scripts); both builds succeed |
+| Migration rehearsal | `DATABASE_URL=<rehearsal> pnpm --filter @workspace/db run push` twice | first push applies the additive schema; second push "No changes detected" |
+| Permissions | `tsx --test src/lib/permissions.test.ts` | 8 pass |
+| Baseline registration | `tsx --test src/routes/registration.test.ts` | 2 pass |
+| Accounts | `tsx --test src/routes/account.test.ts` | 14 pass |
+| Business intake | `tsx --test src/routes/business-intake.test.ts` | 14 pass |
+| Business review/publication | `tsx --test src/routes/business-publication.test.ts` | 25 pass |
+| Lifecycle | `tsx --test src/routes/account-lifecycle.test.ts` | 16 pass |
+| NL/EN parity | `tsx --test src/lib/i18n.test.ts` (new) | 12 pass — identical key trees, no empty strings in any translation table |
+| Browser journeys (desktop 1280×900) | `playwright test --config playwright.config.ts` (30 tests) | run 1: 29 pass, 1 fail `discovery-regression.spec.ts › homepage map keeps the user zoom level when hovering neighborhoods` (expected zoom 13, got 11); isolated `--repeat-each 3`: 3 pass; run 2 (full suite, after the accessibility edits): **30 pass**. The single failure is a timing-sensitive pre-existing map test and is tracked as its own follow-up task; the full check is not considered stable until it is fixed |
+| Browser journeys (mobile 390×844, `reducedMotion: 'reduce'`, touch) | `playwright test e2e/account-preferences.spec.ts e2e/account-privacy.spec.ts e2e/business-intake.spec.ts e2e/business-review.spec.ts` with a viewport override | 18 pass |
+| Flags-off rollback rehearsal | production-mode API bundle started against the rehearsal database with all flags unset | `/api/readiness` → all `false`; `/api/account/me`, `/api/businesses/lookup`, `/api/account/requests` → 404 `FEATURE_DISABLED`; `/api/review/*` not mounted (404); `/api/registration` → 401 unchanged; listings unchanged; no lifecycle dispatch started |
+| Deployed base-path smoke (development, flags on) | `curl` through the Replit dev domain | `/api/readiness` → all `true`; every gated API route answers 401 `AUTH_REQUIRED` anonymously; `/`, `/account`, `/account/voorkeuren`, `/account/privacy`, `/bedrijf-zoeken`, `/mijn-bedrijf`, `/nieuws`, `/deals`, `/activiteiten/den-haag` → 200; `/account/privacy` at 390px renders the real Clerk sign-in gate |
+
+### Evidence per release quality
+
+- **Authorization**: server-derived roles and capabilities; stranger 404,
+  unverified 403, self-review 403, forged role fields `UNKNOWN_FIELD`
+  (`permissions.test.ts`, `account.test.ts`, `business-publication.test.ts`).
+- **Version conflicts**: preference and revision writes 409 `VERSION_CONFLICT`
+  under six concurrent writers; stale reviewer decisions 409; save/discard
+  racing submit on a held profile lock (`account.test.ts`,
+  `business-publication.test.ts`, `business-review.spec.ts`).
+- **Draft privacy and public serialization**: lookup allowlist omits contact
+  and claim data; drafts and rejected revisions invisible publicly; public
+  page serves only the approved snapshot, provenance without reviewer notes
+  or IDs; contradicted website withheld (`business-intake.test.ts`,
+  `business-publication.test.ts`).
+- **Migration**: additive push idempotent on the rehearsal database; backfill
+  creates exactly one approved v1 per legacy profile and is a no-op on re-run.
+- **Message failure**: transient retry with backoff, permanent `failed` after
+  the budget, receipts idempotent, concurrent dispatchers deliver once, status
+  exposed without payload or address (`account-lifecycle.test.ts`).
+- **Deletion exceptions**: sole-owner block, audited support decision, history
+  preserved; erasure deferred to Q6/Q8.
+- **Rollback controls**: flags-off rehearsal above; publication flag off serves
+  legacy columns and re-enabling serves the snapshot (`business-publication.test.ts`).
+- **Localization**: `i18n.test.ts` parity; language switch retains form state
+  (`account-preferences.spec.ts`, `business-review.spec.ts`).
+- **Accessibility (automated part only)**: error summaries carry
+  `role="alert"` and receive focus on the preferences and draft pages; the
+  revision editor now focuses the first invalid field and links each error via
+  `aria-describedby`; a global `prefers-reduced-motion` rule disables
+  animations and transitions; account and business journeys pass at 390×844
+  with reduced motion enabled. **Not yet done:** keyboard-only completion and
+  a screen-reader pass of each new screen (T050, FR-017). This is a release
+  blocker (see blocker 7) and is tracked as a follow-up task.
+- **Low data**: pages render from JSON APIs only; the map layers already fall
+  back from Google to OSM tiles to coordinates (`discovery-regression.spec.ts`).
+- **Operator visibility**: `GET /api/readiness`, structured logs with event
+  codes and IDs only (`lifecycle_dispatch.*`, `lifecycle_message.*`), support
+  queues for deletion requests and failed messages.
+- **Separate flags**: accounts, intake, and publication gate independently;
+  each gated route was checked with only its own flag unset in the route
+  tests (`flag-off 404 on every route`).
+
+### Rollback triggers
+
+Recorded in `doc/md/onboarding-release.md`: draft or reviewer data in a public
+response, unapproved owner edits reaching the public page, failed lifecycle
+rows without visibility or duplicate messages per event, deletion requests
+resolved outside the audited path, or a schema push reporting a destructive
+statement.
 
 ## Verification commands
 
@@ -124,6 +215,15 @@ characters get truncated by PostgreSQL and are recreated on every push
   collaborative lists, route planning, document uploads, automated
   verification/publication, campaign scaling, discovery backlog items #2,
   #3, #6, #7, #8, #10, #12, #15, #16, #17, #20, #21, #22, #23.
+- Intentional deviations from `tasks.md` file names: review/publication
+  routes live in `business-publication.ts` (+ `.test.ts`), the reviewer detail
+  is a panel inside `/redactie/bedrijven` rather than a separate route, and
+  outbox tests live in `account-lifecycle.test.ts`. Behaviour matches the spec.
+- Deviation from the constitution's "focused tests" gate: the manual checks
+  (keyboard-only completion with a screen reader, real Clerk identities in a
+  deployed environment) are documented as owed before the first production
+  flag, not replaced by the automated evidence above.
 - Follow-up candidates outside this feature: adopting migration files
   instead of schema push; shared-store rate limiting for multi-instance
-  deployments; automated erasure job after Q6/Q8.
+  deployments; automated erasure job after Q6/Q8; stabilising the
+  timing-sensitive homepage zoom regression test.

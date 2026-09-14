@@ -172,6 +172,13 @@ export default function BusinessRevisionPage() {
       const next: Record<string, string> = {};
       for (const issue of apiError.fieldErrors ?? []) next[issue.field] = issue.code;
       setFieldErrors(next);
+      // Move focus to the first invalid control so keyboard and screen-reader
+      // users land on the problem instead of only hearing the toast.
+      const firstField = Object.keys(next)[0];
+      if (firstField) {
+        const controlId = firstField.startsWith('facts.') ? `facts-${firstField.slice(6)}` : firstField.replace('.', '-');
+        window.setTimeout(() => document.getElementById(controlId)?.focus(), 0);
+      }
       toast.error(next['nl.description'] === 'required' ? copy.emptySubmit : copy.invalid);
       return;
     }
@@ -350,13 +357,14 @@ export default function BusinessRevisionPage() {
                           id={id}
                           value={form[lang][key]}
                           aria-invalid={Boolean(error)}
+                          aria-describedby={error ? `${id}-error` : undefined}
                           maxLength={key === 'tagline' ? 160 : key === 'description' ? 2400 : 600}
                           rows={key === 'description' ? 6 : 3}
                           onChange={(event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
                             setForm((current) => ({ ...current, [lang]: { ...current[lang], [key]: event.target.value } }))
                           }
                         />
-                        {error && <p className="text-xs text-destructive">{copy.invalid}</p>}
+                        {error && <p id={`${id}-error`} className="text-xs text-destructive">{copy.invalid}</p>}
                       </div>
                     );
                   })}
@@ -381,9 +389,10 @@ export default function BusinessRevisionPage() {
                         inputMode={key.endsWith('Url') ? 'url' : undefined}
                         value={form.facts[key]}
                         aria-invalid={Boolean(error)}
+                        aria-describedby={error ? `${id}-error` : undefined}
                         onChange={(event) => setForm((current) => ({ ...current, facts: { ...current.facts, [key]: event.target.value } }))}
                       />
-                      {error && <p className="text-xs text-destructive" data-testid={`error-${key}`}>{copy.invalid}</p>}
+                      {error && <p id={`${id}-error`} className="text-xs text-destructive" data-testid={`error-${key}`}>{copy.invalid}</p>}
                     </div>
                   );
                 })}

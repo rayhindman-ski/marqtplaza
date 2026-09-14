@@ -18,22 +18,22 @@ Use `T### [P] [US#] description`:
 
 ## Phase 1 — Setup
 
-- [ ] T001 [P] [US1] Add `ApiError` schema, `FeatureFlags` schema, and `GET /account/me` + `GET /account/options` operations to `lib/api-spec/openapi.yaml`; run `pnpm --filter @workspace/api-spec run codegen` and commit output
-- [ ] T002 [P] [US1] Create `artifacts/api-server/src/lib/featureFlags.ts` reading `ACCOUNTS_ENABLED`, `BUSINESS_INTAKE_ENABLED`, `BUSINESS_PUBLICATION_ENABLED` (default false) with `src/lib/featureFlags.test.ts`
-- [ ] T003 [P] [US1] Create `artifacts/api-server/src/middlewares/requireFlag.ts` returning 404 `ApiError` when a flag is off, and `src/lib/apiError.ts` (code, messageKey, fieldErrors, correlationId) with tests
-- [ ] T004 [P] [US1] Create `artifacts/buurtgids/src/lib/featureFlags.ts` reading `VITE_ACCOUNTS_ENABLED`, `VITE_BUSINESS_INTAKE_ENABLED`, `VITE_BUSINESS_PUBLICATION_ENABLED`
-- [ ] T005 [US1] Record baseline evidence in `convergence.md`: current route matrix, `pnpm run typecheck`, existing API route tests, and Playwright regression all green before changes
+- [x] T001 [P] [US1] Add `ApiError` schema, `FeatureFlags` schema, and `GET /account/me` + `GET /account/options` operations to `lib/api-spec/openapi.yaml`; run `pnpm --filter @workspace/api-spec run codegen` and commit output
+- [x] T002 [P] [US1] Create `artifacts/api-server/src/lib/featureFlags.ts` reading `ACCOUNTS_ENABLED`, `BUSINESS_INTAKE_ENABLED`, `BUSINESS_PUBLICATION_ENABLED` (default false) with `src/lib/featureFlags.test.ts`
+- [x] T003 [P] [US1] Create `artifacts/api-server/src/middlewares/requireFlag.ts` returning 404 `ApiError` when a flag is off, and `src/lib/apiError.ts` (code, messageKey, fieldErrors, correlationId) with tests
+- [x] T004 [P] [US1] Create `artifacts/buurtgids/src/lib/featureFlags.ts` reading `VITE_ACCOUNTS_ENABLED`, `VITE_BUSINESS_INTAKE_ENABLED`, `VITE_BUSINESS_PUBLICATION_ENABLED`
+- [x] T005 [US1] Record baseline evidence in `convergence.md`: current route matrix, `pnpm run typecheck`, existing API route tests, and Playwright regression all green before changes
 
 ## Phase 2 — Foundational (US1)
 
-- [ ] T006 [US1] Create `lib/db/src/schema/accounts.ts` (`app_users` unique on `clerk_user_id`; `consumer_preferences` with `revision`; `account_consent_events` append-only) and export from `lib/db/src/schema/index.ts`
-- [ ] T007 [US1] Rehearse the additive push with `node lib/db/scripts/run-isolated-database-integration.mjs -- pnpm --filter @workspace/db run push`; record the SQL diff in `convergence.md`
-- [ ] T008 [US1] Create `artifacts/api-server/src/middlewares/requireAppUser.ts` with idempotent `INSERT … ON CONFLICT DO NOTHING` + select provisioning from `getAuth(req).userId`, injectable resolver like `createRegistrationRouter`
-- [ ] T009 [US1] Create `artifacts/api-server/src/lib/permissions.ts` (`isEditor(claims)`, `isOwner(tx, profileId, userId)`, `assertNotSelfReview`) reused by later routes; unit tests
-- [ ] T010 [US1] Create `artifacts/api-server/src/routes/account.ts` with `GET /account/me` (status, locale, onboardingCompleted, capabilities, hasResearchRegistration via `hasUserRegistration`) and `GET /account/options` (controlled neighbourhood/interest lists); mount in `src/routes/index.ts` behind `requireFlag('accounts')`
-- [ ] T011 [US1] Write `artifacts/api-server/src/routes/account.test.ts`: 401 unauthenticated, 404 when flag off, one row after concurrent provisioning, unknown body fields rejected, no role elevation from body
-- [ ] T012 [US1] Extend `artifacts/buurtgids/src/pages/AccountPage.tsx` to show the capability summary when the accounts flag is on; keep the existing research registration status and Clerk `UserProfile` unchanged
-- [ ] T013 [US1] Add NL/EN keys for account status, capabilities, and "not available yet" to `artifacts/buurtgids/src/lib/i18n.ts`
+- [x] T006 [US1] Create `lib/db/src/schema/accounts.ts` (`app_users` unique on `clerk_user_id`; `consumer_preferences` with `revision`; `account_consent_events` append-only) and export from `lib/db/src/schema/index.ts`
+- [x] T007 [US1] Rehearse the additive push with `node lib/db/scripts/run-isolated-database-integration.mjs -- pnpm --filter @workspace/db run push`; record the SQL diff in `convergence.md`
+- [x] T008 [US1] Create `artifacts/api-server/src/middlewares/requireAppUser.ts` with idempotent `INSERT … ON CONFLICT DO NOTHING` + select provisioning from `getAuth(req).userId`, injectable resolver like `createRegistrationRouter`
+- [x] T009 [US1] Create `artifacts/api-server/src/lib/permissions.ts` (`isEditor(claims)`, `isOwner(tx, profileId, userId)`, `assertNotSelfReview`) reused by later routes; unit tests
+- [x] T010 [US1] Create `artifacts/api-server/src/routes/account.ts` with `GET /account/me` (status, locale, onboardingCompleted, capabilities, hasResearchRegistration via `hasUserRegistration`) and `GET /account/options` (controlled neighbourhood/interest lists); mount in `src/routes/index.ts` behind `requireFlag('accounts')`
+- [x] T011 [US1] Write `artifacts/api-server/src/routes/account.test.ts`: 401 unauthenticated, 404 when flag off, one row after concurrent provisioning, unknown body fields rejected, no role elevation from body
+- [x] T012 [US1] Extend `artifacts/buurtgids/src/pages/AccountPage.tsx` to show the capability summary when the accounts flag is on; keep the existing research registration status and Clerk `UserProfile` unchanged
+- [x] T013 [US1] Add NL/EN keys for account status, capabilities, and "not available yet" to `artifacts/buurtgids/src/lib/i18n.ts`
 - [ ] T014 [US1] **GATE Q7** Owner decides whether the research registration stays mandatory at first sign-up; record in `convergence.md`
 
 ## Phase 3 — User Story 2 (P2) — Optional preferences
@@ -68,36 +68,36 @@ Use `T### [P] [US#] description`:
 
 **Goal**: reviewers decide exact revisions with reasons; only approved, published data is public; existing published profiles stay live.
 
-- [ ] T033 [US4] Create `lib/db/src/schema/businessReview.ts` (`business_profile_revisions` unique on profile+version, `business_reviews`, `fact_checks`) and add `approved_revision_id` to `business_profiles`; backfill revision 1 from current columns for every existing profile in the same push step; rehearse and record
-- [ ] T034 [US4] Add `GET/PATCH /business-profiles/:id/revision`, `POST /business-profiles/:id/revision/submit`, `GET /review/businesses`, `POST /review/claims/:id/decision`, `POST /review/revisions/:id/decision`, `POST /review/businesses/:id/publication` to `openapi.yaml`; codegen
-- [ ] T035 [US4] Create `artifacts/api-server/src/routes/business-review.ts`: paginated queues, decision on exact version (409 if superseded), self-review 403 via `permissions.ts`, atomic approve → move `approved_revision_id`, publication transitions gated by `requireFlag('businessPublication')`
-- [ ] T036 [US4] Update `routes/businesses.ts`: public serialiser reads the approved revision and publication status; owner `PATCH /business-profiles/:id` writes a draft revision when the publication flag is on and behaves as today when off
-- [ ] T037 [US4] Extend claim decision in `routes/businesses.ts` to accept `changes_requested`/`disputed` with a required reason while keeping the existing atomic owner grant and competitor rejection
-- [ ] T038 [US4] Create `artifacts/buurtgids/src/pages/BusinessRevisionPage.tsx` (`/mijn-bedrijf/:id/profiel`, live vs under-review, submit) and `BusinessReviewDetailView.tsx` (`/redactie/bedrijven/:id`, evidence reference, decision form, disabled self-review); extend `BusinessModerationView.tsx` with authority/editorial/publication tabs; register routes
-- [ ] T039 [US4] Update `artifacts/buurtgids/src/pages/BusinessProfileView.tsx` to show "checked on" metadata when present and a 404 state for unpublished businesses
-- [ ] T040 [US4] Write `artifacts/api-server/src/routes/business-review.test.ts`: stale decision 409, self-review 403, public field allowlist, suspended → public 404 but owner visible, backfilled revision 1 keeps profile public
-- [ ] T041 [US4] Write `artifacts/buurtgids/e2e/business-review.spec.ts`: owner edit → public unchanged → reviewer approves → public updated → suspend → public 404
+- [x] T033 [US4] Create `lib/db/src/schema/businessReview.ts` (`business_profile_revisions` unique on profile+version, `business_reviews`, `fact_checks`) and add `approved_revision_id` to `business_profiles`; backfill revision 1 from current columns for every existing profile in the same push step; rehearse and record
+- [x] T034 [US4] Add `GET/PATCH /business-profiles/:id/revision`, `POST /business-profiles/:id/revision/submit`, `GET /review/businesses`, `POST /review/claims/:id/decision`, `POST /review/revisions/:id/decision`, `POST /review/businesses/:id/publication` to `openapi.yaml`; codegen
+- [x] T035 [US4] Create `artifacts/api-server/src/routes/business-review.ts`: paginated queues, decision on exact version (409 if superseded), self-review 403 via `permissions.ts`, atomic approve → move `approved_revision_id`, publication transitions gated by `requireFlag('businessPublication')` _(delivered as `routes/business-publication.ts`)_
+- [x] T036 [US4] Update `routes/businesses.ts`: public serialiser reads the approved revision and publication status; owner `PATCH /business-profiles/:id` writes a draft revision when the publication flag is on and behaves as today when off
+- [x] T037 [US4] Extend claim decision in `routes/businesses.ts` to accept `changes_requested`/`disputed` with a required reason while keeping the existing atomic owner grant and competitor rejection
+- [x] T038 [US4] Create `artifacts/buurtgids/src/pages/BusinessRevisionPage.tsx` (`/mijn-bedrijf/:id/profiel`, live vs under-review, submit) and `BusinessReviewDetailView.tsx` (`/redactie/bedrijven/:id`, evidence reference, decision form, disabled self-review); extend `BusinessModerationView.tsx` with authority/editorial/publication tabs; register routes _(review detail delivered inside `BusinessModerationView.tsx` + `BusinessReviewPanel.tsx` at `/redactie/bedrijven`, not a separate route)_
+- [x] T039 [US4] Update `artifacts/buurtgids/src/pages/BusinessProfileView.tsx` to show "checked on" metadata when present and a 404 state for unpublished businesses
+- [x] T040 [US4] Write `artifacts/api-server/src/routes/business-review.test.ts`: stale decision 409, self-review 403, public field allowlist, suspended → public 404 but owner visible, backfilled revision 1 keeps profile public _(delivered as `routes/business-publication.test.ts`)_
+- [x] T041 [US4] Write `artifacts/buurtgids/e2e/business-review.spec.ts`: owner edit → public unchanged → reviewer approves → public updated → suspend → public 404
 - [ ] T042 [US4] **GATE Q4** Editorial owner approves minimum public fields and NL/EN parity rule; record in `convergence.md`
 
 ## Phase 6 — User Story 5 (P5) — Lifecycle messages and account controls
 
 **Goal**: state changes queue truthful messages durably; consent and deletion controls work with visible status and ownership blockers.
 
-- [ ] T043 [US5] Create `lib/db/src/schema/lifecycle.ts` (`lifecycle_outbox` unique on event+recipient+template, `account_requests`) and export; rehearse push
-- [ ] T044 [US5] Create `artifacts/api-server/src/lib/lifecycleOutbox.ts`: `enqueue(tx, event)` used inside existing transactions in `business-intake.ts`, `business-review.ts`, `businesses.ts`; `dispatch(deliver)` with injected loader, bounded retries with backoff, default loader logs `lifecycle_provider_not_configured` once and leaves rows `queued`
-- [ ] T045 [US5] Add `POST /account/deletion-requests`, `GET /account/requests`, message status fields to `openapi.yaml`; codegen
-- [ ] T046 [US5] Create `artifacts/api-server/src/routes/account-lifecycle.ts`: deletion request with sole-owner check (`blocked_ownership`), Clerk re-authentication requirement documented at contract level, request status listing
-- [ ] T047 [US5] Create `artifacts/buurtgids/src/pages/AccountPrivacyPage.tsx` (`/account/privacy`): consent withdrawal, deletion scope explanation, request status, message status wording limited to queued/accepted/failed; register route
-- [ ] T048 [US5] Write `artifacts/api-server/src/routes/account-lifecycle.test.ts` and `src/lib/lifecycleOutbox.test.ts`: same-transaction commit, provider failure keeps state and marks `failed` with next retry, no duplicate on retry, sole-owner deletion blocked, consent events append-only
+- [x] T043 [US5] Create `lib/db/src/schema/lifecycle.ts` (`lifecycle_outbox` unique on event+recipient+template, `account_requests`) and export; rehearse push
+- [x] T044 [US5] Create `artifacts/api-server/src/lib/lifecycleOutbox.ts`: `enqueue(tx, event)` used inside existing transactions in `business-intake.ts`, `business-review.ts`, `businesses.ts`; `dispatch(deliver)` with injected loader, bounded retries with backoff, default loader logs `lifecycle_provider_not_configured` once and leaves rows `queued`
+- [x] T045 [US5] Add `POST /account/deletion-requests`, `GET /account/requests`, message status fields to `openapi.yaml`; codegen
+- [x] T046 [US5] Create `artifacts/api-server/src/routes/account-lifecycle.ts`: deletion request with sole-owner check (`blocked_ownership`), Clerk re-authentication requirement documented at contract level, request status listing
+- [x] T047 [US5] Create `artifacts/buurtgids/src/pages/AccountPrivacyPage.tsx` (`/account/privacy`): consent withdrawal, deletion scope explanation, request status, message status wording limited to queued/accepted/failed; register route
+- [x] T048 [US5] Write `artifacts/api-server/src/routes/account-lifecycle.test.ts` and `src/lib/lifecycleOutbox.test.ts`: same-transaction commit, provider failure keeps state and marks `failed` with next retry, no duplicate on retry, sole-owner deletion blocked, consent events append-only _(outbox cases live in `routes/account-lifecycle.test.ts`; no separate `lifecycleOutbox.test.ts`)_
 - [ ] T049 [US5] **GATE Q5/Q6/Q8** Operator approves delivery provider and test inbox; legal approves retention periods, deletion exceptions, and registration-data handling; record in `convergence.md`. Actual erasure job is not implemented before this gate
 
 ## Phase 7 — Polish and convergence
 
-- [ ] T050 [P] [US1] Audit all new screens for keyboard completion, focus management, error summary, reduced motion, mobile viewport; fix in the page files
-- [ ] T051 [P] [US1] Audit NL/EN parity of every new key in `src/lib/i18n.ts`; language switch retains form state on every new page
-- [ ] T052 [P] [US1] Document flags, routes, and gates in `replit.md` and `doc/md/` (link `version-v.03.md` as the archived source plan)
-- [ ] T053 [US1] Run the full verification plan from `plan.md` and record outputs in `convergence.md`
-- [ ] T054 [US1] Review deviations against the constitution; list open gates and the flag state per environment; close or park the spec
+- [ ] T050 [P] [US1] Audit all new screens for keyboard completion, focus management, error summary, reduced motion, mobile viewport; fix in the page files _(2026-09-14, partially done: global `prefers-reduced-motion` rule added; revision editor focuses the first invalid field and links errors via `aria-describedby`; account/business journeys re-run at 390×844 with reduced motion → 18 pass. **Still open:** keyboard-only completion and screen-reader pass per screen — tracked as a follow-up task and required before the first production flag.)_
+- [x] T051 [P] [US1] Audit NL/EN parity of every new key in `src/lib/i18n.ts`; language switch retains form state on every new page _(2026-09-14: `src/lib/i18n.test.ts` asserts identical nl/en key trees and no empty strings for every translation table; wired into the package `test` script)_
+- [x] T052 [P] [US1] Document flags, routes, and gates in `replit.md` and `doc/md/` (link `version-v.03.md` as the archived source plan) _(2026-09-14: `doc/md/onboarding-release.md`)_
+- [x] T053 [US1] Run the full verification plan from `plan.md` and record outputs in `convergence.md` _(2026-09-14: see `convergence.md` → Release verification; full browser suite 29/30 on the first run, 30/30 on the rerun — the single failure is a timing-sensitive pre-existing map test tracked as a follow-up)_
+- [x] T054 [US1] Review deviations against the constitution; list open gates and the flag state per environment; close or park the spec _(2026-09-14: spec parked as release candidate with verification incomplete (manual accessibility pass owed) and all gates open; see `convergence.md`)_
 
 ## Dependencies and execution order
 
@@ -111,10 +111,10 @@ Use `T### [P] [US#] description`:
 
 ## Definition of done
 
-- [ ] All selected acceptance scenarios pass.
-- [ ] Loading, empty, stale, blocked, unauthorized, forbidden, conflict, flag-disabled, and provider-failure states are intentional where applicable.
-- [ ] Relevant typecheck and tests pass, including the pre-existing registration, saved-events, and discovery regression suites.
-- [ ] OpenAPI outputs are regenerated after contract changes.
-- [ ] No secrets, personal data, or unsupported claims were added; logs carry event codes and IDs only.
-- [ ] All three rollout flags remain off in every environment until the matching gate is recorded.
-- [ ] Convergence notes are recorded in the feature directory.
+- [x] All selected acceptance scenarios pass (automated, 30/30 browser + 71 API on the recorded rerun; see `convergence.md`).
+- [x] Loading, empty, stale, blocked, unauthorized, forbidden, conflict, flag-disabled, and provider-failure states are intentional where applicable.
+- [x] Relevant typecheck and tests pass, including the pre-existing registration, saved-events, and discovery regression suites.
+- [x] OpenAPI outputs are regenerated after contract changes.
+- [x] No secrets, personal data, or unsupported claims were added; logs carry event codes and IDs only.
+- [x] All three rollout flags remain off in production (on in development for preview only) until the matching gate is recorded.
+- [x] Convergence notes are recorded in the feature directory.

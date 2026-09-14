@@ -31,3 +31,4 @@
 - [Business intake integrity](business-intake-routing.md) — per-route gating, version-bound reviewer decisions, stored-first listing resolution, race-safe idempotency.
 - [Business publication review](business-publication-review.md) — four independent dimensions, snapshot-only public output (no column fallback), interested-party exclusion incl. active claimants.
 - [Lifecycle outbox](lifecycle-outbox.md) — enqueue in the state-change transaction; attempts stay monotonic; terminal account states gate every account-owned route.
+- [Onboarding release verification](release-verification.md) — name the disposable DB and flag state per run; record runs as they happened; never tick manual checks from automated proxies.

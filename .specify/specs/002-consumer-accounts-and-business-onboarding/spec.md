@@ -2,7 +2,7 @@
 
 **Feature Branch**: `002-consumer-accounts-and-business-onboarding`  
 **Created**: 2026-09-14  
-**Status**: Ready for plan  
+**Status**: Implemented behind flags; release candidate with verification incomplete as of 2026-09-14 (manual accessibility pass owed, gates Q1–Q8 open — see `convergence.md`)  
 **Input**: The archived MarqtPlaza implementation plan (`doc/md/version-v.03.md`,
 dated 11 September 2026, status "proposed; documentation only") asked for
 complete consumer account and business onboarding journeys with API
