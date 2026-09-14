@@ -53,7 +53,7 @@ export default function BusinessModerationView() {
 
   // Dialog State
   const [isDecisionModalOpen, setIsDecisionModalOpen] = useState(false);
-  const [decisionItem, setDecisionItem] = useState<{ type: 'claim' | 'deal'; id: number; action: ModerationDecisionDecision } | null>(null);
+  const [decisionItem, setDecisionItem] = useState<{ type: 'claim' | 'deal'; id: number; action: ModerationDecisionDecision; version?: number } | null>(null);
   const [reviewNote, setReviewNote] = useState('');
 
   useEffect(() => {
@@ -87,8 +87,8 @@ export default function BusinessModerationView() {
     );
   }
 
-  const openDecisionModal = (type: 'claim' | 'deal', id: number, action: ModerationDecisionDecision) => {
-    setDecisionItem({ type, id, action });
+  const openDecisionModal = (type: 'claim' | 'deal', id: number, action: ModerationDecisionDecision, version?: number) => {
+    setDecisionItem({ type, id, action, version });
     setReviewNote('');
     setIsDecisionModalOpen(true);
   };
@@ -104,10 +104,19 @@ export default function BusinessModerationView() {
     if (decisionItem.type === 'claim') {
       decideClaim.mutate({
         id: decisionItem.id,
-        data: payload
+        // The decision is bound to the claim version shown in this queue; a stale tab gets 409.
+        data: { ...payload, expectedVersion: decisionItem.version }
       }, {
         onSuccess: () => {
-          toast.success(`Claim ${decisionItem.action === 'approve' ? 'goedgekeurd' : 'afgewezen'}`);
+          toast.success(`Claim ${decisionItem.action === 'approve' ? 'goedgekeurd' : decisionItem.action === 'request_changes' ? 'teruggestuurd voor wijzigingen' : 'afgewezen'}`);
+          setIsDecisionModalOpen(false);
+          queryClient.invalidateQueries({ queryKey: getGetBusinessClaimModerationQueryKey({ status: 'pending' }) });
+        },
+        onError: (error: unknown) => {
+          const status = (error as { response?: { status?: number }; status?: number })?.response?.status ?? (error as { status?: number })?.status;
+          toast.error(status === 409
+            ? 'Deze claim is intussen gewijzigd. De wachtrij is ververst; beoordeel de actuele versie.'
+            : 'Beslissing kon niet worden opgeslagen.');
           setIsDecisionModalOpen(false);
           queryClient.invalidateQueries({ queryKey: getGetBusinessClaimModerationQueryKey({ status: 'pending' }) });
         }
@@ -206,6 +215,19 @@ export default function BusinessModerationView() {
                         <div className="space-y-4">
                           <div>
                             <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2">Bewijs</h4>
+                            {claim.authorityDeclaration && (
+                              <p className="text-sm text-foreground p-3 mb-2 bg-muted/20 rounded-lg border border-border/40 whitespace-pre-wrap">
+                                {claim.authorityDeclaration}
+                              </p>
+                            )}
+                            {claim.evidenceReference && (
+                              <p className="text-sm text-foreground p-3 mb-2 bg-muted/20 rounded-lg border border-border/40 break-words">
+                                {claim.evidenceReference}
+                              </p>
+                            )}
+                            {claim.status === 'disputed' && (
+                              <p className="text-xs font-bold text-amber-700 mb-2 flex items-center gap-1"><AlertCircle className="w-3.5 h-3.5" /> Betwist: dit bedrijf heeft al een geverifieerde eigenaar. Goedkeuren is niet mogelijk.</p>
+                            )}
                             {claim.evidenceUrl ? (
                               <a href={claim.evidenceUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 p-3 bg-primary/5 text-primary hover:bg-primary/10 transition-colors rounded-lg border border-primary/20 font-medium text-sm">
                                 <ExternalLink className="w-4 h-4 shrink-0" />
@@ -228,10 +250,13 @@ export default function BusinessModerationView() {
                       </div>
                     </CardContent>
                     <CardFooter className="p-4 bg-muted/10 border-t border-border/40 flex justify-end gap-3">
-                      <Button variant="outline" className="text-destructive hover:text-destructive hover:bg-destructive/10 border-destructive/20 font-bold" onClick={() => openDecisionModal('claim', claim.id, 'reject')}>
+                      <Button variant="outline" className="text-destructive hover:text-destructive hover:bg-destructive/10 border-destructive/20 font-bold" onClick={() => openDecisionModal('claim', claim.id, 'reject', claim.version)}>
                         <X className="w-4 h-4 mr-1.5" /> Afwijzen
                       </Button>
-                      <Button className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold" onClick={() => openDecisionModal('claim', claim.id, 'approve')}>
+                      <Button variant="outline" className="font-bold" onClick={() => openDecisionModal('claim', claim.id, 'request_changes', claim.version)}>
+                        Wijzigingen vragen
+                      </Button>
+                      <Button className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold" onClick={() => openDecisionModal('claim', claim.id, 'approve', claim.version)}>
                         <Check className="w-4 h-4 mr-1.5" /> Goedkeuren
                       </Button>
                     </CardFooter>
@@ -321,15 +346,19 @@ export default function BusinessModerationView() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              {decisionItem?.action === 'approve' ? 'Goedkeuren' : 'Afwijzen'}
+              {decisionItem?.action === 'approve' ? 'Goedkeuren' : decisionItem?.action === 'request_changes' ? 'Wijzigingen vragen' : 'Afwijzen'}
             </DialogTitle>
             <DialogDescription>
-              Weet je zeker dat je deze {decisionItem?.type === 'claim' ? 'claim' : 'deal'} wilt {decisionItem?.action === 'approve' ? 'goedkeuren' : 'afwijzen'}?
+              {decisionItem?.action === 'request_changes'
+                ? 'De aanvrager ziet jouw reden en kan de aanvraag aanvullen en opnieuw indienen.'
+                : `Weet je zeker dat je deze ${decisionItem?.type === 'claim' ? 'claim' : 'deal'} wilt ${decisionItem?.action === 'approve' ? 'goedkeuren' : 'afwijzen'}?`}
             </DialogDescription>
           </DialogHeader>
           
           <div className="py-4 space-y-3">
-            <label className="text-sm font-bold text-foreground">Reden / Opmerking (optioneel)</label>
+            <label className="text-sm font-bold text-foreground">
+              {decisionItem?.action === 'request_changes' ? 'Reden (verplicht)' : 'Reden / Opmerking (optioneel)'}
+            </label>
             <Textarea 
               value={reviewNote}
               onChange={(e) => setReviewNote(e.target.value)}
@@ -349,7 +378,7 @@ export default function BusinessModerationView() {
               variant={decisionItem?.action === 'approve' ? 'default' : 'destructive'} 
               className={decisionItem?.action === 'approve' ? 'bg-emerald-600 hover:bg-emerald-700 text-white font-bold' : 'font-bold'}
               onClick={submitDecision}
-              disabled={decideClaim.isPending || decideDeal.isPending}
+              disabled={decideClaim.isPending || decideDeal.isPending || (decisionItem?.action === 'request_changes' && reviewNote.trim().length === 0)}
             >
               {decideClaim.isPending || decideDeal.isPending ? 'Bezig...' : 'Bevestigen'}
             </Button>

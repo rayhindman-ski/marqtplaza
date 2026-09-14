@@ -27,7 +27,11 @@ import type {
   BusinessClaim,
   BusinessClaimInput,
   BusinessClaimList,
+  BusinessClaimTransitionInput,
+  BusinessClaimUpdateInput,
+  BusinessIntakeDraftInput,
   BusinessListResult,
+  BusinessLookupResponse,
   BusinessProfile,
   BusinessProfileUpdate,
   CapturePersistRequest,
@@ -60,6 +64,7 @@ import type {
   GooglePlacesUsage,
   HealthStatus,
   ListingsResponse,
+  LookupBusinessesParams,
   ModerationDecision,
   NewsArticle,
   NewsFeed,
@@ -2934,6 +2939,485 @@ export const useDecideBusinessClaim = <TError = ErrorType<void>,
         TContext
       > => {
       return useMutation(getDecideBusinessClaimMutationOptions(options));
+    }
+
+export const getLookupBusinessesUrl = (params: LookupBusinessesParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/businesses/lookup?${stringifiedParams}` : `/api/businesses/lookup`
+}
+
+/**
+ * Bounded lookup over current public business listings and existing business profiles.
+ * Every match is allowlisted to public facts only (name, neighbourhood, category, public
+ * source URL, whether the listing is already claimed). No contact details, claimant data,
+ * pending-claim details, or private drafts are ever returned. Requires a signed-in account,
+ * is rate limited per account (429 RATE_LIMITED), and returns 503 when the listing source
+ * cannot be read rather than an empty list. Returns 404 while the business intake gate is off.
+ * @summary Find public business matches to claim or to avoid duplicate drafts
+ */
+export const lookupBusinesses = async (params: LookupBusinessesParams, options?: Parameters<typeof customFetch>[1]): Promise<BusinessLookupResponse> => {
+
+  return customFetch<BusinessLookupResponse>(getLookupBusinessesUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getLookupBusinessesQueryKey = (params?: LookupBusinessesParams,) => {
+    return [
+    `/api/businesses/lookup`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getLookupBusinessesQueryOptions = <TData = Awaited<ReturnType<typeof lookupBusinesses>>, TError = ErrorType<ApiError | FeatureDisabledResponse>>(params: LookupBusinessesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof lookupBusinesses>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getLookupBusinessesQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof lookupBusinesses>>> = ({ signal }) => lookupBusinesses(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof lookupBusinesses>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type LookupBusinessesQueryResult = NonNullable<Awaited<ReturnType<typeof lookupBusinesses>>>
+export type LookupBusinessesQueryError = ErrorType<ApiError | FeatureDisabledResponse>
+
+
+/**
+ * @summary Find public business matches to claim or to avoid duplicate drafts
+ */
+
+export function useLookupBusinesses<TData = Awaited<ReturnType<typeof lookupBusinesses>>, TError = ErrorType<ApiError | FeatureDisabledResponse>>(
+ params: LookupBusinessesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof lookupBusinesses>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getLookupBusinessesQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateBusinessIntakeDraftUrl = () => {
+
+
+
+
+  return `/api/businesses`
+}
+
+/**
+ * Creates a private `draft` claim for the signed-in, verified representative. For
+ * `existing_listing` the listing is re-resolved server-side from the approved provider by
+ * city, source, and listing ID; browser-supplied names and addresses never redefine the
+ * business. For `new_business` a private draft profile (`publicationStatus = draft`) and the
+ * owner-candidate claim are created in one transaction; the draft is invisible on public
+ * routes and to other users. Drafts hold no claim slot until they are submitted.
+ * Send an `Idempotency-Key` header to make retries safe: a repeated key returns the original
+ * claim (200) instead of a duplicate; the same key with a different payload returns 409
+ * IDEMPOTENCY_CONFLICT. Creating a draft never grants ownership.
+ * @summary Create a private claim draft for an existing listing or a new business
+ */
+export const createBusinessIntakeDraft = async (businessIntakeDraftInput: BusinessIntakeDraftInput, options?: Parameters<typeof customFetch>[1]): Promise<BusinessClaim> => {
+
+  return customFetch<BusinessClaim>(getCreateBusinessIntakeDraftUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(businessIntakeDraftInput)
+  }
+);}
+
+
+
+
+
+export const getCreateBusinessIntakeDraftMutationOptions = <TError = ErrorType<ApiError | FeatureDisabledResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createBusinessIntakeDraft>>, TError,{data: BodyType<BusinessIntakeDraftInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createBusinessIntakeDraft>>, TError,{data: BodyType<BusinessIntakeDraftInput>}, TContext> => {
+
+const mutationKey = ['createBusinessIntakeDraft'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createBusinessIntakeDraft>>, {data: BodyType<BusinessIntakeDraftInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createBusinessIntakeDraft(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateBusinessIntakeDraftMutationResult = NonNullable<Awaited<ReturnType<typeof createBusinessIntakeDraft>>>
+    export type CreateBusinessIntakeDraftMutationBody = BodyType<BusinessIntakeDraftInput>
+    export type CreateBusinessIntakeDraftMutationError = ErrorType<ApiError | FeatureDisabledResponse>
+
+    /**
+ * @summary Create a private claim draft for an existing listing or a new business
+ */
+export const useCreateBusinessIntakeDraft = <TError = ErrorType<ApiError | FeatureDisabledResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createBusinessIntakeDraft>>, TError,{data: BodyType<BusinessIntakeDraftInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createBusinessIntakeDraft>>,
+        TError,
+        {data: BodyType<BusinessIntakeDraftInput>},
+        TContext
+      > => {
+      return useMutation(getCreateBusinessIntakeDraftMutationOptions(options));
+    }
+
+export const getGetBusinessClaimUrl = (id: number,) => {
+
+
+
+
+  return `/api/business-claims/${id}`
+}
+
+/**
+ * Only the claim's creator can read it; any other claim answers 404 without disclosing whether it exists. Returns 404 while the business intake gate is off.
+ * @summary Get one of the signed-in user's claims with its current status and next action
+ */
+export const getBusinessClaim = async (id: number, options?: Parameters<typeof customFetch>[1]): Promise<BusinessClaim> => {
+
+  return customFetch<BusinessClaim>(getGetBusinessClaimUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetBusinessClaimQueryKey = (id: number,) => {
+    return [
+    `/api/business-claims/${id}`
+    ] as const;
+    }
+
+
+export const getGetBusinessClaimQueryOptions = <TData = Awaited<ReturnType<typeof getBusinessClaim>>, TError = ErrorType<ApiError>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getBusinessClaim>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetBusinessClaimQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getBusinessClaim>>> = ({ signal }) => getBusinessClaim(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getBusinessClaim>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetBusinessClaimQueryResult = NonNullable<Awaited<ReturnType<typeof getBusinessClaim>>>
+export type GetBusinessClaimQueryError = ErrorType<ApiError>
+
+
+/**
+ * @summary Get one of the signed-in user's claims with its current status and next action
+ */
+
+export function useGetBusinessClaim<TData = Awaited<ReturnType<typeof getBusinessClaim>>, TError = ErrorType<ApiError>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getBusinessClaim>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetBusinessClaimQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getUpdateBusinessClaimUrl = (id: number,) => {
+
+
+
+
+  return `/api/business-claims/${id}`
+}
+
+/**
+ * Updates contact, authority, and evidence fields (and the business facts of a new-business
+ * draft) while the claim is `draft` or `changes_requested`. `expectedVersion` must equal the
+ * current `version`; a mismatch returns 409 VERSION_CONFLICT with the current
+ * `expectedVersion`. Listing identity, status, claimant, and review fields cannot be set here
+ * (400 UNKNOWN_FIELD).
+ * @summary Update a draft or changes-requested claim with optimistic concurrency
+ */
+export const updateBusinessClaim = async (id: number,
+    businessClaimUpdateInput: BusinessClaimUpdateInput, options?: Parameters<typeof customFetch>[1]): Promise<BusinessClaim> => {
+
+  return customFetch<BusinessClaim>(getUpdateBusinessClaimUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(businessClaimUpdateInput)
+  }
+);}
+
+
+
+
+
+export const getUpdateBusinessClaimMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateBusinessClaim>>, TError,{id: number;data: BodyType<BusinessClaimUpdateInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateBusinessClaim>>, TError,{id: number;data: BodyType<BusinessClaimUpdateInput>}, TContext> => {
+
+const mutationKey = ['updateBusinessClaim'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateBusinessClaim>>, {id: number;data: BodyType<BusinessClaimUpdateInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateBusinessClaim(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateBusinessClaimMutationResult = NonNullable<Awaited<ReturnType<typeof updateBusinessClaim>>>
+    export type UpdateBusinessClaimMutationBody = BodyType<BusinessClaimUpdateInput>
+    export type UpdateBusinessClaimMutationError = ErrorType<ApiError>
+
+    /**
+ * @summary Update a draft or changes-requested claim with optimistic concurrency
+ */
+export const useUpdateBusinessClaim = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateBusinessClaim>>, TError,{id: number;data: BodyType<BusinessClaimUpdateInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateBusinessClaim>>,
+        TError,
+        {id: number;data: BodyType<BusinessClaimUpdateInput>},
+        TContext
+      > => {
+      return useMutation(getUpdateBusinessClaimMutationOptions(options));
+    }
+
+export const getSubmitBusinessClaimUrl = (id: number,) => {
+
+
+
+
+  return `/api/business-claims/${id}/submit`
+}
+
+/**
+ * Moves a `draft` or `changes_requested` claim to `submitted` and takes the single open-claim
+ * slot for the business. Duplicates are re-checked transactionally at this moment: another
+ * open claim for the same business returns 409. When the business already has a verified
+ * owner the claim is recorded as `disputed` for manual review instead of granting anything.
+ * `expectedVersion` must match. Submission never grants ownership; approval is a later,
+ * explicit reviewer action.
+ * @summary Submit a draft (or resubmit a changes-requested claim) for manual review
+ */
+export const submitBusinessClaim = async (id: number,
+    businessClaimTransitionInput: BusinessClaimTransitionInput, options?: Parameters<typeof customFetch>[1]): Promise<BusinessClaim> => {
+
+  return customFetch<BusinessClaim>(getSubmitBusinessClaimUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(businessClaimTransitionInput)
+  }
+);}
+
+
+
+
+
+export const getSubmitBusinessClaimMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitBusinessClaim>>, TError,{id: number;data: BodyType<BusinessClaimTransitionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof submitBusinessClaim>>, TError,{id: number;data: BodyType<BusinessClaimTransitionInput>}, TContext> => {
+
+const mutationKey = ['submitBusinessClaim'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof submitBusinessClaim>>, {id: number;data: BodyType<BusinessClaimTransitionInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  submitBusinessClaim(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SubmitBusinessClaimMutationResult = NonNullable<Awaited<ReturnType<typeof submitBusinessClaim>>>
+    export type SubmitBusinessClaimMutationBody = BodyType<BusinessClaimTransitionInput>
+    export type SubmitBusinessClaimMutationError = ErrorType<ApiError>
+
+    /**
+ * @summary Submit a draft (or resubmit a changes-requested claim) for manual review
+ */
+export const useSubmitBusinessClaim = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitBusinessClaim>>, TError,{id: number;data: BodyType<BusinessClaimTransitionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof submitBusinessClaim>>,
+        TError,
+        {id: number;data: BodyType<BusinessClaimTransitionInput>},
+        TContext
+      > => {
+      return useMutation(getSubmitBusinessClaimMutationOptions(options));
+    }
+
+export const getWithdrawBusinessClaimUrl = (id: number,) => {
+
+
+
+
+  return `/api/business-claims/${id}/withdraw`
+}
+
+/**
+ * Moves a `draft`, `pending`, `submitted`, `changes_requested`, or `disputed` claim to
+ * `withdrawn`, keeps the audit trail, and frees the business for other claims. A withdrawn
+ * new-business draft profile is archived. `expectedVersion` must match. Approved or
+ * rejected claims cannot be withdrawn (409).
+ * @summary Withdraw a draft or open claim
+ */
+export const withdrawBusinessClaim = async (id: number,
+    businessClaimTransitionInput: BusinessClaimTransitionInput, options?: Parameters<typeof customFetch>[1]): Promise<BusinessClaim> => {
+
+  return customFetch<BusinessClaim>(getWithdrawBusinessClaimUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(businessClaimTransitionInput)
+  }
+);}
+
+
+
+
+
+export const getWithdrawBusinessClaimMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof withdrawBusinessClaim>>, TError,{id: number;data: BodyType<BusinessClaimTransitionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof withdrawBusinessClaim>>, TError,{id: number;data: BodyType<BusinessClaimTransitionInput>}, TContext> => {
+
+const mutationKey = ['withdrawBusinessClaim'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof withdrawBusinessClaim>>, {id: number;data: BodyType<BusinessClaimTransitionInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  withdrawBusinessClaim(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type WithdrawBusinessClaimMutationResult = NonNullable<Awaited<ReturnType<typeof withdrawBusinessClaim>>>
+    export type WithdrawBusinessClaimMutationBody = BodyType<BusinessClaimTransitionInput>
+    export type WithdrawBusinessClaimMutationError = ErrorType<ApiError>
+
+    /**
+ * @summary Withdraw a draft or open claim
+ */
+export const useWithdrawBusinessClaim = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof withdrawBusinessClaim>>, TError,{id: number;data: BodyType<BusinessClaimTransitionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof withdrawBusinessClaim>>,
+        TError,
+        {id: number;data: BodyType<BusinessClaimTransitionInput>},
+        TContext
+      > => {
+      return useMutation(getWithdrawBusinessClaimMutationOptions(options));
     }
 
 export const getGetMyBusinessProfilesUrl = () => {

@@ -7,6 +7,7 @@
  */
 import type { ApiErrorCode } from './apiErrorCode';
 import type { ApiFieldError } from './apiFieldError';
+import type { BusinessLookupMatch } from './businessLookupMatch';
 
 /**
  * Stable, safe error shape for account and lifecycle operations. `code` is machine-readable,
@@ -22,4 +23,6 @@ export interface ApiError {
   correlationId: string;
   /** Present on VERSION_CONFLICT responses; the current server version the client must reload before retrying. */
   expectedVersion?: number;
+  /** Present on DUPLICATE_CANDIDATES responses; public matches that may already represent the submitted new business. */
+  duplicateCandidates?: BusinessLookupMatch[];
 }

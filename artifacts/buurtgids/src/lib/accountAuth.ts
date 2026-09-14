@@ -21,10 +21,16 @@ declare global {
 const TEST_AUTH_EVENT = 'buurtplaza:account-test-auth';
 export const ACCOUNT_TEST_AUTH_PARAM = 'e2eAccountAuth';
 
+// Once a development document opts in, client-side navigation must keep the
+// test session even though the opt-in query parameter is not carried along.
+let testAuthOptedIn = false;
+
 export function isAccountTestAuthEnabled(): boolean {
-  return import.meta.env.DEV
-    && typeof window !== 'undefined'
-    && new URLSearchParams(window.location.search).get(ACCOUNT_TEST_AUTH_PARAM) === '1';
+  if (!import.meta.env.DEV || typeof window === 'undefined') return false;
+  if (new URLSearchParams(window.location.search).get(ACCOUNT_TEST_AUTH_PARAM) === '1') {
+    testAuthOptedIn = true;
+  }
+  return testAuthOptedIn;
 }
 
 export type AccountAuth = {

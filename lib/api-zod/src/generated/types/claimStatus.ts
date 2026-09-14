@@ -17,6 +17,7 @@ export type ClaimStatus = typeof ClaimStatus[keyof typeof ClaimStatus];
 
 
 export const ClaimStatus = {
+  draft: 'draft',
   pending: 'pending',
   submitted: 'submitted',
   changes_requested: 'changes_requested',

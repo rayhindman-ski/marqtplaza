@@ -21,6 +21,8 @@ const EXACT_PATHS = new Set([
   '/nieuws',
   '/deals',
   '/bedrijf-aanmelden',
+  '/bedrijf-zoeken',
+  '/bedrijf-nieuw',
   '/bedrijf-claim',
   '/mijn-bedrijf',
 ]);

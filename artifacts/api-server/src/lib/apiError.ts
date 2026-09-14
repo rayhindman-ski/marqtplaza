@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { Request, Response } from "express";
-import type { ApiError, ApiErrorCode, ApiFieldError } from "@workspace/api-zod";
+import type { ApiError, ApiErrorCode, ApiFieldError, BusinessLookupMatch } from "@workspace/api-zod";
 
 /**
  * Stable, safe error envelope for account and lifecycle operations.
@@ -24,6 +24,7 @@ export const API_ERROR_STATUS: Readonly<Record<ApiErrorCode, number>> = {
   UNKNOWN_FIELD: 400,
   VERSION_CONFLICT: 409,
   IDEMPOTENCY_CONFLICT: 409,
+  DUPLICATE_CANDIDATES: 409,
   RATE_LIMITED: 429,
   PROVISIONING_UNAVAILABLE: 503,
   DEPENDENCY_UNAVAILABLE: 503,
@@ -42,6 +43,7 @@ export const API_ERROR_MESSAGE_KEY: Readonly<Record<ApiErrorCode, string>> = {
   UNKNOWN_FIELD: "errors.unknown_field",
   VERSION_CONFLICT: "errors.version_conflict",
   IDEMPOTENCY_CONFLICT: "errors.idempotency_conflict",
+  DUPLICATE_CANDIDATES: "errors.duplicate_candidates",
   RATE_LIMITED: "errors.rate_limited",
   PROVISIONING_UNAVAILABLE: "errors.provisioning_unavailable",
   DEPENDENCY_UNAVAILABLE: "errors.dependency_unavailable",
@@ -54,10 +56,16 @@ export function correlationIdFor(req: Pick<Request, "id"> | undefined): string {
   return randomUUID();
 }
 
+export type ApiErrorExtra = {
+  fieldErrors?: ApiFieldError[];
+  expectedVersion?: number;
+  duplicateCandidates?: BusinessLookupMatch[];
+};
+
 export function buildApiError(
   code: ApiErrorCode,
   correlationId: string,
-  extra: { fieldErrors?: ApiFieldError[]; expectedVersion?: number } = {},
+  extra: ApiErrorExtra = {},
 ): ApiError {
   return {
     code,
@@ -65,6 +73,7 @@ export function buildApiError(
     correlationId,
     ...(extra.fieldErrors?.length ? { fieldErrors: extra.fieldErrors } : {}),
     ...(extra.expectedVersion !== undefined ? { expectedVersion: extra.expectedVersion } : {}),
+    ...(extra.duplicateCandidates ? { duplicateCandidates: extra.duplicateCandidates } : {}),
   };
 }
 
@@ -72,7 +81,7 @@ export function sendApiError(
   req: Pick<Request, "id">,
   res: Response,
   code: ApiErrorCode,
-  extra: { fieldErrors?: ApiFieldError[]; expectedVersion?: number } = {},
+  extra: ApiErrorExtra = {},
 ): void {
   res.status(API_ERROR_STATUS[code]).json(buildApiError(code, correlationIdFor(req), extra));
 }

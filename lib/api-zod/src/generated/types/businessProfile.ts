@@ -43,6 +43,11 @@ export interface BusinessProfile {
   claimedAt?: string | null;
   publicationStatus?: PublicationStatus;
   /**
+     * Self-reported category of a new-business draft; null for listing-derived profiles.
+     * @nullable
+     */
+  category?: string | null;
+  /**
      * Version of the approved revision when publication review is enabled; null when the profile is served from its columns.
      * @nullable
      */

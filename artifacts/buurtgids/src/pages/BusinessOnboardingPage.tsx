@@ -4,6 +4,7 @@ import { Link } from 'wouter';
 import { useAuth } from '@clerk/react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { featureFlags } from '@/lib/featureFlags';
 
 export default function BusinessOnboardingPage() {
   const { isLoaded, isSignedIn } = useAuth();
@@ -50,7 +51,7 @@ export default function BusinessOnboardingPage() {
                   </Link>
                 </Button>
                 <Button asChild variant="outline" data-testid="button-business-claim" className="gap-2 font-bold">
-                  <Link href="/">
+                  <Link href={featureFlags.businessIntake ? '/bedrijf-zoeken' : '/'}>
                     Vermelding zoeken in de gids
                     <Search className="h-4 w-4" aria-hidden="true" />
                   </Link>

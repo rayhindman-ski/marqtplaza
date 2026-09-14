@@ -16,6 +16,7 @@ export type ClaimStatus = typeof ClaimStatus[keyof typeof ClaimStatus];
 
 
 export const ClaimStatus = {
+  draft: 'draft',
   pending: 'pending',
   submitted: 'submitted',
   changes_requested: 'changes_requested',
@@ -26,16 +27,186 @@ export const ClaimStatus = {
 } as const;
 
 /**
- * What the claimant can do next; derived server-side from the claim status.
+ * What the claimant can do next; derived server-side from the claim status. `submit` applies to private drafts, `provide_changes` after a reviewer asked for changes.
  */
 export type ClaimNextAction = typeof ClaimNextAction[keyof typeof ClaimNextAction];
 
 
 export const ClaimNextAction = {
+  submit: 'submit',
   wait_for_review: 'wait_for_review',
   provide_changes: 'provide_changes',
   none: 'none',
 } as const;
+
+/**
+ * Whether a claim targets a current public listing or a new business that is not listed yet.
+ */
+export type BusinessIntakeKind = typeof BusinessIntakeKind[keyof typeof BusinessIntakeKind];
+
+
+export const BusinessIntakeKind = {
+  existing_listing: 'existing_listing',
+  new_business: 'new_business',
+} as const;
+
+/**
+ * `listing` comes from the current public listing source; `profile` is a business already known to Buurtplaza.
+ */
+export type BusinessLookupMatchKind = typeof BusinessLookupMatchKind[keyof typeof BusinessLookupMatchKind];
+
+
+export const BusinessLookupMatchKind = {
+  listing: 'listing',
+  profile: 'profile',
+} as const;
+
+/**
+ * Public-only business match. Never contains contact details, claimant data, or pending-claim details.
+ */
+export interface BusinessLookupMatch {
+  /** `listing` comes from the current public listing source; `profile` is a business already known to Buurtplaza. */
+  kind: BusinessLookupMatchKind;
+  cityId: string;
+  listingSource: string;
+  listingId: string;
+  name: string;
+  /** @nullable */
+  neighborhood?: string | null;
+  /** @nullable */
+  category?: string | null;
+  /** @nullable */
+  sourceUrl?: string | null;
+  /** A verified representative already manages this business; a new claim would be recorded as disputed. */
+  isClaimed: boolean;
+}
+
+export interface BusinessLookupResponse {
+  query: string;
+  matches: BusinessLookupMatch[];
+  /** More matches exist than the bounded result set; refine the query. */
+  truncated: boolean;
+}
+
+/**
+ * Public facts for a business that is not listed yet. Stored privately until publication review.
+ */
+export interface NewBusinessFacts {
+  /**
+     * @minLength 2
+     * @maxLength 160
+     */
+  name: string;
+  /**
+     * @minLength 2
+     * @maxLength 80
+     */
+  category: string;
+  /**
+     * @minLength 2
+     * @maxLength 120
+     */
+  neighborhood: string;
+  /** @maxLength 240 */
+  address?: string;
+  /** @maxLength 400 */
+  websiteUrl?: string;
+}
+
+/**
+ * Required for `existing_listing`; resolved server-side, never trusted for facts.
+ */
+export type BusinessIntakeDraftInputListing = {
+  /** @minLength 1 */
+  cityId: string;
+  /** @minLength 1 */
+  listingSource: string;
+  /** @minLength 1 */
+  listingId: string;
+};
+
+export interface BusinessIntakeDraftInput {
+  kind: BusinessIntakeKind;
+  /** Required for `existing_listing`; resolved server-side, never trusted for facts. */
+  listing?: BusinessIntakeDraftInputListing;
+  business?: NewBusinessFacts;
+  /**
+     * @minLength 2
+     * @maxLength 120
+     */
+  contactName: string;
+  /**
+     * @minLength 3
+     * @maxLength 254
+     * @pattern ^[^\s@]+@[^\s@]+\.[^\s@]+$
+     */
+  contactEmail: string;
+  /**
+     * @minLength 2
+     * @maxLength 120
+     */
+  relationship: string;
+  /**
+     * The representative's own statement of their authority over the business (private).
+     * @minLength 10
+     * @maxLength 1200
+     */
+  authorityDeclaration: string;
+  /**
+     * Optional URL or short text reference supporting the declaration (private). No uploads.
+     * @maxLength 400
+     */
+  evidenceReference?: string;
+  /** @maxLength 1200 */
+  message?: string;
+}
+
+export interface BusinessClaimUpdateInput {
+  expectedVersion: number;
+  /**
+     * @minLength 2
+     * @maxLength 120
+     */
+  contactName?: string;
+  /**
+     * @minLength 3
+     * @maxLength 254
+     * @pattern ^[^\s@]+@[^\s@]+\.[^\s@]+$
+     */
+  contactEmail?: string;
+  /**
+     * @minLength 2
+     * @maxLength 120
+     */
+  relationship?: string;
+  /**
+     * @minLength 10
+     * @maxLength 1200
+     */
+  authorityDeclaration?: string;
+  /**
+     * @maxLength 400
+     * @nullable
+     */
+  evidenceReference?: string | null;
+  /**
+     * @maxLength 1200
+     * @nullable
+     */
+  message?: string | null;
+  business?: NewBusinessFacts;
+}
+
+export interface BusinessClaimTransitionInput {
+  expectedVersion: number;
+  /**
+     * Only meaningful when submitting a `new_business` draft. Submission re-checks public
+     * listings and published profiles for equivalent businesses; when candidates exist and
+     * this flag is not `true`, the server answers 409 `DUPLICATE_CANDIDATES` with the
+     * candidates so the representative can claim one instead or explicitly confirm.
+     */
+  confirmNoDuplicate?: boolean;
+}
 
 /**
  * Business publication lifecycle. Existing profiles are `published`.
@@ -70,6 +241,7 @@ export const ApiErrorCode = {
   UNKNOWN_FIELD: 'UNKNOWN_FIELD',
   VERSION_CONFLICT: 'VERSION_CONFLICT',
   IDEMPOTENCY_CONFLICT: 'IDEMPOTENCY_CONFLICT',
+  DUPLICATE_CANDIDATES: 'DUPLICATE_CANDIDATES',
   RATE_LIMITED: 'RATE_LIMITED',
   PROVISIONING_UNAVAILABLE: 'PROVISIONING_UNAVAILABLE',
   DEPENDENCY_UNAVAILABLE: 'DEPENDENCY_UNAVAILABLE',
@@ -95,6 +267,8 @@ export interface ApiError {
   correlationId: string;
   /** Present on VERSION_CONFLICT responses; the current server version the client must reload before retrying. */
   expectedVersion?: number;
+  /** Present on DUPLICATE_CANDIDATES responses; public matches that may already represent the submitted new business. */
+  duplicateCandidates?: BusinessLookupMatch[];
 }
 
 /**
@@ -517,6 +691,11 @@ export interface BusinessProfile {
   claimedAt?: string | null;
   publicationStatus?: PublicationStatus;
   /**
+     * Self-reported category of a new-business draft; null for listing-derived profiles.
+     * @nullable
+     */
+  category?: string | null;
+  /**
      * Version of the approved revision when publication review is enabled; null when the profile is served from its columns.
      * @nullable
      */
@@ -544,6 +723,19 @@ export interface BusinessClaim {
   /** Optimistic-concurrency version; send it back as expectedVersion on later claim updates. */
   version?: number;
   nextAction?: ClaimNextAction;
+  kind?: BusinessIntakeKind;
+  /**
+     * Only returned to the claimant and reviewers; never to other claimants.
+     * @nullable
+     */
+  authorityDeclaration?: string | null;
+  /**
+     * Only returned to the claimant and reviewers; never to other claimants.
+     * @nullable
+     */
+  evidenceReference?: string | null;
+  /** @nullable */
+  withdrawnAt?: string | null;
   createdAt: string;
   updatedAt: string;
   profile: BusinessProfile;
@@ -682,18 +874,30 @@ export interface DealUpdate {
   status?: DealUpdateStatus;
 }
 
+/**
+ * `request_changes` is only valid for business claims and asks the claimant for more authority evidence.
+ */
 export type ModerationDecisionDecision = typeof ModerationDecisionDecision[keyof typeof ModerationDecisionDecision];
 
 
 export const ModerationDecisionDecision = {
   approve: 'approve',
   reject: 'reject',
+  request_changes: 'request_changes',
 } as const;
 
 export interface ModerationDecision {
+  /** `request_changes` is only valid for business claims and asks the claimant for more authority evidence. */
   decision: ModerationDecisionDecision;
   /** @maxLength 500 */
   reviewNote?: string;
+  /**
+     * Required for business claim decisions: the claim `version` the reviewer saw. The
+     * decision is applied only when the claim still has exactly that version and a
+     * reviewable status; otherwise 409 so a stale moderation tab can never grant
+     * ownership based on evidence the reviewer never saw. Ignored for deals.
+     */
+  expectedVersion?: number;
 }
 
 export type OwnedBusinessProfile = BusinessProfile & {
@@ -1931,6 +2135,9 @@ export const GetCommunityModerationPostsStatus = {
 } as const;
 
 export type GetBusinessClaimModerationParams = {
+/**
+ * `pending` returns every claim awaiting a reviewer decision (legacy `pending`, `submitted`, and `disputed`).
+ */
 status?: GetBusinessClaimModerationStatus;
 };
 
@@ -1939,10 +2146,21 @@ export type GetBusinessClaimModerationStatus = typeof GetBusinessClaimModeration
 
 export const GetBusinessClaimModerationStatus = {
   pending: 'pending',
+  changes_requested: 'changes_requested',
+  disputed: 'disputed',
   approved: 'approved',
   rejected: 'rejected',
   all: 'all',
 } as const;
+
+export type LookupBusinessesParams = {
+/**
+ * Business name (or part of it) to look up.
+ * @minLength 2
+ * @maxLength 80
+ */
+q: string;
+};
 
 export type GetDealsParams = {
 cityId: string;

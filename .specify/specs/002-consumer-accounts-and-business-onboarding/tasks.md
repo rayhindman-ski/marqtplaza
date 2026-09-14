@@ -53,15 +53,15 @@ Use `T### [P] [US#] description`:
 
 **Goal**: a verified representative finds a business, claims it or creates a private draft, and always sees status and next action.
 
-- [ ] T023 [US3] Extend `lib/db/src/schema/businessDirectory.ts`: `business_claims` gains `authority_declaration`, `evidence_reference`, `version`, `withdrawn_at`, statuses `changes_requested|disputed|withdrawn`; partial unique index covers open statuses; `business_profiles` gains `publication_status` (default `published`), `created_by_user_id`; rehearse push (T007 command)
-- [ ] T024 [US3] Add `GET /businesses/lookup`, `POST /businesses` (draft), `PATCH /business-claims/:id`, `POST /business-claims/:id/submit`, `POST /business-claims/:id/withdraw` to `openapi.yaml`; add optional `version`, `nextAction`, `publicationStatus` fields to existing claim/profile schemas; codegen
-- [ ] T025 [US3] Create `artifacts/api-server/src/routes/business-intake.ts`: public-only lookup serialiser (allowlisted fields), per-user in-memory rate limit, transactional draft profile + owner-candidate claim, duplicate re-check on submit, withdraw keeps audit; mount behind `requireFlag('businessIntake')`
-- [ ] T026 [US3] Update `artifacts/api-server/src/routes/businesses.ts` public profile and `GET /deals` to exclude `publication_status <> 'published'`; keep existing claim creation working when the flag is off
-- [ ] T027 [US3] Create `artifacts/buurtgids/src/pages/BusinessLookupPage.tsx` (`/bedrijf-zoeken`) and `BusinessDraftPage.tsx` (`/bedrijf-nieuw`) with modal sign-in preserving URL, duplicate confirmation, receipt with next steps; register routes in `App.tsx`
-- [ ] T028 [US3] Extend `artifacts/buurtgids/src/pages/MyBusinessWorkspace.tsx` with claim status, reviewer reason, editable evidence on `changes_requested`, withdraw action, version-aware resubmit
-- [ ] T029 [US3] Update `artifacts/buurtgids/src/pages/BusinessOnboardingPage.tsx` links to the lookup route when the flag is on; unchanged otherwise
-- [ ] T030 [US3] Write `artifacts/api-server/src/routes/business-intake.test.ts`: lookup omits contact/claim data, 429 on burst, draft invisible via public routes, cross-user 404, withdraw frees the slot, two open claims → 409
-- [ ] T031 [US3] Write `artifacts/buurtgids/e2e/business-intake.spec.ts`: lookup → claim → withdraw → new draft → refresh persists → anonymous cannot see draft
+- [x] T023 [US3] Extend `lib/db/src/schema/businessDirectory.ts`: `business_claims` gains `authority_declaration`, `evidence_reference`, `version`, `withdrawn_at`, statuses `changes_requested|disputed|withdrawn`; partial unique index covers open statuses; `business_profiles` gains `publication_status` (default `published`), `created_by_user_id`; rehearse push (T007 command)
+- [x] T024 [US3] Add `GET /businesses/lookup`, `POST /businesses` (draft), `PATCH /business-claims/:id`, `POST /business-claims/:id/submit`, `POST /business-claims/:id/withdraw` to `openapi.yaml`; add optional `version`, `nextAction`, `publicationStatus` fields to existing claim/profile schemas; codegen
+- [x] T025 [US3] Create `artifacts/api-server/src/routes/business-intake.ts`: public-only lookup serialiser (allowlisted fields), per-user in-memory rate limit, transactional draft profile + owner-candidate claim, duplicate re-check on submit, withdraw keeps audit; mount behind `requireFlag('businessIntake')`
+- [x] T026 [US3] Update `artifacts/api-server/src/routes/businesses.ts` public profile and `GET /deals` to exclude `publication_status <> 'published'`; keep existing claim creation working when the flag is off
+- [x] T027 [US3] Create `artifacts/buurtgids/src/pages/BusinessLookupPage.tsx` (`/bedrijf-zoeken`) and `BusinessDraftPage.tsx` (`/bedrijf-nieuw`) with modal sign-in preserving URL, duplicate confirmation, receipt with next steps; register routes in `App.tsx`
+- [x] T028 [US3] Extend `artifacts/buurtgids/src/pages/MyBusinessWorkspace.tsx` with claim status, reviewer reason, editable evidence on `changes_requested`, withdraw action, version-aware resubmit
+- [x] T029 [US3] Update `artifacts/buurtgids/src/pages/BusinessOnboardingPage.tsx` links to the lookup route when the flag is on; unchanged otherwise
+- [x] T030 [US3] Write `artifacts/api-server/src/routes/business-intake.test.ts`: lookup omits contact/claim data, 429 on burst, draft invisible via public routes, cross-user 404, withdraw frees the slot, two open claims → 409
+- [x] T031 [US3] Write `artifacts/buurtgids/e2e/business-intake.spec.ts`: lookup → claim → withdraw → new draft → refresh persists → anonymous cannot see draft
 - [ ] T032 [US3] **GATE Q2/Q3** Reviewer approves evidence policy; operator names reviewer and support owner; record in `convergence.md`
 
 ## Phase 5 — User Story 4 (P4) — Review and publication

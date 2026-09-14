@@ -7,12 +7,13 @@
  */
 
 /**
- * What the claimant can do next; derived server-side from the claim status.
+ * What the claimant can do next; derived server-side from the claim status. `submit` applies to private drafts, `provide_changes` after a reviewer asked for changes.
  */
 export type ClaimNextAction = typeof ClaimNextAction[keyof typeof ClaimNextAction];
 
 
 export const ClaimNextAction = {
+  submit: 'submit',
   wait_for_review: 'wait_for_review',
   provide_changes: 'provide_changes',
   none: 'none',

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'wouter';
 import { useAuth, SignInButton } from '@clerk/react';
 import { 
   useGetMyBusinessProfiles, 
@@ -7,7 +8,9 @@ import {
   getGetMyBusinessClaimsQueryKey,
   useUpdateBusinessProfile,
   useCreateBusinessDeal,
-  useUpdateBusinessDeal
+  useUpdateBusinessDeal,
+  useWithdrawBusinessClaim,
+  type ApiError,
 } from '@workspace/api-client-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
@@ -45,6 +48,16 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form';
+import { useAccountAuth } from '@/lib/accountAuth';
+import { featureFlags } from '@/lib/featureFlags';
+import { businessIntakeTranslations } from '@/lib/i18n';
+import { claimPresentation } from '@/lib/claimPresentation';
+import { useAppLanguage } from '@/lib/useAppLanguage';
+
+function apiErrorFrom(error: unknown): ApiError | null {
+  const data = (error as { data?: unknown } | null)?.data;
+  return data && typeof data === 'object' && 'code' in data ? data as ApiError : null;
+}
 
 const profileSchema = z.object({
   name: z.string().min(1, 'Naam is verplicht.').max(160),
@@ -75,7 +88,11 @@ const dealSchema = z.object({
 type DealFormValues = z.infer<typeof dealSchema>;
 
 export default function MyBusinessWorkspace() {
-  const { isSignedIn, isLoaded } = useAuth();
+  const clerkAuth = useAuth();
+  const accountAuth = useAccountAuth();
+  const { isSignedIn, isLoaded } = featureFlags.businessIntake ? accountAuth : clerkAuth;
+  const [language] = useAppLanguage();
+  const intakeCopy = businessIntakeTranslations[language];
   const queryClient = useQueryClient();
   
   const { data: profiles, isLoading: profilesLoading } = useGetMyBusinessProfiles({
@@ -96,6 +113,7 @@ export default function MyBusinessWorkspace() {
   const updateProfile = useUpdateBusinessProfile();
   const createDeal = useCreateBusinessDeal();
   const updateDeal = useUpdateBusinessDeal();
+  const withdrawClaim = useWithdrawBusinessClaim();
 
   useEffect(() => {
     document.title = 'Mijn Bedrijf | Buurtplaza';
@@ -273,6 +291,24 @@ export default function MyBusinessWorkspace() {
     });
   };
 
+  const onWithdrawClaim = (claim: NonNullable<typeof claims>[number]) => {
+    if (!confirm(intakeCopy.withdrawConfirm)) return;
+    withdrawClaim.mutate({ id: claim.id, data: { expectedVersion: claim.version ?? 1 } }, {
+      onSuccess: () => {
+        toast.success(intakeCopy.withdrawn);
+        queryClient.invalidateQueries({ queryKey: getGetMyBusinessClaimsQueryKey() });
+      },
+      onError: (error) => {
+        if (apiErrorFrom(error)?.code === 'VERSION_CONFLICT') {
+          toast.error(intakeCopy.conflict);
+          queryClient.invalidateQueries({ queryKey: getGetMyBusinessClaimsQueryKey() });
+        } else {
+          toast.error(intakeCopy.withdrawFailed);
+        }
+      },
+    });
+  };
+
   return (
     <div className="min-h-screen bg-accent/20 pb-20">
       <div className="bg-primary/5 border-b border-primary/10">
@@ -298,42 +334,67 @@ export default function MyBusinessWorkspace() {
               <div className="space-y-4">
                 <h2 className="text-xl font-bold text-foreground">Claim Statussen</h2>
                 <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-4">
-                  {claims.map(claim => (
-                    <Card key={claim.id} className="border-border/50 shadow-sm">
-                      <CardContent className="p-4 flex items-start gap-4">
-                        <div className="shrink-0 pt-1">
-                          {claim.status === 'approved' ? (
-                            <CheckCircle2 className="w-5 h-5 text-emerald-500" />
-                          ) : claim.status === 'rejected' ? (
-                            <XCircle className="w-5 h-5 text-destructive" />
-                          ) : (
-                            <Loader2 className="w-5 h-5 text-amber-500 animate-spin" />
-                          )}
-                        </div>
-                        <div>
-                          <p className="font-bold text-sm text-foreground line-clamp-1">{claim.profile.name}</p>
-                          <div className="flex items-center gap-2 mt-1">
-                            <Badge variant="outline" className={
-                              claim.status === 'approved' ? 'border-emerald-500/30 text-emerald-700 bg-emerald-500/10' :
-                              claim.status === 'rejected' ? 'border-destructive/30 text-destructive bg-destructive/10' :
-                              'border-amber-500/30 text-amber-700 bg-amber-500/10'
-                            }>
-                              {claim.status === 'pending' ? 'In afwachting' : claim.status === 'approved' ? 'Goedgekeurd' : 'Afgewezen'}
-                            </Badge>
+                  {claims.map(claim => {
+                    const status = claim.status;
+                    const view = claimPresentation(claim, language, featureFlags.businessIntake);
+                    const tone = view.tone === 'success'
+                      ? 'border-emerald-500/30 text-emerald-700 bg-emerald-500/10'
+                      : view.tone === 'danger'
+                        ? 'border-destructive/30 text-destructive bg-destructive/10'
+                        : view.tone === 'muted'
+                          ? 'border-border text-muted-foreground bg-muted/40'
+                          : 'border-amber-500/30 text-amber-700 bg-amber-500/10';
+                    return (
+                      <Card key={claim.id} className="border-border/50 shadow-sm">
+                        <CardContent className="p-4 flex items-start gap-4">
+                          <div className="shrink-0 pt-1">
+                            {status === 'approved' ? (
+                              <CheckCircle2 className="w-5 h-5 text-emerald-500" />
+                            ) : status === 'rejected' || status === 'disputed' ? (
+                              <XCircle className="w-5 h-5 text-destructive" />
+                            ) : status === 'withdrawn' ? (
+                              <XCircle className="w-5 h-5 text-muted-foreground" />
+                            ) : (
+                              <Loader2 className="w-5 h-5 text-amber-500 animate-spin" />
+                            )}
                           </div>
-                          {claim.reviewNote && (
-                            <p className="text-xs text-muted-foreground mt-2 bg-muted/50 p-2 rounded-md border border-border/40">
-                              <span className="font-semibold block mb-1">Opmerking redactie:</span>
-                              {claim.reviewNote}
-                            </p>
-                          )}
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
+                          <div className="min-w-0 flex-1">
+                            <p className="font-bold text-sm text-foreground line-clamp-1">{claim.profile.name}</p>
+                            <div className="flex items-center gap-2 mt-1">
+                              {/* Status labels are always truthful, regardless of the intake flag. */}
+                              <Badge variant="outline" className={tone} data-testid={`claim-status-${claim.id}`}>
+                                {view.label}
+                              </Badge>
+                            </div>
+                            <p className="mt-2 text-xs text-muted-foreground">{view.nextAction}</p>
+                            {claim.reviewNote && (
+                              <p className="text-xs text-muted-foreground mt-2 bg-muted/50 p-2 rounded-md border border-border/40">
+                                <span className="font-semibold block mb-1">{intakeCopy.editorNote}</span>
+                                {claim.reviewNote}
+                              </p>
+                            )}
+                            {/* Only the gated actions depend on the flag; after a rollback the claim stays readable. */}
+                            {view.canContinue || view.canWithdraw ? (
+                              <div className="mt-4 flex flex-wrap gap-2">
+                                {view.canContinue ? (
+                                  <Button asChild size="sm"><Link href={`/bedrijf-nieuw?claim=${claim.id}`}>{intakeCopy.continueDraft}</Link></Button>
+                                ) : null}
+                                {view.canWithdraw ? (
+                                  <Button type="button" size="sm" variant="outline" disabled={withdrawClaim.isPending} onClick={() => onWithdrawClaim(claim)}>{intakeCopy.withdraw}</Button>
+                                ) : null}
+                              </div>
+                            ) : null}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
                 </div>
               </div>
             )}
+            {featureFlags.businessIntake ? (
+              <Button asChild variant="outline"><Link href="/bedrijf-zoeken">{intakeCopy.addAnother}</Link></Button>
+            ) : null}
 
             {!profiles || profiles.length === 0 ? (
               <Card className="text-center py-20 border-dashed border-2 bg-transparent shadow-none">

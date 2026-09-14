@@ -28,3 +28,5 @@ packages = ["chromium"]
 [userenv.development]
 ACCOUNTS_ENABLED = "true"
 VITE_ACCOUNTS_ENABLED = "true"
+BUSINESS_INTAKE_ENABLED = "true"
+VITE_BUSINESS_INTAKE_ENABLED = "true"

@@ -63,6 +63,8 @@ import { useAccountAuth } from './lib/accountAuth';
 import { featureFlags } from './lib/featureFlags';
 import { resolveReturnPath, withReturnPath } from './lib/returnPath';
 import BusinessOnboardingPage from './pages/BusinessOnboardingPage';
+import BusinessLookupPage from './pages/BusinessLookupPage';
+import BusinessDraftPage from './pages/BusinessDraftPage';
 import { useEditorAccess } from './lib/editorAccess';
 import {
   getLocationName,
@@ -1559,7 +1561,9 @@ function MarkerCard({
             <div className="flex items-center gap-3 shrink-0">
               {(marker.category === 'Businesses' || marker.category === 'Food & Drink') && (
                 <Link
-                  href={`/bedrijf-claim?listingId=${marker.id}&cityId=dhg&listingSource=${marker.source || 'google_maps'}&name=${encodeURIComponent(marker.name)}&address=${encodeURIComponent(marker.address || '')}`}
+                  href={featureFlags.businessIntake
+                    ? `/bedrijf-nieuw?kind=existing_listing&cityId=dhg&listingSource=${encodeURIComponent(marker.source || 'google_maps')}&listingId=${encodeURIComponent(String(marker.id))}`
+                    : `/bedrijf-claim?listingId=${marker.id}&cityId=dhg&listingSource=${marker.source || 'google_maps'}&name=${encodeURIComponent(marker.name)}&address=${encodeURIComponent(marker.address || '')}`}
                   className="flex items-center gap-1 text-[11px] font-bold text-primary hover:text-primary/80 transition-colors"
                   onClick={e => e.stopPropagation()}
                 >
@@ -3082,6 +3086,8 @@ export default function App() {
           <Route path="/account/voorkeuren" component={AccountPreferencesPage} />
           <Route path="/account/*?" component={AccountPage} />
           <Route path="/bedrijf-aanmelden" component={BusinessOnboardingPage} />
+          <Route path="/bedrijf-zoeken" component={BusinessLookupPage} />
+          <Route path="/bedrijf-nieuw" component={BusinessDraftPage} />
           <Route path="/nieuws" component={NewsFeedView} />
           <Route path="/nieuws/:id" component={NewsArticleView} />
           <Route path="/deals" component={DealsView} />

@@ -8,7 +8,15 @@
 import type { ModerationDecisionDecision } from './moderationDecisionDecision';
 
 export interface ModerationDecision {
+  /** `request_changes` is only valid for business claims and asks the claimant for more authority evidence. */
   decision: ModerationDecisionDecision;
   /** @maxLength 500 */
   reviewNote?: string;
+  /**
+     * Required for business claim decisions: the claim `version` the reviewer saw. The
+     * decision is applied only when the claim still has exactly that version and a
+     * reviewable status; otherwise 409 so a stale moderation tab can never grant
+     * ownership based on evidence the reviewer never saw. Ignored for deals.
+     */
+  expectedVersion?: number;
 }
