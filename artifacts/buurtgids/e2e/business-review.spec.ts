@@ -56,6 +56,9 @@ function installServer(page: Page, options: { initialState?: 'suspended' } = {})
     if (!approved()) return 'unknown';
     return profile.publicationStatus === 'published' ? 'published' : profile.publicationStatus === 'unpublished' ? 'unpublished' : 'approved';
   };
+  let freshnessOverride: Record<string, unknown> | null = null;
+  const freshness = () =>
+    freshnessOverride ?? { status: 'unverified', checkedOn: null, staleAfterDays: 180, staleOn: null, daysUntilStale: null, recheckWindowDays: 30, recheckDue: false };
   const workspace = () => ({
     profile: { ...profile, approvedRevisionVersion: approved()?.version ?? null },
     role: 'owner',
@@ -64,7 +67,7 @@ function installServer(page: Page, options: { initialState?: 'suspended' } = {})
     approvedRevision: approved(),
     latestDecision,
     factChecks: [],
-    freshness: { status: 'unverified', checkedOn: null },
+    freshness: freshness(),
   });
 
   // Reviewer actions the test triggers directly (the moderation UI needs a Clerk editor session).
@@ -142,7 +145,7 @@ function installServer(page: Page, options: { initialState?: 'suspended' } = {})
         approvedRevisionVersion: a?.version ?? null,
         content: a ? a.content : null,
         provenance: a
-          ? { listingSource: 'openstreetmap', sourceUrl: profile.sourceUrl, approvedVersion: a.version, approvedAt: NOW, freshness: { status: 'unverified', checkedOn: null }, checks: [] }
+          ? { listingSource: 'openstreetmap', sourceUrl: profile.sourceUrl, approvedVersion: a.version, approvedAt: NOW, freshness: freshness(), checks: [] }
           : null,
         deals: [],
       });
@@ -150,7 +153,8 @@ function installServer(page: Page, options: { initialState?: 'suspended' } = {})
     await page.route('**/api/business-profiles/7/deals**', (route) => json(route, []));
   };
 
-  return { install, requests, reviewer, profile, revisions };
+  const setFreshness = (value: Record<string, unknown> | null) => { freshnessOverride = value; };
+  return { install, requests, reviewer, profile, revisions, setFreshness };
 }
 
 async function signIn(page: Page) {
@@ -161,6 +165,26 @@ async function signIn(page: Page) {
 }
 
 test.describe('business review publication', () => {
+  test('owner is told before the fact check expires, without the state changing', async ({ page }) => {
+    await signIn(page);
+    const server = installServer(page);
+    server.setFreshness({ status: 'fresh', checkedOn: '2026-03-25T00:00:00.000Z', staleAfterDays: 180, staleOn: '2026-09-21T00:00:00.000Z', daysUntilStale: 7, recheckWindowDays: 30, recheckDue: true });
+    await server.install();
+
+    await page.goto('/mijn-bedrijf/7/profiel?e2eAccountAuth=1');
+    await expect(page.getByTestId('owner-state')).toHaveText('Gepubliceerd');
+    await expect(page.getByTestId('owner-freshness')).toContainText('Feiten recent gecontroleerd');
+    const notice = page.getByTestId('owner-recheck-due');
+    await expect(notice).toContainText('De controle van je feiten verloopt binnenkort');
+    await expect(notice).toContainText('Over 7 dagen (21-9-2026)');
+
+    // A fresh check that is not close to expiring shows no prompt.
+    server.setFreshness({ status: 'fresh', checkedOn: '2026-09-01T00:00:00.000Z', staleAfterDays: 180, staleOn: '2027-02-28T00:00:00.000Z', daysUntilStale: 167, recheckWindowDays: 30, recheckDue: false });
+    await page.reload();
+    await expect(page.getByTestId('owner-freshness')).toContainText('Feiten recent gecontroleerd');
+    await expect(page.getByTestId('owner-recheck-due')).toHaveCount(0);
+  });
+
   test('owner drafts, submits, receives changes, resubmits; public page only shows approved content', async ({ page }) => {
     await signIn(page);
     const server = installServer(page);

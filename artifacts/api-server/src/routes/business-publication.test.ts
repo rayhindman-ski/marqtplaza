@@ -849,10 +849,47 @@ describe("business publication routes", () => {
     await db.update(businessProfilesTable).set({ publicationStatus: "published" }).where(eq(businessProfilesTable.id, legacyProfileId));
   });
 
+  it("flags a re-check as due before freshness flips to stale, without changing the owner state", async () => {
+    const before = await request(`/api/business-profiles/${profileId}/revision`);
+    assert.equal(before.body.freshness.status, "fresh");
+    assert.equal(before.body.freshness.recheckDue, false, "freshly confirmed facts are not due yet");
+    assert.equal(before.body.freshness.recheckWindowDays, 30);
+    assert.equal(
+      new Date(before.body.freshness.staleOn).getTime(),
+      new Date(before.body.freshness.checkedOn).getTime() + 180 * 86_400_000,
+      "staleOn is derived from the confirmed check date, never stored",
+    );
+
+    // 159 days after the confirmation: still fresh, but inside the 30-day re-check window.
+    clock = new Date("2027-02-20T10:00:00.000Z");
+    await db.update(businessProfilesTable).set({ publicationStatus: "unpublished" }).where(eq(businessProfilesTable.id, profileId));
+    const owner = await request(`/api/business-profiles/${profileId}/revision`);
+    assert.equal(owner.body.freshness.status, "fresh");
+    assert.equal(owner.body.freshness.recheckDue, true);
+    assert.equal(owner.body.freshness.daysUntilStale, 21);
+    assert.equal(owner.body.state, "unpublished", "freshness stays independent from publication status");
+
+    const queue = await request("/api/review/businesses?limit=50", asReviewer);
+    assert.equal(queue.status, 200);
+    const item = queue.body.items.find((entry: any) => entry.profile.id === profileId);
+    assert.equal(item.freshness.recheckDue, true, "reviewers see the same soon-stale flag in the publication queue");
+    assert.equal(item.freshness.staleOn, owner.body.freshness.staleOn);
+    for (const entry of queue.body.items) {
+      if (entry.freshness.checkedOn !== null) continue;
+      assert.equal(entry.freshness.status, "unverified");
+      assert.equal(entry.freshness.recheckDue, false, "an unverified snapshot never gets an invented check date");
+      assert.equal(entry.freshness.staleOn, null);
+      assert.equal(entry.freshness.daysUntilStale, null);
+    }
+    clock = new Date("2026-09-14T10:00:00.000Z");
+  });
+
   it("marks freshness as stale honestly after 180 days", async () => {
     clock = new Date("2027-06-01T00:00:00.000Z");
     const owner = await request(`/api/business-profiles/${profileId}/revision`);
     assert.equal(owner.body.freshness.status, "stale");
+    assert.equal(owner.body.freshness.recheckDue, false, "once stale the window has passed; the stale status speaks for itself");
+    assert.ok(owner.body.freshness.daysUntilStale < 0);
     await db.update(businessProfilesTable).set({ publicationStatus: "published" }).where(eq(businessProfilesTable.id, profileId));
     const published = await request(`/api/business-profiles/${profileId}/revision`);
     assert.equal(published.body.state, "stale");

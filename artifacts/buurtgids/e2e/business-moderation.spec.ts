@@ -51,8 +51,8 @@ function installServer(page: Page) {
   ];
 
   const publications = [
-    { profile: profile(301, 'Klaar Voor Publicatie', 'draft'), approvedRevision: revision(70, 301, 3, 'approved', 'Goedgekeurd'), latestDecision: null, freshness: { status: 'unverified', checkedOn: null, staleAfterDays: 180 }, canDecide: true },
-    { profile: profile(302, 'Al Online', 'published'), approvedRevision: revision(71, 302, 1, 'approved', 'Live'), latestDecision: { id: 9, targetType: 'publication', targetId: 302, targetVersion: 1, decision: 'publish', reason: 'Alles klopt.', createdAt: NOW }, freshness: { status: 'fresh', checkedOn: '2026-09-01', staleAfterDays: 180 }, canDecide: true },
+    { profile: profile(301, 'Klaar Voor Publicatie', 'draft'), approvedRevision: revision(70, 301, 3, 'approved', 'Goedgekeurd'), latestDecision: null, freshness: { status: 'unverified', checkedOn: null, staleAfterDays: 180, staleOn: null, daysUntilStale: null, recheckWindowDays: 30, recheckDue: false }, canDecide: true },
+    { profile: profile(302, 'Al Online', 'published'), approvedRevision: revision(71, 302, 1, 'approved', 'Live'), latestDecision: { id: 9, targetType: 'publication', targetId: 302, targetVersion: 1, decision: 'publish', reason: 'Alles klopt.', createdAt: NOW }, freshness: { status: 'fresh', checkedOn: '2026-03-25T00:00:00.000Z', staleAfterDays: 180, staleOn: '2026-09-21T00:00:00.000Z', daysUntilStale: 7, recheckWindowDays: 30, recheckDue: true }, canDecide: true },
   ];
 
   const json = (route: Route, body: unknown, status = 200) =>
@@ -340,6 +340,9 @@ test.describe('business moderation screen', () => {
 
     const live = queue.getByTestId('publication-item-302');
     await expect(live.getByText('gepubliceerd')).toBeVisible();
+    await expect(draft.getByTestId('publication-recheck-due-301')).toHaveCount(0);
+    await expect(live.getByTestId('publication-recheck-due-302')).toContainText('Hercontrole nodig');
+    await expect(live.getByTestId('publication-recheck-due-302')).toContainText('verloopt op 21-9-2026');
     await expect(live.getByText(/laatste toelichting: Alles klopt\./)).toBeVisible();
     await expect(live.getByRole('button', { name: 'Publiceren' })).toHaveCount(0);
     await expect(live.getByRole('button', { name: 'Offline halen' })).toBeVisible();

@@ -8,11 +8,27 @@
 import type { BusinessFreshnessStatus } from './businessFreshnessStatus';
 
 /**
- * Truthful freshness of the approved snapshot. `unverified` when no field was ever confirmed; `stale` when the newest confirmation is older than `staleAfterDays`.
+ * Truthful freshness of the approved snapshot. `unverified` when no field was ever confirmed;
+ * `stale` when the newest confirmation is older than `staleAfterDays`. `recheckDue` flags a
+ * still-fresh snapshot that turns stale within `recheckWindowDays`, so owners and reviewers can
+ * schedule a re-check before it flips. `staleOn` is derived from `checkedOn`, never stored.
+ * Freshness is independent from publication status.
  */
 export interface BusinessFreshness {
   status: BusinessFreshnessStatus;
   /** @nullable */
   checkedOn: string | null;
   staleAfterDays: number;
+  /**
+     * ISO date-time when the snapshot turns (or turned) stale; null when unverified.
+     * @nullable
+     */
+  staleOn: string | null;
+  /**
+     * Whole days until `staleOn`; negative once stale; null when unverified.
+     * @nullable
+     */
+  daysUntilStale: number | null;
+  recheckWindowDays: number;
+  recheckDue: boolean;
 }

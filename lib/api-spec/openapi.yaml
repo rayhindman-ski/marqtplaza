@@ -3343,8 +3343,13 @@ components:
 
     BusinessFreshness:
       type: object
-      description: Truthful freshness of the approved snapshot. `unverified` when no field was ever confirmed; `stale` when the newest confirmation is older than `staleAfterDays`.
-      required: [status, checkedOn, staleAfterDays]
+      description: |
+        Truthful freshness of the approved snapshot. `unverified` when no field was ever confirmed;
+        `stale` when the newest confirmation is older than `staleAfterDays`. `recheckDue` flags a
+        still-fresh snapshot that turns stale within `recheckWindowDays`, so owners and reviewers can
+        schedule a re-check before it flips. `staleOn` is derived from `checkedOn`, never stored.
+        Freshness is independent from publication status.
+      required: [status, checkedOn, staleAfterDays, staleOn, daysUntilStale, recheckWindowDays, recheckDue]
       properties:
         status:
           type: string
@@ -3353,6 +3358,16 @@ components:
           type: ["string", "null"]
         staleAfterDays:
           type: number
+        staleOn:
+          type: ["string", "null"]
+          description: ISO date-time when the snapshot turns (or turned) stale; null when unverified.
+        daysUntilStale:
+          type: ["number", "null"]
+          description: Whole days until `staleOn`; negative once stale; null when unverified.
+        recheckWindowDays:
+          type: number
+        recheckDue:
+          type: boolean
 
     BusinessOwnerState:
       type: string

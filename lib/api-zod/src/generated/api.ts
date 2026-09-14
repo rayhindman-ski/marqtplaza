@@ -2525,8 +2525,12 @@ export const GetBusinessProfileResponse = zod.object({
   "freshness": zod.object({
   "status": zod.enum(['unverified', 'fresh', 'stale']),
   "checkedOn": zod.string().nullable(),
-  "staleAfterDays": zod.number()
-}).describe('Truthful freshness of the approved snapshot. `unverified` when no field was ever confirmed; `stale` when the newest confirmation is older than `staleAfterDays`.'),
+  "staleAfterDays": zod.number(),
+  "staleOn": zod.string().nullable().describe('ISO date-time when the snapshot turns (or turned) stale; null when unverified.'),
+  "daysUntilStale": zod.number().nullable().describe('Whole days until `staleOn`; negative once stale; null when unverified.'),
+  "recheckWindowDays": zod.number(),
+  "recheckDue": zod.boolean()
+}).describe('Truthful freshness of the approved snapshot. `unverified` when no field was ever confirmed;\n`stale` when the newest confirmation is older than `staleAfterDays`. `recheckDue` flags a\nstill-fresh snapshot that turns stale within `recheckWindowDays`, so owners and reviewers can\nschedule a re-check before it flips. `staleOn` is derived from `checkedOn`, never stored.\nFreshness is independent from publication status.\n'),
   "checks": zod.array(zod.object({
   "field": zod.string(),
   "status": zod.enum(['unchecked', 'confirmed', 'contradicted', 'unavailable']).describe('Reviewer verdict for one approved field. `contradicted` fields are withheld publicly; `unchecked` and `unavailable` are shown with that provenance.'),
@@ -2658,8 +2662,12 @@ export const GetBusinessRevisionWorkspaceResponse = zod.object({
   "freshness": zod.object({
   "status": zod.enum(['unverified', 'fresh', 'stale']),
   "checkedOn": zod.string().nullable(),
-  "staleAfterDays": zod.number()
-}).describe('Truthful freshness of the approved snapshot. `unverified` when no field was ever confirmed; `stale` when the newest confirmation is older than `staleAfterDays`.')
+  "staleAfterDays": zod.number(),
+  "staleOn": zod.string().nullable().describe('ISO date-time when the snapshot turns (or turned) stale; null when unverified.'),
+  "daysUntilStale": zod.number().nullable().describe('Whole days until `staleOn`; negative once stale; null when unverified.'),
+  "recheckWindowDays": zod.number(),
+  "recheckDue": zod.boolean()
+}).describe('Truthful freshness of the approved snapshot. `unverified` when no field was ever confirmed;\n`stale` when the newest confirmation is older than `staleAfterDays`. `recheckDue` flags a\nstill-fresh snapshot that turns stale within `recheckWindowDays`, so owners and reviewers can\nschedule a re-check before it flips. `staleOn` is derived from `checkedOn`, never stored.\nFreshness is independent from publication status.\n')
 })
 
 
@@ -2837,8 +2845,12 @@ export const UpdateBusinessRevisionResponse = zod.object({
   "freshness": zod.object({
   "status": zod.enum(['unverified', 'fresh', 'stale']),
   "checkedOn": zod.string().nullable(),
-  "staleAfterDays": zod.number()
-}).describe('Truthful freshness of the approved snapshot. `unverified` when no field was ever confirmed; `stale` when the newest confirmation is older than `staleAfterDays`.')
+  "staleAfterDays": zod.number(),
+  "staleOn": zod.string().nullable().describe('ISO date-time when the snapshot turns (or turned) stale; null when unverified.'),
+  "daysUntilStale": zod.number().nullable().describe('Whole days until `staleOn`; negative once stale; null when unverified.'),
+  "recheckWindowDays": zod.number(),
+  "recheckDue": zod.boolean()
+}).describe('Truthful freshness of the approved snapshot. `unverified` when no field was ever confirmed;\n`stale` when the newest confirmation is older than `staleAfterDays`. `recheckDue` flags a\nstill-fresh snapshot that turns stale within `recheckWindowDays`, so owners and reviewers can\nschedule a re-check before it flips. `staleOn` is derived from `checkedOn`, never stored.\nFreshness is independent from publication status.\n')
 })
 
 
@@ -2967,8 +2979,12 @@ export const SubmitBusinessRevisionResponse = zod.object({
   "freshness": zod.object({
   "status": zod.enum(['unverified', 'fresh', 'stale']),
   "checkedOn": zod.string().nullable(),
-  "staleAfterDays": zod.number()
-}).describe('Truthful freshness of the approved snapshot. `unverified` when no field was ever confirmed; `stale` when the newest confirmation is older than `staleAfterDays`.')
+  "staleAfterDays": zod.number(),
+  "staleOn": zod.string().nullable().describe('ISO date-time when the snapshot turns (or turned) stale; null when unverified.'),
+  "daysUntilStale": zod.number().nullable().describe('Whole days until `staleOn`; negative once stale; null when unverified.'),
+  "recheckWindowDays": zod.number(),
+  "recheckDue": zod.boolean()
+}).describe('Truthful freshness of the approved snapshot. `unverified` when no field was ever confirmed;\n`stale` when the newest confirmation is older than `staleAfterDays`. `recheckDue` flags a\nstill-fresh snapshot that turns stale within `recheckWindowDays`, so owners and reviewers can\nschedule a re-check before it flips. `staleOn` is derived from `checkedOn`, never stored.\nFreshness is independent from publication status.\n')
 })
 
 
@@ -3095,8 +3111,12 @@ export const DiscardBusinessRevisionResponse = zod.object({
   "freshness": zod.object({
   "status": zod.enum(['unverified', 'fresh', 'stale']),
   "checkedOn": zod.string().nullable(),
-  "staleAfterDays": zod.number()
-}).describe('Truthful freshness of the approved snapshot. `unverified` when no field was ever confirmed; `stale` when the newest confirmation is older than `staleAfterDays`.')
+  "staleAfterDays": zod.number(),
+  "staleOn": zod.string().nullable().describe('ISO date-time when the snapshot turns (or turned) stale; null when unverified.'),
+  "daysUntilStale": zod.number().nullable().describe('Whole days until `staleOn`; negative once stale; null when unverified.'),
+  "recheckWindowDays": zod.number(),
+  "recheckDue": zod.boolean()
+}).describe('Truthful freshness of the approved snapshot. `unverified` when no field was ever confirmed;\n`stale` when the newest confirmation is older than `staleAfterDays`. `recheckDue` flags a\nstill-fresh snapshot that turns stale within `recheckWindowDays`, so owners and reviewers can\nschedule a re-check before it flips. `staleOn` is derived from `checkedOn`, never stored.\nFreshness is independent from publication status.\n')
 })
 
 
@@ -3507,8 +3527,12 @@ export const GetPublicationQueueResponse = zod.object({
   "freshness": zod.object({
   "status": zod.enum(['unverified', 'fresh', 'stale']),
   "checkedOn": zod.string().nullable(),
-  "staleAfterDays": zod.number()
-}).describe('Truthful freshness of the approved snapshot. `unverified` when no field was ever confirmed; `stale` when the newest confirmation is older than `staleAfterDays`.'),
+  "staleAfterDays": zod.number(),
+  "staleOn": zod.string().nullable().describe('ISO date-time when the snapshot turns (or turned) stale; null when unverified.'),
+  "daysUntilStale": zod.number().nullable().describe('Whole days until `staleOn`; negative once stale; null when unverified.'),
+  "recheckWindowDays": zod.number(),
+  "recheckDue": zod.boolean()
+}).describe('Truthful freshness of the approved snapshot. `unverified` when no field was ever confirmed;\n`stale` when the newest confirmation is older than `staleAfterDays`. `recheckDue` flags a\nstill-fresh snapshot that turns stale within `recheckWindowDays`, so owners and reviewers can\nschedule a re-check before it flips. `staleOn` is derived from `checkedOn`, never stored.\nFreshness is independent from publication status.\n'),
   "canDecide": zod.boolean()
 })),
   "pageInfo": zod.object({
@@ -3596,8 +3620,12 @@ export const SetBusinessPublicationResponse = zod.object({
   "freshness": zod.object({
   "status": zod.enum(['unverified', 'fresh', 'stale']),
   "checkedOn": zod.string().nullable(),
-  "staleAfterDays": zod.number()
-}).describe('Truthful freshness of the approved snapshot. `unverified` when no field was ever confirmed; `stale` when the newest confirmation is older than `staleAfterDays`.'),
+  "staleAfterDays": zod.number(),
+  "staleOn": zod.string().nullable().describe('ISO date-time when the snapshot turns (or turned) stale; null when unverified.'),
+  "daysUntilStale": zod.number().nullable().describe('Whole days until `staleOn`; negative once stale; null when unverified.'),
+  "recheckWindowDays": zod.number(),
+  "recheckDue": zod.boolean()
+}).describe('Truthful freshness of the approved snapshot. `unverified` when no field was ever confirmed;\n`stale` when the newest confirmation is older than `staleAfterDays`. `recheckDue` flags a\nstill-fresh snapshot that turns stale within `recheckWindowDays`, so owners and reviewers can\nschedule a re-check before it flips. `staleOn` is derived from `checkedOn`, never stored.\nFreshness is independent from publication status.\n'),
   "canDecide": zod.boolean()
 })
 

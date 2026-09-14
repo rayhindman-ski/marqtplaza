@@ -1242,6 +1242,12 @@ export const businessPublicationTranslations = {
     reviewerNote: 'Toelichting redactie',
     freshness: { fresh: 'Feiten recent gecontroleerd', stale: 'Controle verlopen', unverified: 'Feiten nog niet gecontroleerd' } as Record<string, string>,
     checkedOn: 'gecontroleerd op',
+    recheckDueBadge: 'Hercontrole nodig',
+    recheckDueTitle: 'De controle van je feiten verloopt binnenkort',
+    recheckDueBody: (days: number, date: string) => days <= 0
+      ? `De laatste controle verloopt vandaag (${date}). Controleer je gegevens en dien een bijgewerkte versie in, dan kan de redactie ze opnieuw bevestigen.`
+      : `Over ${days} ${days === 1 ? 'dag' : 'dagen'} (${date}) geldt de laatste controle als verlopen. Controleer je gegevens en dien een bijgewerkte versie in, dan kan de redactie ze opnieuw bevestigen.`,
+    staleOn: 'verloopt op',
     languageNl: 'Nederlands',
     languageEn: 'Engels',
     languageHint: 'Laat Engelse velden leeg als je geen vertaling hebt; we verzinnen er geen.',
@@ -1306,6 +1312,12 @@ export const businessPublicationTranslations = {
     reviewerNote: 'Editorial note',
     freshness: { fresh: 'Facts checked recently', stale: 'Checks expired', unverified: 'Facts not checked yet' } as Record<string, string>,
     checkedOn: 'checked on',
+    recheckDueBadge: 'Re-check due',
+    recheckDueTitle: 'Your fact check is about to expire',
+    recheckDueBody: (days: number, date: string) => days <= 0
+      ? `The last check expires today (${date}). Review your details and submit an updated version so the editors can confirm them again.`
+      : `In ${days} ${days === 1 ? 'day' : 'days'} (${date}) the last check will count as expired. Review your details and submit an updated version so the editors can confirm them again.`,
+    staleOn: 'expires on',
     languageNl: 'Dutch',
     languageEn: 'English',
     languageHint: 'Leave English fields empty if you have no translation; we never invent one.',

@@ -37,6 +37,8 @@ export type RevisionContent = { nl: RevisionText; en: RevisionText; facts: Revis
 
 /** Newest confirmation older than this is reported as `stale`; nothing is hidden by it. */
 export const FRESHNESS_STALE_AFTER_DAYS = 180;
+/** A fresh confirmation that will turn stale within this many days is flagged so a re-check can be scheduled. */
+export const FRESHNESS_RECHECK_WINDOW_DAYS = 30;
 
 export const EDITABLE_REVISION_STATUSES: ReadonlySet<string> = new Set(["draft"]);
 export const OPEN_REVISION_STATUSES: ReadonlySet<string> = new Set(["draft", "submitted", "changes_requested"]);
@@ -228,7 +230,18 @@ export function serialisePublicCheck(check: FactCheck) {
   };
 }
 
-export type Freshness = { status: "unverified" | "fresh" | "stale"; checkedOn: string | null; staleAfterDays: number };
+export type Freshness = {
+  status: "unverified" | "fresh" | "stale";
+  checkedOn: string | null;
+  staleAfterDays: number;
+  /** Derived from `checkedOn` + `staleAfterDays`; never stored, never guessed. */
+  staleOn: string | null;
+  /** Whole days until `staleOn` (negative once stale); null when unverified. */
+  daysUntilStale: number | null;
+  recheckWindowDays: number;
+  /** True only while `fresh` and within `recheckWindowDays` of turning stale. */
+  recheckDue: boolean;
+};
 
 export function freshnessFor(checks: FactCheck[], now: Date = new Date()): Freshness {
   let newest: Date | null = null;
@@ -236,12 +249,29 @@ export function freshnessFor(checks: FactCheck[], now: Date = new Date()): Fresh
     if (check.status !== "confirmed" || !check.checkedOn) continue;
     if (!newest || check.checkedOn > newest) newest = check.checkedOn;
   }
-  if (!newest) return { status: "unverified", checkedOn: null, staleAfterDays: FRESHNESS_STALE_AFTER_DAYS };
+  if (!newest) {
+    return {
+      status: "unverified",
+      checkedOn: null,
+      staleAfterDays: FRESHNESS_STALE_AFTER_DAYS,
+      staleOn: null,
+      daysUntilStale: null,
+      recheckWindowDays: FRESHNESS_RECHECK_WINDOW_DAYS,
+      recheckDue: false,
+    };
+  }
+  const staleOn = new Date(newest.getTime() + FRESHNESS_STALE_AFTER_DAYS * 86_400_000);
   const ageDays = (now.getTime() - newest.getTime()) / 86_400_000;
+  const status = ageDays > FRESHNESS_STALE_AFTER_DAYS ? "stale" : "fresh";
+  const daysUntilStale = Math.floor((staleOn.getTime() - now.getTime()) / 86_400_000);
   return {
-    status: ageDays > FRESHNESS_STALE_AFTER_DAYS ? "stale" : "fresh",
+    status,
     checkedOn: newest.toISOString(),
     staleAfterDays: FRESHNESS_STALE_AFTER_DAYS,
+    staleOn: staleOn.toISOString(),
+    daysUntilStale,
+    recheckWindowDays: FRESHNESS_RECHECK_WINDOW_DAYS,
+    recheckDue: status === "fresh" && daysUntilStale <= FRESHNESS_RECHECK_WINDOW_DAYS,
   };
 }
 

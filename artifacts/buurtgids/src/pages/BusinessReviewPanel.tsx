@@ -287,6 +287,11 @@ export function BusinessReviewPanel({ section, enabled }: { section: 'authority'
                     <div className="flex gap-2">
                       <Badge variant={item.profile.publicationStatus === 'published' ? 'secondary' : 'outline'}>{copy.publicationStatus[item.profile.publicationStatus] ?? item.profile.publicationStatus}</Badge>
                       <Badge variant="outline">{fields.freshness[item.freshness.status] ?? item.freshness.status}</Badge>
+                      {item.freshness.recheckDue && item.freshness.staleOn && (
+                        <Badge variant="outline" className="border-amber-500/60 bg-amber-500/10 text-amber-900" data-testid={`publication-recheck-due-${item.profile.id}`}>
+                          {fields.recheckDueBadge} · {fields.staleOn} {new Date(item.freshness.staleOn).toLocaleDateString(language === 'nl' ? 'nl-NL' : 'en-GB')}
+                        </Badge>
+                      )}
                     </div>
                   </div>
                   <CardDescription>

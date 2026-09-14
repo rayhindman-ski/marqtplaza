@@ -293,6 +293,12 @@ export default function BusinessRevisionPage() {
                   {workspace.freshness.checkedOn ? ` · ${copy.checkedOn} ${new Date(workspace.freshness.checkedOn).toLocaleDateString(language === 'nl' ? 'nl-NL' : 'en-GB')}` : ''}
                 </span>
               </div>
+              {workspace.freshness.recheckDue && workspace.freshness.staleOn && workspace.freshness.daysUntilStale !== null && (
+                <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3" role="status" data-testid="owner-recheck-due">
+                  <p className="text-xs font-bold uppercase tracking-wide text-amber-800 mb-1 flex items-center gap-1"><Clock className="w-3.5 h-3.5" /> {copy.recheckDueTitle}</p>
+                  <p className="text-sm">{copy.recheckDueBody(workspace.freshness.daysUntilStale, new Date(workspace.freshness.staleOn).toLocaleDateString(language === 'nl' ? 'nl-NL' : 'en-GB'))}</p>
+                </div>
+              )}
               {showDecisionNote && (
                 <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3" data-testid="reviewer-note">
                   <p className="text-xs font-bold uppercase tracking-wide text-amber-800 mb-1 flex items-center gap-1"><ShieldAlert className="w-3.5 h-3.5" /> {copy.reviewerNote}</p>
