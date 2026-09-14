@@ -13,6 +13,7 @@ import businessPublicationRouter from "./business-publication";
 import savedEventsRouter from "./saved-events";
 import registrationRouter from "./registration";
 import accountRouter from "./account";
+import accountLifecycleRouter from "./account-lifecycle";
 
 const router: IRouter = Router();
 
@@ -31,5 +32,6 @@ router.use(businessPublicationRouter);
 router.use(savedEventsRouter);
 router.use(registrationRouter);
 router.use(accountRouter);
+router.use(accountLifecycleRouter);
 
 export default router;

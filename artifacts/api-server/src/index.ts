@@ -6,6 +6,7 @@ import { ensureEventSourceStatusStorage, startEventSourceScheduler } from "./rou
 import { startNeighborhoodDiscoveryScheduler } from "./lib/neighborhood-discovery-refresh";
 import { backfillApprovedRevisions } from "./lib/businessRevisionBackfill";
 import { getFeatureFlags } from "./lib/featureFlags";
+import { startLifecycleDispatcher } from "./lib/lifecycleOutbox";
 
 const rawPort = process.env["PORT"];
 
@@ -34,6 +35,10 @@ async function startServer(): Promise<void> {
   startEventSourceScheduler();
   startSocialMapReviewScheduler();
   startNeighborhoodDiscoveryScheduler();
+  if (getFeatureFlags().accounts) {
+    // Without a configured provider this only logs once; queued rows stay visible as queued.
+    startLifecycleDispatcher();
+  }
   app.listen(port, (err) => {
     if (err) {
       logger.error({ err }, "Error listening on port");

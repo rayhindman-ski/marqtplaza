@@ -54,7 +54,9 @@ import {
   serialiseProfile,
   serialiseClaim,
 } from "../lib/businessClaims";
+import { requireActiveAccount } from "../lib/accountStatus";
 import { applyClaimDecision } from "../lib/claimDecisions";
+import { notifyUser } from "../lib/lifecycleNotifications";
 import {
   approvedRevisionFor,
   factChecksFor,
@@ -76,6 +78,8 @@ export type BusinessesRouterOptions = {
   requireEditor?: RequestHandler;
   /** Rollout flags; `businessPublication` routes owner edits through draft revisions. */
   flags?: FeatureFlagSource;
+  /** Outbound listing resolver for claims; injectable so tests never call providers. */
+  resolveListing?: typeof resolveClaimableBusinessListing;
 };
 
 const supportedCities = new Set(["ams", "rot", "utr", "dhg", "ein"]);
@@ -219,22 +223,15 @@ export function createBusinessesRouter(
   const getUserId = options.getUserId ?? clerkUserId;
   const requireEditorRole = options.requireEditor ?? requireEditor;
   const flags = options.flags ?? getFeatureFlags;
+  const resolveListing = options.resolveListing ?? resolveClaimableBusinessListing;
   const router: IRouter = Router();
 
-  function currentUserId(
-    req: Request,
-    res: { status: (code: number) => { json: (body: unknown) => unknown } },
-  ) {
-    const userId = getUserId(req);
-    if (!userId) {
-      res.status(401).json({ error: "Authentication is required." });
-      return null;
-    }
-    return userId;
-  }
+  // Suspended or deleted application accounts keep their Clerk session but
+  // must not read or operate retained memberships, claims, or deals; every
+  // authenticated route below goes through requireActiveAccount.
 
   router.get("/business-claims", async (req, res): Promise<void> => {
-    const userId = currentUserId(req, res);
+    const userId = await requireActiveAccount(req, res, getUserId);
     if (!userId) return;
     const rows = await claimRows(eq(businessClaimsTable.claimantId, userId));
     res.json(
@@ -245,7 +242,7 @@ export function createBusinessesRouter(
   });
 
   router.post("/business-claims", async (req, res): Promise<void> => {
-    const userId = currentUserId(req, res);
+    const userId = await requireActiveAccount(req, res, getUserId);
     if (!userId) return;
     const parsed = CreateBusinessClaimBody.safeParse(req.body);
     if (!parsed.success) {
@@ -268,7 +265,7 @@ export function createBusinessesRouter(
 
     let canonical;
     try {
-      canonical = await resolveClaimableBusinessListing(
+      canonical = await resolveListing(
         listing.cityId,
         listing.listingSource,
         listing.listingId,
@@ -361,6 +358,18 @@ export function createBusinessesRouter(
             message: message?.trim() || null,
           })
           .returning();
+        // The claimant's confirmation commits with the claim; nothing is sent from here.
+        await notifyUser(tx, {
+          clerkUserId: userId,
+          eventCode: "claim.submitted",
+          idempotencyKey: `claim:${newClaim.id}:v${newClaim.version}:${newClaim.status}`,
+          payload: {
+            claimId: newClaim.id,
+            businessProfileId: existingProfile.id,
+            businessName: existingProfile.name,
+            status: newClaim.status,
+          },
+        });
         return { claim: newClaim, profile: existingProfile };
       }));
     } catch (error) {
@@ -466,7 +475,7 @@ export function createBusinessesRouter(
   );
 
   router.get("/business-profiles/mine", async (req, res): Promise<void> => {
-    const userId = currentUserId(req, res);
+    const userId = await requireActiveAccount(req, res, getUserId);
     if (!userId) return;
     const rows = await db
       .select({
@@ -510,7 +519,7 @@ export function createBusinessesRouter(
   });
 
   router.patch("/business-profiles/:id", async (req, res): Promise<void> => {
-    const userId = currentUserId(req, res);
+    const userId = await requireActiveAccount(req, res, getUserId);
     if (!userId) return;
     const params = UpdateBusinessProfileParams.safeParse(req.params);
     const body = UpdateBusinessProfileBody.safeParse(req.body);
@@ -589,7 +598,7 @@ export function createBusinessesRouter(
   router.post(
     "/business-profiles/:id/deals",
     async (req, res): Promise<void> => {
-      const userId = currentUserId(req, res);
+      const userId = await requireActiveAccount(req, res, getUserId);
       if (!userId) return;
       const params = CreateBusinessDealParams.safeParse(req.params);
       const body = CreateBusinessDealBody.safeParse(req.body);
@@ -644,7 +653,7 @@ export function createBusinessesRouter(
   router.patch(
     "/business-profiles/:id/deals/:dealId",
     async (req, res): Promise<void> => {
-      const userId = currentUserId(req, res);
+      const userId = await requireActiveAccount(req, res, getUserId);
       if (!userId) return;
       const params = UpdateBusinessDealParams.safeParse(req.params);
       const body = UpdateBusinessDealBody.safeParse(req.body);

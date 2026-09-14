@@ -23,6 +23,8 @@ import type {
   AccountConsents,
   AccountMe,
   AccountOptions,
+  AccountRequest,
+  AccountRequests,
   ApiError,
   AuthorityQueuePage,
   BusinessClaim,
@@ -48,6 +50,7 @@ import type {
   CommunityPostParticipationInput,
   CommunityPostParticipationResponse,
   CommunityPostSubmission,
+  CreateAccountDeletionRequestInput,
   Deal,
   DealInput,
   DealUpdate,
@@ -69,9 +72,12 @@ import type {
   GetListingsParams,
   GetNewsParams,
   GetPublicationQueueParams,
+  GetSupportAccountRequestsParams,
+  GetSupportLifecycleMessagesParams,
   GetWeatherParams,
   GooglePlacesUsage,
   HealthStatus,
+  LifecycleMessages,
   ListingsResponse,
   LookupBusinessesParams,
   ModerationDecision,
@@ -98,9 +104,15 @@ import type {
   SocialMapReviewResponse,
   SourceScanRequest,
   SourceScanResponse,
+  SupportAccountRequest,
+  SupportAccountRequestDecisionInput,
+  SupportAccountRequests,
+  SupportLifecycleMessage,
+  SupportLifecycleMessages,
   UpdateAccountPreferencesInput,
   VersionConflictResponse,
-  WeatherResponse
+  WeatherResponse,
+  WithdrawAccountRequestInput
 } from './api.schemas';
 
 import { customFetch } from '../custom-fetch';
@@ -676,6 +688,632 @@ export const useRecordAccountConsent = <TError = ErrorType<ApiError | FeatureDis
         TContext
       > => {
       return useMutation(getRecordAccountConsentMutationOptions(options));
+    }
+
+export const getCreateAccountDeletionRequestUrl = () => {
+
+
+
+
+  return `/api/account/deletion-requests`
+}
+
+/**
+ * Records a tracked deletion request for the signed-in account. The caller must first
+ * acknowledge every deletion scope; the research registration and Clerk credentials are
+ * separate and are not covered by this request. Clients must re-authenticate through Clerk
+ * immediately before calling this operation. When the requester is the only owner of a
+ * business the request is stored as `blocked` with `blocked_ownership` until support records
+ * a transfer, closure, or unpublication decision. Nothing is erased by this call: erasure
+ * follows the approved retention configuration and a completed support decision.
+ * @summary Request deletion of the account
+ */
+export const createAccountDeletionRequest = async (createAccountDeletionRequestInput: CreateAccountDeletionRequestInput, options?: Parameters<typeof customFetch>[1]): Promise<AccountRequest> => {
+
+  return customFetch<AccountRequest>(getCreateAccountDeletionRequestUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(createAccountDeletionRequestInput)
+  }
+);}
+
+
+
+
+
+export const getCreateAccountDeletionRequestMutationOptions = <TError = ErrorType<ApiError | FeatureDisabledResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createAccountDeletionRequest>>, TError,{data: BodyType<CreateAccountDeletionRequestInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createAccountDeletionRequest>>, TError,{data: BodyType<CreateAccountDeletionRequestInput>}, TContext> => {
+
+const mutationKey = ['createAccountDeletionRequest'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createAccountDeletionRequest>>, {data: BodyType<CreateAccountDeletionRequestInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createAccountDeletionRequest(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateAccountDeletionRequestMutationResult = NonNullable<Awaited<ReturnType<typeof createAccountDeletionRequest>>>
+    export type CreateAccountDeletionRequestMutationBody = BodyType<CreateAccountDeletionRequestInput>
+    export type CreateAccountDeletionRequestMutationError = ErrorType<ApiError | FeatureDisabledResponse>
+
+    /**
+ * @summary Request deletion of the account
+ */
+export const useCreateAccountDeletionRequest = <TError = ErrorType<ApiError | FeatureDisabledResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createAccountDeletionRequest>>, TError,{data: BodyType<CreateAccountDeletionRequestInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createAccountDeletionRequest>>,
+        TError,
+        {data: BodyType<CreateAccountDeletionRequestInput>},
+        TContext
+      > => {
+      return useMutation(getCreateAccountDeletionRequestMutationOptions(options));
+    }
+
+export const getGetAccountRequestsUrl = () => {
+
+
+
+
+  return `/api/account/requests`
+}
+
+/**
+ * @summary List the account's tracked requests
+ */
+export const getAccountRequests = async ( options?: Parameters<typeof customFetch>[1]): Promise<AccountRequests> => {
+
+  return customFetch<AccountRequests>(getGetAccountRequestsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetAccountRequestsQueryKey = () => {
+    return [
+    `/api/account/requests`
+    ] as const;
+    }
+
+
+export const getGetAccountRequestsQueryOptions = <TData = Awaited<ReturnType<typeof getAccountRequests>>, TError = ErrorType<ApiError | FeatureDisabledResponse>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAccountRequests>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetAccountRequestsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAccountRequests>>> = ({ signal }) => getAccountRequests({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAccountRequests>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetAccountRequestsQueryResult = NonNullable<Awaited<ReturnType<typeof getAccountRequests>>>
+export type GetAccountRequestsQueryError = ErrorType<ApiError | FeatureDisabledResponse>
+
+
+/**
+ * @summary List the account's tracked requests
+ */
+
+export function useGetAccountRequests<TData = Awaited<ReturnType<typeof getAccountRequests>>, TError = ErrorType<ApiError | FeatureDisabledResponse>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAccountRequests>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetAccountRequestsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getWithdrawAccountRequestUrl = (id: number,) => {
+
+
+
+
+  return `/api/account/requests/${id}/withdraw`
+}
+
+/**
+ * @summary Withdraw a request that is not yet in review
+ */
+export const withdrawAccountRequest = async (id: number,
+    withdrawAccountRequestInput: WithdrawAccountRequestInput, options?: Parameters<typeof customFetch>[1]): Promise<AccountRequest> => {
+
+  return customFetch<AccountRequest>(getWithdrawAccountRequestUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(withdrawAccountRequestInput)
+  }
+);}
+
+
+
+
+
+export const getWithdrawAccountRequestMutationOptions = <TError = ErrorType<ApiError | VersionConflictResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof withdrawAccountRequest>>, TError,{id: number;data: BodyType<WithdrawAccountRequestInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof withdrawAccountRequest>>, TError,{id: number;data: BodyType<WithdrawAccountRequestInput>}, TContext> => {
+
+const mutationKey = ['withdrawAccountRequest'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof withdrawAccountRequest>>, {id: number;data: BodyType<WithdrawAccountRequestInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  withdrawAccountRequest(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type WithdrawAccountRequestMutationResult = NonNullable<Awaited<ReturnType<typeof withdrawAccountRequest>>>
+    export type WithdrawAccountRequestMutationBody = BodyType<WithdrawAccountRequestInput>
+    export type WithdrawAccountRequestMutationError = ErrorType<ApiError | VersionConflictResponse>
+
+    /**
+ * @summary Withdraw a request that is not yet in review
+ */
+export const useWithdrawAccountRequest = <TError = ErrorType<ApiError | VersionConflictResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof withdrawAccountRequest>>, TError,{id: number;data: BodyType<WithdrawAccountRequestInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof withdrawAccountRequest>>,
+        TError,
+        {id: number;data: BodyType<WithdrawAccountRequestInput>},
+        TContext
+      > => {
+      return useMutation(getWithdrawAccountRequestMutationOptions(options));
+    }
+
+export const getGetAccountMessagesUrl = () => {
+
+
+
+
+  return `/api/account/messages`
+}
+
+/**
+ * Lists claim, review, publication, and request messages addressed to the account with a
+ * truthful delivery state: `queued` (not handed to a provider yet), `accepted` (provider
+ * accepted it), `delivered` (provider confirmed delivery), or `failed`. Message bodies and
+ * addresses are never returned.
+ * @summary Status of application-owned lifecycle messages
+ */
+export const getAccountMessages = async ( options?: Parameters<typeof customFetch>[1]): Promise<LifecycleMessages> => {
+
+  return customFetch<LifecycleMessages>(getGetAccountMessagesUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetAccountMessagesQueryKey = () => {
+    return [
+    `/api/account/messages`
+    ] as const;
+    }
+
+
+export const getGetAccountMessagesQueryOptions = <TData = Awaited<ReturnType<typeof getAccountMessages>>, TError = ErrorType<ApiError | FeatureDisabledResponse>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAccountMessages>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetAccountMessagesQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAccountMessages>>> = ({ signal }) => getAccountMessages({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAccountMessages>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetAccountMessagesQueryResult = NonNullable<Awaited<ReturnType<typeof getAccountMessages>>>
+export type GetAccountMessagesQueryError = ErrorType<ApiError | FeatureDisabledResponse>
+
+
+/**
+ * @summary Status of application-owned lifecycle messages
+ */
+
+export function useGetAccountMessages<TData = Awaited<ReturnType<typeof getAccountMessages>>, TError = ErrorType<ApiError | FeatureDisabledResponse>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAccountMessages>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetAccountMessagesQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetSupportAccountRequestsUrl = (params?: GetSupportAccountRequestsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/review/account-requests?${stringifiedParams}` : `/api/review/account-requests`
+}
+
+/**
+ * @summary Support queue of account requests
+ */
+export const getSupportAccountRequests = async (params?: GetSupportAccountRequestsParams, options?: Parameters<typeof customFetch>[1]): Promise<SupportAccountRequests> => {
+
+  return customFetch<SupportAccountRequests>(getGetSupportAccountRequestsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetSupportAccountRequestsQueryKey = (params?: GetSupportAccountRequestsParams,) => {
+    return [
+    `/api/review/account-requests`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetSupportAccountRequestsQueryOptions = <TData = Awaited<ReturnType<typeof getSupportAccountRequests>>, TError = ErrorType<ApiError | FeatureDisabledResponse>>(params?: GetSupportAccountRequestsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSupportAccountRequests>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetSupportAccountRequestsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getSupportAccountRequests>>> = ({ signal }) => getSupportAccountRequests(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getSupportAccountRequests>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetSupportAccountRequestsQueryResult = NonNullable<Awaited<ReturnType<typeof getSupportAccountRequests>>>
+export type GetSupportAccountRequestsQueryError = ErrorType<ApiError | FeatureDisabledResponse>
+
+
+/**
+ * @summary Support queue of account requests
+ */
+
+export function useGetSupportAccountRequests<TData = Awaited<ReturnType<typeof getSupportAccountRequests>>, TError = ErrorType<ApiError | FeatureDisabledResponse>>(
+ params?: GetSupportAccountRequestsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSupportAccountRequests>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetSupportAccountRequestsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getDecideSupportAccountRequestUrl = (id: number,) => {
+
+
+
+
+  return `/api/review/account-requests/${id}/decision`
+}
+
+/**
+ * `start_review` moves a received or blocked request into review. `resolve_blocker` records
+ * how one sole-owned business was dealt with: `ownership_transferred` (another owner must
+ * already exist), `business_closed` (archives the profile), or `business_unpublished`
+ * (removes it from the public directory). Claims, memberships, and audit history are never
+ * deleted. `complete` marks the account deleted once no blocker remains; `reject` closes the
+ * request with `request_rejected`. Every decision is version-bound and appended to the
+ * request's audit trail. A reviewer cannot decide their own request.
+ * @summary Record a support decision on an account request
+ */
+export const decideSupportAccountRequest = async (id: number,
+    supportAccountRequestDecisionInput: SupportAccountRequestDecisionInput, options?: Parameters<typeof customFetch>[1]): Promise<SupportAccountRequest> => {
+
+  return customFetch<SupportAccountRequest>(getDecideSupportAccountRequestUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(supportAccountRequestDecisionInput)
+  }
+);}
+
+
+
+
+
+export const getDecideSupportAccountRequestMutationOptions = <TError = ErrorType<ApiError | VersionConflictResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof decideSupportAccountRequest>>, TError,{id: number;data: BodyType<SupportAccountRequestDecisionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof decideSupportAccountRequest>>, TError,{id: number;data: BodyType<SupportAccountRequestDecisionInput>}, TContext> => {
+
+const mutationKey = ['decideSupportAccountRequest'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof decideSupportAccountRequest>>, {id: number;data: BodyType<SupportAccountRequestDecisionInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  decideSupportAccountRequest(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DecideSupportAccountRequestMutationResult = NonNullable<Awaited<ReturnType<typeof decideSupportAccountRequest>>>
+    export type DecideSupportAccountRequestMutationBody = BodyType<SupportAccountRequestDecisionInput>
+    export type DecideSupportAccountRequestMutationError = ErrorType<ApiError | VersionConflictResponse>
+
+    /**
+ * @summary Record a support decision on an account request
+ */
+export const useDecideSupportAccountRequest = <TError = ErrorType<ApiError | VersionConflictResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof decideSupportAccountRequest>>, TError,{id: number;data: BodyType<SupportAccountRequestDecisionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof decideSupportAccountRequest>>,
+        TError,
+        {id: number;data: BodyType<SupportAccountRequestDecisionInput>},
+        TContext
+      > => {
+      return useMutation(getDecideSupportAccountRequestMutationOptions(options));
+    }
+
+export const getGetSupportLifecycleMessagesUrl = (params?: GetSupportLifecycleMessagesParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/review/lifecycle-messages?${stringifiedParams}` : `/api/review/lifecycle-messages`
+}
+
+/**
+ * @summary Lifecycle messages for support (exhausted retries first)
+ */
+export const getSupportLifecycleMessages = async (params?: GetSupportLifecycleMessagesParams, options?: Parameters<typeof customFetch>[1]): Promise<SupportLifecycleMessages> => {
+
+  return customFetch<SupportLifecycleMessages>(getGetSupportLifecycleMessagesUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetSupportLifecycleMessagesQueryKey = (params?: GetSupportLifecycleMessagesParams,) => {
+    return [
+    `/api/review/lifecycle-messages`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetSupportLifecycleMessagesQueryOptions = <TData = Awaited<ReturnType<typeof getSupportLifecycleMessages>>, TError = ErrorType<ApiError | FeatureDisabledResponse>>(params?: GetSupportLifecycleMessagesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSupportLifecycleMessages>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetSupportLifecycleMessagesQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getSupportLifecycleMessages>>> = ({ signal }) => getSupportLifecycleMessages(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getSupportLifecycleMessages>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetSupportLifecycleMessagesQueryResult = NonNullable<Awaited<ReturnType<typeof getSupportLifecycleMessages>>>
+export type GetSupportLifecycleMessagesQueryError = ErrorType<ApiError | FeatureDisabledResponse>
+
+
+/**
+ * @summary Lifecycle messages for support (exhausted retries first)
+ */
+
+export function useGetSupportLifecycleMessages<TData = Awaited<ReturnType<typeof getSupportLifecycleMessages>>, TError = ErrorType<ApiError | FeatureDisabledResponse>>(
+ params?: GetSupportLifecycleMessagesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSupportLifecycleMessages>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetSupportLifecycleMessagesQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getResendSupportLifecycleMessageUrl = (id: number,) => {
+
+
+
+
+  return `/api/review/lifecycle-messages/${id}/resend`
+}
+
+/**
+ * @summary Re-queue a permanently failed message
+ */
+export const resendSupportLifecycleMessage = async (id: number, options?: Parameters<typeof customFetch>[1]): Promise<SupportLifecycleMessage> => {
+
+  return customFetch<SupportLifecycleMessage>(getResendSupportLifecycleMessageUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getResendSupportLifecycleMessageMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof resendSupportLifecycleMessage>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof resendSupportLifecycleMessage>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['resendSupportLifecycleMessage'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof resendSupportLifecycleMessage>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  resendSupportLifecycleMessage(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ResendSupportLifecycleMessageMutationResult = NonNullable<Awaited<ReturnType<typeof resendSupportLifecycleMessage>>>
+
+    export type ResendSupportLifecycleMessageMutationError = ErrorType<ApiError>
+
+    /**
+ * @summary Re-queue a permanently failed message
+ */
+export const useResendSupportLifecycleMessage = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof resendSupportLifecycleMessage>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof resendSupportLifecycleMessage>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getResendSupportLifecycleMessageMutationOptions(options));
     }
 
 export const getGetReadinessUrl = () => {

@@ -30,3 +30,4 @@
 - [drizzle-kit push diff limits](drizzle-push-diff-limits.md) — push misses partial-index WHERE changes (rename the index) and re-applies FKs whose generated names exceed 63 chars (name them).
 - [Business intake integrity](business-intake-routing.md) — per-route gating, version-bound reviewer decisions, stored-first listing resolution, race-safe idempotency.
 - [Business publication review](business-publication-review.md) — four independent dimensions, snapshot-only public output (no column fallback), interested-party exclusion incl. active claimants.
+- [Lifecycle outbox](lifecycle-outbox.md) — enqueue in the state-change transaction; attempts stay monotonic; terminal account states gate every account-owned route.

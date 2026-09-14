@@ -250,6 +250,313 @@ export const RecordAccountConsentResponse = zod.object({
 
 
 /**
+ * Records a tracked deletion request for the signed-in account. The caller must first
+ * acknowledge every deletion scope; the research registration and Clerk credentials are
+ * separate and are not covered by this request. Clients must re-authenticate through Clerk
+ * immediately before calling this operation. When the requester is the only owner of a
+ * business the request is stored as `blocked` with `blocked_ownership` until support records
+ * a transfer, closure, or unpublication decision. Nothing is erased by this call: erasure
+ * follows the approved retention configuration and a completed support decision.
+ * @summary Request deletion of the account
+ */
+export const createAccountDeletionRequestBodyAcknowledgedScopesMax = 10;
+
+
+
+export const CreateAccountDeletionRequestBody = zod.object({
+  "acknowledgedScopes": zod.array(zod.enum(['account_profile', 'preferences', 'consents', 'saved_events', 'business_memberships']).describe('What an account deletion request covers. The research registration, community\ncontributions, and Clerk credentials are separate scopes handled outside this request.\n')).min(1).max(createAccountDeletionRequestBodyAcknowledgedScopesMax).describe('Must contain every AccountDeletionScope value exactly once.')
+})
+
+export const CreateAccountDeletionRequestResponse = zod.object({
+  "id": zod.number(),
+  "scope": zod.enum(['account', 'business']),
+  "type": zod.enum(['deletion', 'export', 'suspension_appeal']),
+  "status": zod.enum(['received', 'blocked', 'in_review', 'completed', 'rejected', 'withdrawn']).describe('`received` awaits support; `blocked` needs a support decision about a sole-owned business\nfirst; `in_review` is being handled; `completed`, `rejected`, and `withdrawn` are final.\n'),
+  "version": zod.number(),
+  "acknowledgedScopes": zod.array(zod.string()),
+  "blocker": zod.union([zod.object({
+  "code": zod.enum(['blocked_ownership']),
+  "businesses": zod.array(zod.object({
+  "businessProfileId": zod.number(),
+  "name": zod.string(),
+  "publicationStatus": zod.string(),
+  "resolved": zod.boolean().describe('True once a support resolution has been recorded for this business.')
+}))
+}),zod.null()]),
+  "resolutionCode": zod.string().nullable(),
+  "deadlineAt": zod.string().nullable().describe('Null until a handling deadline is approved in release configuration.'),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string(),
+  "resolvedAt": zod.string().nullable(),
+  "withdrawnAt": zod.string().nullable()
+}).describe('Requester-facing view. Support notes and the handling reviewer are never included.')
+
+
+/**
+ * @summary List the account's tracked requests
+ */
+export const GetAccountRequestsResponse = zod.object({
+  "requests": zod.array(zod.object({
+  "id": zod.number(),
+  "scope": zod.enum(['account', 'business']),
+  "type": zod.enum(['deletion', 'export', 'suspension_appeal']),
+  "status": zod.enum(['received', 'blocked', 'in_review', 'completed', 'rejected', 'withdrawn']).describe('`received` awaits support; `blocked` needs a support decision about a sole-owned business\nfirst; `in_review` is being handled; `completed`, `rejected`, and `withdrawn` are final.\n'),
+  "version": zod.number(),
+  "acknowledgedScopes": zod.array(zod.string()),
+  "blocker": zod.union([zod.object({
+  "code": zod.enum(['blocked_ownership']),
+  "businesses": zod.array(zod.object({
+  "businessProfileId": zod.number(),
+  "name": zod.string(),
+  "publicationStatus": zod.string(),
+  "resolved": zod.boolean().describe('True once a support resolution has been recorded for this business.')
+}))
+}),zod.null()]),
+  "resolutionCode": zod.string().nullable(),
+  "deadlineAt": zod.string().nullable().describe('Null until a handling deadline is approved in release configuration.'),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string(),
+  "resolvedAt": zod.string().nullable(),
+  "withdrawnAt": zod.string().nullable()
+}).describe('Requester-facing view. Support notes and the handling reviewer are never included.'))
+})
+
+
+/**
+ * @summary Withdraw a request that is not yet in review
+ */
+export const WithdrawAccountRequestParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+
+
+export const WithdrawAccountRequestBody = zod.object({
+  "expectedVersion": zod.number().min(1)
+})
+
+export const WithdrawAccountRequestResponse = zod.object({
+  "id": zod.number(),
+  "scope": zod.enum(['account', 'business']),
+  "type": zod.enum(['deletion', 'export', 'suspension_appeal']),
+  "status": zod.enum(['received', 'blocked', 'in_review', 'completed', 'rejected', 'withdrawn']).describe('`received` awaits support; `blocked` needs a support decision about a sole-owned business\nfirst; `in_review` is being handled; `completed`, `rejected`, and `withdrawn` are final.\n'),
+  "version": zod.number(),
+  "acknowledgedScopes": zod.array(zod.string()),
+  "blocker": zod.union([zod.object({
+  "code": zod.enum(['blocked_ownership']),
+  "businesses": zod.array(zod.object({
+  "businessProfileId": zod.number(),
+  "name": zod.string(),
+  "publicationStatus": zod.string(),
+  "resolved": zod.boolean().describe('True once a support resolution has been recorded for this business.')
+}))
+}),zod.null()]),
+  "resolutionCode": zod.string().nullable(),
+  "deadlineAt": zod.string().nullable().describe('Null until a handling deadline is approved in release configuration.'),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string(),
+  "resolvedAt": zod.string().nullable(),
+  "withdrawnAt": zod.string().nullable()
+}).describe('Requester-facing view. Support notes and the handling reviewer are never included.')
+
+
+/**
+ * Lists claim, review, publication, and request messages addressed to the account with a
+ * truthful delivery state: `queued` (not handed to a provider yet), `accepted` (provider
+ * accepted it), `delivered` (provider confirmed delivery), or `failed`. Message bodies and
+ * addresses are never returned.
+ * @summary Status of application-owned lifecycle messages
+ */
+export const GetAccountMessagesResponse = zod.object({
+  "messages": zod.array(zod.object({
+  "id": zod.number(),
+  "eventCode": zod.string(),
+  "status": zod.enum(['queued', 'sending', 'accepted', 'delivered', 'failed', 'cancelled']),
+  "locale": zod.string(),
+  "businessName": zod.string().nullable(),
+  "attempts": zod.number(),
+  "maxAttempts": zod.number(),
+  "nextRetryAt": zod.string().nullable(),
+  "acceptedAt": zod.string().nullable(),
+  "deliveredAt": zod.string().nullable(),
+  "failedAt": zod.string().nullable(),
+  "createdAt": zod.string()
+}))
+})
+
+
+/**
+ * @summary Support queue of account requests
+ */
+export const GetSupportAccountRequestsQueryParams = zod.object({
+  "status": zod.enum(['received', 'blocked', 'in_review', 'completed', 'rejected', 'withdrawn']).optional()
+})
+
+export const GetSupportAccountRequestsResponse = zod.object({
+  "requests": zod.array(zod.object({
+  "id": zod.number(),
+  "scope": zod.enum(['account', 'business']),
+  "type": zod.enum(['deletion', 'export', 'suspension_appeal']),
+  "status": zod.enum(['received', 'blocked', 'in_review', 'completed', 'rejected', 'withdrawn']).describe('`received` awaits support; `blocked` needs a support decision about a sole-owned business\nfirst; `in_review` is being handled; `completed`, `rejected`, and `withdrawn` are final.\n'),
+  "version": zod.number(),
+  "acknowledgedScopes": zod.array(zod.string()),
+  "blocker": zod.union([zod.object({
+  "code": zod.enum(['blocked_ownership']),
+  "businesses": zod.array(zod.object({
+  "businessProfileId": zod.number(),
+  "name": zod.string(),
+  "publicationStatus": zod.string(),
+  "resolved": zod.boolean().describe('True once a support resolution has been recorded for this business.')
+}))
+}),zod.null()]),
+  "resolutionCode": zod.string().nullable(),
+  "deadlineAt": zod.string().nullable().describe('Null until a handling deadline is approved in release configuration.'),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string(),
+  "resolvedAt": zod.string().nullable(),
+  "withdrawnAt": zod.string().nullable()
+}).describe('Requester-facing view. Support notes and the handling reviewer are never included.').and(zod.object({
+  "userId": zod.number().describe('Internal app user id of the requester; never contact data.'),
+  "resolutionNote": zod.string().nullable(),
+  "resolvedByUserId": zod.string().nullable(),
+  "events": zod.array(zod.object({
+  "id": zod.number(),
+  "fromStatus": zod.string().nullable(),
+  "toStatus": zod.string(),
+  "actor": zod.enum(['requester', 'support', 'system']),
+  "resolutionCode": zod.string().nullable(),
+  "businessProfileId": zod.number().nullable(),
+  "note": zod.string().nullable(),
+  "createdAt": zod.string()
+}))
+})))
+})
+
+
+/**
+ * `start_review` moves a received or blocked request into review. `resolve_blocker` records
+ * how one sole-owned business was dealt with: `ownership_transferred` (another owner must
+ * already exist), `business_closed` (archives the profile), or `business_unpublished`
+ * (removes it from the public directory). Claims, memberships, and audit history are never
+ * deleted. `complete` marks the account deleted once no blocker remains; `reject` closes the
+ * request with `request_rejected`. Every decision is version-bound and appended to the
+ * request's audit trail. A reviewer cannot decide their own request.
+ * @summary Record a support decision on an account request
+ */
+export const DecideSupportAccountRequestParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+export const decideSupportAccountRequestBodyNoteMax = 1000;
+
+
+
+export const DecideSupportAccountRequestBody = zod.object({
+  "expectedVersion": zod.number().min(1),
+  "decision": zod.enum(['start_review', 'resolve_blocker', 'complete', 'reject']),
+  "resolutionCode": zod.enum(['ownership_transferred', 'business_closed', 'business_unpublished', 'account_deleted', 'request_rejected']).optional(),
+  "businessProfileId": zod.number().optional().describe('Required for `resolve_blocker`; must be one of the request\'s blocked businesses.'),
+  "note": zod.string().max(decideSupportAccountRequestBodyNoteMax).optional().describe('Internal support note; never shown to the requester.')
+})
+
+export const DecideSupportAccountRequestResponse = zod.object({
+  "id": zod.number(),
+  "scope": zod.enum(['account', 'business']),
+  "type": zod.enum(['deletion', 'export', 'suspension_appeal']),
+  "status": zod.enum(['received', 'blocked', 'in_review', 'completed', 'rejected', 'withdrawn']).describe('`received` awaits support; `blocked` needs a support decision about a sole-owned business\nfirst; `in_review` is being handled; `completed`, `rejected`, and `withdrawn` are final.\n'),
+  "version": zod.number(),
+  "acknowledgedScopes": zod.array(zod.string()),
+  "blocker": zod.union([zod.object({
+  "code": zod.enum(['blocked_ownership']),
+  "businesses": zod.array(zod.object({
+  "businessProfileId": zod.number(),
+  "name": zod.string(),
+  "publicationStatus": zod.string(),
+  "resolved": zod.boolean().describe('True once a support resolution has been recorded for this business.')
+}))
+}),zod.null()]),
+  "resolutionCode": zod.string().nullable(),
+  "deadlineAt": zod.string().nullable().describe('Null until a handling deadline is approved in release configuration.'),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string(),
+  "resolvedAt": zod.string().nullable(),
+  "withdrawnAt": zod.string().nullable()
+}).describe('Requester-facing view. Support notes and the handling reviewer are never included.').and(zod.object({
+  "userId": zod.number().describe('Internal app user id of the requester; never contact data.'),
+  "resolutionNote": zod.string().nullable(),
+  "resolvedByUserId": zod.string().nullable(),
+  "events": zod.array(zod.object({
+  "id": zod.number(),
+  "fromStatus": zod.string().nullable(),
+  "toStatus": zod.string(),
+  "actor": zod.enum(['requester', 'support', 'system']),
+  "resolutionCode": zod.string().nullable(),
+  "businessProfileId": zod.number().nullable(),
+  "note": zod.string().nullable(),
+  "createdAt": zod.string()
+}))
+}))
+
+
+/**
+ * @summary Lifecycle messages for support (exhausted retries first)
+ */
+export const GetSupportLifecycleMessagesQueryParams = zod.object({
+  "status": zod.enum(['queued', 'sending', 'accepted', 'delivered', 'failed', 'cancelled']).optional()
+})
+
+export const GetSupportLifecycleMessagesResponse = zod.object({
+  "messages": zod.array(zod.object({
+  "id": zod.number(),
+  "eventCode": zod.string(),
+  "status": zod.enum(['queued', 'sending', 'accepted', 'delivered', 'failed', 'cancelled']),
+  "locale": zod.string(),
+  "businessName": zod.string().nullable(),
+  "attempts": zod.number(),
+  "maxAttempts": zod.number(),
+  "nextRetryAt": zod.string().nullable(),
+  "acceptedAt": zod.string().nullable(),
+  "deliveredAt": zod.string().nullable(),
+  "failedAt": zod.string().nullable(),
+  "createdAt": zod.string()
+}).and(zod.object({
+  "recipientUserId": zod.number().nullable(),
+  "lastErrorCode": zod.string().nullable(),
+  "lastErrorAt": zod.string().nullable()
+})))
+})
+
+
+/**
+ * @summary Re-queue a permanently failed message
+ */
+export const ResendSupportLifecycleMessageParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const ResendSupportLifecycleMessageResponse = zod.object({
+  "id": zod.number(),
+  "eventCode": zod.string(),
+  "status": zod.enum(['queued', 'sending', 'accepted', 'delivered', 'failed', 'cancelled']),
+  "locale": zod.string(),
+  "businessName": zod.string().nullable(),
+  "attempts": zod.number(),
+  "maxAttempts": zod.number(),
+  "nextRetryAt": zod.string().nullable(),
+  "acceptedAt": zod.string().nullable(),
+  "deliveredAt": zod.string().nullable(),
+  "failedAt": zod.string().nullable(),
+  "createdAt": zod.string()
+}).and(zod.object({
+  "recipientUserId": zod.number().nullable(),
+  "lastErrorCode": zod.string().nullable(),
+  "lastErrorAt": zod.string().nullable()
+}))
+
+
+/**
  * Reports which gated feature areas are enabled for this deployment. Flags are read-only and set by the operator environment.
  * @summary Get the rollout readiness state of gated entry points
  */

@@ -7,9 +7,8 @@
  */
 
 /**
- * received -> blocked | in_review | withdrawn; blocked -> received | withdrawn;
- * in_review -> completed | rejected. Deletion requests are blocked while the user is the
- * sole owner of a published business.
+ * `received` awaits support; `blocked` needs a support decision about a sole-owned business
+ * first; `in_review` is being handled; `completed`, `rejected`, and `withdrawn` are final.
  */
 export type AccountRequestStatus = typeof AccountRequestStatus[keyof typeof AccountRequestStatus];
 

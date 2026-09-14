@@ -12,6 +12,7 @@ import {
 } from "@workspace/db";
 
 import { ClaimConflictError, REVIEWABLE_CLAIM_STATUSES } from "./businessClaims";
+import { notifyUser } from "./lifecycleNotifications";
 import { SelfReviewError, assertNotReviewingOwnBusiness, assertNotSelfReview } from "./permissions";
 
 export type ClaimDecision = "approve" | "reject" | "request_changes";
@@ -160,7 +161,7 @@ export async function applyClaimDecision(input: ClaimDecisionInput): Promise<Cla
           .insert(businessMembersTable)
           .values({ businessProfileId: profile.id, userId: row.claim.claimantId, role: "owner" })
           .onConflictDoNothing();
-        await tx
+        const competing = await tx
           .update(businessClaimsTable)
           .set({
             status: "rejected",
@@ -175,7 +176,16 @@ export async function applyClaimDecision(input: ClaimDecisionInput): Promise<Cla
               inArray(businessClaimsTable.status, ["pending", "submitted", "changes_requested", "disputed"]),
               ne(businessClaimsTable.id, claim.id),
             ),
-          );
+          )
+          .returning({ id: businessClaimsTable.id, claimantId: businessClaimsTable.claimantId, version: businessClaimsTable.version });
+        for (const other of competing) {
+          await notifyUser(tx, {
+            clerkUserId: other.claimantId,
+            eventCode: "claim.rejected",
+            idempotencyKey: `claim:${other.id}:v${other.version}:rejected`,
+            payload: { claimId: other.id, businessProfileId: profile.id, businessName: profile.name, status: "rejected" },
+          });
+        }
       }
       await tx.insert(businessReviewsTable).values({
         targetType: "claim",
@@ -186,6 +196,14 @@ export async function applyClaimDecision(input: ClaimDecisionInput): Promise<Cla
         decision: input.decision,
         reasonCode: approved ? null : input.decision,
         reason: input.reason,
+      });
+      // The claimant's message commits with the decision (FR-013); the reviewer's
+      // note and identity stay out of the payload.
+      await notifyUser(tx, {
+        clerkUserId: claim.claimantId,
+        eventCode: approved ? "claim.approved" : input.decision === "reject" ? "claim.rejected" : "claim.changes_requested",
+        idempotencyKey: `claim:${claim.id}:v${claim.version}:${nextStatus}`,
+        payload: { claimId: claim.id, businessProfileId: profile.id, businessName: profile.name, status: nextStatus },
       });
       return { claim, profile };
     });

@@ -6,19 +6,14 @@
  * OpenAPI spec version: 0.1.0
  */
 
-/**
- * Outbox state of a lifecycle message, distinct from the business or account state it describes.
- * queued -> sending -> sent | failed; sending -> queued on transient failure with a retry time;
- * queued -> cancelled when the triggering state is reverted. Without a configured provider
- * messages stay queued and the UI may only say "message pending".
- */
 export type LifecycleMessageStatus = typeof LifecycleMessageStatus[keyof typeof LifecycleMessageStatus];
 
 
 export const LifecycleMessageStatus = {
   queued: 'queued',
   sending: 'sending',
-  sent: 'sent',
+  accepted: 'accepted',
+  delivered: 'delivered',
   failed: 'failed',
   cancelled: 'cancelled',
 } as const;

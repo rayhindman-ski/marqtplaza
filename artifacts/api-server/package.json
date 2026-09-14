@@ -13,6 +13,7 @@
     "test:events-quota": "tsx --test src/routes/sources.test.ts src/routes/listings-quota.test.ts src/routes/listings-language.test.ts",
     "test:discovery-refresh": "tsx --test src/lib/neighborhood-discovery-refresh.test.ts src/routes/listings-query.test.ts",
     "test:account-foundation": "tsx --test src/lib/permissions.test.ts src/routes/account.test.ts src/routes/registration.test.ts",
+    "test:account-lifecycle": "tsx --test src/routes/account-lifecycle.test.ts",
     "test:business-intake": "tsx --test src/routes/business-intake.test.ts",
     "test:business-publication": "tsx --test src/routes/business-publication.test.ts",
     "backfill:business-revisions": "tsx src/scripts/backfillBusinessRevisions.ts",

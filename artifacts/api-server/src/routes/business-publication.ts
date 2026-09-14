@@ -45,6 +45,7 @@ import {
 import { sendApiError, unknownFieldErrors } from "../lib/apiError";
 import { claimKind, serialiseClaim, serialiseProfile } from "../lib/businessClaims";
 import { applyClaimDecision } from "../lib/claimDecisions";
+import { notifyBusinessOwners } from "../lib/lifecycleNotifications";
 import {
   CHECKABLE_FIELDS,
   approvedRevisionFor,
@@ -838,14 +839,23 @@ export function createBusinessPublicationRouter(options: BusinessPublicationRout
           );
         }
       }
-      await tx.insert(businessReviewsTable).values({
-        targetType: "revision",
-        targetId: revision.id,
-        targetVersion: revision.version,
-        reviewerUserId: reviewerId,
-        decision,
-        reasonCode: decision === "approve" ? null : decision,
-        reason,
+      const [reviewRow] = await tx
+        .insert(businessReviewsTable)
+        .values({
+          targetType: "revision",
+          targetId: revision.id,
+          targetVersion: revision.version,
+          reviewerUserId: reviewerId,
+          decision,
+          reasonCode: decision === "approve" ? null : decision,
+          reason,
+        })
+        .returning({ id: businessReviewsTable.id });
+      await notifyBusinessOwners(tx, {
+        businessProfileId: profile.id,
+        eventCode: decision === "approve" ? "revision.approved" : decision === "reject" ? "revision.rejected" : "revision.changes_requested",
+        dedupeScope: `review:${reviewRow.id}`,
+        payload: { businessProfileId: profile.id, businessName: profile.name, revisionVersion: revision.version, status: nextStatus },
       });
       return { kind: "ok", revision: decided, profile: nextProfile };
     });
@@ -1020,14 +1030,25 @@ export function createBusinessPublicationRouter(options: BusinessPublicationRout
         .where(and(eq(businessProfilesTable.id, profile.id), eq(businessProfilesTable.publicationStatus, from)))
         .returning();
       if (!updated) return { kind: "invalid_transition", status: from };
-      await tx.insert(businessReviewsTable).values({
-        targetType: "publication",
-        targetId: profile.id,
-        targetVersion: currentVersion,
-        reviewerUserId: reviewerId,
-        decision: action,
-        reasonCode: action === "publish" ? null : action,
-        reason,
+      const [reviewRow] = await tx
+        .insert(businessReviewsTable)
+        .values({
+          targetType: "publication",
+          targetId: profile.id,
+          targetVersion: currentVersion,
+          reviewerUserId: reviewerId,
+          decision: action,
+          reasonCode: action === "publish" ? null : action,
+          reason,
+        })
+        .returning({ id: businessReviewsTable.id });
+      // Owners learn about the transition through the outbox committed here; the
+      // reviewer's reason is an audit field and is not part of the message.
+      await notifyBusinessOwners(tx, {
+        businessProfileId: profile.id,
+        eventCode: to === "published" ? "business.published" : to === "unpublished" ? "business.unpublished" : "business.suspended",
+        dedupeScope: `review:${reviewRow.id}`,
+        payload: { businessProfileId: profile.id, businessName: profile.name, status: to },
       });
       return { kind: "ok", profile: updated, approved: approved ?? null };
     });

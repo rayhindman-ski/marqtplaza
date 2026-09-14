@@ -5,12 +5,13 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { AccountRequestBlocker } from './accountRequestBlocker';
 import type { AccountRequestScope } from './accountRequestScope';
 import type { AccountRequestStatus } from './accountRequestStatus';
 import type { AccountRequestType } from './accountRequestType';
 
 /**
- * Private to the requesting account.
+ * Requester-facing view. Support notes and the handling reviewer are never included.
  */
 export interface AccountRequest {
   id: number;
@@ -18,14 +19,19 @@ export interface AccountRequest {
   type: AccountRequestType;
   status: AccountRequestStatus;
   version: number;
+  acknowledgedScopes: string[];
+  blocker: AccountRequestBlocker | null;
   /** @nullable */
-  deadlineAt?: string | null;
-  /** @nullable */
-  blockerCode?: string | null;
-  /** @nullable */
-  resolutionCode?: string | null;
-  /** @nullable */
-  resolvedAt?: string | null;
+  resolutionCode: string | null;
+  /**
+     * Null until a handling deadline is approved in release configuration.
+     * @nullable
+     */
+  deadlineAt: string | null;
   createdAt: string;
   updatedAt: string;
+  /** @nullable */
+  resolvedAt: string | null;
+  /** @nullable */
+  withdrawnAt: string | null;
 }

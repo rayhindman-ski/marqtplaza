@@ -464,6 +464,240 @@ export interface AccountConsents {
   history: ConsentEvent[];
 }
 
+/**
+ * What an account deletion request covers. The research registration, community
+ * contributions, and Clerk credentials are separate scopes handled outside this request.
+ */
+export type AccountDeletionScope = typeof AccountDeletionScope[keyof typeof AccountDeletionScope];
+
+
+export const AccountDeletionScope = {
+  account_profile: 'account_profile',
+  preferences: 'preferences',
+  consents: 'consents',
+  saved_events: 'saved_events',
+  business_memberships: 'business_memberships',
+} as const;
+
+export interface CreateAccountDeletionRequestInput {
+  /**
+     * Must contain every AccountDeletionScope value exactly once.
+     * @minItems 1
+     * @maxItems 10
+     */
+  acknowledgedScopes: AccountDeletionScope[];
+}
+
+export interface WithdrawAccountRequestInput {
+  /** @minimum 1 */
+  expectedVersion: number;
+}
+
+/**
+ * `received` awaits support; `blocked` needs a support decision about a sole-owned business
+ * first; `in_review` is being handled; `completed`, `rejected`, and `withdrawn` are final.
+ */
+export type AccountRequestStatus = typeof AccountRequestStatus[keyof typeof AccountRequestStatus];
+
+
+export const AccountRequestStatus = {
+  received: 'received',
+  blocked: 'blocked',
+  in_review: 'in_review',
+  completed: 'completed',
+  rejected: 'rejected',
+  withdrawn: 'withdrawn',
+} as const;
+
+export type AccountRequestResolution = typeof AccountRequestResolution[keyof typeof AccountRequestResolution];
+
+
+export const AccountRequestResolution = {
+  ownership_transferred: 'ownership_transferred',
+  business_closed: 'business_closed',
+  business_unpublished: 'business_unpublished',
+  account_deleted: 'account_deleted',
+  request_rejected: 'request_rejected',
+} as const;
+
+export interface AccountRequestBlockedBusiness {
+  businessProfileId: number;
+  name: string;
+  publicationStatus: string;
+  /** True once a support resolution has been recorded for this business. */
+  resolved: boolean;
+}
+
+export type AccountRequestBlockerCode = typeof AccountRequestBlockerCode[keyof typeof AccountRequestBlockerCode];
+
+
+export const AccountRequestBlockerCode = {
+  blocked_ownership: 'blocked_ownership',
+} as const;
+
+export interface AccountRequestBlocker {
+  code: AccountRequestBlockerCode;
+  businesses: AccountRequestBlockedBusiness[];
+}
+
+export type AccountRequestScope = typeof AccountRequestScope[keyof typeof AccountRequestScope];
+
+
+export const AccountRequestScope = {
+  account: 'account',
+  business: 'business',
+} as const;
+
+export type AccountRequestType = typeof AccountRequestType[keyof typeof AccountRequestType];
+
+
+export const AccountRequestType = {
+  deletion: 'deletion',
+  export: 'export',
+  suspension_appeal: 'suspension_appeal',
+} as const;
+
+/**
+ * Requester-facing view. Support notes and the handling reviewer are never included.
+ */
+export interface AccountRequest {
+  id: number;
+  scope: AccountRequestScope;
+  type: AccountRequestType;
+  status: AccountRequestStatus;
+  version: number;
+  acknowledgedScopes: string[];
+  blocker: AccountRequestBlocker | null;
+  /** @nullable */
+  resolutionCode: string | null;
+  /**
+     * Null until a handling deadline is approved in release configuration.
+     * @nullable
+     */
+  deadlineAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  /** @nullable */
+  resolvedAt: string | null;
+  /** @nullable */
+  withdrawnAt: string | null;
+}
+
+export interface AccountRequests {
+  requests: AccountRequest[];
+}
+
+export type AccountRequestEventActor = typeof AccountRequestEventActor[keyof typeof AccountRequestEventActor];
+
+
+export const AccountRequestEventActor = {
+  requester: 'requester',
+  support: 'support',
+  system: 'system',
+} as const;
+
+export interface AccountRequestEvent {
+  id: number;
+  /** @nullable */
+  fromStatus: string | null;
+  toStatus: string;
+  actor: AccountRequestEventActor;
+  /** @nullable */
+  resolutionCode: string | null;
+  /** @nullable */
+  businessProfileId: number | null;
+  /** @nullable */
+  note: string | null;
+  createdAt: string;
+}
+
+export type SupportAccountRequest = AccountRequest & ({
+  /** Internal app user id of the requester; never contact data. */
+  userId: number;
+  /** @nullable */
+  resolutionNote: string | null;
+  /** @nullable */
+  resolvedByUserId: string | null;
+  events: AccountRequestEvent[];
+});
+
+export interface SupportAccountRequests {
+  requests: SupportAccountRequest[];
+}
+
+export type SupportAccountRequestDecisionInputDecision = typeof SupportAccountRequestDecisionInputDecision[keyof typeof SupportAccountRequestDecisionInputDecision];
+
+
+export const SupportAccountRequestDecisionInputDecision = {
+  start_review: 'start_review',
+  resolve_blocker: 'resolve_blocker',
+  complete: 'complete',
+  reject: 'reject',
+} as const;
+
+export interface SupportAccountRequestDecisionInput {
+  /** @minimum 1 */
+  expectedVersion: number;
+  decision: SupportAccountRequestDecisionInputDecision;
+  resolutionCode?: AccountRequestResolution;
+  /** Required for `resolve_blocker`; must be one of the request's blocked businesses. */
+  businessProfileId?: number;
+  /**
+     * Internal support note; never shown to the requester.
+     * @maxLength 1000
+     */
+  note?: string;
+}
+
+export type LifecycleMessageStatus = typeof LifecycleMessageStatus[keyof typeof LifecycleMessageStatus];
+
+
+export const LifecycleMessageStatus = {
+  queued: 'queued',
+  sending: 'sending',
+  accepted: 'accepted',
+  delivered: 'delivered',
+  failed: 'failed',
+  cancelled: 'cancelled',
+} as const;
+
+export interface LifecycleMessage {
+  id: number;
+  eventCode: string;
+  status: LifecycleMessageStatus;
+  locale: string;
+  /** @nullable */
+  businessName: string | null;
+  attempts: number;
+  maxAttempts: number;
+  /** @nullable */
+  nextRetryAt: string | null;
+  /** @nullable */
+  acceptedAt: string | null;
+  /** @nullable */
+  deliveredAt: string | null;
+  /** @nullable */
+  failedAt: string | null;
+  createdAt: string;
+}
+
+export interface LifecycleMessages {
+  messages: LifecycleMessage[];
+}
+
+export type SupportLifecycleMessage = LifecycleMessage & ({
+  /** @nullable */
+  recipientUserId: number | null;
+  /** @nullable */
+  lastErrorCode: string | null;
+  /** @nullable */
+  lastErrorAt: string | null;
+});
+
+export interface SupportLifecycleMessages {
+  messages: SupportLifecycleMessage[];
+}
+
 export type AccountOptionLabel = {
   nl: string;
   en: string;
@@ -973,78 +1207,6 @@ export interface PublicBusinessProvenance {
   freshness: BusinessFreshness;
   checks: PublicBusinessProvenanceChecksItem[];
 }
-
-/**
- * received -> blocked | in_review | withdrawn; blocked -> received | withdrawn;
- * in_review -> completed | rejected. Deletion requests are blocked while the user is the
- * sole owner of a published business.
- */
-export type AccountRequestStatus = typeof AccountRequestStatus[keyof typeof AccountRequestStatus];
-
-
-export const AccountRequestStatus = {
-  received: 'received',
-  blocked: 'blocked',
-  in_review: 'in_review',
-  completed: 'completed',
-  rejected: 'rejected',
-  withdrawn: 'withdrawn',
-} as const;
-
-export type AccountRequestScope = typeof AccountRequestScope[keyof typeof AccountRequestScope];
-
-
-export const AccountRequestScope = {
-  account: 'account',
-  business: 'business',
-} as const;
-
-export type AccountRequestType = typeof AccountRequestType[keyof typeof AccountRequestType];
-
-
-export const AccountRequestType = {
-  deletion: 'deletion',
-  export: 'export',
-  suspension_appeal: 'suspension_appeal',
-} as const;
-
-/**
- * Private to the requesting account.
- */
-export interface AccountRequest {
-  id: number;
-  scope: AccountRequestScope;
-  type: AccountRequestType;
-  status: AccountRequestStatus;
-  version: number;
-  /** @nullable */
-  deadlineAt?: string | null;
-  /** @nullable */
-  blockerCode?: string | null;
-  /** @nullable */
-  resolutionCode?: string | null;
-  /** @nullable */
-  resolvedAt?: string | null;
-  createdAt: string;
-  updatedAt: string;
-}
-
-/**
- * Outbox state of a lifecycle message, distinct from the business or account state it describes.
- * queued -> sending -> sent | failed; sending -> queued on transient failure with a retry time;
- * queued -> cancelled when the triggering state is reverted. Without a configured provider
- * messages stay queued and the UI may only say "message pending".
- */
-export type LifecycleMessageStatus = typeof LifecycleMessageStatus[keyof typeof LifecycleMessageStatus];
-
-
-export const LifecycleMessageStatus = {
-  queued: 'queued',
-  sending: 'sending',
-  sent: 'sent',
-  failed: 'failed',
-  cancelled: 'cancelled',
-} as const;
 
 export type DealStatus = typeof DealStatus[keyof typeof DealStatus];
 
@@ -2390,6 +2552,14 @@ export type PageCursorParameter = string;
  * Page size for cursor-paginated lists.
  */
 export type PageLimitParameter = number;
+
+export type GetSupportAccountRequestsParams = {
+status?: AccountRequestStatus;
+};
+
+export type GetSupportLifecycleMessagesParams = {
+status?: LifecycleMessageStatus;
+};
 
 export type GetWeatherParams = {
 /**

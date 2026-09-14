@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link, Redirect } from 'wouter';
 import { useClerk, UserProfile } from '@clerk/react';
 import { useQueryClient } from '@tanstack/react-query';
-import { BookmarkCheck, ClipboardList, LogOut, Mail, ShieldCheck, UserRound } from 'lucide-react';
+import { BookmarkCheck, ClipboardList, LogOut, Mail, ShieldCheck, Trash2, UserRound } from 'lucide-react';
 
 import {
   getGetAccountConsentsQueryKey,
@@ -131,6 +131,24 @@ export default function AccountPage() {
             </section>
           ) : null}
           {me ? <ConsentPanel language={language} enabled={accountsOn} verified={me.capabilities.isVerified} /> : null}
+          {me ? (
+            <section data-testid="account-privacy-link-panel" className="mb-6 flex flex-col gap-4 rounded-3xl border border-border/80 bg-card p-6 shadow-sm sm:flex-row sm:items-center sm:justify-between sm:p-8">
+              <div>
+                <p className="flex items-center gap-2 text-xs font-extrabold uppercase tracking-[0.16em] text-primary">
+                  <Trash2 className="h-4 w-4" aria-hidden="true" />
+                  {copy.privacy.link}
+                </p>
+                <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">{copy.privacy.linkBody}</p>
+              </div>
+              <Link
+                href="/account/privacy"
+                data-testid="link-account-privacy"
+                className="inline-flex shrink-0 items-center justify-center rounded-full border border-border px-4 py-2 text-sm font-bold text-foreground hover:border-primary/50 hover:text-primary"
+              >
+                {copy.privacy.link}
+              </Link>
+            </section>
+          ) : null}
         </>
       )}
 
@@ -212,7 +230,7 @@ const PURPOSE_COPY_KEY: Record<ConsentPurpose, 'consentPurposeMarketing' | 'cons
   research_contact: 'consentPurposeResearch',
 };
 
-function ConsentPanel({ language, enabled, verified }: { language: Language; enabled: boolean; verified: boolean }) {
+export function ConsentPanel({ language, enabled, verified }: { language: Language; enabled: boolean; verified: boolean }) {
   const copy = accountTranslations[language].account;
   const queryClient = useQueryClient();
   const consentsQuery = useGetAccountConsents({

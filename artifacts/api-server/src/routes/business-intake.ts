@@ -33,6 +33,7 @@ import {
 } from "@workspace/api-zod";
 
 import { sendApiError, unknownFieldErrors } from "../lib/apiError";
+import { notifyUser } from "../lib/lifecycleNotifications";
 import {
   ClaimConflictError,
   EDITABLE_CLAIM_STATUSES,
@@ -965,6 +966,13 @@ export function createBusinessIntakeRouter(options: BusinessIntakeRouterOptions 
           })
           .where(eq(businessClaimsTable.id, locked.id))
           .returning();
+        // Confirmation commits with the submission; nothing is sent from here.
+        await notifyUser(tx, {
+          clerkUserId: claim.claimantId,
+          eventCode: nextStatus === "disputed" ? "claim.disputed" : "claim.submitted",
+          idempotencyKey: `claim:${claim.id}:v${claim.version}:${nextStatus}`,
+          payload: { claimId: claim.id, businessProfileId: profile.id, businessName: profile.name, status: nextStatus },
+        });
         return { claim, profile };
       });
     } catch (error) {

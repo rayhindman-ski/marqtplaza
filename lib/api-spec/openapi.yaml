@@ -283,6 +283,301 @@ paths:
         "404":
           $ref: "#/components/responses/FeatureDisabled"
 
+  /account/deletion-requests:
+    post:
+      operationId: createAccountDeletionRequest
+      tags: [account]
+      summary: Request deletion of the account
+      description: |
+        Records a tracked deletion request for the signed-in account. The caller must first
+        acknowledge every deletion scope; the research registration and Clerk credentials are
+        separate and are not covered by this request. Clients must re-authenticate through Clerk
+        immediately before calling this operation. When the requester is the only owner of a
+        business the request is stored as `blocked` with `blocked_ownership` until support records
+        a transfer, closure, or unpublication decision. Nothing is erased by this call: erasure
+        follows the approved retention configuration and a completed support decision.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAccountDeletionRequestInput"
+      responses:
+        "201":
+          description: Request recorded (possibly blocked)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountRequest"
+        "400":
+          description: Invalid or incomplete acknowledgement
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Authentication is required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: E-mail must be verified first
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          $ref: "#/components/responses/FeatureDisabled"
+        "409":
+          description: An open deletion request already exists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /account/requests:
+    get:
+      operationId: getAccountRequests
+      tags: [account]
+      summary: List the account's tracked requests
+      responses:
+        "200":
+          description: Requests, newest first
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountRequests"
+        "401":
+          description: Authentication is required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          $ref: "#/components/responses/FeatureDisabled"
+
+  /account/requests/{id}/withdraw:
+    post:
+      operationId: withdrawAccountRequest
+      tags: [account]
+      summary: Withdraw a request that is not yet in review
+      parameters:
+        - $ref: "#/components/parameters/AccountRequestId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WithdrawAccountRequestInput"
+      responses:
+        "200":
+          description: Request withdrawn
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountRequest"
+        "401":
+          description: Authentication is required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Request not found or the accounts gate is off
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "409":
+          $ref: "#/components/responses/VersionConflict"
+
+  /account/messages:
+    get:
+      operationId: getAccountMessages
+      tags: [account]
+      summary: Status of application-owned lifecycle messages
+      description: |
+        Lists claim, review, publication, and request messages addressed to the account with a
+        truthful delivery state: `queued` (not handed to a provider yet), `accepted` (provider
+        accepted it), `delivered` (provider confirmed delivery), or `failed`. Message bodies and
+        addresses are never returned.
+      responses:
+        "200":
+          description: Messages, newest first
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LifecycleMessages"
+        "401":
+          description: Authentication is required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          $ref: "#/components/responses/FeatureDisabled"
+
+  /review/account-requests:
+    get:
+      operationId: getSupportAccountRequests
+      tags: [account-support]
+      summary: Support queue of account requests
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/AccountRequestStatus"
+      responses:
+        "200":
+          description: Requests, oldest open first
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SupportAccountRequests"
+        "401":
+          description: Authentication is required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: Reviewer role required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          $ref: "#/components/responses/FeatureDisabled"
+
+  /review/account-requests/{id}/decision:
+    post:
+      operationId: decideSupportAccountRequest
+      tags: [account-support]
+      summary: Record a support decision on an account request
+      description: |
+        `start_review` moves a received or blocked request into review. `resolve_blocker` records
+        how one sole-owned business was dealt with: `ownership_transferred` (another owner must
+        already exist), `business_closed` (archives the profile), or `business_unpublished`
+        (removes it from the public directory). Claims, memberships, and audit history are never
+        deleted. `complete` marks the account deleted once no blocker remains; `reject` closes the
+        request with `request_rejected`. Every decision is version-bound and appended to the
+        request's audit trail. A reviewer cannot decide their own request.
+      parameters:
+        - $ref: "#/components/parameters/AccountRequestId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SupportAccountRequestDecisionInput"
+      responses:
+        "200":
+          description: Updated request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SupportAccountRequest"
+        "400":
+          description: Invalid decision for the current state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Authentication is required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: Reviewer role required or self-review
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Request not found or the accounts gate is off
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "409":
+          $ref: "#/components/responses/VersionConflict"
+
+  /review/lifecycle-messages:
+    get:
+      operationId: getSupportLifecycleMessages
+      tags: [account-support]
+      summary: Lifecycle messages for support (exhausted retries first)
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/LifecycleMessageStatus"
+      responses:
+        "200":
+          description: Messages
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SupportLifecycleMessages"
+        "401":
+          description: Authentication is required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: Reviewer role required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          $ref: "#/components/responses/FeatureDisabled"
+
+  /review/lifecycle-messages/{id}/resend:
+    post:
+      operationId: resendSupportLifecycleMessage
+      tags: [account-support]
+      summary: Re-queue a permanently failed message
+      parameters:
+        - $ref: "#/components/parameters/LifecycleMessageId"
+      responses:
+        "200":
+          description: Message re-queued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SupportLifecycleMessage"
+        "401":
+          description: Authentication is required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: Reviewer role required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Message not found or the accounts gate is off
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "409":
+          description: Only failed messages can be re-queued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
   /readiness:
     get:
       operationId: getReadiness
@@ -2050,6 +2345,18 @@ components:
         minimum: 1
         maximum: 50
         default: 20
+    AccountRequestId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: number
+    LifecycleMessageId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: number
   responses:
     VersionConflict:
       description: The expectedVersion or expectedRevision did not match the current server version. Reload and retry with the returned expectedVersion.
@@ -2538,6 +2845,254 @@ components:
         createdAt:
           type: string
 
+    AccountDeletionScope:
+      type: string
+      description: |
+        What an account deletion request covers. The research registration, community
+        contributions, and Clerk credentials are separate scopes handled outside this request.
+      enum: [account_profile, preferences, consents, saved_events, business_memberships]
+
+    CreateAccountDeletionRequestInput:
+      type: object
+      additionalProperties: false
+      required: [acknowledgedScopes]
+      properties:
+        acknowledgedScopes:
+          type: array
+          description: Must contain every AccountDeletionScope value exactly once.
+          minItems: 1
+          maxItems: 10
+          items:
+            $ref: "#/components/schemas/AccountDeletionScope"
+
+    WithdrawAccountRequestInput:
+      type: object
+      additionalProperties: false
+      required: [expectedVersion]
+      properties:
+        expectedVersion:
+          type: number
+          minimum: 1
+
+    AccountRequestStatus:
+      type: string
+      description: |
+        `received` awaits support; `blocked` needs a support decision about a sole-owned business
+        first; `in_review` is being handled; `completed`, `rejected`, and `withdrawn` are final.
+      enum: [received, blocked, in_review, completed, rejected, withdrawn]
+
+    AccountRequestResolution:
+      type: string
+      enum: [ownership_transferred, business_closed, business_unpublished, account_deleted, request_rejected]
+
+    AccountRequestBlockedBusiness:
+      type: object
+      required: [businessProfileId, name, publicationStatus, resolved]
+      properties:
+        businessProfileId:
+          type: number
+        name:
+          type: string
+        publicationStatus:
+          type: string
+        resolved:
+          type: boolean
+          description: True once a support resolution has been recorded for this business.
+
+    AccountRequestBlocker:
+      type: object
+      required: [code, businesses]
+      properties:
+        code:
+          type: string
+          enum: [blocked_ownership]
+        businesses:
+          type: array
+          items:
+            $ref: "#/components/schemas/AccountRequestBlockedBusiness"
+
+    AccountRequest:
+      type: object
+      description: Requester-facing view. Support notes and the handling reviewer are never included.
+      required: [id, scope, type, status, version, acknowledgedScopes, blocker, resolutionCode, deadlineAt, createdAt, updatedAt, resolvedAt, withdrawnAt]
+      properties:
+        id:
+          type: number
+        scope:
+          type: string
+          enum: [account, business]
+        type:
+          type: string
+          enum: [deletion, export, suspension_appeal]
+        status:
+          $ref: "#/components/schemas/AccountRequestStatus"
+        version:
+          type: number
+        acknowledgedScopes:
+          type: array
+          items:
+            type: string
+        blocker:
+          oneOf:
+            - $ref: "#/components/schemas/AccountRequestBlocker"
+            - type: "null"
+        resolutionCode:
+          type: ["string", "null"]
+        deadlineAt:
+          type: ["string", "null"]
+          description: Null until a handling deadline is approved in release configuration.
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+        resolvedAt:
+          type: ["string", "null"]
+        withdrawnAt:
+          type: ["string", "null"]
+
+    AccountRequests:
+      type: object
+      required: [requests]
+      properties:
+        requests:
+          type: array
+          items:
+            $ref: "#/components/schemas/AccountRequest"
+
+    AccountRequestEvent:
+      type: object
+      required: [id, fromStatus, toStatus, actor, resolutionCode, businessProfileId, note, createdAt]
+      properties:
+        id:
+          type: number
+        fromStatus:
+          type: ["string", "null"]
+        toStatus:
+          type: string
+        actor:
+          type: string
+          enum: [requester, support, system]
+        resolutionCode:
+          type: ["string", "null"]
+        businessProfileId:
+          type: ["number", "null"]
+        note:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+
+    SupportAccountRequest:
+      allOf:
+        - $ref: "#/components/schemas/AccountRequest"
+        - type: object
+          required: [userId, resolutionNote, resolvedByUserId, events]
+          properties:
+            userId:
+              type: number
+              description: Internal app user id of the requester; never contact data.
+            resolutionNote:
+              type: ["string", "null"]
+            resolvedByUserId:
+              type: ["string", "null"]
+            events:
+              type: array
+              items:
+                $ref: "#/components/schemas/AccountRequestEvent"
+
+    SupportAccountRequests:
+      type: object
+      required: [requests]
+      properties:
+        requests:
+          type: array
+          items:
+            $ref: "#/components/schemas/SupportAccountRequest"
+
+    SupportAccountRequestDecisionInput:
+      type: object
+      additionalProperties: false
+      required: [expectedVersion, decision]
+      properties:
+        expectedVersion:
+          type: number
+          minimum: 1
+        decision:
+          type: string
+          enum: [start_review, resolve_blocker, complete, reject]
+        resolutionCode:
+          $ref: "#/components/schemas/AccountRequestResolution"
+        businessProfileId:
+          type: number
+          description: Required for `resolve_blocker`; must be one of the request's blocked businesses.
+        note:
+          type: string
+          maxLength: 1000
+          description: Internal support note; never shown to the requester.
+
+    LifecycleMessageStatus:
+      type: string
+      enum: [queued, sending, accepted, delivered, failed, cancelled]
+
+    LifecycleMessage:
+      type: object
+      required: [id, eventCode, status, locale, businessName, attempts, maxAttempts, nextRetryAt, acceptedAt, deliveredAt, failedAt, createdAt]
+      properties:
+        id:
+          type: number
+        eventCode:
+          type: string
+        status:
+          $ref: "#/components/schemas/LifecycleMessageStatus"
+        locale:
+          type: string
+        businessName:
+          type: ["string", "null"]
+        attempts:
+          type: number
+        maxAttempts:
+          type: number
+        nextRetryAt:
+          type: ["string", "null"]
+        acceptedAt:
+          type: ["string", "null"]
+        deliveredAt:
+          type: ["string", "null"]
+        failedAt:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+
+    LifecycleMessages:
+      type: object
+      required: [messages]
+      properties:
+        messages:
+          type: array
+          items:
+            $ref: "#/components/schemas/LifecycleMessage"
+
+    SupportLifecycleMessage:
+      allOf:
+        - $ref: "#/components/schemas/LifecycleMessage"
+        - type: object
+          required: [recipientUserId, lastErrorCode, lastErrorAt]
+          properties:
+            recipientUserId:
+              type: ["number", "null"]
+            lastErrorCode:
+              type: ["string", "null"]
+            lastErrorAt:
+              type: ["string", "null"]
+
+    SupportLifecycleMessages:
+      type: object
+      required: [messages]
+      properties:
+        messages:
+          type: array
+          items:
+            $ref: "#/components/schemas/SupportLifecycleMessage"
+
     AccountOption:
       type: object
       required: [id, label]
@@ -3023,53 +3578,6 @@ components:
                 type: ["string", "null"]
               checkedOn:
                 type: ["string", "null"]
-
-    AccountRequestStatus:
-      type: string
-      description: |
-        received -> blocked | in_review | withdrawn; blocked -> received | withdrawn;
-        in_review -> completed | rejected. Deletion requests are blocked while the user is the
-        sole owner of a published business.
-      enum: [received, blocked, in_review, completed, rejected, withdrawn]
-
-    AccountRequest:
-      type: object
-      description: Private to the requesting account.
-      required: [id, scope, type, status, version, createdAt, updatedAt]
-      properties:
-        id:
-          type: number
-        scope:
-          type: string
-          enum: [account, business]
-        type:
-          type: string
-          enum: [deletion, export, suspension_appeal]
-        status:
-          $ref: "#/components/schemas/AccountRequestStatus"
-        version:
-          type: number
-        deadlineAt:
-          type: ["string", "null"]
-        blockerCode:
-          type: ["string", "null"]
-        resolutionCode:
-          type: ["string", "null"]
-        resolvedAt:
-          type: ["string", "null"]
-        createdAt:
-          type: string
-        updatedAt:
-          type: string
-
-    LifecycleMessageStatus:
-      type: string
-      description: |
-        Outbox state of a lifecycle message, distinct from the business or account state it describes.
-        queued -> sending -> sent | failed; sending -> queued on transient failure with a retry time;
-        queued -> cancelled when the triggering state is reverted. Without a configured provider
-        messages stay queued and the UI may only say "message pending".
-      enum: [queued, sending, sent, failed, cancelled]
 
     DealStatus:
       type: string

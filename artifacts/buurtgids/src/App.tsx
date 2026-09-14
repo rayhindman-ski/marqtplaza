@@ -60,6 +60,7 @@ import BusinessModerationView from './pages/BusinessModerationView';
 import OnboardingPage from './pages/OnboardingPage';
 import AccountPage from './pages/AccountPage';
 import AccountPreferencesPage from './pages/AccountPreferencesPage';
+import AccountPrivacyPage from './pages/AccountPrivacyPage';
 import { useAccountAuth } from './lib/accountAuth';
 import { featureFlags } from './lib/featureFlags';
 import { resolveReturnPath, withReturnPath } from './lib/returnPath';
@@ -3085,6 +3086,7 @@ export default function App() {
           <Route path="/sign-up/*?" component={SignUpPage} />
           <Route path="/onboarding" component={OnboardingPage} />
           <Route path="/account/voorkeuren" component={AccountPreferencesPage} />
+          <Route path="/account/privacy" component={AccountPrivacyPage} />
           <Route path="/account/*?" component={AccountPage} />
           <Route path="/bedrijf-aanmelden" component={BusinessOnboardingPage} />
           <Route path="/bedrijf-zoeken" component={BusinessLookupPage} />
