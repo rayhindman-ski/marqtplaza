@@ -157,6 +157,22 @@ test.describe('consumer account journey', () => {
     await expect(page).toHaveURL(/\/sign-in\?terug=%2Faccount%2Fvoorkeuren/);
   });
 
+  test('keeps the originating route when account links open preferences', async ({ page }) => {
+    await signIn(page);
+    await installAccountServer(page);
+    await page.goto('/?e2eAccountAuth=1');
+
+    const accountLink = page.getByRole('link', { name: /Mijn account|My account/ });
+    await expect(accountLink).toHaveAttribute('href', '/account?terug=%2F%3Fe2eAccountAuth%3D1');
+    await accountLink.click();
+    await expect(page).toHaveURL(/\/account\?terug=%2F%3Fe2eAccountAuth%3D1$/);
+
+    const preferencesLink = page.getByTestId('link-edit-preferences');
+    await expect(preferencesLink).toHaveAttribute('href', '/account/voorkeuren?terug=%2F%3Fe2eAccountAuth%3D1');
+    await preferencesLink.click();
+    await expect(page).toHaveURL(/\/account\/voorkeuren\?terug=%2F%3Fe2eAccountAuth%3D1$/);
+  });
+
   test('saves controlled preferences, keeps the draft across language switch and refresh, and resumes', async ({ page }) => {
     await signIn(page);
     const server = await installAccountServer(page);

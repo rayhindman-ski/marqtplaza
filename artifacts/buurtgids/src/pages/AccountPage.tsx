@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, Redirect } from 'wouter';
+import { Link, Redirect, useSearch } from 'wouter';
 import { useClerk, UserProfile } from '@clerk/react';
 import { useQueryClient } from '@tanstack/react-query';
 import { BookmarkCheck, ClipboardList, LogOut, Mail, ShieldCheck, Trash2, UserRound } from 'lucide-react';
@@ -24,6 +24,7 @@ import { Button } from '@/components/ui/button';
 import { useAccountAuth } from '@/lib/accountAuth';
 import { featureFlags } from '@/lib/featureFlags';
 import { accountErrorMessage, accountTranslations, formatCopy, type Language } from '@/lib/i18n';
+import { resolveReturnPath, withReturnPath } from '@/lib/returnPath';
 import { useAppLanguage } from '@/lib/useAppLanguage';
 import { PreferenceSummary } from './AccountPreferencesPage';
 
@@ -39,9 +40,11 @@ export default function AccountPage() {
   const [language, setLanguage] = useAppLanguage();
   const copy = accountTranslations[language];
   const auth = useAccountAuth();
+  const search = useSearch();
   const { signOut } = useClerk();
   const signedIn = auth.isLoaded && auth.isSignedIn;
   const accountsOn = featureFlags.accounts && signedIn;
+  const returnPath = resolveReturnPath(search);
 
   const registrationQuery = useGetRegistration({
     query: { enabled: signedIn, queryKey: getGetRegistrationQueryKey() },
@@ -114,7 +117,7 @@ export default function AccountPage() {
                   </p>
                 </div>
                 <Link
-                  href="/account/voorkeuren"
+                  href={withReturnPath('/account/voorkeuren', returnPath)}
                   data-testid="link-edit-preferences"
                   className="inline-flex shrink-0 items-center justify-center rounded-full bg-primary px-4 py-2 text-sm font-bold text-primary-foreground hover:bg-primary/90"
                 >

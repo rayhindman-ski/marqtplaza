@@ -755,6 +755,9 @@ function ReferenceCategoryNav({
   embedded?: boolean;
 }) {
   const t = translations[language];
+  const [location] = useLocation();
+  const search = useSearch();
+  const accountHref = withReturnPath('/account', `${location}${search ? `?${search}` : ''}`);
   const iconForCategory = (id: string) => {
     if (id === 'things-to-do') return CalendarDays;
     if (id === 'locals') return UsersRound;
@@ -819,7 +822,7 @@ function ReferenceCategoryNav({
           { href: '/deals', label: language === 'nl' ? 'Deals' : 'Deals', Icon: Tag },
           { href: '/mijn-bedrijf', label: language === 'nl' ? 'Mijn bedrijf' : 'My business', Icon: Store },
           { href: '/bedrijf-aanmelden', label: language === 'nl' ? 'Bedrijf aanmelden' : 'List a business', Icon: Building2 },
-          { href: '/account', label: language === 'nl' ? 'Mijn account' : 'My account', Icon: UserRound },
+          { href: accountHref, label: language === 'nl' ? 'Mijn account' : 'My account', Icon: UserRound },
         ].filter(({ href }) => userRole === 'designer' || !['/capture', '/bronnen'].includes(href))
           .map(({ href, label, Icon }) => (
           <span key={href} className="group relative">
