@@ -43,7 +43,11 @@ depend on any flag.
    `business_fact_checks`, `lifecycle_outbox`, or `account_requests`; never
    erase claims, memberships, requests, or consent events.
 3. With `BUSINESS_PUBLICATION_ENABLED` off the public business page serves the
-   legacy profile columns again; re-enabling serves the approved snapshot.
+   legacy profile columns again and the workspace shows the legacy inline
+   profile editor; re-enabling serves the approved snapshot and routes owner
+   edits into draft revisions. Both paths stay in the code until the flag is
+   retired; the retirement runbook is
+   `doc/md/business-publication-flag-removal.md`.
 4. Schema changes ship through `drizzle-kit push` only: rehearse on an
    isolated database (`node lib/db/scripts/run-isolated-database-integration.mjs`
    or a `pg_dump --schema-only` clone) and take a production backup first.

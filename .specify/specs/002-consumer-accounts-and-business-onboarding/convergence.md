@@ -55,6 +55,15 @@ A development flag is a preview convenience and is never gate evidence; only a
 row in the gate table with an approver and date allows a production flag.
 Operator documentation: `doc/md/onboarding-release.md`.
 
+Decision 2026-09-14: the legacy owner editor (workspace inline dialog and the
+column-writing branch of `PATCH /api/business-profiles/:id`) and the
+`businessPublication` flag branches are **kept** until Q4 is recorded and the
+production flag has survived one release cycle. While the flag is on the
+legacy PATCH only produces draft revisions and the inline dialog is not
+rendered, so no owner input bypasses review; the removal steps are written
+down in `doc/md/business-publication-flag-removal.md` and are not to be run
+before that gate.
+
 ## Release gates (approvals required; no defaults invented)
 
 | ID | Decision | Approver | Status | Recorded on |
