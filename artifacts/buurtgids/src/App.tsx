@@ -2736,10 +2736,13 @@ function EventDetailView({ eventId, listingSection = 'events' }: { eventId: stri
   const language: Language = typeof window !== 'undefined' && window.localStorage.getItem('buurtplaza-language') === 'nl'
     ? 'nl'
     : 'en';
-  const { data, isLoading, isError } = useGetListings({ cityId: 'dhg', section: listingSection, language });
-  const listing = data?.listings.find((item) => item.id === decodeURIComponent(eventId));
+  const { savedMarkers, savedStateStatus } = useSavedPlaces();
+  const listingsQuery = useGetListings({ cityId: 'dhg', section: listingSection, language });
+  const decodedEventId = decodeURIComponent(eventId);
+  const liveListing = listingsQuery.data?.listings.find((item) => item.id === decodedEventId);
+  const listing = liveListing ?? savedMarkers.get(decodedEventId);
 
-  if (isLoading) {
+  if (listingsQuery.isLoading || (!listing && savedStateStatus === 'loading')) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background p-6">
         <div className="w-full max-w-2xl animate-pulse space-y-4">
@@ -2751,7 +2754,7 @@ function EventDetailView({ eventId, listingSection = 'events' }: { eventId: stri
     );
   }
 
-  if (isError || !listing) {
+  if (!listing) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background p-6">
         <div className="w-full max-w-md rounded-3xl border border-border bg-card p-8 text-center shadow-xl">
@@ -2759,19 +2762,34 @@ function EventDetailView({ eventId, listingSection = 'events' }: { eventId: stri
             <MapPinOff className="h-7 w-7 text-muted-foreground" />
           </div>
           <h1 className="text-2xl font-extrabold text-foreground">
-            {language === 'nl' ? 'Activiteit niet gevonden' : 'Event not found'}
+            {language === 'nl' ? 'Activiteit tijdelijk niet beschikbaar' : 'Event temporarily unavailable'}
           </h1>
           <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-            {language === 'nl' ? 'Deze activiteit is niet meer beschikbaar.' : 'This activity is no longer available.'}
+            {language === 'nl'
+              ? 'We konden deze activiteit nu niet ophalen. De bron kan tijdelijk niet beschikbaar zijn of de activiteit kan zijn gewijzigd.'
+              : 'We could not retrieve this activity right now. Its source may be temporarily unavailable or the activity may have changed.'}
           </p>
-          <button
-            type="button"
-            onClick={() => navigate('/activiteiten/den-haag')}
-            className="mt-6 inline-flex items-center gap-2 rounded-full bg-foreground px-5 py-3 text-sm font-bold text-background"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            {language === 'nl' ? 'Terug naar ontdekken' : 'Back to discoveries'}
-          </button>
+          <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+            <button
+              type="button"
+              onClick={() => void listingsQuery.refetch()}
+              disabled={listingsQuery.isFetching}
+              className="inline-flex items-center gap-2 rounded-full bg-primary px-5 py-3 text-sm font-bold text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-wait disabled:opacity-60"
+            >
+              <RefreshCw className={cn('h-4 w-4', listingsQuery.isFetching && 'animate-spin')} />
+              {listingsQuery.isFetching
+                ? (language === 'nl' ? 'Opnieuw laden…' : 'Retrying…')
+                : (language === 'nl' ? 'Opnieuw proberen' : 'Try again')}
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate('/activiteiten/den-haag')}
+              className="inline-flex items-center gap-2 rounded-full bg-foreground px-5 py-3 text-sm font-bold text-background"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              {language === 'nl' ? 'Terug naar ontdekken' : 'Back to discoveries'}
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -3143,6 +3161,7 @@ function readBrowserEventAlerts(): SavedEventAlert[] {
 function useSavedPlaces() {
   const [savedMarkers, setSavedMarkers] = useState<Map<string, Marker>>(readBrowserSavedMarkers);
   const [savedEventAlerts, setSavedEventAlerts] = useState<SavedEventAlert[]>(readBrowserEventAlerts);
+  const [accountHydrationStatus, setAccountHydrationStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
   const [syncRetry, setSyncRetry] = useState(0);
   const [hydrationRetry, setHydrationRetry] = useState(0);
   const clerkAuth = useAuth();
@@ -3221,6 +3240,7 @@ function useSavedPlaces() {
 
   useEffect(() => {
     if (!isSignedIn || !userId) {
+      setAccountHydrationStatus('idle');
       if (activeAccountUserRef.current !== null) {
         activeAccountUserRef.current = null;
         accountHydratedRef.current = false;
@@ -3237,6 +3257,7 @@ function useSavedPlaces() {
     activeAccountUserRef.current = userId;
     accountHydratedRef.current = false;
     syncInFlightUserRef.current = null;
+    setAccountHydrationStatus('loading');
 
     const browserMarkers = readBrowserSavedMarkers();
     const browserAlerts = readBrowserEventAlerts();
@@ -3272,9 +3293,11 @@ function useSavedPlaces() {
         // Account data is already safe on the server even if browser cleanup is unavailable.
       }
       accountHydratedRef.current = true;
+      setAccountHydrationStatus('ready');
       setSyncRetry(value => value + 1);
     }).catch(() => {
       if (!cancelled) {
+        setAccountHydrationStatus('error');
         window.setTimeout(() => setHydrationRetry(value => value + 1), 1500);
       }
     });
@@ -3455,8 +3478,11 @@ function useSavedPlaces() {
 
   const savedIds = useMemo(() => new Set(savedMarkers.keys()), [savedMarkers]);
   const savedCount = savedMarkers.size;
+  const savedStateStatus = !clerkAuth.isLoaded || accountHydrationStatus === 'loading'
+    ? 'loading'
+    : accountHydrationStatus;
 
-  return { savedIds, savedMarkers, savedEventAlerts, recordEventRefresh, toggle, savedCount };
+  return { savedIds, savedMarkers, savedEventAlerts, recordEventRefresh, toggle, savedCount, savedStateStatus };
 }
 
 function SavedView({
