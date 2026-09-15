@@ -331,24 +331,43 @@ for (const [mapPath, tilesAvailable] of [['tile map', true], ['coordinate fallba
 test('homepage map keeps the user zoom level when hovering neighborhoods', async ({ page }) => {
   await stubBoundaryDiscovery(page, true);
   await page.goto('/');
+  // The map legitimately refits its camera when data arrives or the container
+  // is resized. Under a loaded full run those refits can land after the user
+  // zoom below, so wait for them to finish before touching the zoom.
+  await page.waitForLoadState('networkidle');
 
   const centrumBoundary = page.getByRole('button', { name: 'Select neighborhood: Centrum', exact: true });
   await expect(centrumBoundary).toHaveCount(1);
   const tileZoom = () => page.locator('img[src*="tile.openstreetmap.org"]').first()
     .getAttribute('src').then((src) => Number(new URL(src ?? '').pathname.split('/')[1]));
+  // Flush any pending React commits and layout work before reading the zoom.
+  const flushFrames = () => page.evaluate(
+    () => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))),
+  );
+  const zoomIsSettled = async () => {
+    const before = await tileZoom();
+    await flushFrames();
+    return (await tileZoom()) === before;
+  };
+  await expect.poll(zoomIsSettled, { message: 'homepage map zoom should settle after initial load' }).toBe(true);
 
   const initialZoom = await tileZoom();
   await page.getByRole('button', { name: 'Zoom in', exact: true }).click();
   await page.getByRole('button', { name: 'Zoom in', exact: true }).click();
   await expect.poll(tileZoom).toBe(initialZoom + 2);
+  await expect.poll(zoomIsSettled).toBe(true);
 
   await centrumBoundary.dispatchEvent('mouseover');
   await expect(centrumBoundary).toHaveCSS('stroke-opacity', '1');
+  await flushFrames();
+  expect(await tileZoom(), 'hovering a neighborhood must not refit the camera').toBe(initialZoom + 2);
   await centrumBoundary.dispatchEvent('mouseout');
   await expect(centrumBoundary).toHaveCSS('stroke-opacity', '0.2');
   await page.mouse.move(700, 300);
   await page.mouse.move(720, 320);
-  await page.waitForTimeout(300);
+  await flushFrames();
+  expect(await tileZoom(), 'leaving a neighborhood must not refit the camera').toBe(initialZoom + 2);
+  await expect.poll(zoomIsSettled).toBe(true);
   expect(await tileZoom()).toBe(initialZoom + 2);
 });
 

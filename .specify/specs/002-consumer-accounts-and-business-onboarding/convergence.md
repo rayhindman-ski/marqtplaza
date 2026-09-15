@@ -110,8 +110,14 @@ runner + Playwright.
 7. Keyboard-only and screen-reader completion of the new screens (T050,
    FR-017) has not been performed; automated focus/aria/reduced-motion checks
    do not replace it.
-8. The full browser suite is not yet stable: one pre-existing homepage map
-   zoom test failed once in two full runs (passed on rerun and in isolation).
+8. ~~The full browser suite is not yet stable: one pre-existing homepage map
+   zoom test failed once in two full runs (passed on rerun and in isolation).~~
+   Resolved 2026-09-15: the test now waits for the map camera to settle
+   (network idle + zoom stable across two animation frames) before applying the
+   user zoom, and reads the zoom after flushing frames instead of a fixed
+   300 ms sleep. Verified 5/5 isolated repeats and 16/16 for the full
+   `discovery-regression.spec.ts` file (`--repeat-each 2`) with three
+   CPU-burning background processes to simulate full-run contention.
 
 ## Acceptance evidence
 
@@ -146,7 +152,7 @@ consumer, reviewer, or production row was touched.
 | Business review/publication | `tsx --test src/routes/business-publication.test.ts` | 25 pass |
 | Lifecycle | `tsx --test src/routes/account-lifecycle.test.ts` | 16 pass |
 | NL/EN parity | `tsx --test src/lib/i18n.test.ts` (new) | 12 pass — identical key trees, no empty strings in any translation table |
-| Browser journeys (desktop 1280×900) | `playwright test --config playwright.config.ts` (30 tests) | run 1: 29 pass, 1 fail `discovery-regression.spec.ts › homepage map keeps the user zoom level when hovering neighborhoods` (expected zoom 13, got 11); isolated `--repeat-each 3`: 3 pass; run 2 (full suite, after the accessibility edits): **30 pass**. The single failure is a timing-sensitive pre-existing map test and is tracked as its own follow-up task; the full check is not considered stable until it is fixed |
+| Browser journeys (desktop 1280×900) | `playwright test --config playwright.config.ts` (30 tests) | run 1: 29 pass, 1 fail `discovery-regression.spec.ts › homepage map keeps the user zoom level when hovering neighborhoods` (expected zoom 13, got 11); isolated `--repeat-each 3`: 3 pass; run 2 (full suite, after the accessibility edits): **30 pass**. The single failure was a timing race in the test itself: the map legitimately refits its camera when the container size/content settles, and under load that refit landed after the test's zoom-in clicks; the test used a fixed 300 ms sleep. Fixed 2026-09-15 by waiting for the camera to settle before zooming and by flushing animation frames instead of sleeping (see Known gaps item 8) |
 | Browser journeys (mobile 390×844, `reducedMotion: 'reduce'`, touch) | `playwright test e2e/account-preferences.spec.ts e2e/account-privacy.spec.ts e2e/business-intake.spec.ts e2e/business-review.spec.ts` with a viewport override | 18 pass |
 | Flags-off rollback rehearsal | production-mode API bundle started against the rehearsal database with all flags unset | `/api/readiness` → all `false`; `/api/account/me`, `/api/businesses/lookup`, `/api/account/requests` → 404 `FEATURE_DISABLED`; `/api/review/*` not mounted (404); `/api/registration` → 401 unchanged; listings unchanged; no lifecycle dispatch started |
 | Deployed base-path smoke (development, flags on) | `curl` through the Replit dev domain | `/api/readiness` → all `true`; every gated API route answers 401 `AUTH_REQUIRED` anonymously; `/`, `/account`, `/account/voorkeuren`, `/account/privacy`, `/bedrijf-zoeken`, `/mijn-bedrijf`, `/nieuws`, `/deals`, `/activiteiten/den-haag` → 200; `/account/privacy` at 390px renders the real Clerk sign-in gate |
@@ -239,5 +245,5 @@ characters get truncated by PostgreSQL and are recreated on every push
   flag, not replaced by the automated evidence above.
 - Follow-up candidates outside this feature: adopting migration files
   instead of schema push; shared-store rate limiting for multi-instance
-  deployments; automated erasure job after Q6/Q8; stabilising the
-  timing-sensitive homepage zoom regression test.
+  deployments; automated erasure job after Q6/Q8. (The timing-sensitive
+  homepage zoom regression test was stabilised on 2026-09-15.)
