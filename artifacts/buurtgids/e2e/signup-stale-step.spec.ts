@@ -149,3 +149,46 @@ test.describe('stale sign-up verification step (offline)', () => {
     expect(log).toContain('GET /v1/client');
   });
 });
+
+test.describe('Clerk language switching (offline)', () => {
+  test.skip(!frontendApiHost, 'VITE_CLERK_PUBLISHABLE_KEY is required to derive the Clerk Frontend API host');
+
+  for (const {
+    initialLanguage,
+    selectedLanguage,
+    accountLabel,
+    heading,
+    emailLabel,
+  } of [
+    {
+      initialLanguage: 'nl',
+      selectedLanguage: 'en',
+      accountLabel: 'My account',
+      heading: 'Sign in to marqtplaza-speckit',
+      emailLabel: 'Email address',
+    },
+    {
+      initialLanguage: 'en',
+      selectedLanguage: 'nl',
+      accountLabel: 'Mijn account',
+      heading: 'Inloggen',
+      emailLabel: 'E-mailadres',
+    },
+  ] as const) {
+    test(`${initialLanguage} -> ${selectedLanguage} updates the sign-in card without a reload`, async ({ page }) => {
+      await page.addInitScript((language) => {
+        window.localStorage.setItem('buurtplaza-language', language);
+      }, initialLanguage);
+      await stubClerkFrontendApi(page, { id: `client_language_${selectedLanguage}`, signUp: null });
+
+      await page.goto('/');
+      await page.getByRole('combobox', { name: /Taal|Language/ }).selectOption(selectedLanguage);
+      await page.getByRole('link', { name: accountLabel }).click();
+
+      await expect(page).toHaveURL(/\/sign-in(?:\?|$)/);
+      await expect(page.getByRole('heading', { name: heading, exact: true })).toBeVisible({ timeout: 20_000 });
+      await expect(page.getByText(emailLabel, { exact: true })).toBeVisible();
+      await expect(page.locator('html')).toHaveAttribute('lang', selectedLanguage);
+    });
+  }
+});
