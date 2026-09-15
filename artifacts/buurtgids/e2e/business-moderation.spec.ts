@@ -173,6 +173,17 @@ test.describe('business moderation screen', () => {
     await page.goto(MODERATION_URL);
     await expect(page.getByRole('heading', { name: 'Redactietoegang vereist' })).toBeVisible();
     await expect(page.getByTestId('tab-authority')).toHaveCount(0);
+
+    // The same gates read in English when the app language is English.
+    await signIn(page, { userId: null }, 'en');
+    await page.goto(MODERATION_URL);
+    await expect(page.getByRole('heading', { name: 'No access' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Back to home' })).toBeVisible();
+
+    await signIn(page, { userId: 'user-member', role: 'member' }, 'en');
+    await page.goto(MODERATION_URL);
+    await expect(page.getByRole('heading', { name: 'Editorial access required' })).toBeVisible();
+    await expect(page.getByTestId('tab-authority')).toHaveCount(0);
     expect(server.requests.filter((request) => request.path.startsWith('/api/review/'))).toEqual([]);
   });
 

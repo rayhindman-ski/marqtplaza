@@ -1409,6 +1409,15 @@ export const businessReviewTranslations = {
     claimStatus: { pending: 'in behandeling', submitted: 'ingediend', disputed: 'betwist', changes_requested: 'wijzigingen gevraagd' } as Record<string, string>,
     publicationStatus: { draft: 'concept', published: 'gepubliceerd', unpublished: 'offline', suspended: 'geschorst', archived: 'gearchiveerd' } as Record<string, string>,
     decisions: { approve: 'Goedkeuren', reject: 'Afwijzen', request_changes: 'Wijzigingen vragen', publish: 'Publiceren', unpublish: 'Offline halen', suspend: 'Schorsen' } as Record<string, string>,
+    access: {
+      signedOutTitle: 'Geen toegang',
+      signedOutBody: 'Je moet ingelogd zijn om deze pagina te bekijken.',
+      signedOutAction: 'Terug naar home',
+      notEditorTitle: 'Redactietoegang vereist',
+      notEditorBody: 'Deze werkplek is alleen beschikbaar voor accounts met een redactionele rol.',
+      notEditorAction: 'Terug naar Buurtplaza',
+    },
+    tabs: { authority: 'Eigenaarschap', editorial: 'Profielen', publication: 'Publicatie' },
   },
   en: {
     errors: {
@@ -1467,6 +1476,15 @@ export const businessReviewTranslations = {
     claimStatus: { pending: 'pending', submitted: 'submitted', disputed: 'disputed', changes_requested: 'changes requested' } as Record<string, string>,
     publicationStatus: { draft: 'draft', published: 'published', unpublished: 'unpublished', suspended: 'suspended', archived: 'archived' } as Record<string, string>,
     decisions: { approve: 'Approve', reject: 'Reject', request_changes: 'Request changes', publish: 'Publish', unpublish: 'Unpublish', suspend: 'Suspend' } as Record<string, string>,
+    access: {
+      signedOutTitle: 'No access',
+      signedOutBody: 'You need to be signed in to view this page.',
+      signedOutAction: 'Back to home',
+      notEditorTitle: 'Editorial access required',
+      notEditorBody: 'This workspace is only available to accounts with an editorial role.',
+      notEditorAction: 'Back to Buurtplaza',
+    },
+    tabs: { authority: 'Ownership', editorial: 'Profiles', publication: 'Publication' },
   },
 };
 

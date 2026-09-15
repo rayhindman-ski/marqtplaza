@@ -29,7 +29,7 @@ import { useEditorAccess } from '@/lib/editorAccess';
 import { featureFlags } from '@/lib/featureFlags';
 import { BusinessReviewPanel } from './BusinessReviewPanel';
 import { AccountSupportPanel } from './AccountSupportPanel';
-import { accountSupportTranslations, reviewWorkspaceTranslations } from '@/lib/i18n';
+import { accountSupportTranslations, businessReviewTranslations, reviewWorkspaceTranslations } from '@/lib/i18n';
 import { useAppLanguage } from '@/lib/useAppLanguage';
 
 // Minimal editor check based on role - assuming editor access checks are done elsewhere, 
@@ -44,6 +44,8 @@ export default function BusinessModerationView() {
   const [reviewLanguage] = useAppLanguage();
   const supportCopy = accountSupportTranslations[reviewLanguage];
   const workspaceCopy = reviewWorkspaceTranslations[reviewLanguage];
+  const accessCopy = businessReviewTranslations[reviewLanguage].access;
+  const tabCopy = businessReviewTranslations[reviewLanguage].tabs;
   const tabCount = 2 + (featureFlags.businessPublication ? 3 : 0) + (featureFlags.accounts ? 2 : 0);
   
   // Claim Queries & Mutations
@@ -76,9 +78,9 @@ export default function BusinessModerationView() {
   if (!isSignedIn) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center">
-        <h1 className="text-2xl font-bold mb-4">Geen toegang</h1>
-        <p className="text-muted-foreground mb-6">Je moet ingelogd zijn om deze pagina te bekijken.</p>
-        <Button onClick={() => setLocation('/')}>Terug naar home</Button>
+        <h1 className="text-2xl font-bold mb-4">{accessCopy.signedOutTitle}</h1>
+        <p className="text-muted-foreground mb-6">{accessCopy.signedOutBody}</p>
+        <Button onClick={() => setLocation('/')}>{accessCopy.signedOutAction}</Button>
       </div>
     );
   }
@@ -88,9 +90,9 @@ export default function BusinessModerationView() {
       <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-accent/20">
         <div className="max-w-md text-center">
           <AlertCircle className="w-16 h-16 text-destructive mx-auto mb-6 opacity-80" />
-          <h1 className="text-3xl font-extrabold text-foreground mb-4">Redactietoegang vereist</h1>
-          <p className="text-muted-foreground mb-8 text-lg">Deze werkplek is alleen beschikbaar voor accounts met een redactionele rol.</p>
-          <Button onClick={() => setLocation('/')}>Terug naar Buurtplaza</Button>
+          <h1 className="text-3xl font-extrabold text-foreground mb-4">{accessCopy.notEditorTitle}</h1>
+          <p className="text-muted-foreground mb-8 text-lg">{accessCopy.notEditorBody}</p>
+          <Button onClick={() => setLocation('/')}>{accessCopy.notEditorAction}</Button>
         </div>
       </div>
     );
@@ -169,9 +171,9 @@ export default function BusinessModerationView() {
             </TabsTrigger>
             {featureFlags.businessPublication && (
               <>
-                <TabsTrigger value="authority" className="flex-1 basis-[calc(50%-0.25rem)] sm:basis-auto min-w-fit whitespace-nowrap px-4 py-2.5 font-bold data-[state=active]:bg-primary/10 data-[state=active]:text-primary rounded-lg" data-testid="tab-authority">{reviewLanguage === 'nl' ? 'Eigenaarschap' : 'Ownership'}</TabsTrigger>
-                <TabsTrigger value="editorial" className="flex-1 basis-[calc(50%-0.25rem)] sm:basis-auto min-w-fit whitespace-nowrap px-4 py-2.5 font-bold data-[state=active]:bg-primary/10 data-[state=active]:text-primary rounded-lg" data-testid="tab-editorial">{reviewLanguage === 'nl' ? 'Profielen' : 'Profiles'}</TabsTrigger>
-                <TabsTrigger value="publication" className="flex-1 basis-[calc(50%-0.25rem)] sm:basis-auto min-w-fit whitespace-nowrap px-4 py-2.5 font-bold data-[state=active]:bg-primary/10 data-[state=active]:text-primary rounded-lg" data-testid="tab-publication">{reviewLanguage === 'nl' ? 'Publicatie' : 'Publication'}</TabsTrigger>
+                <TabsTrigger value="authority" className="flex-1 basis-[calc(50%-0.25rem)] sm:basis-auto min-w-fit whitespace-nowrap px-4 py-2.5 font-bold data-[state=active]:bg-primary/10 data-[state=active]:text-primary rounded-lg" data-testid="tab-authority">{tabCopy.authority}</TabsTrigger>
+                <TabsTrigger value="editorial" className="flex-1 basis-[calc(50%-0.25rem)] sm:basis-auto min-w-fit whitespace-nowrap px-4 py-2.5 font-bold data-[state=active]:bg-primary/10 data-[state=active]:text-primary rounded-lg" data-testid="tab-editorial">{tabCopy.editorial}</TabsTrigger>
+                <TabsTrigger value="publication" className="flex-1 basis-[calc(50%-0.25rem)] sm:basis-auto min-w-fit whitespace-nowrap px-4 py-2.5 font-bold data-[state=active]:bg-primary/10 data-[state=active]:text-primary rounded-lg" data-testid="tab-publication">{tabCopy.publication}</TabsTrigger>
               </>
             )}
             {featureFlags.accounts && (
