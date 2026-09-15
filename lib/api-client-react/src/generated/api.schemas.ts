@@ -2118,6 +2118,21 @@ export const ListingCategory = {
 } as const;
 
 /**
+ * Source-derived Food & Drink venue type. Absent for non-food listings.
+ */
+export type ListingFoodType = typeof ListingFoodType[keyof typeof ListingFoodType];
+
+
+export const ListingFoodType = {
+  restaurant: 'restaurant',
+  cafe: 'cafe',
+  bar: 'bar',
+  bakery: 'bakery',
+  takeaway: 'takeaway',
+  other: 'other',
+} as const;
+
+/**
  * The approved source stream that supplied this event.
  */
 export type ListingSourceGroup = typeof ListingSourceGroup[keyof typeof ListingSourceGroup];
@@ -2261,6 +2276,8 @@ export interface Listing {
   /** Link to the website where this activity was listed. */
   sourceUrl?: string;
   businessCategory?: BusinessCategory;
+  /** Source-derived Food & Drink venue type. Absent for non-food listings. */
+  foodType?: ListingFoodType;
   source?: ListingSource;
   /** Human-readable publisher or provider that listed this item, distinct from its destination URL. */
   sourceName?: string;

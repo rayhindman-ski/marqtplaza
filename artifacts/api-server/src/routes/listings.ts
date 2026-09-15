@@ -63,6 +63,7 @@ const BUSINESS_CATEGORIES: readonly BusinessCategory[] = [
 ];
 const BUSINESS_CATEGORY_SET = new Set<string>(BUSINESS_CATEGORIES);
 type ListingSource = "google_maps" | "openstreetmap" | "curated" | "source_scan";
+export type FoodType = "restaurant" | "cafe" | "bar" | "bakery" | "takeaway" | "other";
 export type Listing = {
   id: string;
   locationId: string;
@@ -77,6 +78,7 @@ export type Listing = {
   lng: number;
   sourceUrl?: string;
   businessCategory?: BusinessCategory;
+  foodType?: FoodType;
   source?: ListingSource;
   sourceName?: string;
   neighborhood?: string;
@@ -690,6 +692,17 @@ function isFoodGooglePlace(place: GooglePlace): boolean {
   );
 }
 
+export function foodTypeForGooglePrimaryType(primaryType: string | undefined): FoodType {
+  const type = primaryType?.toLowerCase();
+  if (!type) return "other";
+  if (type === "cafe" || type === "cafeteria" || type === "coffee_shop" || type === "tea_house") return "cafe";
+  if (type === "bar" || type === "pub" || type === "wine_bar" || type === "night_club") return "bar";
+  if (type === "bakery" || type === "dessert_shop" || type === "ice_cream_shop") return "bakery";
+  if (type === "meal_takeaway" || type === "meal_delivery" || type === "fast_food_restaurant") return "takeaway";
+  if (type === "restaurant" || type.endsWith("_restaurant")) return "restaurant";
+  return "other";
+}
+
 function businessCategoryForGooglePlace(
   place: GooglePlace,
   section: Exclude<ListingSection, "events" | "social-map">,
@@ -1040,6 +1053,9 @@ async function collectGooglePlaces(
             locationId: "dhg",
             category: section === "food-drink" ? "Food & Drink" : "Businesses",
              businessCategory,
+             ...(businessCategory === "Food & Drink"
+               ? { foodType: foodTypeForGooglePrimaryType(place.primaryType) }
+               : {}),
             name,
              address,
             description: googlePlaceDescription(place, section),
@@ -1185,6 +1201,24 @@ function businessCategoryForOsmTags(
   return "Professional Services";
 }
 
+export function foodTypeForOsmTags(tags: Record<string, string>): FoodType {
+  const amenity = tags.amenity?.toLowerCase();
+  const shop = tags.shop?.toLowerCase();
+  const amenityValues = new Set((amenity ?? "").split(";").filter(Boolean));
+  if (amenityValues.has("cafe")) return "cafe";
+  if (amenityValues.has("bar") || amenityValues.has("pub") || amenityValues.has("biergarten")) return "bar";
+  if (
+    shop === "bakery"
+    || shop === "confectionery"
+    || shop === "pastry"
+    || shop === "ice_cream"
+    || amenityValues.has("ice_cream")
+  ) return "bakery";
+  if (amenityValues.has("fast_food") || amenityValues.has("food_court")) return "takeaway";
+  if (amenityValues.has("restaurant")) return "restaurant";
+  return "other";
+}
+
 function osmAddressFromTags(tags: Record<string, string>): string | undefined {
   const street = tags["addr:street"];
   const houseNumber = tags["addr:housenumber"];
@@ -1309,6 +1343,7 @@ export function fetchOpenStreetMapBusinesses(
       locationId: "dhg",
       category: section === "food-drink" ? "Food & Drink" : "Businesses",
       businessCategory,
+      ...(businessCategory === "Food & Drink" ? { foodType: foodTypeForOsmTags(tags) } : {}),
       name: tags.name,
       ...(address ? { address } : {}),
       description: descriptionFromTags(tags),

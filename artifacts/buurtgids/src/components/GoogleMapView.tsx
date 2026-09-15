@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { importLibrary, setOptions } from '@googlemaps/js-api-loader';
-import { Baby, Coffee, Gamepad2, HandHeart, Landmark, MapPin as MapPinIcon, Route, ShoppingBag, Waves, type LucideIcon } from 'lucide-react';
+import { Baby, Coffee, Gamepad2, HandHeart, Landmark, MapPin as MapPinIcon, Route, ShoppingBag, Waves, X, type LucideIcon } from 'lucide-react';
 import { type Marker as MarkerData, LOCATIONS, type Category } from '../lib/data';
 import { getMarkerCopy, translations, type Language } from '../lib/i18n';
 import { NEIGHBORHOOD_BOUNDARIES, type BoundaryPoint, type NeighborhoodBoundary } from '@workspace/geo';
@@ -67,6 +67,7 @@ interface GoogleMapViewProps {
   selectedMarkerId: string | null;
   savedIds: Set<string>;
   onMarkerClick: (id: string) => void;
+  onClusterMarkerClick?: (id: string) => void;
 }
 
 interface LatLng {
@@ -435,7 +436,7 @@ function ClusterSummaryMarker({
   const downRef = useRef<{ x: number; y: number } | null>(null);
   const draggedRef = useRef(false);
   const label = isInteractive
-    ? `${count} listings in this area. Zoom in to expand.`
+    ? `${count} listings in this area. Show listings and zoom in.`
     : `${count} listings in this area`;
 
   return (
@@ -501,7 +502,7 @@ function createHtmlClusterElement(
   const button = document.createElement('button');
   button.type = 'button';
   button.setAttribute('data-map-cluster', '');
-  button.setAttribute('aria-label', `${count} listings in this area. Zoom in to expand.`);
+  button.setAttribute('aria-label', `${count} listings in this area. Show listings and zoom in.`);
   button.title = `${count} listings in this area`;
   button.style.cssText = [
     'position:absolute',
@@ -652,6 +653,7 @@ function CoordinateMapFallback({
   markers,
   selectedMarkerId,
   onMarkerClick,
+  onClusterClick,
 }: Pick<
   GoogleMapViewProps,
   | 'language'
@@ -666,7 +668,7 @@ function CoordinateMapFallback({
   | 'markers'
   | 'selectedMarkerId'
   | 'onMarkerClick'
->) {
+> & { onClusterClick?: (cluster: MapPointCluster) => void }) {
   const points = getMapPoints(markers);
   const displayedNeighborhoods = showAllNeighborhoods
     ? (getLocation(locationId)?.neighborhoods ?? selectedNeighborhoods)
@@ -813,6 +815,7 @@ function CoordinateMapFallback({
                 left: `${(cluster.x / pixelWidth) * 100}%`,
                 top: `${(cluster.y / pixelHeight) * 100}%`,
               }}
+              onClick={() => onClusterClick?.(cluster)}
             />
           );
         }
@@ -895,7 +898,8 @@ function TileMapView({
   savedIds,
   onMarkerClick,
   onUnavailable,
-}: GoogleMapViewProps & { onUnavailable: () => void }) {
+  onClusterClick,
+}: GoogleMapViewProps & { onUnavailable: () => void; onClusterClick?: (cluster: MapPointCluster) => void; }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{
     pointerId: number;
@@ -1104,6 +1108,7 @@ function TileMapView({
       center: { lat: cluster.lat, lng: cluster.lng },
       zoom: Math.min(MAX_TILE_ZOOM, current.zoom + 2),
     }));
+    onClusterClick?.(cluster);
   };
 
   return (
@@ -1335,7 +1340,8 @@ function GoogleMapCanvas({
   savedIds,
   onMarkerClick,
   onUnavailable,
-}: GoogleMapViewProps & { onUnavailable: () => void }) {
+  onClusterClick,
+}: GoogleMapViewProps & { onUnavailable: () => void; onClusterClick?: (cluster: MapPointCluster) => void; }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<google.maps.Map | null>(null);
   const markersRef = useRef<Map<string, HtmlMarkerOverlay>>(new Map());
@@ -1507,9 +1513,10 @@ function GoogleMapCanvas({
         if (!map) return;
         map.panTo({ lat: cluster.lat, lng: cluster.lng });
         map.setZoom(Math.min(18, (map.getZoom() ?? mapZoom) + 2));
+        onClusterClick?.(cluster);
       });
     },
-    [mapZoom],
+    [mapZoom, onClusterClick],
   );
 
   useEffect(() => {
@@ -1832,13 +1839,22 @@ export function GoogleMapView(props: GoogleMapViewProps) {
   );
   const useTileMap = useCallback(() => setProvider('tiles'), []);
   const useCoordinateFallback = useCallback(() => setProvider('fallback'), []);
+  const [openedCluster, setOpenedCluster] = useState<MapPointCluster | null>(null);
 
+  // Close the overlay if the selected marker changes (e.g. they picked one)
+  useEffect(() => {
+    if (props.selectedMarkerId) {
+      setOpenedCluster(null);
+    }
+  }, [props.selectedMarkerId]);
+
+  let content;
   if (
     props.markers.length === 0
     && props.selectedNeighborhoods.length === 0
     && !props.showAllNeighborhoods
   ) {
-    return (
+    content = (
       <div
         className="absolute inset-0 grid place-items-center bg-muted/40 p-6 text-center"
         role="status"
@@ -1854,15 +1870,63 @@ export function GoogleMapView(props: GoogleMapViewProps) {
         </div>
       </div>
     );
+  } else if (provider === 'fallback') {
+    content = <CoordinateMapFallback {...props} onClusterClick={setOpenedCluster} />;
+  } else if (provider === 'tiles') {
+    content = <TileMapView {...props} onUnavailable={useCoordinateFallback} onClusterClick={setOpenedCluster} />;
+  } else {
+    content = <GoogleMapCanvas {...props} onUnavailable={useTileMap} onClusterClick={setOpenedCluster} />;
   }
 
-  if (provider === 'fallback') {
-    return <CoordinateMapFallback {...props} />;
-  }
-
-  if (provider === 'tiles') {
-    return <TileMapView {...props} onUnavailable={useCoordinateFallback} />;
-  }
-
-  return <GoogleMapCanvas {...props} onUnavailable={useTileMap} />;
+  return (
+    <div className="relative w-full h-full">
+      {content}
+      {openedCluster && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center p-4 bg-background/20 backdrop-blur-sm">
+          <div className="bg-card w-full max-w-sm rounded-2xl shadow-2xl border border-border flex flex-col max-h-full">
+            <div className="p-3 border-b flex items-center justify-between bg-muted/30 rounded-t-2xl shrink-0">
+              <h3 className="font-bold text-sm px-1">
+                {openedCluster.points.length} {props.language === 'nl' ? 'resultaten hier' : 'results here'}
+              </h3>
+              <button
+                type="button"
+                onClick={() => setOpenedCluster(null)}
+                className="p-1.5 hover:bg-muted rounded-lg text-muted-foreground transition-colors"
+                aria-label={props.language === 'nl' ? 'Sluiten' : 'Close'}
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="p-2 overflow-y-auto min-h-0 space-y-1">
+              {openedCluster.points.map(point => {
+                const Icon = getCategoryIcon(point.category);
+                return (
+                  <button
+                    key={point.id}
+                    type="button"
+                    data-cluster-result-id={point.id}
+                    onClick={() => {
+                      (props.onClusterMarkerClick ?? props.onMarkerClick)(point.id);
+                      setOpenedCluster(null);
+                    }}
+                    className="w-full text-left p-3 rounded-xl hover:bg-muted/50 transition-colors flex gap-3 items-start group"
+                  >
+                    <div className="bg-primary/10 text-primary p-2 rounded-lg shrink-0 group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
+                      <Icon className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <div className="font-bold text-sm text-foreground group-hover:text-primary transition-colors">{point.name}</div>
+                      <div className="text-[11px] text-muted-foreground font-semibold uppercase tracking-wide mt-0.5">
+                        {translations[props.language].categories[point.category]}
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }

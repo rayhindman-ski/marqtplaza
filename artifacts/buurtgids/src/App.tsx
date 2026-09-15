@@ -34,6 +34,7 @@ import {
   BUSINESS_CATEGORIES,
   EVENT_CATEGORIES,
   SOCIAL_MAP_CATEGORIES,
+  FOOD_TYPES,
   type BusinessCategory,
   type Category,
   type ListingSource,
@@ -41,6 +42,7 @@ import {
   type EventActivityKind,
   type SocialMapCategory,
   type SocialMapReviewStatus,
+  type FoodType,
 } from './lib/data';
 import { GoogleMapView } from './components/GoogleMapView';
 import CaptureView from './pages/CaptureView';
@@ -445,7 +447,7 @@ function alertFromAccountSnapshot(value: Record<string, unknown>): SavedEventAle
 }
 
 type ListingSection = 'events' | 'businesses' | 'food-drink' | 'social-map';
-type FilterSubcategory = Exclude<Category, 'Businesses' | 'Social map'> | BusinessCategory | SocialMapCategory;
+type FilterSubcategory = Exclude<Category, 'Businesses' | 'Social map' | 'Food & Drink'> | BusinessCategory | SocialMapCategory | FoodType;
 const TOP_LEVEL_SECTIONS: ListingSection[] = ['events', 'food-drink', 'social-map', 'businesses'];
 const DEFAULT_START_SECTION: ListingSection = 'events';
 type AgendaTimeFilter = 'all' | 'today' | 'week';
@@ -513,11 +515,14 @@ function noTopLevelState(): Record<ListingSection, boolean> {
 function subcategoryStateFor(section: ListingSection): Record<FilterSubcategory, boolean> {
   const active = subcategoriesForTopLevel(section);
   const eventSubcategories = EVENT_CATEGORIES.filter(
-    (category): category is Exclude<Category, 'Businesses' | 'Social map'> =>
-      category !== 'Businesses' && category !== 'Social map',
+    (category): category is Exclude<Category, 'Businesses' | 'Social map' | 'Food & Drink'> =>
+      category !== 'Businesses' && category !== 'Social map' && category !== 'Food & Drink',
   );
   return Object.fromEntries(
-    [...eventSubcategories, ...BUSINESS_CATEGORIES, ...SOCIAL_MAP_CATEGORIES].map((category) => [category, active.includes(category)]),
+    [...eventSubcategories, ...BUSINESS_CATEGORIES, ...SOCIAL_MAP_CATEGORIES, ...FOOD_TYPES].map((category) => [
+      category,
+      active.includes(category),
+    ]),
   ) as Record<FilterSubcategory, boolean>;
 }
 
@@ -538,15 +543,15 @@ function noSubcategoryState(): Record<FilterSubcategory, boolean> {
 function subcategoriesForTopLevel(section: ListingSection): FilterSubcategory[] {
   if (section === 'events') {
     return EVENT_CATEGORIES.filter(
-      (category): category is Exclude<Category, 'Businesses' | 'Social map'> =>
-        category !== 'Businesses' && category !== 'Social map',
+      (category): category is Exclude<Category, 'Businesses' | 'Social map' | 'Food & Drink'> =>
+        category !== 'Businesses' && category !== 'Social map' && category !== 'Food & Drink',
     );
   }
   if (section === 'businesses') {
     return BUSINESS_CATEGORIES.filter((subcategory) => subcategory !== 'Food & Drink');
   }
   if (section === 'social-map') return SOCIAL_MAP_CATEGORIES;
-  return ['Food & Drink'];
+  return FOOD_TYPES;
 }
 
 function topLevelForMarker(marker: Marker): ListingSection {
@@ -557,6 +562,17 @@ function topLevelForMarker(marker: Marker): ListingSection {
 }
 
 function subcategoryLabelFor(subcategory: FilterSubcategory, language: Language): string {
+  if (FOOD_TYPES.includes(subcategory as FoodType)) {
+    const labels: Record<FoodType, { nl: string, en: string }> = {
+      restaurant: { nl: 'Restaurant', en: 'Restaurant' },
+      cafe: { nl: 'Café', en: 'Cafe' },
+      bar: { nl: 'Bar', en: 'Bar' },
+      bakery: { nl: 'Bakker', en: 'Bakery' },
+      takeaway: { nl: 'Afhalen & Bezorgen', en: 'Takeaway' },
+      other: { nl: 'Overig', en: 'Other' },
+    };
+    return labels[subcategory as FoodType][language];
+  }
   if (EVENT_CATEGORIES.includes(subcategory as Category)) {
     return translations[language].categories[subcategory as Category];
   }
@@ -852,7 +868,7 @@ function ReferenceCategoryNav({
 function SaveButton({ saved, onToggle }: { saved: boolean; onToggle: (e: React.MouseEvent) => void }) {
   return (
     <button
-      onClick={onToggle}
+      onClick={(e) => { e.stopPropagation(); onToggle(e); }}
       aria-label={saved ? 'Remove from saved' : 'Save this place'}
       className={cn(
         "p-1.5 rounded-lg transition-all duration-200 shrink-0",
@@ -1396,7 +1412,7 @@ function MarkerCard({
   onClick: () => void;
   onSave: (e: React.MouseEvent) => void;
 }) {
-  const [isExpanded, setIsExpanded] = useState(true);
+  const [isExpanded, setIsExpanded] = useState(false);
   const Icon = CATEGORY_ICONS[marker.category];
   const DetailIcon = DETAIL_ICONS[marker.category];
   const copy = getMarkerCopy(marker, language);
@@ -1416,12 +1432,19 @@ function MarkerCard({
           ? (language === 'nl' ? 'Betaald' : 'Paid')
           : (language === 'nl' ? 'Prijs onbekend' : 'Price unknown'));
 
+  useEffect(() => {
+    if (isSelected) setIsExpanded(true);
+  }, [isSelected]);
+
+  const toggleExpanded = () => {
+    onClick();
+    setIsExpanded((current) => !current);
+  };
+
   return (
     <div
-      role="group"
-      onClick={onClick}
       className={cn(
-        "w-full text-left p-4 rounded-2xl border transition-all duration-300 relative group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:border-transparent",
+        "w-full text-left p-4 rounded-2xl border transition-all duration-300 relative group",
         isSelected
           ? "bg-primary/5 border-primary shadow-[0_4px_20px_-4px_rgba(243,108,33,0.15)]"
           : "bg-card border-border hover:border-primary/40 hover:shadow-md"
@@ -1431,47 +1454,39 @@ function MarkerCard({
         <div className="absolute top-0 left-0 w-1.5 h-full bg-primary rounded-l-2xl" />
       )}
       <div className="flex items-start gap-4">
-        <div className={cn(
-          "p-3 rounded-xl shrink-0 transition-colors",
-          isSelected ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20" : "bg-muted text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary"
-        )}>
-          <Icon className="w-5 h-5" />
-        </div>
-        <div className="flex-1 min-w-0 py-0.5">
-          <div className="flex items-start justify-between mb-1 gap-2">
-            <h3 className="min-w-0">
-              <button
-                type="button"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onClick();
-                }}
+        <button
+          type="button"
+          onClick={toggleExpanded}
+          aria-expanded={isExpanded}
+          aria-controls={`marker-details-${marker.id}`}
+          className="flex min-w-0 flex-1 items-start gap-4 rounded-xl text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+        >
+          <span className={cn(
+            "p-3 rounded-xl shrink-0 transition-colors",
+            isSelected ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20" : "bg-muted text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary"
+          )}>
+            <Icon className="w-5 h-5" />
+          </span>
+          <span className="min-w-0 flex-1 py-0.5">
+            <span className="mb-1 flex items-start justify-between gap-2">
+              <span
                 className={cn(
-                  "max-w-full truncate text-left font-bold text-base transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+                  "min-w-0 truncate font-bold text-base transition-colors",
                   isSelected ? "text-primary" : "text-foreground group-hover:text-primary",
                 )}
               >
                 {marker.name}
-              </button>
-            </h3>
-            <div className="flex shrink-0 items-center gap-1">
-              <SaveButton saved={isSaved} onToggle={onSave} />
-              <button
-                type="button"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  setIsExpanded((current) => !current);
-                }}
-                aria-expanded={isExpanded}
-                aria-label={language === 'nl'
-                  ? `${isExpanded ? 'Klap in' : 'Klap uit'}: ${marker.name}`
-                  : `${isExpanded ? 'Collapse' : 'Expand'}: ${marker.name}`}
-                className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-              >
-                <ChevronDown className={cn("h-4 w-4 transition-transform", isExpanded && "rotate-180")} />
-              </button>
-            </div>
-          </div>
+              </span>
+              <ChevronDown
+                className={cn("h-4 w-4 shrink-0 text-muted-foreground transition-transform", isExpanded && "rotate-180")}
+                aria-hidden="true"
+              />
+            </span>
+          </span>
+        </button>
+        <SaveButton saved={isSaved} onToggle={onSave} />
+      </div>
+      <div className="ml-16 min-w-0 py-0.5">
           {isEvent && (
             <div className="mb-3">
               <div className="flex flex-wrap items-center gap-3 text-xs font-bold">
@@ -1509,7 +1524,7 @@ function MarkerCard({
               />
             </div>
           )}
-          {isExpanded && <>
+          {isExpanded && <div id={`marker-details-${marker.id}`}>
            {(marker.businessCategory || marker.socialCategory || sourceLabel || trust || freshness || marker.reviewStatus || (topLevelForMarker(marker) === 'events' && eventBadgeLabel(marker, language).length > 0)) && (
              <div className="mb-3 flex flex-wrap items-center gap-1.5">
                {marker.businessCategory && (
@@ -1591,9 +1606,8 @@ function MarkerCard({
             </div>
           </div>
           <RouteLinks language={language} marker={marker} />
-          </>}
+          </div>}
         </div>
-      </div>
     </div>
   );
 }
@@ -1754,7 +1768,11 @@ function DiscoveryState({
     ? location?.neighborhoodCoords[selectedNeighborhoods[0]]
     : undefined;
 
-  const [liveMode] = useState(readIncludeExternalSources);
+  const [liveMode, setLiveMode] = useState(readIncludeExternalSources);
+  const enableLiveMode = useCallback(() => {
+    localStorage.setItem('buurtplaza-discovery-live-mode', 'true');
+    setLiveMode(true);
+  }, []);
 
   const mode = liveMode ? 'live' : 'stored_only';
   const anonymousId = useMemo(() => {
@@ -1873,6 +1891,14 @@ function DiscoveryState({
     if (detailWindow) {
       detailWindow.opener = null;
     }
+  };
+
+  const handleClusterMarkerClick = (id: string) => {
+    setSelectedMarker(id);
+    setView('list');
+    window.setTimeout(() => {
+      document.getElementById(`event-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 0);
   };
 
   const toggleNeighborhood = (neighborhood: string) => {
@@ -2012,6 +2038,7 @@ function DiscoveryState({
         priceType: l.priceType,
         priceText: l.priceText,
         mealType: l.mealType,
+        foodType: l.foodType,
         audience: l.audience,
         recurrenceText: l.recurrenceText,
         isApproximateLocation: l.isApproximateLocation,
@@ -2044,13 +2071,15 @@ function DiscoveryState({
   const filteredMarkers = allMarkers.filter((marker) => {
     const markerTopLevel = topLevelForMarker(marker);
     if (!topLevelCategories[markerTopLevel]) return false;
-    const markerSubcategory = marker.socialCategory
-      ?? marker.businessCategory
-      ?? (marker.category === 'Businesses' ? undefined : marker.category as FilterSubcategory);
+    const markerSubcategory = marker.category === 'Food & Drink'
+      ? (marker.foodType && FOOD_TYPES.includes(marker.foodType) ? marker.foodType : 'other')
+      : (marker.socialCategory
+        ?? marker.businessCategory
+        ?? (marker.category === 'Businesses' ? undefined : marker.category as FilterSubcategory));
     if (
       markerTopLevel !== 'events'
       && visibleSubcategories.length > 0
-      && (!markerSubcategory || !subcategories[markerSubcategory])
+      && (!markerSubcategory || !subcategories[markerSubcategory as FilterSubcategory])
     ) {
       return false;
     }
@@ -2494,10 +2523,19 @@ function DiscoveryState({
               </span>
             )}
             {isCacheMiss && !liveMode && (
-              <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-rose-600 bg-rose-50 border border-rose-200 px-2.5 py-1 rounded-full dark:bg-rose-950 dark:border-rose-800 dark:text-rose-300">
-                <WifiOff className="w-3 h-3" />
-                {language === 'nl' ? 'Geen lokale gegevens' : 'No local data'}
-              </span>
+              <div className="flex flex-col gap-2 w-full mt-2">
+                <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-rose-600 bg-rose-50 border border-rose-200 px-2.5 py-1.5 rounded-xl dark:bg-rose-950 dark:border-rose-800 dark:text-rose-300">
+                  <WifiOff className="w-4 h-4 shrink-0" />
+                  {language === 'nl' ? 'Er zijn geen opgeslagen resultaten voor deze zoekopdracht.' : 'No saved results exist for this search.'}
+                </span>
+                <button
+                  type="button"
+                  onClick={enableLiveMode}
+                  className="self-start text-xs font-bold text-primary hover:text-primary/80 hover:underline transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-sm"
+                >
+                  {language === 'nl' ? 'Schakel over naar live modus om externe bronnen te doorzoeken' : 'Switch to live mode to search external sources'}
+                </button>
+              </div>
             )}
             {isFallback && fallbackMessage && (
               <span className="text-xs text-muted-foreground">{fallbackMessage}</span>
@@ -2722,6 +2760,7 @@ function DiscoveryState({
             selectedMarkerId={selectedMarker}
             savedIds={savedIds}
             onMarkerClick={handleMarkerClick}
+            onClusterMarkerClick={handleClusterMarkerClick}
           />
 
           {/* Mobile Toggle Overlay */}

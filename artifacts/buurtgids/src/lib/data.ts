@@ -67,6 +67,8 @@ export type SocialMapReviewStatus = 'verified' | 'review_due' | 'changed' | 'una
 export type EventPriceType = 'free' | 'low-cost' | 'paid' | 'unknown';
 export type EventMealType = 'community-meal' | 'food-support';
 export type EventActivityKind = 'community' | 'culture' | 'learning' | 'movement' | 'meal' | 'family' | 'market' | 'outdoor' | 'entertainment';
+export type FoodType = 'restaurant' | 'cafe' | 'bar' | 'bakery' | 'takeaway' | 'other';
+export const FOOD_TYPES: FoodType[] = ['restaurant', 'cafe', 'bar', 'bakery', 'takeaway', 'other'];
 
 export interface Location {
   id: string;
@@ -101,6 +103,8 @@ export interface Marker {
   sourceUrl?: string;
   /** Normalized business taxonomy label, present for business listings. */
   businessCategory?: BusinessCategory;
+  /** Source-derived Food & Drink venue type. */
+  foodType?: FoodType;
   /** Provider or editorial source for this listing. */
   source?: ListingSource;
   /** Human-readable publisher or provider that listed this item. */

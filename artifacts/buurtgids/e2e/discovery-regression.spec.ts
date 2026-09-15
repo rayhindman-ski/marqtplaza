@@ -209,8 +209,18 @@ test('keeps discovery filters, map pins, routes, and translations in sync', asyn
   );
   await expect(page.locator('[data-map-pin]')).toHaveCount(0);
 
-  // Selecting a listing must pull it out of the cluster so it is always visible.
-  await page.locator('#event-qualifying-event').click();
+  // Activating the cluster reveals its contents.
+  await page.locator('[data-map-cluster]').click();
+  await expect(page.getByText('2 results here')).toBeVisible();
+  await page.locator('[data-cluster-result-id="approximate-event"]').click();
+  await expect(page.locator('[data-map-pin][data-event-id="approximate-event"]')).toHaveCount(1, { timeout: 10_000 });
+
+  // Selecting a listing from the list pulls it out of the cluster so it is always visible.
+  const qualifyingDisclosure = page.locator('#event-qualifying-event')
+    .getByRole('button', { name: 'Qualifying family workshop', exact: true });
+  await qualifyingDisclosure.focus();
+  await page.keyboard.press('Enter');
+  await expect(qualifyingDisclosure).toHaveAttribute('aria-expanded', 'true');
   await expect(page.locator('[data-map-pin][data-event-id="qualifying-event"]')).toHaveCount(1, { timeout: 10_000 });
   // The remaining listing is alone, so it is drawn as a normal pin too.
   await expect(page.locator('[data-map-pin]')).toHaveCount(2);
@@ -225,6 +235,7 @@ test('keeps discovery filters, map pins, routes, and translations in sync', asyn
     .toEqual(['bicycling', 'driving', 'transit', 'walking']);
 
   const approximateCard = page.locator('#event-approximate-event');
+  await approximateCard.getByRole('button', { name: 'Approximate family workshop', exact: true }).click();
   await expect(approximateCard.locator('a[href*="google.com/maps/dir"]')).toHaveCount(0);
   await expect(approximateCard.getByText('Directions unavailable: this map point is approximate.')).toBeVisible();
 
@@ -434,12 +445,17 @@ test('main search external-source setting controls discovery mode and persists',
   expect(anonId).toMatch(/^anon_|^[0-9a-f-]{36}$/i);
   await expect(page.getByText('Stored postcode result').first()).toBeVisible();
   await expect(page.getByText('Stored data')).toBeVisible();
-  await expect(page.getByText('No local data')).toBeVisible();
+  await expect(page.getByText('No saved results exist for this search.')).toBeVisible();
+  const liveSearchButton = page.getByRole('button', { name: 'Switch to live mode to search external sources' });
+  await expect(liveSearchButton).toBeVisible();
   await expect(page.getByRole('checkbox', { name: 'Include external sources' })).toHaveCount(0);
+  await liveSearchButton.click();
+  await expect.poll(() => listingsRequests.at(-1)?.searchParams.get('mode')).toBe('live');
+  await expect.poll(() => page.evaluate(() => localStorage.getItem('buurtplaza-discovery-live-mode'))).toBe('true');
 
   // The single top-level setting persists when returning to the main search page.
   await page.goto('/');
-  await expect(page.getByRole('checkbox', { name: 'Include external sources' })).not.toBeChecked();
+  await expect(page.getByRole('checkbox', { name: 'Include external sources' })).toBeChecked();
 });
 
 test('keeps every selected neighborhood free of out-of-boundary listings', async ({ page }) => {
