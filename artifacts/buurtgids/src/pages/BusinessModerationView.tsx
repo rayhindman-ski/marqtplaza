@@ -28,6 +28,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { useEditorAccess } from '@/lib/editorAccess';
 import { featureFlags } from '@/lib/featureFlags';
 import { BusinessReviewPanel } from './BusinessReviewPanel';
+import { AccountSupportPanel } from './AccountSupportPanel';
+import { accountSupportTranslations } from '@/lib/i18n';
 import { useAppLanguage } from '@/lib/useAppLanguage';
 
 // Minimal editor check based on role - assuming editor access checks are done elsewhere, 
@@ -40,6 +42,8 @@ export default function BusinessModerationView() {
 
   const [activeTab, setActiveTab] = useState('claims');
   const [reviewLanguage] = useAppLanguage();
+  const supportCopy = accountSupportTranslations[reviewLanguage];
+  const tabCount = 2 + (featureFlags.businessPublication ? 3 : 0) + (featureFlags.accounts ? 2 : 0);
   
   // Claim Queries & Mutations
   const { data: claims, isLoading: claimsLoading } = useGetBusinessClaimModeration(
@@ -155,7 +159,7 @@ export default function BusinessModerationView() {
 
       <div className="container max-w-6xl mx-auto px-4 sm:px-6 py-8">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className={`grid w-full ${featureFlags.businessPublication ? 'max-w-3xl grid-cols-5' : 'max-w-md grid-cols-2'} mb-8 bg-card border-border/50 shadow-sm p-1 rounded-xl h-auto`}>
+          <TabsList className={`grid w-full ${tabCount >= 5 ? 'max-w-5xl' : tabCount > 2 ? 'max-w-3xl' : 'max-w-md'} mb-8 bg-card border-border/50 shadow-sm p-1 rounded-xl h-auto`} style={{ gridTemplateColumns: `repeat(${tabCount}, minmax(0, 1fr))` }}>
             <TabsTrigger value="claims" className="py-2.5 font-bold data-[state=active]:bg-primary/10 data-[state=active]:text-primary rounded-lg flex gap-2">
               Claims {claims && claims.length > 0 && <Badge variant="secondary" className="bg-primary text-primary-foreground text-[10px] py-0 px-1.5 h-4 min-w-4">{claims.length}</Badge>}
             </TabsTrigger>
@@ -169,7 +173,20 @@ export default function BusinessModerationView() {
                 <TabsTrigger value="publication" className="py-2.5 font-bold data-[state=active]:bg-primary/10 data-[state=active]:text-primary rounded-lg" data-testid="tab-publication">{reviewLanguage === 'nl' ? 'Publicatie' : 'Publication'}</TabsTrigger>
               </>
             )}
+            {featureFlags.accounts && (
+              <>
+                <TabsTrigger value="account-requests" className="py-2.5 font-bold data-[state=active]:bg-primary/10 data-[state=active]:text-primary rounded-lg" data-testid="tab-account-requests">{supportCopy.tabRequests}</TabsTrigger>
+                <TabsTrigger value="lifecycle-messages" className="py-2.5 font-bold data-[state=active]:bg-primary/10 data-[state=active]:text-primary rounded-lg" data-testid="tab-lifecycle-messages">{supportCopy.tabMessages}</TabsTrigger>
+              </>
+            )}
           </TabsList>
+
+          {featureFlags.accounts && (
+            <>
+              <TabsContent value="account-requests" className="mt-0"><AccountSupportPanel section="requests" enabled={activeTab === 'account-requests'} /></TabsContent>
+              <TabsContent value="lifecycle-messages" className="mt-0"><AccountSupportPanel section="messages" enabled={activeTab === 'lifecycle-messages'} /></TabsContent>
+            </>
+          )}
 
           {featureFlags.businessPublication && (
             <>
