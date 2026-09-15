@@ -87,3 +87,30 @@ export function withReturnPath(path: string, returnPath: string | null | undefin
   const joiner = path.includes('?') ? '&' : '?';
   return `${path}${joiner}${RETURN_PATH_PARAM}=${encodeURIComponent(safe)}`;
 }
+
+const AUTH_STEP_PREFIXES = ['/sign-in', '/sign-up'];
+
+/**
+ * Keeps `terug` on Clerk's internal navigations. The hosted sign-in and
+ * sign-up components move between their own steps (for example
+ * `/sign-up/verify-email-address`) with a bare path, which would otherwise
+ * drop the return destination before the redirect target is computed.
+ */
+export function carryReturnPath(to: string, currentSearch: string): string {
+  const params = new URLSearchParams(currentSearch.startsWith('?') ? currentSearch.slice(1) : currentSearch);
+  const safe = sanitizeReturnPath(params.get(RETURN_PATH_PARAM));
+  if (!safe || safe === DEFAULT_RETURN_PATH) return to;
+
+  const hashIndex = to.indexOf('#');
+  const hash = hashIndex === -1 ? '' : to.slice(hashIndex);
+  const withoutHash = hashIndex === -1 ? to : to.slice(0, hashIndex);
+  const queryIndex = withoutHash.indexOf('?');
+  const pathname = queryIndex === -1 ? withoutHash : withoutHash.slice(0, queryIndex);
+  const query = new URLSearchParams(queryIndex === -1 ? '' : withoutHash.slice(queryIndex + 1));
+
+  const isAuthStep = AUTH_STEP_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
+  if (!isAuthStep || query.has(RETURN_PATH_PARAM)) return to;
+
+  query.set(RETURN_PATH_PARAM, safe);
+  return `${pathname}?${query.toString()}${hash}`;
+}

@@ -63,7 +63,7 @@ import AccountPreferencesPage from './pages/AccountPreferencesPage';
 import AccountPrivacyPage from './pages/AccountPrivacyPage';
 import { useAccountAuth } from './lib/accountAuth';
 import { featureFlags } from './lib/featureFlags';
-import { resolveReturnPath, withReturnPath } from './lib/returnPath';
+import { carryReturnPath, resolveReturnPath, withReturnPath } from './lib/returnPath';
 import BusinessOnboardingPage from './pages/BusinessOnboardingPage';
 import BusinessLookupPage from './pages/BusinessLookupPage';
 import BusinessDraftPage from './pages/BusinessDraftPage';
@@ -3827,8 +3827,8 @@ function ClerkProviderWithRouter({ children }: { children: React.ReactNode }) {
       appearance={clerkAppearance}
       signInUrl={`${basePath}/sign-in`}
       signUpUrl={`${basePath}/sign-up`}
-      routerPush={(to) => setLocation(stripBase(to))}
-      routerReplace={(to) => setLocation(stripBase(to), { replace: true })}
+      routerPush={(to) => setLocation(carryReturnPath(stripBase(to), window.location.search))}
+      routerReplace={(to) => setLocation(carryReturnPath(stripBase(to), window.location.search), { replace: true })}
     >
       <ApiAuthTokenBridge />
       {children}

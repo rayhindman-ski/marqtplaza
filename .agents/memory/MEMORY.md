@@ -32,5 +32,5 @@
 - [Business publication review](business-publication-review.md) — four independent dimensions, snapshot-only public output (no column fallback), interested-party exclusion incl. active claimants.
 - [Lifecycle outbox](lifecycle-outbox.md) — enqueue in the state-change transaction; attempts stay monotonic; terminal account states gate every account-owned route.
 - [Onboarding release verification](release-verification.md) — name the disposable DB and flag state per run; record runs as they happened; never tick manual checks from automated proxies.
-- [Clerk live verification](clerk-live-verification.md) — an authenticated Clerk session does not prove sign-up email delivery, redirect-after-verification, or expired-link handling.
+- [Clerk live verification](clerk-live-verification.md) — real sign-up needs a testing token plus a blocked Turnstile script; test identities prove verification, not SMTP; Clerk step navigations drop query state.
 - [Playwright route globs](playwright-route-globs.md) — trailing `**` globs miss nested `/:id/action` paths here; use regex routes and an editor test-auth opt-in for reviewer screens.

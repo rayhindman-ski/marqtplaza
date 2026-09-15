@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import { DEFAULT_RETURN_PATH, resolveReturnPath, sanitizeReturnPath, withReturnPath } from './returnPath';
+import { DEFAULT_RETURN_PATH, carryReturnPath, resolveReturnPath, sanitizeReturnPath, withReturnPath } from './returnPath';
 
 describe('sanitizeReturnPath', () => {
   it('accepts allowlisted local paths and keeps their query and hash', () => {
@@ -51,5 +51,25 @@ describe('withReturnPath', () => {
     assert.equal(withReturnPath('/sign-in', '/account'), '/sign-in');
     assert.equal(withReturnPath('/sign-in', 'https://evil.example'), '/sign-in');
     assert.equal(withReturnPath('/sign-in', null), '/sign-in');
+  });
+});
+
+describe('carryReturnPath', () => {
+  it('re-attaches terug to Clerk step navigations inside sign-in and sign-up', () => {
+    assert.equal(
+      carryReturnPath('/sign-up/verify-email-address', '?terug=%2Factiviteiten%2Fden-haag%3Fq%3D1'),
+      '/sign-up/verify-email-address?terug=%2Factiviteiten%2Fden-haag%3Fq%3D1',
+    );
+    assert.equal(carryReturnPath('/sign-in/factor-one', 'terug=%2Fdeals'), '/sign-in/factor-one?terug=%2Fdeals');
+    assert.equal(carryReturnPath('/sign-in?x=1#/foo', '?terug=%2Fdeals'), '/sign-in?x=1&terug=%2Fdeals#/foo');
+  });
+
+  it('leaves other navigations, existing parameters, unsafe and default destinations alone', () => {
+    assert.equal(carryReturnPath('/account/voorkeuren', '?terug=%2Fdeals'), '/account/voorkeuren');
+    assert.equal(carryReturnPath('/sign-up-other', '?terug=%2Fdeals'), '/sign-up-other');
+    assert.equal(carryReturnPath('/sign-up?terug=%2Fnieuws', '?terug=%2Fdeals'), '/sign-up?terug=%2Fnieuws');
+    assert.equal(carryReturnPath('/sign-up/verify-email-address', '?terug=https%3A%2F%2Fevil.example'), '/sign-up/verify-email-address');
+    assert.equal(carryReturnPath('/sign-up/verify-email-address', '?terug=%2Faccount'), '/sign-up/verify-email-address');
+    assert.equal(carryReturnPath('/sign-up/verify-email-address', ''), '/sign-up/verify-email-address');
   });
 });
