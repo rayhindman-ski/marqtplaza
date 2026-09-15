@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type BrowserContext, type Page } from '@playwright/test';
 import { mkdirSync } from 'node:fs';
 
 /**
@@ -24,8 +24,20 @@ import { mkdirSync } from 'node:fs';
  * the spec (see convergence.md).
  */
 const LIVE = process.env.CLERK_LIVE_RECOVERY === '1';
+/** UI language the app is opened in; Clerk cards must follow it (`nl` proves the Dutch localization). */
+const LANGUAGE: 'nl' | 'en' = process.env.CLERK_LIVE_LANGUAGE === 'nl' ? 'nl' : 'en';
 const TEST_CODE = '424242';
 const SHOTS = 'test-results/clerk-recovery';
+
+/** Stores the app language before any page script runs, the same way the in-app toggle would. */
+async function seedLanguage(context: BrowserContext): Promise<void> {
+  await context.addInitScript((language) => {
+    window.localStorage.setItem('buurtplaza-language', language);
+  }, LANGUAGE);
+}
+
+/** Language-specific expectation for an expired/invalid link message. */
+const EXPIRED_LINK_TEXT = LANGUAGE === 'nl' ? /verlopen|ongeldig|niet meer geldig|al gebruikt/i : /expired|invalid|already/i;
 
 type ClerkWindow = Window & { Clerk?: { loaded?: boolean; session?: { id: string } | null; user?: { id: string } | null; signOut(): Promise<void> } };
 
@@ -85,6 +97,10 @@ test.describe('live Clerk expired and consumed credentials', () => {
     return (await res.json()) as T;
   };
 
+  test.beforeEach(async ({ context }) => {
+    await seedLanguage(context);
+  });
+
   test.beforeAll(() => {
     if (!LIVE) return;
     if (!secretKey || !publishableKey) throw new Error('CLERK_SECRET_KEY and VITE_CLERK_PUBLISHABLE_KEY are required');
@@ -111,9 +127,9 @@ test.describe('live Clerk expired and consumed credentials', () => {
     await page.goto(`${liveBase}/sign-in?__clerk_ticket=${encodeURIComponent(token.token)}&terug=${encodeURIComponent(returnPath)}`);
     const text = await visibleClerkText(page);
     await page.screenshot({ path: `${SHOTS}/expired-sign-in-link.png`, fullPage: true });
-    test.info().annotations.push({ type: 'clerk-state', description: text }, { type: 'url', description: page.url() }, { type: 'fapi', description: fapi.join(' | ') });
+    test.info().annotations.push({ type: 'language', description: LANGUAGE }, { type: 'clerk-state', description: text }, { type: 'url', description: page.url() }, { type: 'fapi', description: fapi.join(' | ') });
 
-    expect(text).toMatch(/expired|verlopen|invalid|ongeldig/i);
+    expect(text).toMatch(EXPIRED_LINK_TEXT);
     // Recovery: the sign-in card with an e-mail field (or a sign-up link) is reachable from this screen.
     const recovery = page.locator('input[name="identifier"], a.cl-footerActionLink, .cl-formButtonPrimary').first();
     await expect(recovery).toBeVisible();
@@ -128,6 +144,7 @@ test.describe('live Clerk expired and consumed credentials', () => {
 
     // First use: consumes the ticket in an isolated context, then signs out again.
     const first = await browser.newContext();
+    await seedLanguage(first);
     const firstPage = await first.newPage();
     await firstPage.goto(link);
     await firstPage.waitForURL((url) => url.pathname === returnPath, { timeout: 60_000 });
@@ -140,15 +157,16 @@ test.describe('live Clerk expired and consumed credentials', () => {
 
     // Second use: a fresh browser opens the same link.
     const second = await browser.newContext();
+    await seedLanguage(second);
     const page = await second.newPage();
     const fapi: string[] = [];
     recordTicketResponses(page, frontendApiHost, fapi);
     await page.goto(link);
     const text = await visibleClerkText(page);
     await page.screenshot({ path: `${SHOTS}/consumed-sign-in-link.png`, fullPage: true });
-    test.info().annotations.push({ type: 'clerk-state', description: text }, { type: 'url', description: page.url() }, { type: 'fapi', description: fapi.join(' | ') });
+    test.info().annotations.push({ type: 'language', description: LANGUAGE }, { type: 'clerk-state', description: text }, { type: 'url', description: page.url() }, { type: 'fapi', description: fapi.join(' | ') });
 
-    expect(text).toMatch(/expired|verlopen|invalid|ongeldig|already/i);
+    expect(text).toMatch(EXPIRED_LINK_TEXT);
     await expect(page.locator('input[name="identifier"], a.cl-footerActionLink, .cl-formButtonPrimary').first()).toBeVisible();
     expect(await clerkSessionId(page)).toBeNull();
     expect(new URL(page.url()).pathname).toMatch(/^\/sign-in/);
@@ -177,7 +195,7 @@ test.describe('live Clerk expired and consumed credentials', () => {
     const codeInput = page.locator('input[autocomplete="one-time-code"]').first();
     await codeInput.click();
     await page.keyboard.type('000000', { delay: 40 });
-    const wrongCode = page.getByText(/incorrect code|onjuiste code/i).first();
+    const wrongCode = page.getByText(LANGUAGE === 'nl' ? /onjuist/i : /incorrect code/i).first();
     await expect(wrongCode).toBeVisible({ timeout: 30_000 });
     const wrongText = await visibleClerkText(page);
     await page.screenshot({ path: `${SHOTS}/wrong-code-recovery.png`, fullPage: true });

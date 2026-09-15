@@ -7,6 +7,7 @@ import {
   ArrowLeft, Clock, Newspaper, MapPin, ShieldAlert, Briefcase, Landmark,
   Trophy, Users, ArrowRight, ChevronDown, SlidersHorizontal
 } from 'lucide-react';
+import { persistLanguage } from '../lib/useAppLanguage';
 import { cn } from '../lib/utils';
 import BrandLogo from '../components/BrandLogo';
 import {
@@ -46,8 +47,7 @@ export default function NewsFeedView() {
   });
 
   useEffect(() => {
-    window.localStorage.setItem('buurtplaza-language', language);
-    document.documentElement.lang = language;
+    persistLanguage(language);
   }, [language]);
 
   const { data, isLoading, isError, refetch } = useGetNews(

@@ -78,6 +78,8 @@ import {
   translations,
   type Language,
 } from './lib/i18n';
+import { persistLanguage, useStoredLanguage } from './lib/useAppLanguage';
+import { clerkLocalizationFor } from './lib/clerkLocalization';
 import {
   formatEventTiming,
   freshnessBadge,
@@ -2984,8 +2986,7 @@ function MainApp({ initialLocationId }: { initialLocationId?: string } = {}) {
   } = useSavedPlaces();
 
   useEffect(() => {
-    window.localStorage.setItem('buurtplaza-language', language);
-    document.documentElement.lang = language;
+    persistLanguage(language);
   }, [language]);
 
   useEffect(() => {
@@ -3840,11 +3841,15 @@ function ApiAuthTokenBridge() {
 
 function ClerkProviderWithRouter({ children }: { children: React.ReactNode }) {
   const [, setLocation] = useLocation();
+  // Clerk renders its own sign-in/sign-up/error cards, so it needs the app language
+  // explicitly; otherwise expired-link and code errors stay English-only.
+  const language = useStoredLanguage();
   return (
     <ClerkProvider
       publishableKey={clerkPubKey}
       proxyUrl={clerkProxyUrl}
       appearance={clerkAppearance}
+      localization={clerkLocalizationFor(language)}
       signInUrl={`${basePath}/sign-in`}
       signUpUrl={`${basePath}/sign-up`}
       routerPush={(to) => setLocation(carryReturnPath(stripBase(to), window.location.search))}

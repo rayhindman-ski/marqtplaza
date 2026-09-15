@@ -18,6 +18,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
+import { persistLanguage } from '@/lib/useAppLanguage';
 import { useEditorAccess } from '../lib/editorAccess';
 
 type Language = 'en' | 'nl';
@@ -97,8 +98,7 @@ export default function CommunityModerationView() {
   });
 
   useEffect(() => {
-    window.localStorage.setItem('buurtplaza-language', language);
-    document.documentElement.lang = language;
+    persistLanguage(language);
   }, [language]);
 
   const copy = t[language];

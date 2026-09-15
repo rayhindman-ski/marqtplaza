@@ -23,6 +23,12 @@ the token stalls on bot protection and looks like "no email arrived".
 app needs after redirect (e.g. `terug`) must be re-attached there — a live run is the only test
 that catches this.
 
+**Localization:** `@clerk/localizations` nl-NL leaves several error codes untranslated
+(`ticket_expired_code`, `ticket_invalid_code`, `form_code_incorrect`) and `sign_in_token_already_used_code`
+is absent from the typed table entirely; Clerk then shows the English server message. Clerk looks
+errors up by raw server code under `unstable__errors`, so untyped keys work at runtime. Run the live
+specs with `CLERK_LIVE_LANGUAGE=nl` to prove Dutch — the default run only proves English.
+
 **Expired/consumed links:** this instance verifies e-mail by code only, so the only Clerk-issued
 links are Backend API sign-in tokens (`POST /v1/sign_in_tokens`, `expires_in_seconds` accepts 1).
 Expired → `ticket_expired_code`, reused → `sign_in_token_already_used_code`; Clerk's SignIn card
