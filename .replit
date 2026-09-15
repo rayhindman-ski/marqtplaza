@@ -11,6 +11,26 @@ env = { "CI" = "true" }
 [workflows]
 runButton = "Project"
 
+[[workflows.workflow]]
+name = "Project"
+mode = "parallel"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "typecheck"
+
+[[workflows.workflow]]
+name = "typecheck"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "pnpm run typecheck"
+
+[workflows.workflow.metadata]
+isValidation = true
+
 [agent]
 stack = "PNPM_WORKSPACE"
 expertMode = true
@@ -22,3 +42,13 @@ timeoutMs = 20000
 [nix]
 channel = "stable-25_05"
 packages = ["chromium"]
+
+[userenv]
+
+[userenv.development]
+ACCOUNTS_ENABLED = "true"
+VITE_ACCOUNTS_ENABLED = "true"
+BUSINESS_INTAKE_ENABLED = "true"
+VITE_BUSINESS_INTAKE_ENABLED = "true"
+BUSINESS_PUBLICATION_ENABLED = "true"
+VITE_BUSINESS_PUBLICATION_ENABLED = "true"

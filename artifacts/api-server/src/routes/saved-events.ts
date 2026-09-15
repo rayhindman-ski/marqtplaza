@@ -1,4 +1,6 @@
 import { getAuth } from "@clerk/express";
+
+import { requireActiveAccount } from "../lib/accountStatus";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { Router, type IRouter, type Request } from "express";
 import {
@@ -15,20 +17,6 @@ import {
 
 type UserIdResolver = (req: Request) => string | null | undefined;
 
-function currentUserId(
-  req: Request,
-  res: {
-    status: (code: number) => { json: (body: unknown) => unknown };
-  },
-  resolveUserId: UserIdResolver,
-): string | null {
-  const userId = resolveUserId(req);
-  if (!userId) {
-    res.status(401).json({ error: "Authentication is required." });
-    return null;
-  }
-  return userId;
-}
 
 async function accountState(userId: string) {
   const [events, alerts] = await Promise.all([
@@ -61,7 +49,7 @@ export function createSavedEventsRouter(
   const router: IRouter = Router();
 
   router.get("/saved-events", async (req, res): Promise<void> => {
-    const userId = currentUserId(req, res, resolveUserId);
+    const userId = await requireActiveAccount(req, res, resolveUserId);
     if (!userId) return;
     try {
       res.json(GetSavedEventsResponse.parse(await accountState(userId)));
@@ -74,7 +62,7 @@ export function createSavedEventsRouter(
   });
 
   router.post("/saved-events/sync", async (req, res): Promise<void> => {
-    const userId = currentUserId(req, res, resolveUserId);
+    const userId = await requireActiveAccount(req, res, resolveUserId);
     if (!userId) return;
     const parsed = SyncSavedEventsBody.safeParse(req.body);
     if (!parsed.success) {

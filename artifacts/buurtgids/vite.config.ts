@@ -5,13 +5,10 @@ import { defineConfig } from 'vite';
 
 import runtimeErrorOverlay from '@replit/vite-plugin-runtime-error-modal';
 
-const rawPort = process.env.PORT;
-
-if (!rawPort) {
-  throw new Error(
-    'PORT environment variable is required but was not provided.',
-  );
-}
+// The artifact runtime injects PORT and BASE_PATH for dev/preview. Production
+// static builds do not need a listening port, so use the artifact defaults when
+// Vite evaluates this config during publishing.
+const rawPort = process.env.PORT ?? '22571';
 
 const port = Number(rawPort);
 
@@ -19,15 +16,9 @@ if (Number.isNaN(port) || port <= 0) {
   throw new Error(`Invalid PORT value: "${rawPort}"`);
 }
 
-const basePath = process.env.BASE_PATH;
+const basePath = process.env.BASE_PATH ?? '/';
 const googleMapsBrowserKey = process.env.GOOGLE_MAPS_API_KEY?.trim();
 const googleMapsBrowserKeyPattern = /^AIza[0-9A-Za-z_-]{35}$/;
-
-if (!basePath) {
-  throw new Error(
-    'BASE_PATH environment variable is required but was not provided.',
-  );
-}
 
 export default defineConfig({
   base: basePath,

@@ -6,10 +6,14 @@
  * OpenAPI spec version: 0.1.0
  */
 
+/**
+ * `request_changes` is only valid for business claims and asks the claimant for more authority evidence.
+ */
 export type ModerationDecisionDecision = typeof ModerationDecisionDecision[keyof typeof ModerationDecisionDecision];
 
 
 export const ModerationDecisionDecision = {
   approve: 'approve',
   reject: 'reject',
+  request_changes: 'request_changes',
 } as const;

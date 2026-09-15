@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { Route, Switch, Router as WouterRouter, Link, Redirect, useLocation, useRoute } from 'wouter';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { ClerkProvider, SignIn, SignUp, useAuth } from '@clerk/react';
+import { Route, Switch, Router as WouterRouter, Link, Redirect, useLocation, useRoute, useSearch } from 'wouter';
+import { QueryClient, QueryClientProvider, keepPreviousData } from '@tanstack/react-query';
+import { ClerkProvider, SignIn, SignUp, useAuth, useClerk } from '@clerk/react';
 import { publishableKeyFromHost } from '@clerk/react/internal';
 import { shadcn } from '@clerk/themes';
 import { 
@@ -12,7 +12,7 @@ import {
   Landmark, Route as RouteIcon, Baby, Building2, Coffee, Gamepad2, HandHeart, Waves, ShoppingBag, ExternalLink, AlertCircle, CalendarPlus,
   CalendarDays, UsersRound, Utensils,
   CloudSun, Cloud, CloudFog, CloudRain, CloudSnow, Sun, Wind, Droplets, Tag, Store,
-  Bike, Car, Footprints, TrainFront, ShieldCheck, Sparkles, Navigation
+  Bike, Car, Footprints, TrainFront, ShieldCheck, Sparkles, Navigation, UserRound, Loader2
 } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -55,7 +55,18 @@ import DealsView from './pages/DealsView';
 import BusinessProfileView from './pages/BusinessProfileView';
 import BusinessClaimView from './pages/BusinessClaimView';
 import MyBusinessWorkspace from './pages/MyBusinessWorkspace';
+import BusinessRevisionPage from './pages/BusinessRevisionPage';
 import BusinessModerationView from './pages/BusinessModerationView';
+import OnboardingPage from './pages/OnboardingPage';
+import AccountPage from './pages/AccountPage';
+import AccountPreferencesPage from './pages/AccountPreferencesPage';
+import AccountPrivacyPage from './pages/AccountPrivacyPage';
+import { useAccountAuth } from './lib/accountAuth';
+import { featureFlags } from './lib/featureFlags';
+import { carryReturnPath, resolveReturnPath, withReturnPath } from './lib/returnPath';
+import BusinessOnboardingPage from './pages/BusinessOnboardingPage';
+import BusinessLookupPage from './pages/BusinessLookupPage';
+import BusinessDraftPage from './pages/BusinessDraftPage';
 import { useEditorAccess } from './lib/editorAccess';
 import {
   getLocationName,
@@ -67,6 +78,8 @@ import {
   translations,
   type Language,
 } from './lib/i18n';
+import { persistLanguage, useStoredLanguage } from './lib/useAppLanguage';
+import { clerkLocalizationFor } from './lib/clerkLocalization';
 import {
   formatEventTiming,
   freshnessBadge,
@@ -76,9 +89,19 @@ import {
   type DiscoveryQuickFilter,
   type RouteMode,
 } from './lib/listingPresentation';
+import { isPointInsideNeighborhoods } from '@workspace/geo';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
+}
+
+function formatEvidenceCheckedAt(value: string, language: Language): string {
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return value;
+  return new Intl.DateTimeFormat(language === 'nl' ? 'nl-NL' : 'en-GB', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(date);
 }
 
 type UserRole = 'designer' | 'user';
@@ -734,6 +757,9 @@ function ReferenceCategoryNav({
   embedded?: boolean;
 }) {
   const t = translations[language];
+  const [location] = useLocation();
+  const search = useSearch();
+  const accountHref = withReturnPath('/account', `${location}${search ? `?${search}` : ''}`);
   const iconForCategory = (id: string) => {
     if (id === 'things-to-do') return CalendarDays;
     if (id === 'locals') return UsersRound;
@@ -797,6 +823,8 @@ function ReferenceCategoryNav({
           { href: '/buurt', label: language === 'nl' ? 'Buurtplein' : 'Community', Icon: HandHeart },
           { href: '/deals', label: language === 'nl' ? 'Deals' : 'Deals', Icon: Tag },
           { href: '/mijn-bedrijf', label: language === 'nl' ? 'Mijn bedrijf' : 'My business', Icon: Store },
+          { href: '/bedrijf-aanmelden', label: language === 'nl' ? 'Bedrijf aanmelden' : 'List a business', Icon: Building2 },
+          { href: accountHref, label: language === 'nl' ? 'Mijn account' : 'My account', Icon: UserRound },
         ].filter(({ href }) => userRole === 'designer' || !['/capture', '/bronnen'].includes(href))
           .map(({ href, label, Icon }) => (
           <span key={href} className="group relative">
@@ -881,8 +909,20 @@ function SearchState({
   const [query, setQuery] = useState('');
   const [error, setError] = useState('');
   const [selectedCityId, setSelectedCityId] = useState<string | null>(null);
+  const [selectedMapNeighborhood, setSelectedMapNeighborhood] = useState<string | null>(null);
+  const [hoveredMapNeighborhood, setHoveredMapNeighborhood] = useState<string | null>(null);
   const [includeExternalSources, setIncludeExternalSources] = useState(readIncludeExternalSources);
   const t = translations[language];
+  const mapLocation = LOCATIONS.find((location) => location.id === selectedCityId) ?? LOCATIONS[0];
+
+  useEffect(() => {
+    if (!mapLocation.neighborhoods.includes(selectedMapNeighborhood ?? '')) {
+      setSelectedMapNeighborhood(null);
+    }
+    if (!mapLocation.neighborhoods.includes(hoveredMapNeighborhood ?? '')) {
+      setHoveredMapNeighborhood(null);
+    }
+  }, [hoveredMapNeighborhood, mapLocation, selectedMapNeighborhood]);
 
   useEffect(() => {
     window.localStorage.setItem(
@@ -1006,72 +1046,129 @@ function SearchState({
         </form>
 
         <div className="w-full pt-6">
-          <p className="text-xs text-muted-foreground mb-4 uppercase tracking-widest font-bold">{t.popularDestinations}</p>
-          <div className="flex flex-wrap justify-center gap-2.5">
-            {LOCATIONS.map(loc => {
-              const neighborhoodOptions = selectedCityId === loc.id
-                ? loc.neighborhoods
-                : (popularNeighborhoods[loc.id] ?? loc.neighborhoods.slice(0, 8));
-
-              return (
-              <div
-                key={loc.id}
-                className={cn(
-                  "flex w-full max-w-5xl flex-col items-center gap-2 rounded-2xl p-1.5 transition-colors",
-                  selectedCityId === loc.id && "bg-primary/5 p-3 ring-1 ring-primary/20",
-                )}
-              >
-                <button
-                  type="button"
-                  aria-pressed={selectedCityId === loc.id}
-                  onClick={() => setSelectedCityId(loc.id)}
-                  className={cn(
-                    "px-4 py-2 backdrop-blur-sm border rounded-full text-sm font-semibold transition-all shadow-sm hover:shadow-md",
-                    selectedCityId === loc.id
-                      ? "bg-foreground text-background border-foreground"
-                      : "bg-card/80 border-border/60 text-foreground hover:border-primary/50 hover:text-primary",
-                  )}
-                >
-                  {getLocationName(loc, language)}
-                </button>
-                <div className="w-full text-left">
-                  <p className="mb-2 text-center text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
-                    {selectedCityId === loc.id
-                      ? t.chooseNeighborhood(getLocationName(loc, language))
-                      : t.popularNeighborhoods}
-                  </p>
-                  <div className="mb-3 flex flex-wrap justify-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => onSearch(loc.id, undefined, DEFAULT_START_SECTION)}
-                      className="rounded-full border border-primary/40 bg-primary/10 px-3 py-1.5 text-[11px] font-extrabold text-primary transition-colors hover:bg-primary/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                    >
-                      {t.selectAllNeighborhoods}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setSelectedCityId(null)}
-                      className="rounded-full border border-border/70 bg-card/80 px-3 py-1.5 text-[11px] font-extrabold text-muted-foreground transition-colors hover:border-primary/40 hover:bg-primary/5 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                    >
-                      {t.clearNeighborhoodSelection}
-                    </button>
-                  </div>
-                  <div className="grid w-full grid-cols-2 gap-2 animate-in fade-in slide-in-from-top-1 duration-300 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
-                    {neighborhoodOptions.map((neighborhood) => (
-                      <button
-                        key={neighborhood}
-                        type="button"
-                        onClick={() => onSearch(loc.id, neighborhood, DEFAULT_START_SECTION)}
-                        className="min-h-10 rounded-xl border border-border/50 bg-card/80 px-3 py-2 text-left text-xs font-semibold text-muted-foreground transition-all hover:border-primary/50 hover:bg-primary/5 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                      >
-                        {neighborhood}
-                      </button>
-                    ))}
-                  </div>
-                </div>
+          <div className="grid gap-6 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1.35fr)] lg:items-start">
+            <div className="relative h-[25rem] overflow-hidden rounded-3xl border border-border/70 bg-card/80 text-left shadow-xl backdrop-blur-sm sm:h-[30rem]">
+              <GoogleMapView
+                language={language}
+                locationId={mapLocation.id}
+                selectedNeighborhoods={mapLocation.neighborhoods}
+                showNeighborhoodLabels={false}
+                highlightedNeighborhood={hoveredMapNeighborhood ?? selectedMapNeighborhood}
+                onNeighborhoodClick={setSelectedMapNeighborhood}
+                onNeighborhoodHover={setHoveredMapNeighborhood}
+                markers={[]}
+                selectedMarkerId={null}
+                savedIds={new Set()}
+                onMarkerClick={() => undefined}
+              />
+              <div className="pointer-events-none absolute left-4 top-4 z-10 max-w-[calc(100%-2rem)] rounded-2xl border border-border/70 bg-card/90 px-4 py-3 shadow-lg backdrop-blur-sm">
+                <p className="text-sm font-extrabold text-foreground">
+                  {language === 'nl' ? 'Buurten op de kaart' : 'Neighborhoods on the map'}
+                </p>
+                <p className="mt-1 text-xs font-semibold text-muted-foreground">
+                  {getLocationName(mapLocation, language)}
+                  {' · '}
+                  {language === 'nl'
+                    ? 'Elke buurt is omlijnd; de namen staan ernaast.'
+                    : 'Each neighborhood is outlined; names are listed alongside.'}
+                </p>
               </div>
-              );
-            })}
+              {selectedMapNeighborhood && (
+                <div className="absolute bottom-4 left-4 right-4 z-10 flex items-center justify-between gap-3 rounded-2xl border border-primary/30 bg-card/95 px-4 py-3 text-left shadow-lg backdrop-blur-sm">
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-muted-foreground">
+                      {language === 'nl' ? 'Geselecteerde buurt' : 'Selected neighborhood'}
+                    </p>
+                    <p className="truncate text-sm font-extrabold text-foreground">{selectedMapNeighborhood}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => onSearch(mapLocation.id, selectedMapNeighborhood, DEFAULT_START_SECTION)}
+                    className="shrink-0 rounded-xl bg-primary px-3 py-2 text-xs font-extrabold text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  >
+                    {language === 'nl' ? 'Selecteer buurt' : 'Select neighborhood'}
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <div>
+              <p className="mb-4 text-xs font-bold uppercase tracking-widest text-muted-foreground">{t.popularDestinations}</p>
+              <div className="flex flex-wrap justify-center gap-2.5">
+                {LOCATIONS.map(loc => {
+                  const neighborhoodOptions = selectedCityId === loc.id
+                    ? loc.neighborhoods
+                    : (popularNeighborhoods[loc.id] ?? loc.neighborhoods.slice(0, 8));
+
+                  return (
+                  <div
+                    key={loc.id}
+                    className={cn(
+                      "flex w-full max-w-5xl flex-col items-center gap-2 rounded-2xl p-1.5 transition-colors",
+                      selectedCityId === loc.id && "bg-primary/5 p-3 ring-1 ring-primary/20",
+                    )}
+                  >
+                    <button
+                      type="button"
+                      aria-pressed={selectedCityId === loc.id}
+                      onClick={() => {
+                        setSelectedCityId(loc.id);
+                        setSelectedMapNeighborhood(null);
+                        setHoveredMapNeighborhood(null);
+                      }}
+                      className={cn(
+                        "px-4 py-2 backdrop-blur-sm border rounded-full text-sm font-semibold transition-all shadow-sm hover:shadow-md",
+                        selectedCityId === loc.id
+                          ? "bg-foreground text-background border-foreground"
+                          : "bg-card/80 border-border/60 text-foreground hover:border-primary/50 hover:text-primary",
+                      )}
+                    >
+                      {getLocationName(loc, language)}
+                    </button>
+                    <div className="w-full text-left">
+                      <p className="mb-2 text-center text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
+                        {selectedCityId === loc.id
+                          ? t.chooseNeighborhood(getLocationName(loc, language))
+                          : t.popularNeighborhoods}
+                      </p>
+                      <div className="mb-3 flex flex-wrap justify-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => onSearch(loc.id, undefined, DEFAULT_START_SECTION)}
+                          className="rounded-full border border-primary/40 bg-primary/10 px-3 py-1.5 text-[11px] font-extrabold text-primary transition-colors hover:bg-primary/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                        >
+                          {t.selectAllNeighborhoods}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedCityId(null)}
+                          className="rounded-full border border-border/70 bg-card/80 px-3 py-1.5 text-[11px] font-extrabold text-muted-foreground transition-colors hover:border-primary/40 hover:bg-primary/5 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                        >
+                          {t.clearNeighborhoodSelection}
+                        </button>
+                      </div>
+                      <div className="grid w-full grid-cols-2 gap-2 animate-in fade-in slide-in-from-top-1 duration-300 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-2 xl:grid-cols-3">
+                        {neighborhoodOptions.map((neighborhood) => (
+                          <button
+                            key={neighborhood}
+                            type="button"
+                            onClick={() => onSearch(loc.id, neighborhood, DEFAULT_START_SECTION)}
+                            onMouseEnter={() => selectedCityId === loc.id && setHoveredMapNeighborhood(neighborhood)}
+                            onMouseLeave={() => setHoveredMapNeighborhood(null)}
+                            onFocus={() => selectedCityId === loc.id && setHoveredMapNeighborhood(neighborhood)}
+                            onBlur={() => setHoveredMapNeighborhood(null)}
+                            className="min-h-10 rounded-xl border border-border/50 bg-card/80 px-3 py-2 text-left text-xs font-semibold text-muted-foreground transition-all hover:border-primary/50 hover:bg-primary/5 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                          >
+                            {neighborhood}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                  );
+                })}
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -1149,10 +1246,12 @@ function FilterFrame({
   title,
   children,
   defaultOpen = true,
+  status,
 }: {
   title: string;
   children: React.ReactNode;
   defaultOpen?: boolean;
+  status?: React.ReactNode;
 }) {
   const [isOpen, setIsOpen] = useState(defaultOpen);
   return (
@@ -1164,7 +1263,10 @@ function FilterFrame({
         className="flex min-h-9 w-full items-center justify-between gap-2 px-3 py-2 text-left text-[10px] font-black uppercase tracking-[0.14em] text-muted-foreground hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
       >
         <span>{title}</span>
-        <ChevronDown className={cn("h-4 w-4 shrink-0 transition-transform", isOpen && "rotate-180")} />
+        <span className="flex items-center gap-2">
+          {status}
+          <ChevronDown className={cn("h-4 w-4 shrink-0 transition-transform", isOpen && "rotate-180")} />
+        </span>
       </button>
       {isOpen && <div className="border-t border-border/60 p-2">{children}</div>}
     </section>
@@ -1466,7 +1568,9 @@ function MarkerCard({
             <div className="flex items-center gap-3 shrink-0">
               {(marker.category === 'Businesses' || marker.category === 'Food & Drink') && (
                 <Link
-                  href={`/bedrijf-claim?listingId=${marker.id}&cityId=dhg&listingSource=${marker.source || 'google_maps'}&name=${encodeURIComponent(marker.name)}&address=${encodeURIComponent(marker.address || '')}`}
+                  href={featureFlags.businessIntake
+                    ? `/bedrijf-nieuw?kind=existing_listing&cityId=dhg&listingSource=${encodeURIComponent(marker.source || 'google_maps')}&listingId=${encodeURIComponent(String(marker.id))}`
+                    : `/bedrijf-claim?listingId=${marker.id}&cityId=dhg&listingSource=${marker.source || 'google_maps'}&name=${encodeURIComponent(marker.name)}&address=${encodeURIComponent(marker.address || '')}`}
                   className="flex items-center gap-1 text-[11px] font-bold text-primary hover:text-primary/80 transition-colors"
                   onClick={e => e.stopPropagation()}
                 >
@@ -1669,13 +1773,19 @@ function DiscoveryState({
     { cityId: locationId, section: 'events', language, neighborhoods: requestedNeighborhoods, mode, anonymousId },
     { query: { enabled: topLevelCategories.events, queryKey: getGetListingsQueryKey({ cityId: locationId, section: 'events', language, neighborhoods: requestedNeighborhoods, mode, anonymousId }) } },
   );
+  // Narrowing a filter changes the query key. Keep the previous response while
+  // the new one loads: the client-side polygon and subcategory filters already
+  // narrow it correctly, so the user never sees a false "0 results" state.
   const businessesQuery = useGetListings(
     { cityId: locationId, section: 'businesses', language, neighborhoods: requestedNeighborhoods, businessCategories: requestedBusinessCategories, searchLat: requestedSearchCenter?.lat, searchLng: requestedSearchCenter?.lng, mode, anonymousId },
-    { query: { enabled: topLevelCategories.businesses && hasSearchArea && selectedBusinessCategories.length > 0, queryKey: getGetListingsQueryKey({ cityId: locationId, section: 'businesses', language, neighborhoods: requestedNeighborhoods, businessCategories: requestedBusinessCategories, searchLat: requestedSearchCenter?.lat, searchLng: requestedSearchCenter?.lng, mode, anonymousId }) } },
+    // Keep the query enabled even when the final subcategory is unchecked.
+    // The empty category value is a real request for the current area; the
+    // client-side filter keeps the map empty until the response settles.
+    { query: { enabled: topLevelCategories.businesses && hasSearchArea, placeholderData: keepPreviousData, queryKey: getGetListingsQueryKey({ cityId: locationId, section: 'businesses', language, neighborhoods: requestedNeighborhoods, businessCategories: requestedBusinessCategories, searchLat: requestedSearchCenter?.lat, searchLng: requestedSearchCenter?.lng, mode, anonymousId }) } },
   );
   const foodDrinkQuery = useGetListings(
-    { cityId: locationId, section: 'food-drink', language, neighborhoods: requestedNeighborhoods, mode, anonymousId },
-    { query: { enabled: topLevelCategories['food-drink'] && hasSearchArea, queryKey: getGetListingsQueryKey({ cityId: locationId, section: 'food-drink', language, neighborhoods: requestedNeighborhoods, mode, anonymousId }) } },
+    { cityId: locationId, section: 'food-drink', language, neighborhoods: requestedNeighborhoods, searchLat: requestedSearchCenter?.lat, searchLng: requestedSearchCenter?.lng, mode, anonymousId },
+    { query: { enabled: topLevelCategories['food-drink'] && hasSearchArea, placeholderData: keepPreviousData, queryKey: getGetListingsQueryKey({ cityId: locationId, section: 'food-drink', language, neighborhoods: requestedNeighborhoods, searchLat: requestedSearchCenter?.lat, searchLng: requestedSearchCenter?.lng, mode, anonymousId }) } },
   );
   const socialMapQuery = useGetListings(
     { cityId: locationId, section: 'social-map', language, neighborhoods: requestedNeighborhoods, mode, anonymousId },
@@ -1766,15 +1876,11 @@ function DiscoveryState({
   };
 
   const toggleNeighborhood = (neighborhood: string) => {
-    if (neighborhoodSelection === 'all') {
-      setNeighborhoodSelection('some');
-      setSelectedNeighborhoods([neighborhood]);
-    } else if (selectedNeighborhoods.includes(neighborhood)) {
-      const next = selectedNeighborhoods.filter((item) => item !== neighborhood);
-      setSelectedNeighborhoods(next);
-      setNeighborhoodSelection(next.length > 0 ? 'some' : 'none');
+    if (selectedNeighborhoods.includes(neighborhood)) {
+      setSelectedNeighborhoods([]);
+      setNeighborhoodSelection('none');
     } else {
-      setSelectedNeighborhoods([...selectedNeighborhoods, neighborhood]);
+      setSelectedNeighborhoods([neighborhood]);
       setNeighborhoodSelection('some');
     }
     setSelectedMarker(null);
@@ -1926,6 +2032,15 @@ function DiscoveryState({
   const nearbyOrigin = nearbyPosition
     ?? selectedAreas[0]
     ?? { lat: location.lat, lng: location.lng };
+  // A map click or a refresh can update selectedNeighborhoods before the
+  // checkbox state catches up. Explicit selections must always win over the
+  // "all neighborhoods" default, otherwise pins from the whole city remain
+  // visible while one polygon is highlighted.
+  const activeNeighborhoodNames = neighborhoodSelection === 'all' && selectedNeighborhoods.length === 0
+    ? location.neighborhoods
+    : neighborhoodSelection === 'none'
+      ? []
+      : selectedNeighborhoods;
   const filteredMarkers = allMarkers.filter((marker) => {
     const markerTopLevel = topLevelForMarker(marker);
     if (!topLevelCategories[markerTopLevel]) return false;
@@ -1955,14 +2070,28 @@ function DiscoveryState({
       return false;
     }
     if (neighborhoodSelection === 'none') return false;
-    if (neighborhoodSelection === 'all') return true;
-    if (selectedAreas.length === 0) return false;
+    if (activeNeighborhoodNames.length === 0) return false;
     if (marker.category === 'Social map') {
-      return Boolean(marker.neighborhood && selectedNeighborhoods.includes(marker.neighborhood));
+      if (!marker.neighborhood || !activeNeighborhoodNames.includes(marker.neighborhood)) return false;
     }
-    return selectedAreas.some((area) => getDistanceKm(marker.lat, marker.lng, area.lat, area.lng) <= 2.5);
+    return isPointInsideNeighborhoods(marker.lat, marker.lng, activeNeighborhoodNames);
   });
   const isLoading = selectedQueries.some((query) => query.isLoading);
+  // A background refetch after a filter change shows the previous response
+  // (placeholder data) until the narrowed result arrives; surface that state.
+  const isRefreshing = !isLoading && selectedQueries.some((query) => query.isFetching);
+  const refreshingLabel = language === 'nl' ? 'Resultaten worden bijgewerkt…' : 'Updating results…';
+  const refreshingIndicator = isRefreshing ? (
+    <span
+      role="status"
+      aria-live="polite"
+      data-testid="results-refreshing"
+      className="inline-flex items-center gap-1 text-[10px] font-semibold normal-case tracking-normal text-primary"
+    >
+      <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
+      {refreshingLabel}
+    </span>
+  ) : null;
   const isError = selectedQueries.some((query) => query.isError) && selectedListings.length === 0;
   const refetch = () => Promise.all(selectedQueries.map((query) => query.refetch()));
   const isLive = selectedData.some((result) => result.source === 'live');
@@ -1976,6 +2105,17 @@ function DiscoveryState({
     .filter((result) => result.source === 'fallback' && result.message)
     .map((result) => result.message)
     .join(' ');
+  const eventEvidence = topLevelCategories.events
+    ? selectedData.find((result) => result.evidence)?.evidence
+    : undefined;
+  const evidenceStatus = eventEvidence?.status;
+  const evidenceTone = evidenceStatus === 'verified'
+    ? 'border-emerald-200 bg-emerald-50 text-emerald-950'
+    : evidenceStatus === 'empty'
+      ? 'border-slate-200 bg-slate-50 text-slate-900'
+      : evidenceStatus === 'stale'
+        ? 'border-amber-200 bg-amber-50 text-amber-950'
+        : 'border-rose-200 bg-rose-50 text-rose-950';
 
   const savedCount = savedIds.size;
   const normalizedNeighborhoodSearch = neighborhoodSearch.trim().toLocaleLowerCase(language === 'nl' ? 'nl-NL' : 'en-GB');
@@ -2007,7 +2147,10 @@ function DiscoveryState({
             </button>
             <div className="flex-1 min-w-0">
               <h2 className="text-3xl font-extrabold text-foreground tracking-tight">{getLocationName(location, language)}</h2>
-              <p className="text-sm text-muted-foreground font-medium">{t.discoveriesNearby(filteredMarkers.length)}</p>
+              <p className="flex items-center gap-2 text-sm text-muted-foreground font-medium">
+                {t.discoveriesNearby(filteredMarkers.length)}
+                {isRefreshing && <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" aria-hidden="true" />}
+              </p>
             </div>
             <button
               onClick={onViewSaved}
@@ -2123,7 +2266,7 @@ function DiscoveryState({
               </div>
             </FilterFrame>
             {visibleSubcategories.length > 0 && (
-              <FilterFrame title={t.subcategories}>
+              <FilterFrame title={t.subcategories} status={refreshingIndicator}>
                 <div className="mb-2">
                   <CategoryActionButtons
                     language={language}
@@ -2136,7 +2279,8 @@ function DiscoveryState({
                 <div
                   role="group"
                   aria-label={t.subcategories}
-                  className="grid grid-cols-2 gap-1"
+                  aria-busy={isRefreshing}
+                  className={cn("grid grid-cols-2 gap-1 transition-opacity", isRefreshing && "opacity-70")}
                 >
                   {visibleSubcategories.map((subcategory) => {
                     const isChecked = subcategories[subcategory];
@@ -2363,6 +2507,46 @@ function DiscoveryState({
                 {selectedTopLevelSections.includes('social-map') ? t.socialMapCoverageNote : t.listingsCoverageNote}
               </p>
             )}
+            {eventEvidence && evidenceStatus && (
+              <div
+                data-testid="event-evidence-summary"
+                role="status"
+                aria-live="polite"
+                className={cn('w-full rounded-xl border px-3 py-2.5', evidenceTone)}
+              >
+                <div className="flex items-start gap-2">
+                  <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                      <span className="text-[10px] font-black uppercase tracking-[0.14em]">
+                        {t.eventEvidenceTitle}
+                      </span>
+                      <span data-testid="event-evidence-status" className="text-xs font-bold">
+                        {t.eventEvidenceStatus[evidenceStatus]}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-xs leading-relaxed">{eventEvidence.message}</p>
+                    {eventEvidence.lastCheckedAt && (
+                      <p className="mt-1 text-[10px] opacity-75">
+                        {t.eventEvidenceLastChecked(formatEvidenceCheckedAt(eventEvidence.lastCheckedAt, language))}
+                      </p>
+                    )}
+                    {eventEvidence.sources.length > 0 && (
+                      <ul className="mt-2 flex flex-wrap gap-1.5" aria-label={t.eventEvidenceTitle}>
+                        {eventEvidence.sources.slice(0, 6).map((source) => (
+                          <li
+                            key={source.id}
+                            className="rounded-full border border-current/15 bg-white/50 px-2 py-0.5 text-[10px] font-semibold"
+                          >
+                            {source.name}: {t.eventEvidenceSourceStatus[source.status]}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
             {selectedTopLevelSections.includes('social-map') && socialMapSnapshotDate && (
               <span data-testid="text-social-map-public-snapshot-date" className="w-full text-xs text-muted-foreground">
                 {t.socialMapSnapshot(socialMapSnapshotDate)}
@@ -2440,6 +2624,7 @@ function DiscoveryState({
               <div 
                 key={m.id} 
                 id={`event-${m.id}`}
+                data-event-id={m.id}
                 data-selected={selectedMarker === m.id || undefined}
                 className="animate-in fade-in slide-in-from-bottom-4 duration-500 fill-mode-both"
                 style={{ animationDelay: `${i * 50}ms` }}
@@ -2462,7 +2647,9 @@ function DiscoveryState({
                 </div>
                 <h3 className="text-lg font-bold text-foreground mb-2">{t.noDiscoveries}</h3>
                 <p className="text-sm text-muted-foreground max-w-[250px] leading-relaxed">
-                  {t.noDiscoveriesDescription}
+                   {topLevelCategories.events && eventEvidence && allMarkers.length === 0
+                     ? eventEvidence.message
+                     : t.noDiscoveriesDescription}
                 </p>
               </div>
             )}
@@ -2527,6 +2714,10 @@ function DiscoveryState({
             language={language}
             locationId={location.id}
             selectedNeighborhoods={selectedNeighborhoods}
+            showAllNeighborhoods
+            highlightedNeighborhood={selectedNeighborhoods.length === 1 ? selectedNeighborhoods[0] : null}
+            isDataLoading={topLevelCategories.businesses && businessesQuery.isFetching}
+            onNeighborhoodClick={toggleNeighborhood}
             markers={filteredMarkers}
             selectedMarkerId={selectedMarker}
             savedIds={savedIds}
@@ -2795,8 +2986,7 @@ function MainApp({ initialLocationId }: { initialLocationId?: string } = {}) {
   } = useSavedPlaces();
 
   useEffect(() => {
-    window.localStorage.setItem('buurtplaza-language', language);
-    document.documentElement.lang = language;
+    persistLanguage(language);
   }, [language]);
 
   useEffect(() => {
@@ -2898,12 +3088,20 @@ export default function App() {
           <Route path="/beoordelen/community" component={CommunityModerationView} />
           <Route path="/sign-in/*?" component={SignInPage} />
           <Route path="/sign-up/*?" component={SignUpPage} />
+          <Route path="/onboarding" component={OnboardingPage} />
+          <Route path="/account/voorkeuren" component={AccountPreferencesPage} />
+          <Route path="/account/privacy" component={AccountPrivacyPage} />
+          <Route path="/account/*?" component={AccountPage} />
+          <Route path="/bedrijf-aanmelden" component={BusinessOnboardingPage} />
+          <Route path="/bedrijf-zoeken" component={BusinessLookupPage} />
+          <Route path="/bedrijf-nieuw" component={BusinessDraftPage} />
           <Route path="/nieuws" component={NewsFeedView} />
           <Route path="/nieuws/:id" component={NewsArticleView} />
           <Route path="/deals" component={DealsView} />
           <Route path="/bedrijf/:slug" component={BusinessProfileView} />
           <Route path="/bedrijf-claim" component={BusinessClaimView} />
           <Route path="/mijn-bedrijf" component={MyBusinessWorkspace} />
+          <Route path="/mijn-bedrijf/:id/profiel" component={BusinessRevisionPage} />
           <Route path="/redactie/bedrijven" component={BusinessModerationView} />
           <Route>
             <div className="min-h-screen flex items-center justify-center bg-background text-foreground">
@@ -3562,10 +3760,60 @@ const clerkAppearance = {
   },
 };
 
+/**
+ * Where Clerk sends a user after it finishes sign-in, sign-up, or verification.
+ * The `terug` parameter is validated against a local allowlist, so an external
+ * or unknown destination silently becomes the account page. New accounts go
+ * through the optional preference step first when accounts are enabled;
+ * otherwise the legacy research registration stays the landing step.
+ */
+function useClerkRedirects() {
+  const search = useSearch();
+  const returnPath = resolveReturnPath(search, '');
+  const signInTarget = `${basePath}${returnPath}`;
+  const signUpTarget = featureFlags.accounts
+    ? `${basePath}${withReturnPath('/account/voorkeuren', returnPath)}`
+    : `${basePath}/onboarding`;
+  const carry = search ? `?${search}` : '';
+  return {
+    signInTarget,
+    signUpTarget,
+    signInUrl: `${basePath}/sign-in${carry}`,
+    signUpUrl: `${basePath}/sign-up${carry}`,
+  };
+}
+
+/**
+ * Clerk renders an empty card for a stale verification step
+ * (`/sign-up/verify-email-address`) when no sign-up is in progress, for example
+ * a bookmarked or history entry reopened after the code was already used.
+ * Send those visitors back to the start of sign-up so the recovery path is visible.
+ */
+function useStaleSignUpStepRecovery() {
+  const [location, navigate] = useLocation();
+  const search = useSearch();
+  const clerk = useClerk();
+  const { isLoaded, isSignedIn } = useAuth();
+  const isVerificationStep = /^\/sign-up\/verify-/.test(location);
+  useEffect(() => {
+    if (!isVerificationStep || !isLoaded || !clerk.loaded || isSignedIn) return;
+    if (clerk.client?.signUp?.id) return;
+    navigate(`/sign-up${search ? `?${search}` : ''}`, { replace: true });
+  }, [isVerificationStep, isLoaded, isSignedIn, clerk, search, navigate]);
+}
+
 function SignUpPage() {
+  const redirects = useClerkRedirects();
+  useStaleSignUpStepRecovery();
   return (
     <div className="flex min-h-[100dvh] items-center justify-center bg-background px-4">
-      <SignUp routing="path" path={`${basePath}/sign-up`} signInUrl={`${basePath}/sign-in`} />
+      <SignUp
+        routing="path"
+        path={`${basePath}/sign-up`}
+        signInUrl={redirects.signInUrl}
+        forceRedirectUrl={redirects.signUpTarget}
+        signInForceRedirectUrl={redirects.signInTarget}
+      />
     </div>
   );
 }
@@ -3576,7 +3824,7 @@ const clerkPubKey = publishableKeyFromHost(
 );
 
 function ApiAuthTokenBridge() {
-  const { getToken, isSignedIn } = useAuth();
+  const { getToken, isSignedIn, userId } = useAccountAuth();
 
   useEffect(() => {
     if (!isSignedIn) {
@@ -3586,22 +3834,26 @@ function ApiAuthTokenBridge() {
 
     setAuthTokenGetter(() => getToken());
     return () => setAuthTokenGetter(null);
-  }, [getToken, isSignedIn]);
+  }, [getToken, isSignedIn, userId]);
 
   return null;
 }
 
 function ClerkProviderWithRouter({ children }: { children: React.ReactNode }) {
   const [, setLocation] = useLocation();
+  // Clerk renders its own sign-in/sign-up/error cards, so it needs the app language
+  // explicitly; otherwise expired-link and code errors stay English-only.
+  const language = useStoredLanguage();
   return (
     <ClerkProvider
       publishableKey={clerkPubKey}
       proxyUrl={clerkProxyUrl}
       appearance={clerkAppearance}
+      localization={clerkLocalizationFor(language)}
       signInUrl={`${basePath}/sign-in`}
       signUpUrl={`${basePath}/sign-up`}
-      routerPush={(to) => setLocation(stripBase(to))}
-      routerReplace={(to) => setLocation(stripBase(to), { replace: true })}
+      routerPush={(to) => setLocation(carryReturnPath(stripBase(to), window.location.search))}
+      routerReplace={(to) => setLocation(carryReturnPath(stripBase(to), window.location.search), { replace: true })}
     >
       <ApiAuthTokenBridge />
       {children}
@@ -3610,9 +3862,16 @@ function ClerkProviderWithRouter({ children }: { children: React.ReactNode }) {
 }
 
 function SignInPage() {
+  const redirects = useClerkRedirects();
   return (
     <div className="flex min-h-[100dvh] items-center justify-center bg-background px-4">
-      <SignIn routing="path" path={`${basePath}/sign-in`} signUpUrl={`${basePath}/sign-up`} />
+      <SignIn
+        routing="path"
+        path={`${basePath}/sign-in`}
+        signUpUrl={redirects.signUpUrl}
+        forceRedirectUrl={redirects.signInTarget}
+        signUpForceRedirectUrl={redirects.signUpTarget}
+      />
     </div>
   );
 }

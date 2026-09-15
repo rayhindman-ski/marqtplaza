@@ -1,10 +1,13 @@
+- [Event source evidence](event-evidence.md) — distinguish checked-empty from blocked, stale, unavailable, and verified event coverage.
 - [Overpass API fetch pattern](overpass-fetch.md) — must use GET with `?data=` param and a User-Agent header; POST and text/plain body returns 406/504 from Node.js fetch.
 - [Browser map credentials](browser-map-credentials.md) — only load Google Maps for an exact browser-key format; otherwise use generic tiles before coordinate fallback.
 - [buurtplaza Location interface](buurtplaza-location-interface.md) — Location type needs postcodes, neighborhoods, and mapType fields; SchematicMap and CaptureView depend on them.
 - [External source scanning](source-scanning.md) — server-side scans only allow approved source IDs and must report blocked sources instead of treating them as empty.
 - [DenHaag calendar markup](denhaag-calendar-markup.md) — generic UI “walking” can masquerade as venue; prefer event-specific location data and richer local evidence.
 - [OpenAPI numeric counts](openapi-numeric-counts.md) — use `number`, not `integer`, for generated count schemas in this workspace’s Orval/Zod toolchain.
+- [Map marker clustering](map-marker-clustering.md) — cluster in screen pixels, never hide the selected listing in a badge, badges capture their own pointer with a drag threshold.
 - [Map marker anchoring](map-marker-anchoring.md) — custom pin wrappers own coordinates once; multi-neighborhood tile viewports must use live canvas dimensions.
+- [Neighborhood boundaries](neighborhood-highlight-radius.md) — use official polygon geometry for visual neighborhood selection; never represent administrative areas with centroid circles.
 - [Business filter hierarchy](business-filter-hierarchy.md) — Businesses owns non-food subcategories; Food & Drink owns its matching one, and children only show when their parent is selected.
 - [Google Places discovery](google-places-discovery.md) — follow bounded next-page results; a first-page-only search makes the business inventory look incomplete.
 - [OpenAPI client regeneration](openapi-client-regeneration.md) — regenerate the shared client after merged endpoint changes before judging downstream typecheck failures.
@@ -18,3 +21,18 @@
 - [Discovery outbound isolation](discovery-lineage-failure-isolation.md) — stored-only is read-only; live provider and lineage failures settle independently.
 - [Provider integration tests](provider-integration-tests.md) — inject outbound loaders at route construction; replacing global fetch cannot override dependencies captured during module load.
 - [Neighborhood category result caps](neighborhood-category-result-caps.md) — narrow by selected category and neighborhood, then rank by proximity before enforcing provider caps.
+- [Spec Kit workflow](speckit-workflow.md) — use the project-local constitution → spec → plan → tasks → implement → converge flow for non-trivial changes.
+- [Connected GitHub branch publishing](github-branch-publishing.md) — when no git remote is available, diff the workspace tree against the remote branch and publish through Git Data API objects.
+- [Database error assertions](database-error-assertions.md) — Drizzle/pg may expose wrapped SQL errors without the server trigger message; assert stable failure state instead of exact text.
+- [Playwright browser executable](playwright-chromium.md) — set PLAYWRIGHT_CHROMIUM_EXECUTABLE to system chromium; boundary tests assert opacity, not polygon removal.
+- [OpenAPI email validation](openapi-email-validation.md) — use a regex pattern instead of format email because this workspace's generated Zod client runs on Zod 3.
+- [Onboarding spec baseline](onboarding-spec-baseline.md) — use the 002 Spec Kit package, not the archived v.03 plan; a dev-enabled flag is never gate approval — only convergence.md records it.
+- [drizzle-kit push diff limits](drizzle-push-diff-limits.md) — push misses partial-index WHERE changes (rename the index) and re-applies FKs whose generated names exceed 63 chars (name them).
+- [Business intake integrity](business-intake-routing.md) — per-route gating, version-bound reviewer decisions, stored-first listing resolution, race-safe idempotency.
+- [Business publication review](business-publication-review.md) — four independent dimensions, snapshot-only public output (no column fallback), interested-party exclusion incl. active claimants.
+- [Lifecycle outbox](lifecycle-outbox.md) — enqueue in the state-change transaction; attempts stay monotonic; terminal account states gate every account-owned route.
+- [Onboarding release verification](release-verification.md) — name the disposable DB and flag state per run; record runs as they happened; never tick manual checks from automated proxies.
+- [Clerk live verification](clerk-live-verification.md) — real sign-up needs a testing token plus a blocked Turnstile script; sign-in tokens are the only expirable links; stale sign-up verify steps render blank unless the app redirects.
+- [Playwright route globs](playwright-route-globs.md) — trailing `**` globs miss nested `/:id/action` paths here; use regex routes and an editor test-auth opt-in for reviewer screens.
+- [Boolean query params](boolean-query-params.md) — Orval coerce.boolean() turns "false" into true; parse flags from the raw query. Route suites need a fresh disposable DB.
+- [Clerk offline stub](clerk-offline-stub.md) — real Clerk screens in the default e2e suite: stub environment (POST), client, dev_browser; only CDN bundles need network.

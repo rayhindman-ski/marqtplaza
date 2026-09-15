@@ -5,7 +5,9 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { BusinessIntakeKind } from './businessIntakeKind';
 import type { BusinessProfile } from './businessProfile';
+import type { ClaimNextAction } from './claimNextAction';
 import type { ClaimStatus } from './claimStatus';
 
 export interface BusinessClaim {
@@ -24,6 +26,22 @@ export interface BusinessClaim {
   reviewNote?: string | null;
   /** @nullable */
   reviewedAt?: string | null;
+  /** Optimistic-concurrency version; send it back as expectedVersion on later claim updates. */
+  version?: number;
+  nextAction?: ClaimNextAction;
+  kind?: BusinessIntakeKind;
+  /**
+     * Only returned to the claimant and reviewers; never to other claimants.
+     * @nullable
+     */
+  authorityDeclaration?: string | null;
+  /**
+     * Only returned to the claimant and reviewers; never to other claimants.
+     * @nullable
+     */
+  evidenceReference?: string | null;
+  /** @nullable */
+  withdrawnAt?: string | null;
   createdAt: string;
   updatedAt: string;
   profile: BusinessProfile;

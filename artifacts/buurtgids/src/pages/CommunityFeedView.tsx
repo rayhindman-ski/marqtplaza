@@ -13,8 +13,10 @@ import * as z from 'zod';
 import { toast } from 'sonner';
 
 import {
+  getGetRegistrationQueryKey,
   useGetCommunityPosts,
   getGetCommunityPostsQueryKey,
+  useGetRegistration,
   useCreateCommunityPost,
   useToggleCommunityPostParticipation,
   type CommunityPost,
@@ -28,6 +30,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
+import { persistLanguage } from '@/lib/useAppLanguage';
 
 type Language = 'en' | 'nl';
 
@@ -140,6 +143,12 @@ const CITIES = ['dhg', 'ams', 'rot', 'utr', 'ein'] as const;
 export default function CommunityFeedView() {
   const [_, setLocation] = useLocation();
   const { isSignedIn, isLoaded } = useAuth();
+  const registrationQuery = useGetRegistration({
+    query: {
+      enabled: Boolean(isLoaded && isSignedIn),
+      queryKey: getGetRegistrationQueryKey(),
+    },
+  });
   const queryClient = useQueryClient();
   
   const [language, setLanguage] = useState<Language>(() => {
@@ -148,8 +157,7 @@ export default function CommunityFeedView() {
   });
 
   useEffect(() => {
-    window.localStorage.setItem('buurtplaza-language', language);
-    document.documentElement.lang = language;
+    persistLanguage(language);
   }, [language]);
 
   const copy = t[language];
@@ -175,6 +183,11 @@ export default function CommunityFeedView() {
     if (!isLoaded) return;
     if (!isSignedIn) {
       setLocation('/sign-in');
+      return;
+    }
+    if (registrationQuery.isLoading) return;
+    if (!registrationQuery.data?.registered) {
+      setLocation('/onboarding');
       return;
     }
 
@@ -216,6 +229,10 @@ export default function CommunityFeedView() {
     if (!isLoaded) return;
     if (!isSignedIn) {
       setLocation('/sign-in');
+    } else if (registrationQuery.isLoading) {
+      return;
+    } else if (!registrationQuery.data?.registered) {
+      setLocation('/onboarding');
     } else {
       setIsPostDialogOpen(true);
     }

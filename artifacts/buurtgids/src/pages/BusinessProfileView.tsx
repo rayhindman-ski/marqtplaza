@@ -8,6 +8,8 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useAppLanguage } from '@/lib/useAppLanguage';
+import { businessPublicationTranslations } from '@/lib/i18n';
 
 export default function BusinessProfileView() {
   const [, params] = useRoute('/bedrijf/:slug');
@@ -20,6 +22,22 @@ export default function BusinessProfileView() {
     }
   });
 
+  const [language] = useAppLanguage();
+  const publicationCopy = businessPublicationTranslations[language];
+  // Localised editorial text comes only from the approved snapshot. English falls
+  // back to Dutch per field; nothing is ever invented client-side.
+  const approved = profile?.content ?? null;
+  const localised = approved
+    ? {
+        tagline: (language === 'en' ? approved.en.tagline : null) ?? approved.nl.tagline,
+        description: (language === 'en' ? approved.en.description : null) ?? approved.nl.description,
+        openingHours: (language === 'en' ? approved.en.openingHours : null) ?? approved.nl.openingHours,
+      }
+    : profile
+      ? { tagline: profile.tagline, description: profile.description, openingHours: profile.openingHours }
+      : { tagline: null, description: null, openingHours: null };
+  const provenance = profile?.provenance ?? null;
+
   useEffect(() => {
     let metaDesc = document.querySelector('meta[name="description"]');
     if (!metaDesc) {
@@ -29,12 +47,12 @@ export default function BusinessProfileView() {
     }
     if (profile) {
       document.title = `${profile.name} | Buurtplaza`;
-      metaDesc.setAttribute('content', profile.tagline || profile.description || `Bekijk het profiel van ${profile.name} op Buurtplaza.`);
+      metaDesc.setAttribute('content', localised.tagline || localised.description || `Bekijk het profiel van ${profile.name} op Buurtplaza.`);
     } else {
       document.title = 'Bedrijf | Buurtplaza';
       metaDesc.setAttribute('content', 'Bedrijfsprofiel op Buurtplaza.');
     }
-  }, [profile]);
+  }, [profile, localised.tagline, localised.description]);
 
   if (isLoading) {
     return (
@@ -109,8 +127,8 @@ export default function BusinessProfileView() {
                     </Badge>
                   )}
                 </div>
-                {profile.tagline && (
-                  <p className="text-lg md:text-xl font-medium text-muted-foreground">{profile.tagline}</p>
+                {localised.tagline && (
+                  <p className="text-lg md:text-xl font-medium text-muted-foreground" data-testid="public-tagline">{localised.tagline}</p>
                 )}
               </div>
               
@@ -148,9 +166,9 @@ export default function BusinessProfileView() {
           <div className="mt-10 grid md:grid-cols-3 gap-8 pt-8 border-t border-border/50">
             <div className="md:col-span-2 space-y-4">
               <h3 className="text-xl font-bold text-foreground">Over {profile.name}</h3>
-              {profile.description ? (
-                <div className="prose prose-sm md:prose-base prose-neutral max-w-none text-muted-foreground">
-                  {profile.description.split('\n').map((paragraph, i) => (
+              {localised.description ? (
+                <div className="prose prose-sm md:prose-base prose-neutral max-w-none text-muted-foreground" data-testid="public-description">
+                  {localised.description.split('\n').map((paragraph, i) => (
                     <p key={i}>{paragraph}</p>
                   ))}
                 </div>
@@ -164,13 +182,40 @@ export default function BusinessProfileView() {
                 <Clock className="w-5 h-5 text-primary" />
                 Openingstijden
               </h3>
-              {profile.openingHours ? (
-                <p className="text-sm text-muted-foreground whitespace-pre-wrap leading-relaxed">{profile.openingHours}</p>
+              {localised.openingHours ? (
+                <p className="text-sm text-muted-foreground whitespace-pre-wrap leading-relaxed" data-testid="public-opening-hours">{localised.openingHours}</p>
               ) : (
                 <p className="text-sm text-muted-foreground italic">Geen openingstijden bekend.</p>
               )}
             </div>
           </div>
+
+          {provenance && (
+            <section className="mt-8 pt-6 border-t border-border/50 text-xs text-muted-foreground space-y-2" aria-label={language === 'nl' ? 'Herkomst en controle' : 'Source and verification'} data-testid="public-provenance">
+              <p className="font-bold uppercase tracking-wide text-[11px]">{language === 'nl' ? 'Herkomst en controle' : 'Source and verification'}</p>
+              <p>
+                {language === 'nl' ? 'Bron' : 'Source'}: {provenance.sourceUrl ? (
+                  <a href={provenance.sourceUrl} target="_blank" rel="noopener noreferrer" className="underline hover:text-primary">{provenance.listingSource}</a>
+                ) : provenance.listingSource}
+                {' · '}
+                {language === 'nl' ? 'goedgekeurde versie' : 'approved version'} v{provenance.approvedVersion}
+                {provenance.approvedAt ? ` (${new Date(provenance.approvedAt).toLocaleDateString(language === 'nl' ? 'nl-NL' : 'en-GB')})` : ''}
+                {' · '}
+                <span data-testid="public-freshness">{publicationCopy.freshness[provenance.freshness.status]}</span>
+                {provenance.freshness.checkedOn ? ` (${publicationCopy.checkedOn} ${new Date(provenance.freshness.checkedOn).toLocaleDateString(language === 'nl' ? 'nl-NL' : 'en-GB')})` : ''}
+              </p>
+              {provenance.checks.length > 0 && (
+                <ul className="flex flex-wrap gap-x-4 gap-y-1">
+                  {provenance.checks.map((check) => (
+                    <li key={check.field}>
+                      {publicationCopy[check.field as keyof typeof publicationCopy] as string ?? check.field}: {publicationCopy.checkStatus[check.status] ?? check.status}
+                      {check.checkedOn ? ` (${new Date(check.checkedOn).toLocaleDateString(language === 'nl' ? 'nl-NL' : 'en-GB')})` : ''}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          )}
         </div>
 
         {/* Deals Section */}

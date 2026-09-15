@@ -2,13 +2,18 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { db, pool } from "@workspace/db";
 
 import {
   deduplicateSourceEvents,
   detectEventContentLanguage,
+  ensureEventSourceStatusStorage,
   eventPriceEvidenceFromHtml,
   eventMetadata,
   parseVisibleEventPrice,
+  nextSourceScanAt,
+  sourcesTesting,
+  sourceScanStatus,
   structuredEventsFromPage,
   structuredIndoorStatus,
   type SourceDefinition,
@@ -20,6 +25,71 @@ const source: SourceDefinition = {
   activityUrl: "https://events.example.test",
   sourceGroup: "city-agenda",
 };
+
+describe("source scan outcomes", () => {
+  it("keeps verified events distinct from partial coverage", () => {
+    assert.equal(sourceScanStatus({
+      eventCount: 1,
+      sourceDenied: false,
+      pagesFailed: 0,
+      crawlLimitReached: false,
+    }), "found");
+    assert.equal(sourceScanStatus({
+      eventCount: 1,
+      sourceDenied: false,
+      pagesFailed: 1,
+      crawlLimitReached: false,
+    }), "partial");
+  });
+
+  it("does not collapse blocked or failed sources into an empty result", () => {
+    assert.equal(sourceScanStatus({
+      eventCount: 0,
+      sourceDenied: true,
+      pagesFailed: 0,
+      crawlLimitReached: false,
+    }), "blocked");
+    assert.equal(sourceScanStatus({
+      eventCount: 0,
+      sourceDenied: false,
+      pagesFailed: 1,
+      crawlLimitReached: false,
+    }), "error");
+    assert.equal(sourceScanStatus({
+      eventCount: 0,
+      sourceDenied: false,
+      pagesFailed: 0,
+      crawlLimitReached: false,
+    }), "no_events");
+    assert.equal(sourceScanStatus({
+      eventCount: 0,
+      sourceDenied: false,
+      pagesFailed: 0,
+      crawlLimitReached: true,
+    }), "partial");
+  });
+
+  it("uses a longer refresh cadence for checked sources and controlled retries for failures", () => {
+    const scannedAt = new Date("2026-09-12T10:00:00.000Z");
+    assert.equal(
+      nextSourceScanAt("found", scannedAt).toISOString(),
+      "2026-09-12T22:00:00.000Z",
+    );
+    assert.equal(
+      nextSourceScanAt("partial", scannedAt).toISOString(),
+      "2026-09-12T22:00:00.000Z",
+    );
+    assert.equal(
+      nextSourceScanAt("blocked", scannedAt).toISOString(),
+      "2026-09-12T16:00:00.000Z",
+    );
+    assert.equal(
+      nextSourceScanAt("error", scannedAt).toISOString(),
+      "2026-09-12T12:00:00.000Z",
+    );
+  });
+});
+
 
 describe("event price capture", () => {
   it("keeps a structured exact paid price", () => {
@@ -349,5 +419,123 @@ describe("event cancellation capture", () => {
     `, "https://events.example.test/evening-concert", source);
 
     assert.equal(event?.isCancelled, false);
+  });
+});
+
+describe("event source status storage upgrades (database integration)", {
+  skip: !process.env.EVENT_SOURCE_STATUS_INTEGRATION,
+}, () => {
+  it("adds scheduling columns without losing legacy status data and claims a due source", async () => {
+    const sourceId = `event-source-upgrade-${process.pid}`;
+    const lastScannedAt = new Date("2026-09-12T08:00:00.000Z");
+    const now = new Date("2026-09-12T10:00:00.000Z");
+
+    await pool.query("DROP TABLE IF EXISTS event_source_statuses");
+    await pool.query(`
+      CREATE TABLE event_source_statuses (
+        source_id text PRIMARY KEY,
+        source_name text NOT NULL,
+        source_url text NOT NULL,
+        source_group text NOT NULL,
+        status text NOT NULL DEFAULT 'pending',
+        last_scanned_at timestamptz,
+        message text,
+        events_captured integer NOT NULL DEFAULT 0,
+        events_eligible integer NOT NULL DEFAULT 0,
+        events_added integer NOT NULL DEFAULT 0,
+        events_updated integer NOT NULL DEFAULT 0,
+        pages_failed integer NOT NULL DEFAULT 0
+      )
+    `);
+    await pool.query(
+      `INSERT INTO event_source_statuses
+        (source_id, source_name, source_url, source_group, status, last_scanned_at, message,
+         events_captured, events_eligible, events_added, events_updated, pages_failed)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+      [
+        sourceId,
+        "Legacy event source",
+        "https://legacy-events.example.test/",
+        "community",
+        "pending",
+        lastScannedAt,
+        "legacy status data",
+        8,
+        6,
+        5,
+        4,
+        1,
+      ],
+    );
+
+    try {
+      await ensureEventSourceStatusStorage(db);
+
+      const columns = await pool.query<{ column_name: string }>(
+        `SELECT column_name
+         FROM information_schema.columns
+         WHERE table_name = 'event_source_statuses'
+           AND column_name IN ('next_scan_at', 'retry_lease_until')`,
+      );
+      assert.deepEqual(
+        columns.rows.map((row) => row.column_name).sort(),
+        ["next_scan_at", "retry_lease_until"],
+      );
+
+      const status = await pool.query<{
+        source_name: string;
+        source_url: string;
+        source_group: string;
+        status: string;
+        last_scanned_at: Date;
+        message: string;
+        events_captured: number;
+        events_eligible: number;
+        events_added: number;
+        events_updated: number;
+        pages_failed: number;
+        next_scan_at: Date | null;
+      }>(
+        `SELECT source_name, source_url, source_group, status, last_scanned_at, message,
+                events_captured, events_eligible, events_added, events_updated, pages_failed,
+                next_scan_at
+         FROM event_source_statuses
+         WHERE source_id = $1`,
+        [sourceId],
+      );
+      assert.deepEqual(status.rows[0], {
+        source_name: "Legacy event source",
+        source_url: "https://legacy-events.example.test/",
+        source_group: "community",
+        status: "pending",
+        last_scanned_at: lastScannedAt,
+        message: "legacy status data",
+        events_captured: 8,
+        events_eligible: 6,
+        events_added: 5,
+        events_updated: 4,
+        pages_failed: 1,
+        next_scan_at: null,
+      });
+
+      // Startup also seeds approved sources. Keep this assertion focused on
+      // the legacy row so the claim result is deterministic.
+      await pool.query(
+        "DELETE FROM event_source_statuses WHERE source_id <> $1",
+        [sourceId],
+      );
+
+      assert.deepEqual(
+        await sourcesTesting.claimDueEventSourceIds(db, now),
+        [sourceId],
+      );
+      const lease = await pool.query<{ retry_lease_until: Date | null }>(
+        "SELECT retry_lease_until FROM event_source_statuses WHERE source_id = $1",
+        [sourceId],
+      );
+      assert.ok(lease.rows[0]?.retry_lease_until);
+    } finally {
+      await pool.query("DROP TABLE IF EXISTS event_source_statuses");
+    }
   });
 });

@@ -5,9 +5,16 @@
   "scripts": {
     "preinstall": "sh -c 'rm -f package-lock.json yarn.lock; case \"$npm_config_user_agent\" in pnpm/*) ;; *) echo \"Use pnpm instead\" >&2; exit 1 ;; esac'",
     "build": "pnpm run test:saved-events:integration && pnpm run typecheck && pnpm --filter @workspace/buurtgids run test && pnpm -r --if-present run build",
+    "test:event-source-status:integration": "pnpm --dir lib/db exec node scripts/run-event-source-status-integration.mjs",
     "test:saved-events:integration": "pnpm --dir lib/db exec node scripts/run-saved-events-integration.mjs",
+    "test:listings-query:integration": "pnpm --dir lib/db exec node scripts/run-listings-query-integration.mjs",
     "typecheck:libs": "tsc --build",
-    "typecheck": "pnpm run typecheck:libs && pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck"
+    "typecheck": "pnpm run check:typecheck-scripts && pnpm run typecheck:libs && pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" run typecheck",
+    "check:typecheck-scripts": "node scripts/src/check-typecheck-scripts.mjs",
+    "test:typecheck-scripts": "node --test scripts/src/check-typecheck-scripts.test.mjs",
+    "speckit:check": ".specify/scripts/check-prerequisites.sh",
+    "speckit:new": ".specify/scripts/create-new-feature.sh",
+    "speckit:plan": ".specify/scripts/setup-plan.sh"
   },
   "private": true,
   "dependencies": {

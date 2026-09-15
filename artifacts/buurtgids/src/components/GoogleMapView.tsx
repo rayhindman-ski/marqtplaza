@@ -3,6 +3,7 @@ import { importLibrary, setOptions } from '@googlemaps/js-api-loader';
 import { Baby, Coffee, Gamepad2, HandHeart, Landmark, MapPin as MapPinIcon, Route, ShoppingBag, Waves, type LucideIcon } from 'lucide-react';
 import { type Marker as MarkerData, LOCATIONS, type Category } from '../lib/data';
 import { getMarkerCopy, translations, type Language } from '../lib/i18n';
+import { NEIGHBORHOOD_BOUNDARIES, type BoundaryPoint, type NeighborhoodBoundary } from '@workspace/geo';
 
 type MapCategory = Category;
 
@@ -36,20 +37,32 @@ const MAP_STYLES: google.maps.MapTypeStyle[] = [
   { elementType: 'labels.icon', stylers: [{ visibility: 'on' }] },
 ];
 const MARQTPLAZA_MARKER_GRADIENT = 'linear-gradient(135deg, #ff9a52 0%, #f36c21 48%, #c94d12 100%)';
+const NEIGHBORHOOD_PULSE_DURATION_MS = 2_400;
 
 const TILE_SIZE = 256;
 const MIN_TILE_ZOOM = 10;
 const MAX_TILE_ZOOM = 18;
-const NEIGHBORHOOD_FILTER_RADIUS_METERS = 2500;
+const MAP_CLUSTER_RADIUS_PX = 56;
+const CLUSTER_DRAG_THRESHOLD_PX = 6;
 const GOOGLE_MAPS_LOAD_TIMEOUT_MS = 4_000;
 const googleMapsApiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string | undefined;
 const googleMapsBrowserKeyPattern = /^AIza[0-9A-Za-z_-]{35}$/;
 const hasGoogleMapsApiKey = googleMapsBrowserKeyPattern.test(googleMapsApiKey ?? '');
 
+function mapClassNames(...classes: Array<string | false | undefined>) {
+  return classes.filter(Boolean).join(' ');
+}
+
 interface GoogleMapViewProps {
   language: Language;
   locationId: string;
   selectedNeighborhoods: string[];
+  showAllNeighborhoods?: boolean;
+  showNeighborhoodLabels?: boolean;
+  highlightedNeighborhood?: string | null;
+  isDataLoading?: boolean;
+  onNeighborhoodClick?: (name: string) => void;
+  onNeighborhoodHover?: (name: string | null) => void;
   markers: MarkerData[];
   selectedMarkerId: string | null;
   savedIds: Set<string>;
@@ -173,9 +186,26 @@ const MAP_COPY = {
   },
 } as const;
 
-type MapPoint = Pick<MarkerData, 'id' | 'name' | 'category' | 'description' | 'details' | 'lat' | 'lng'> & {
-  category: MapCategory;
-};
+function DataLoadingNotice({ isDataLoading }: { isDataLoading: boolean }) {
+  if (!isDataLoading) return null;
+
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      data-testid="map-fetching-notice"
+      className="pointer-events-none absolute left-1/2 top-4 z-30 -translate-x-1/2 rounded-full border border-primary/30 bg-card/95 px-4 py-2 text-xs font-extrabold text-primary shadow-lg backdrop-blur-sm"
+    >
+      <span
+        aria-hidden="true"
+        className="mr-2 inline-block h-2 w-2 animate-pulse rounded-full bg-primary align-middle"
+      />
+      Fetching data please wait
+    </div>
+  );
+}
+
+type MapPoint = MarkerData;
 
 function getCategoryIcon(category: MapCategory) {
   return CATEGORY_ICONS[category] ?? MapPinIcon;
@@ -235,6 +265,7 @@ type NeighborhoodArea = {
   lat: number;
   lng: number;
   zoom: number;
+  boundary: NeighborhoodBoundary;
 };
 
 function getNeighborhoodAreas(locationId: string, neighborhoodNames: string[]): NeighborhoodArea[] {
@@ -243,22 +274,10 @@ function getNeighborhoodAreas(locationId: string, neighborhoodNames: string[]): 
   return neighborhoodNames
     .map((name) => {
       const area = location.neighborhoodCoords[name];
-      return area ? { name, ...area } : null;
+      const boundary = NEIGHBORHOOD_BOUNDARIES[name];
+      return area && boundary ? { name, ...area, boundary } : null;
     })
     .filter((area): area is NeighborhoodArea => Boolean(area));
-}
-
-function getProjectedNeighborhoodRadius(area: NeighborhoodArea, zoom: number) {
-  const center = latLngToWorld(area, zoom);
-  const latitudeRadius = NEIGHBORHOOD_FILTER_RADIUS_METERS / 111_320;
-  const longitudeRadius = NEIGHBORHOOD_FILTER_RADIUS_METERS
-    / (111_320 * Math.max(0.2, Math.cos((area.lat * Math.PI) / 180)));
-  const east = latLngToWorld({ lat: area.lat, lng: area.lng + longitudeRadius }, zoom);
-  const north = latLngToWorld({ lat: area.lat + latitudeRadius, lng: area.lng }, zoom);
-  return {
-    width: Math.max(12, Math.abs(east.x - center.x)),
-    height: Math.max(12, Math.abs(north.y - center.y)),
-  };
 }
 
 function getMapPoints(markers: MarkerData[]): MapPoint[] {
@@ -287,6 +306,226 @@ function worldToLatLng(x: number, y: number, zoom: number): LatLng {
   };
 }
 
+type MapPointCluster = {
+  id: string;
+  points: MapPoint[];
+  lat: number;
+  lng: number;
+  x: number;
+  y: number;
+};
+
+function clusterMapPoints(
+  points: MapPoint[],
+  getPosition: (point: MapPoint) => { x: number; y: number },
+  radius: number,
+  selectedMarkerId: string | null = null,
+): MapPointCluster[] {
+  const clusters: MapPointCluster[] = [];
+  // The selected listing is always rendered on its own so it can never be
+  // hidden inside a count badge; cluster only the remaining points.
+  const selectedPoint = selectedMarkerId
+    ? points.find((point) => point.id === selectedMarkerId)
+    : undefined;
+
+  for (const point of points) {
+    if (point === selectedPoint) continue;
+    const position = getPosition(point);
+    const cluster = clusters.find((candidate) => (
+      Math.hypot(candidate.x - position.x, candidate.y - position.y) <= radius
+    ));
+
+    if (!cluster) {
+      clusters.push({
+        id: `cluster-${point.id}`,
+        points: [point],
+        lat: point.lat,
+        lng: point.lng,
+        x: position.x,
+        y: position.y,
+      });
+      continue;
+    }
+
+    const nextCount = cluster.points.length + 1;
+    cluster.points.push(point);
+    cluster.lat = (cluster.lat * (nextCount - 1) + point.lat) / nextCount;
+    cluster.lng = (cluster.lng * (nextCount - 1) + point.lng) / nextCount;
+    cluster.x = (cluster.x * (nextCount - 1) + position.x) / nextCount;
+    cluster.y = (cluster.y * (nextCount - 1) + position.y) / nextCount;
+    cluster.id = `cluster-${cluster.points.map(({ id }) => id).sort().join('-')}`;
+  }
+
+  if (selectedPoint) {
+    const position = getPosition(selectedPoint);
+    clusters.push({
+      id: `cluster-${selectedPoint.id}`,
+      points: [selectedPoint],
+      lat: selectedPoint.lat,
+      lng: selectedPoint.lng,
+      x: position.x,
+      y: position.y,
+    });
+  }
+
+  return clusters;
+}
+
+function useElementSize<T extends HTMLElement>() {
+  const ref = useRef<T>(null);
+  const [size, setSize] = useState({ width: 0, height: 0 });
+  useEffect(() => {
+    const element = ref.current;
+    if (!element) return;
+    const update = () => {
+      const rect = element.getBoundingClientRect();
+      setSize((current) => (
+        current.width === rect.width && current.height === rect.height
+          ? current
+          : { width: rect.width, height: rect.height }
+      ));
+    };
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+  return [ref, size] as const;
+}
+
+/** Runs onActivate only for a stationary pointer release, so a map drag that
+ *  starts or ends on a cluster badge does not zoom. */
+function attachStationaryActivation(element: HTMLElement, onActivate: () => void) {
+  let down: { x: number; y: number } | null = null;
+  let dragged = false;
+  element.addEventListener('pointerdown', (event) => {
+    down = { x: event.clientX, y: event.clientY };
+    dragged = false;
+    event.stopPropagation();
+    element.setPointerCapture(event.pointerId);
+  });
+  element.addEventListener('pointermove', (event) => {
+    if (!down) return;
+    if (Math.hypot(event.clientX - down.x, event.clientY - down.y) > CLUSTER_DRAG_THRESHOLD_PX) {
+      dragged = true;
+    }
+  });
+  element.addEventListener('click', (event) => {
+    event.stopPropagation();
+    const wasDragged = dragged;
+    down = null;
+    dragged = false;
+    if (wasDragged) return;
+    onActivate();
+  });
+}
+
+function ClusterSummaryMarker({
+  cluster,
+  style,
+  onClick,
+}: {
+  cluster: MapPointCluster;
+  style: React.CSSProperties;
+  onClick?: () => void;
+}) {
+  const count = cluster.points.length;
+  const size = count >= 100 ? 62 : count >= 10 ? 56 : 50;
+  const isInteractive = Boolean(onClick);
+  const downRef = useRef<{ x: number; y: number } | null>(null);
+  const draggedRef = useRef(false);
+  const label = isInteractive
+    ? `${count} listings in this area. Zoom in to expand.`
+    : `${count} listings in this area`;
+
+  return (
+    <div
+      key={cluster.id}
+      data-map-cluster
+      role={isInteractive ? 'button' : 'img'}
+      tabIndex={isInteractive ? 0 : undefined}
+      aria-label={label}
+      title={`${count} listings in this area`}
+      className="absolute z-30 -translate-x-1/2 -translate-y-1/2"
+      style={style}
+      onPointerDown={(event) => {
+        downRef.current = { x: event.clientX, y: event.clientY };
+        draggedRef.current = false;
+        if (isInteractive) {
+          // Keep the map from starting a pan (and capturing the pointer, which
+          // would swallow our click); the badge tracks its own movement.
+          event.stopPropagation();
+          event.currentTarget.setPointerCapture(event.pointerId);
+        }
+      }}
+      onPointerMove={(event) => {
+        const down = downRef.current;
+        if (down && Math.hypot(event.clientX - down.x, event.clientY - down.y) > CLUSTER_DRAG_THRESHOLD_PX) {
+          draggedRef.current = true;
+        }
+      }}
+      onClick={(event) => {
+        event.stopPropagation();
+        const wasDragged = draggedRef.current;
+        downRef.current = null;
+        draggedRef.current = false;
+        if (!wasDragged) onClick?.();
+      }}
+      onKeyDown={(event) => {
+        if (isInteractive && (event.key === 'Enter' || event.key === ' ')) {
+          event.preventDefault();
+          onClick?.();
+        }
+      }}
+    >
+      <span
+        className="flex items-center justify-center rounded-full border-[3px] border-white bg-[linear-gradient(135deg,#ff9a52_0%,#f36c21_48%,#c94d12_100%)] font-black text-white shadow-[0_7px_16px_-5px_rgba(23,34,53,0.5),0_0_0_2px_rgba(243,108,33,0.3)]"
+        style={{
+          width: size,
+          height: size,
+          fontSize: count >= 100 ? 14 : 16,
+        }}
+      >
+        {count}
+      </span>
+    </div>
+  );
+}
+
+function createHtmlClusterElement(
+  cluster: MapPointCluster,
+  onClick: () => void,
+): HTMLElement {
+  const count = cluster.points.length;
+  const size = count >= 100 ? 62 : count >= 10 ? 56 : 50;
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.setAttribute('data-map-cluster', '');
+  button.setAttribute('aria-label', `${count} listings in this area. Zoom in to expand.`);
+  button.title = `${count} listings in this area`;
+  button.style.cssText = [
+    'position:absolute',
+    'display:flex',
+    'align-items:center',
+    'justify-content:center',
+    'transform:translate(-50%,-50%)',
+    `width:${size}px`,
+    `height:${size}px`,
+    'border:3px solid #fff',
+    'border-radius:50%',
+    'background:linear-gradient(135deg,#ff9a52 0%,#f36c21 48%,#c94d12 100%)',
+    'box-shadow:0 7px 16px -5px rgba(23,34,53,0.5),0 0 0 2px rgba(243,108,33,0.3)',
+    'color:#fff',
+    `font:${count >= 100 ? 14 : 16}px/1 ui-sans-serif,system-ui,sans-serif`,
+    'font-weight:900',
+    'cursor:pointer',
+    'padding:0',
+  ].join(';');
+  button.textContent = String(count);
+  attachStationaryActivation(button, onClick);
+  return button;
+}
+
 function getInitialViewport(locationId: string): TileViewport {
   const location = getLocation(locationId) ?? LOCATIONS[0];
   return {
@@ -300,23 +539,15 @@ function getNeighborhoodViewport(
   neighborhoodNames: string[],
   mapSize: { width: number; height: number },
 ): TileViewport {
-  const location = getLocation(locationId) ?? LOCATIONS[0];
-  const neighborhoods = neighborhoodNames
-    .map((name) => location.neighborhoodCoords[name])
-    .filter((area): area is { lat: number; lng: number; zoom: number } => Boolean(area));
+  const neighborhoods = getNeighborhoodAreas(locationId, neighborhoodNames);
 
   if (neighborhoods.length === 0) {
     return getInitialViewport(locationId);
   }
-  if (neighborhoods.length === 1) {
-    return {
-      center: { lat: neighborhoods[0].lat, lng: neighborhoods[0].lng },
-      zoom: Math.max(MIN_TILE_ZOOM, Math.min(MAX_TILE_ZOOM, neighborhoods[0].zoom)),
-    };
-  }
 
-  const latitudes = neighborhoods.map((area) => area.lat);
-  const longitudes = neighborhoods.map((area) => area.lng);
+  const boundaryPoints = neighborhoods.flatMap((area) => area.boundary.flat());
+  const latitudes = boundaryPoints.map(([lat]) => lat);
+  const longitudes = boundaryPoints.map(([, lng]) => lng);
   const latitudeSpan = Math.max(...latitudes) - Math.min(...latitudes);
   const longitudeSpan = Math.max(...longitudes) - Math.min(...longitudes);
   const availableWidth = Math.max(240, mapSize.width - 96);
@@ -364,21 +595,86 @@ function getMarkerViewport(
   };
 }
 
+function getBoundaryPoints(areas: NeighborhoodArea[]): LatLng[] {
+  return areas.flatMap((area) => area.boundary.flat().map(([lat, lng]) => ({ lat, lng })));
+}
+
+function projectCoordinatePoint(
+  point: BoundaryPoint,
+  bounds: { minLat: number; maxLat: number; minLng: number; maxLng: number },
+) {
+  return {
+    x: ((point[1] - bounds.minLng) / (bounds.maxLng - bounds.minLng)) * 100,
+    y: ((bounds.maxLat - point[0]) / (bounds.maxLat - bounds.minLat)) * 100,
+  };
+}
+
+function getViewportSignature(markers: MarkerData[], neighborhoods: string[]): string {
+  const markerPart = markers.map((marker) => `${marker.id}:${marker.lat}:${marker.lng}`).join('|');
+  return `${neighborhoods.join(',')}#${markerPart}`;
+}
+
+function shouldShowNeighborhoodLabel(
+  name: string,
+  options: {
+    showNeighborhoodLabels: boolean;
+    showAllNeighborhoods: boolean;
+    selectedNeighborhoods: string[];
+    highlightedNeighborhood: string | null;
+  },
+): boolean {
+  if (options.highlightedNeighborhood === name) return true;
+  if (!options.showNeighborhoodLabels) return false;
+  return !options.showAllNeighborhoods || options.selectedNeighborhoods.includes(name);
+}
+
+function handleNeighborhoodKeyDown(
+  event: React.KeyboardEvent<SVGPolygonElement>,
+  name: string,
+  onNeighborhoodClick?: (name: string) => void,
+) {
+  if (onNeighborhoodClick && (event.key === 'Enter' || event.key === ' ')) {
+    event.preventDefault();
+    onNeighborhoodClick(name);
+  }
+}
+
 function CoordinateMapFallback({
   language,
   locationId,
   selectedNeighborhoods,
+  showAllNeighborhoods = false,
+  showNeighborhoodLabels = true,
+  highlightedNeighborhood = null,
+  isDataLoading = false,
+  onNeighborhoodClick,
+  onNeighborhoodHover,
   markers,
   selectedMarkerId,
   onMarkerClick,
 }: Pick<
   GoogleMapViewProps,
-  'language' | 'locationId' | 'selectedNeighborhoods' | 'markers' | 'selectedMarkerId' | 'onMarkerClick'
+  | 'language'
+  | 'locationId'
+  | 'selectedNeighborhoods'
+  | 'showAllNeighborhoods'
+  | 'showNeighborhoodLabels'
+  | 'highlightedNeighborhood'
+   | 'isDataLoading'
+  | 'onNeighborhoodClick'
+   | 'onNeighborhoodHover'
+  | 'markers'
+  | 'selectedMarkerId'
+  | 'onMarkerClick'
 >) {
   const points = getMapPoints(markers);
-  const neighborhoodAreas = getNeighborhoodAreas(locationId, selectedNeighborhoods);
+  const displayedNeighborhoods = showAllNeighborhoods
+    ? (getLocation(locationId)?.neighborhoods ?? selectedNeighborhoods)
+    : selectedNeighborhoods;
+  const neighborhoodAreas = getNeighborhoodAreas(locationId, displayedNeighborhoods);
   const mapCopy = MAP_COPY[language];
   const [hoveredMarkerId, setHoveredMarkerId] = useState<string | null>(null);
+  const [containerRef, containerSize] = useElementSize<HTMLDivElement>();
 
   if (points.length === 0 && neighborhoodAreas.length === 0) {
     return (
@@ -394,15 +690,12 @@ function CoordinateMapFallback({
   }
 
   const selectedPoint = points.find((point) => point.id === selectedMarkerId);
-  const neighborhoodCoordinates = neighborhoodAreas.flatMap((area) => {
-    const latitudeRadius = NEIGHBORHOOD_FILTER_RADIUS_METERS / 111_320;
-    const longitudeRadius = NEIGHBORHOOD_FILTER_RADIUS_METERS
-      / (111_320 * Math.max(0.2, Math.cos((area.lat * Math.PI) / 180)));
-    return [
-      { lat: area.lat - latitudeRadius, lng: area.lng - longitudeRadius },
-      { lat: area.lat + latitudeRadius, lng: area.lng + longitudeRadius },
-    ];
-  });
+  // The camera follows the selected neighborhoods; context boundaries are drawn
+  // but must not widen the viewport to the whole city.
+  const viewportAreas = selectedNeighborhoods.length > 0
+    ? getNeighborhoodAreas(locationId, selectedNeighborhoods)
+    : neighborhoodAreas;
+  const neighborhoodCoordinates = getBoundaryPoints(viewportAreas);
   const mapCoordinates = selectedPoint
     ? [
         { lat: selectedPoint.lat - 0.012, lng: selectedPoint.lng - 0.018 },
@@ -420,9 +713,25 @@ function CoordinateMapFallback({
   const maxLat = Math.max(...latitudes) + latitudePadding;
   const minLng = Math.min(...longitudes) - longitudePadding;
   const maxLng = Math.max(...longitudes) + longitudePadding;
+  const bounds = { minLat, maxLat, minLng, maxLng };
+  // Cluster in CSS pixels (percent × measured size) so grouping matches the
+  // other providers regardless of the container's aspect ratio. Until the
+  // container is measured, assume a square so the first paint is stable.
+  const pixelWidth = containerSize.width || 100;
+  const pixelHeight = containerSize.height || 100;
+  const pointClusters = clusterMapPoints(
+    points,
+    (point) => ({
+      x: ((point.lng - minLng) / (maxLng - minLng)) * pixelWidth,
+      y: ((maxLat - point.lat) / (maxLat - minLat)) * pixelHeight,
+    }),
+    MAP_CLUSTER_RADIUS_PX,
+    selectedMarkerId,
+  );
 
   return (
     <div
+      ref={containerRef}
       className="absolute inset-0 overflow-hidden bg-[linear-gradient(135deg,_#e8f0e9_0%,_#f7f4ed_46%,_#dceaf0_100%)]"
       aria-label={mapCopy.coordinateMap}
     >
@@ -434,35 +743,80 @@ function CoordinateMapFallback({
         </p>
       </div>
       {neighborhoodAreas.map((area) => {
-        const latitudeRadius = NEIGHBORHOOD_FILTER_RADIUS_METERS / 111_320;
-        const longitudeRadius = NEIGHBORHOOD_FILTER_RADIUS_METERS
-          / (111_320 * Math.max(0.2, Math.cos((area.lat * Math.PI) / 180)));
-        const left = ((area.lng - longitudeRadius - minLng) / (maxLng - minLng)) * 100;
-        const top = ((maxLat - area.lat - latitudeRadius) / (maxLat - minLat)) * 100;
-        const width = ((longitudeRadius * 2) / (maxLng - minLng)) * 100;
-        const height = ((latitudeRadius * 2) / (maxLat - minLat)) * 100;
+        const center = projectCoordinatePoint([area.lat, area.lng], bounds);
         return (
-          <div
-            key={`neighborhood-${area.name}`}
-            data-neighborhood-boundary
-            className="pointer-events-none absolute z-[5] rounded-[50%] border-[3px] border-teal-700/85 bg-teal-400/10 shadow-[0_0_0_1px_rgba(255,255,255,0.8)]"
-            style={{
-              left: `${left}%`,
-              top: `${top}%`,
-              width: `${width}%`,
-              height: `${height}%`,
-            }}
-          >
-            <span
-              data-neighborhood-label
-              className="absolute left-1/2 top-3 -translate-x-1/2 whitespace-nowrap rounded-full border-2 border-teal-700/85 bg-white/95 px-2.5 py-1 text-[11px] font-black text-teal-900 shadow-md"
+          <div key={`neighborhood-${area.name}`} className="absolute inset-0">
+            <svg
+              className="pointer-events-none absolute inset-0 z-[5] h-full w-full overflow-visible"
+              viewBox="0 0 100 100"
+              preserveAspectRatio="none"
+              aria-hidden={!onNeighborhoodClick && !onNeighborhoodHover}
             >
-              {area.name}
-            </span>
+              {area.boundary.map((ring, ringIndex) => (
+                <polygon
+                  key={`${area.name}-${ringIndex}`}
+                  data-neighborhood-boundary
+                  role={onNeighborhoodClick || onNeighborhoodHover ? 'button' : undefined}
+                  tabIndex={onNeighborhoodClick || onNeighborhoodHover ? 0 : undefined}
+                  aria-label={onNeighborhoodClick ? `Select neighborhood: ${area.name}` : `Neighborhood: ${area.name}`}
+                  points={ring.map((point) => {
+                    const projected = projectCoordinatePoint(point, bounds);
+                    return `${projected.x},${projected.y}`;
+                  }).join(' ')}
+                  onClick={() => onNeighborhoodClick?.(area.name)}
+                   onMouseEnter={() => onNeighborhoodHover?.(area.name)}
+                   onMouseLeave={() => onNeighborhoodHover?.(null)}
+                   onFocus={() => onNeighborhoodHover?.(area.name)}
+                   onBlur={() => onNeighborhoodHover?.(null)}
+                  onKeyDown={(event) => handleNeighborhoodKeyDown(event, area.name, onNeighborhoodClick)}
+                  className={mapClassNames(
+                    (onNeighborhoodClick || onNeighborhoodHover) && "pointer-events-auto cursor-pointer focus-visible:outline-none",
+                    highlightedNeighborhood === area.name
+                      ? "fill-primary/20 stroke-primary"
+                      : "fill-teal-400/10 stroke-teal-700/20",
+                  )}
+                  style={{
+                    strokeWidth: highlightedNeighborhood === area.name ? 0.8 : 0.35,
+                    strokeOpacity: highlightedNeighborhood === area.name ? 1 : 0.2,
+                     fillOpacity: highlightedNeighborhood === area.name ? 0.2 : 0.1,
+                     animation: isDataLoading && highlightedNeighborhood === area.name
+                       ? `buurtplaza-neighborhood-pulse ${NEIGHBORHOOD_PULSE_DURATION_MS}ms ease-in-out infinite`
+                       : undefined,
+                     transition: 'stroke 180ms ease, stroke-opacity 180ms ease, fill-opacity 180ms ease',
+                    vectorEffect: 'non-scaling-stroke',
+                  }}
+                   data-neighborhood-loading={isDataLoading && highlightedNeighborhood === area.name ? 'true' : undefined}
+                />
+              ))}
+            </svg>
+            {shouldShowNeighborhoodLabel(area.name, { showNeighborhoodLabels, showAllNeighborhoods, selectedNeighborhoods, highlightedNeighborhood }) && (
+              <span
+                data-neighborhood-label
+                className="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-1/2 whitespace-nowrap rounded-full border-2 border-teal-700/85 bg-white/95 px-2.5 py-1 text-[11px] font-black text-teal-900 shadow-md"
+                style={{ left: `${center.x}%`, top: `${center.y}%` }}
+              >
+                {area.name}
+              </span>
+            )}
           </div>
         );
       })}
-      {points.map((point) => {
+      <DataLoadingNotice isDataLoading={isDataLoading} />
+      {pointClusters.map((cluster) => {
+        const point = cluster.points[0]!;
+        if (cluster.points.length > 1) {
+          return (
+            <ClusterSummaryMarker
+              key={cluster.id}
+              cluster={cluster}
+              style={{
+                left: `${(cluster.x / pixelWidth) * 100}%`,
+                top: `${(cluster.y / pixelHeight) * 100}%`,
+              }}
+            />
+          );
+        }
+
         const left = ((point.lng - minLng) / (maxLng - minLng)) * 100;
         const top = ((maxLat - point.lat) / (maxLat - minLat)) * 100;
         const isSelected = point.id === selectedMarkerId;
@@ -530,6 +884,12 @@ function TileMapView({
   language,
   locationId,
   selectedNeighborhoods,
+  showAllNeighborhoods = false,
+  showNeighborhoodLabels = true,
+  highlightedNeighborhood = null,
+  isDataLoading = false,
+  onNeighborhoodClick,
+  onNeighborhoodHover,
   markers,
   selectedMarkerId,
   savedIds,
@@ -581,23 +941,35 @@ function TileMapView({
     setViewport(getInitialViewport(locationId));
   }, [locationId]);
 
-  useEffect(() => {
-    setViewport(
-      selectedNeighborhoods.length > 0
-        ? getNeighborhoodViewport(locationId, selectedNeighborhoods, size)
-        : getMarkerViewport(locationId, markers, size),
-    );
-  }, [locationId, markers, selectedNeighborhoods, size.height, size.width]);
+  // Only refit the camera when the content actually changes; parent re-renders
+  // (e.g. hover state) that pass equivalent props must never reset user zoom.
+  const viewportSignature = getViewportSignature(markers, selectedNeighborhoods);
+  const markersRef = useRef(markers);
+  markersRef.current = markers;
+  const selectedNeighborhoodsRef = useRef(selectedNeighborhoods);
+  selectedNeighborhoodsRef.current = selectedNeighborhoods;
 
   useEffect(() => {
-    const marker = markers.find((item) => item.id === selectedMarkerId);
+    const selected = selectedNeighborhoodsRef.current;
+    const viewportNeighborhoods = showAllNeighborhoods && selected.length === 0
+      ? (getLocation(locationId)?.neighborhoods ?? selected)
+      : selected;
+    setViewport(
+      viewportNeighborhoods.length > 0
+        ? getNeighborhoodViewport(locationId, viewportNeighborhoods, size)
+        : getMarkerViewport(locationId, markersRef.current, size),
+    );
+  }, [locationId, viewportSignature, showAllNeighborhoods, size.height, size.width]);
+
+  useEffect(() => {
+    const marker = markersRef.current.find((item) => item.id === selectedMarkerId);
     if (marker?.lat != null && marker.lng != null) {
       setViewport((current) => ({
         ...current,
         center: { lat: marker.lat, lng: marker.lng },
       }));
     }
-  }, [markers, selectedMarkerId]);
+  }, [selectedMarkerId]);
 
   const tiles = useMemo(() => {
     if (size.width === 0 || size.height === 0) return [];
@@ -671,11 +1043,23 @@ function TileMapView({
   }, [reportUnavailable, tileSetKey]);
 
   const points = getMapPoints(markers);
-  const neighborhoodAreas = getNeighborhoodAreas(locationId, selectedNeighborhoods);
+  const displayedNeighborhoods = showAllNeighborhoods
+    ? (getLocation(locationId)?.neighborhoods ?? selectedNeighborhoods)
+    : selectedNeighborhoods;
+  const neighborhoodAreas = getNeighborhoodAreas(locationId, displayedNeighborhoods);
   const [hoveredMarkerId, setHoveredMarkerId] = useState<string | null>(null);
   const center = latLngToWorld(viewport.center, viewport.zoom);
   const mapLeft = center.x - size.width / 2;
   const mapTop = center.y - size.height / 2;
+  const pointClusters = clusterMapPoints(
+    points,
+    (point) => {
+      const world = latLngToWorld({ lat: point.lat, lng: point.lng }, viewport.zoom);
+      return { x: world.x - mapLeft, y: world.y - mapTop };
+    },
+    MAP_CLUSTER_RADIUS_PX,
+    selectedMarkerId,
+  );
 
   const changeZoom = (amount: number) => {
     setViewport((current) => ({
@@ -715,6 +1099,13 @@ function TileMapView({
     }
   };
 
+  const zoomToCluster = (cluster: MapPointCluster) => {
+    setViewport((current) => ({
+      center: { lat: cluster.lat, lng: cluster.lng },
+      zoom: Math.min(MAX_TILE_ZOOM, current.zoom + 2),
+    }));
+  };
+
   return (
     <div
       ref={containerRef}
@@ -742,32 +1133,86 @@ function TileMapView({
         />
       ))}
 
+      {size.width > 0 && size.height > 0 && (
+        <svg
+          className="pointer-events-none absolute inset-0 z-[5] h-full w-full overflow-visible"
+          viewBox={`0 0 ${size.width} ${size.height}`}
+          preserveAspectRatio="none"
+           aria-hidden={!onNeighborhoodClick && !onNeighborhoodHover}
+        >
+          {neighborhoodAreas.flatMap((area) => area.boundary.map((ring, ringIndex) => (
+            <polygon
+              key={`${area.name}-${ringIndex}`}
+              data-neighborhood-boundary
+              role={onNeighborhoodClick || onNeighborhoodHover ? 'button' : undefined}
+              tabIndex={onNeighborhoodClick || onNeighborhoodHover ? 0 : undefined}
+              aria-label={onNeighborhoodClick ? `Select neighborhood: ${area.name}` : `Neighborhood: ${area.name}`}
+              points={ring.map(([lat, lng]) => {
+                const world = latLngToWorld({ lat, lng }, viewport.zoom);
+                return `${world.x - mapLeft},${world.y - mapTop}`;
+              }).join(' ')}
+              onPointerDown={(event) => event.stopPropagation()}
+              onClick={() => onNeighborhoodClick?.(area.name)}
+              onMouseEnter={() => onNeighborhoodHover?.(area.name)}
+              onMouseLeave={() => onNeighborhoodHover?.(null)}
+              onFocus={() => onNeighborhoodHover?.(area.name)}
+              onBlur={() => onNeighborhoodHover?.(null)}
+              onKeyDown={(event) => handleNeighborhoodKeyDown(event, area.name, onNeighborhoodClick)}
+              className={mapClassNames(
+                (onNeighborhoodClick || onNeighborhoodHover) && "pointer-events-auto cursor-pointer focus-visible:outline-none",
+                highlightedNeighborhood === area.name
+                  ? "fill-primary/20 stroke-primary"
+                  : "fill-teal-400/10 stroke-teal-700/20",
+              )}
+              style={{
+                strokeWidth: highlightedNeighborhood === area.name ? 5 : 2.5,
+                strokeOpacity: highlightedNeighborhood === area.name ? 1 : 0.2,
+                 fillOpacity: highlightedNeighborhood === area.name ? 0.2 : 0.1,
+                 animation: isDataLoading && highlightedNeighborhood === area.name
+                 ? `buurtplaza-neighborhood-pulse ${NEIGHBORHOOD_PULSE_DURATION_MS}ms ease-in-out infinite`
+                   : undefined,
+                 transition: 'stroke 180ms ease, stroke-opacity 180ms ease, fill-opacity 180ms ease',
+                vectorEffect: 'non-scaling-stroke',
+              }}
+               data-neighborhood-loading={isDataLoading && highlightedNeighborhood === area.name ? 'true' : undefined}
+            />
+          )))}
+        </svg>
+      )}
+      <DataLoadingNotice isDataLoading={isDataLoading} />
       {neighborhoodAreas.map((area) => {
+        if (!shouldShowNeighborhoodLabel(area.name, { showNeighborhoodLabels, showAllNeighborhoods, selectedNeighborhoods, highlightedNeighborhood })) return null;
         const world = latLngToWorld(area, viewport.zoom);
-        const radius = getProjectedNeighborhoodRadius(area, viewport.zoom);
         return (
-          <div
-            key={`neighborhood-${area.name}`}
-            data-neighborhood-boundary
-            className="pointer-events-none absolute z-[5] rounded-[50%] border-[3px] border-teal-700/85 bg-teal-400/10 shadow-[0_0_0_1px_rgba(255,255,255,0.8)]"
-            style={{
-              left: world.x - mapLeft - radius.width,
-              top: world.y - mapTop - radius.height,
-              width: radius.width * 2,
-              height: radius.height * 2,
-            }}
+          <span
+            key={`neighborhood-label-${area.name}`}
+            data-neighborhood-label
+            className={mapClassNames(
+              "pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-1/2 whitespace-nowrap rounded-full border-2 px-2.5 py-1 text-[11px] font-black shadow-md",
+              highlightedNeighborhood === area.name
+                ? "border-primary bg-card text-primary shadow-lg"
+                : "border-teal-700/85 bg-white/95 text-teal-900",
+            )}
+            style={{ left: world.x - mapLeft, top: world.y - mapTop }}
           >
-            <span
-              data-neighborhood-label
-              className="absolute left-1/2 top-3 -translate-x-1/2 whitespace-nowrap rounded-full border-2 border-teal-700/85 bg-white/95 px-2.5 py-1 text-[11px] font-black text-teal-900 shadow-md"
-            >
-              {area.name}
-            </span>
-          </div>
+            {area.name}
+          </span>
         );
       })}
 
-      {points.map((point) => {
+      {pointClusters.map((cluster) => {
+        const point = cluster.points[0]!;
+        if (cluster.points.length > 1) {
+          return (
+            <ClusterSummaryMarker
+              key={cluster.id}
+              cluster={cluster}
+              style={{ left: cluster.x, top: cluster.y }}
+              onClick={() => zoomToCluster(cluster)}
+            />
+          );
+        }
+
         const world = latLngToWorld({ lat: point.lat, lng: point.lng }, viewport.zoom);
         const left = world.x - mapLeft;
         const top = world.y - mapTop;
@@ -879,6 +1324,12 @@ function GoogleMapCanvas({
   language,
   locationId,
   selectedNeighborhoods,
+  showAllNeighborhoods = false,
+  showNeighborhoodLabels = true,
+  highlightedNeighborhood = null,
+  isDataLoading = false,
+  onNeighborhoodClick,
+  onNeighborhoodHover,
   markers,
   selectedMarkerId,
   savedIds,
@@ -889,11 +1340,18 @@ function GoogleMapCanvas({
   const mapRef = useRef<google.maps.Map | null>(null);
   const markersRef = useRef<Map<string, HtmlMarkerOverlay>>(new Map());
   const neighborhoodOverlaysRef = useRef<Map<string, {
-    circle: google.maps.Circle;
-    label: HtmlMarkerOverlay;
+    polygon: google.maps.Polygon;
+    label?: HtmlMarkerOverlay;
   }>>(new Map());
-  const [mapReady, setMapReady] = useState(false);
   const location = getLocation(locationId);
+  const [mapReady, setMapReady] = useState(false);
+  const [mapZoom, setMapZoom] = useState(() => location?.zoom ?? 12);
+  // Polygon listeners are bound once per overlay; route them through refs so
+  // they always call the latest React callbacks instead of a stale closure.
+  const neighborhoodClickRef = useRef(onNeighborhoodClick);
+  const neighborhoodHoverRef = useRef(onNeighborhoodHover);
+  neighborhoodClickRef.current = onNeighborhoodClick;
+  neighborhoodHoverRef.current = onNeighborhoodHover;
 
   const buildMarkerEl = useCallback(
     (marker: MarkerData, isSelected: boolean, isSaved: boolean): HTMLElement => {
@@ -903,7 +1361,11 @@ function GoogleMapCanvas({
       const wrapper = document.createElement('div');
       const isMuted = Boolean(selectedMarkerId) && !isSelected;
       wrapper.style.cssText = [
-        'position:relative',
+        // Google OverlayView writes the projected coordinate to this wrapper's
+        // left/top values. It must be removed from normal flow; relative
+        // positioning turns those coordinates into per-element offsets and
+        // makes correctly filtered pins appear outside their polygon.
+        'position:absolute',
         'display:flex',
         'align-items:center',
         'justify-content:center',
@@ -1038,6 +1500,18 @@ function GoogleMapCanvas({
     [language, onMarkerClick, selectedMarkerId],
   );
 
+  const buildClusterEl = useCallback(
+    (cluster: MapPointCluster): HTMLElement => {
+      return createHtmlClusterElement(cluster, () => {
+        const map = mapRef.current;
+        if (!map) return;
+        map.panTo({ lat: cluster.lat, lng: cluster.lng });
+        map.setZoom(Math.min(18, (map.getZoom() ?? mapZoom) + 2));
+      });
+    },
+    [mapZoom],
+  );
+
   useEffect(() => {
     if (!location || !containerRef.current) {
       onUnavailable();
@@ -1075,6 +1549,7 @@ function GoogleMapCanvas({
           streetViewControl: false,
           fullscreenControl: false,
         });
+        setMapZoom(location.zoom);
         setMapReady(true);
       })
       .catch(onUnavailable)
@@ -1090,10 +1565,31 @@ function GoogleMapCanvas({
   }, [location, onUnavailable]);
 
   useEffect(() => {
+    if (!mapReady || !mapRef.current) return;
+    const zoomListener = mapRef.current.addListener('zoom_changed', () => {
+      setMapZoom(mapRef.current?.getZoom() ?? location?.zoom ?? 12);
+    });
+    return () => zoomListener.remove();
+  }, [location?.zoom, mapReady]);
+
+  // Only refit the camera when the content actually changes; parent re-renders
+  // (e.g. hover state) that pass equivalent props must never reset user zoom.
+  const viewportSignature = getViewportSignature(markers, selectedNeighborhoods);
+  const viewportMarkersRef = useRef(markers);
+  viewportMarkersRef.current = markers;
+  const viewportNeighborhoodsRef = useRef(selectedNeighborhoods);
+  viewportNeighborhoodsRef.current = selectedNeighborhoods;
+
+  useEffect(() => {
     if (!mapReady || !mapRef.current || !location) return;
-    const neighborhoods = selectedNeighborhoods
-      .map((name) => location.neighborhoodCoords[name])
-      .filter((area): area is { lat: number; lng: number; zoom: number } => Boolean(area));
+    const markers = viewportMarkersRef.current;
+    const selectedNeighborhoods = viewportNeighborhoodsRef.current;
+    const neighborhoods = getNeighborhoodAreas(
+      locationId,
+      showAllNeighborhoods && selectedNeighborhoods.length === 0
+        ? (location.neighborhoods ?? selectedNeighborhoods)
+        : selectedNeighborhoods,
+    );
     if (neighborhoods.length === 0 && markers.length === 1) {
       mapRef.current.panTo({ lat: markers[0].lat, lng: markers[0].lng });
       mapRef.current.setZoom(15);
@@ -1105,58 +1601,130 @@ function GoogleMapCanvas({
       mapRef.current.panTo({ lat: location.lat, lng: location.lng });
       mapRef.current.setZoom(location.zoom);
     } else if (neighborhoods.length === 1) {
-      mapRef.current.panTo(neighborhoods[0]);
-      mapRef.current.setZoom(neighborhoods[0].zoom);
+      const bounds = new google.maps.LatLngBounds();
+      neighborhoods[0].boundary.flat().forEach(([lat, lng]) => bounds.extend({ lat, lng }));
+      mapRef.current.fitBounds(bounds, 64);
     } else {
       const bounds = new google.maps.LatLngBounds();
-      neighborhoods.forEach((area) => bounds.extend(area));
+      neighborhoods.forEach((area) => {
+        area.boundary.flat().forEach(([lat, lng]) => bounds.extend({ lat, lng }));
+      });
       mapRef.current.fitBounds(bounds, 64);
     }
-  }, [location, mapReady, markers, selectedNeighborhoods]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- content tracked via viewportSignature
+  }, [location, locationId, mapReady, viewportSignature, showAllNeighborhoods]);
 
   useEffect(() => {
     if (!mapReady || !mapRef.current || !location) return;
 
-    const areas = getNeighborhoodAreas(locationId, selectedNeighborhoods);
+    const areas = getNeighborhoodAreas(
+      locationId,
+      showAllNeighborhoods ? (location.neighborhoods ?? selectedNeighborhoods) : selectedNeighborhoods,
+    );
     const activeNames = new Set(areas.map((area) => area.name));
 
     for (const [name, overlay] of neighborhoodOverlaysRef.current) {
       if (activeNames.has(name)) continue;
-      overlay.circle.setMap(null);
-      overlay.label.setMap(null);
+      overlay.polygon.setMap(null);
+      overlay.label?.setMap(null);
       neighborhoodOverlaysRef.current.delete(name);
     }
 
     for (const area of areas) {
       const existing = neighborhoodOverlaysRef.current.get(area.name);
       if (existing) {
-        existing.circle.setCenter({ lat: area.lat, lng: area.lng });
-        existing.label.setPosition({ lat: area.lat, lng: area.lng });
-        existing.label.setContent(createNeighborhoodLabelElement(area.name));
+        const paths = area.boundary.map((ring) => ring.map(([lat, lng]) => ({ lat, lng })));
+        existing.polygon.setPaths(paths);
+        existing.polygon.setOptions({
+          strokeColor: highlightedNeighborhood === area.name ? '#f36c21' : '#0f766e',
+          strokeOpacity: highlightedNeighborhood === area.name ? 1 : 0.2,
+          strokeWeight: highlightedNeighborhood === area.name ? 5 : 3,
+          fillColor: highlightedNeighborhood === area.name ? '#f36c21' : '#2dd4bf',
+          fillOpacity: highlightedNeighborhood === area.name ? 0.2 : 0.1,
+        });
+        const labelVisible = shouldShowNeighborhoodLabel(area.name, { showNeighborhoodLabels, showAllNeighborhoods, selectedNeighborhoods, highlightedNeighborhood });
+        if (labelVisible && existing.label) {
+          existing.label.setPosition({ lat: area.lat, lng: area.lng });
+          existing.label.setContent(createNeighborhoodLabelElement(area.name));
+        } else if (labelVisible && !existing.label) {
+          existing.label = createHtmlMarkerOverlay(
+            mapRef.current,
+            { lat: area.lat, lng: area.lng },
+            createNeighborhoodLabelElement(area.name),
+            5,
+          );
+        } else if (!labelVisible && existing.label) {
+          existing.label.setMap(null);
+          existing.label = undefined;
+        }
         continue;
       }
 
-      const circle = new google.maps.Circle({
+      const polygon = new google.maps.Polygon({
         map: mapRef.current,
-        center: { lat: area.lat, lng: area.lng },
-        radius: NEIGHBORHOOD_FILTER_RADIUS_METERS,
-        strokeColor: '#0f766e',
-        strokeOpacity: 0.9,
-        strokeWeight: 3,
-        fillColor: '#2dd4bf',
-        fillOpacity: 0.1,
-        clickable: false,
+        paths: area.boundary.map((ring) => ring.map(([lat, lng]) => ({ lat, lng }))),
+        strokeColor: highlightedNeighborhood === area.name ? '#f36c21' : '#0f766e',
+        strokeOpacity: highlightedNeighborhood === area.name ? 1 : 0.2,
+        strokeWeight: highlightedNeighborhood === area.name ? 5 : 3,
+        fillColor: highlightedNeighborhood === area.name ? '#f36c21' : '#2dd4bf',
+        fillOpacity: highlightedNeighborhood === area.name ? 0.2 : 0.1,
+         clickable: Boolean(onNeighborhoodClick || onNeighborhoodHover),
         zIndex: 1,
       });
-      const label = createHtmlMarkerOverlay(
-        mapRef.current,
-        { lat: area.lat, lng: area.lng },
-        createNeighborhoodLabelElement(area.name),
-        5,
-      );
-      neighborhoodOverlaysRef.current.set(area.name, { circle, label });
+      if (onNeighborhoodClick) {
+        polygon.addListener('click', () => neighborhoodClickRef.current?.(area.name));
+      }
+      if (onNeighborhoodHover) {
+        polygon.addListener('mouseover', () => neighborhoodHoverRef.current?.(area.name));
+        polygon.addListener('mouseout', () => neighborhoodHoverRef.current?.(null));
+      }
+      const label = shouldShowNeighborhoodLabel(area.name, { showNeighborhoodLabels, showAllNeighborhoods, selectedNeighborhoods, highlightedNeighborhood })
+        ? createHtmlMarkerOverlay(
+            mapRef.current,
+            { lat: area.lat, lng: area.lng },
+            createNeighborhoodLabelElement(area.name),
+            5,
+          )
+        : undefined;
+      neighborhoodOverlaysRef.current.set(area.name, { polygon, ...(label ? { label } : {}) });
     }
-  }, [location, locationId, mapReady, selectedNeighborhoods]);
+   }, [
+     location,
+     locationId,
+     highlightedNeighborhood,
+      isDataLoading,
+     mapReady,
+     onNeighborhoodClick,
+      onNeighborhoodHover,
+     selectedNeighborhoods,
+      showAllNeighborhoods,
+      showNeighborhoodLabels,
+   ]);
+
+  // Google polygons are canvas-rendered, so CSS animation cannot change their
+  // fill. Pulse the selected boundary directly while the filtered request is
+  // in flight, then restore the normal selected opacity on cleanup.
+  useEffect(() => {
+    if (!mapReady || !highlightedNeighborhood || !isDataLoading) return;
+
+    const startedAt = performance.now();
+    let frame = 0;
+    const animate = (now: number) => {
+      const overlay = neighborhoodOverlaysRef.current.get(highlightedNeighborhood);
+      if (overlay) {
+        const phase = (Math.sin(((now - startedAt) / NEIGHBORHOOD_PULSE_DURATION_MS) * Math.PI * 2) + 1) / 2;
+        overlay.polygon.setOptions({ fillOpacity: 0.2 + phase * 0.22 });
+      }
+      frame = requestAnimationFrame(animate);
+    };
+    frame = requestAnimationFrame(animate);
+
+    return () => {
+      cancelAnimationFrame(frame);
+      const overlay = neighborhoodOverlaysRef.current.get(highlightedNeighborhood);
+      overlay?.polygon.setOptions({ fillOpacity: 0.2 });
+    };
+  }, [highlightedNeighborhood, isDataLoading, mapReady]);
 
   useEffect(() => {
     if (!mapReady || !mapRef.current) return;
@@ -1173,7 +1741,16 @@ function GoogleMapCanvas({
       content.addEventListener('marker-preview-visibility', handlePreviewVisibility);
     };
 
-    const newIds = new Set(markers.map((marker) => marker.id));
+    const pointClusters = clusterMapPoints(
+      markers,
+      (marker) => {
+        const world = latLngToWorld({ lat: marker.lat, lng: marker.lng }, mapZoom);
+        return { x: world.x, y: world.y };
+      },
+      MAP_CLUSTER_RADIUS_PX,
+      selectedMarkerId,
+    );
+    const newIds = new Set(pointClusters.map((cluster) => cluster.id));
     for (const [id, mapMarker] of markersRef.current) {
       if (!newIds.has(id)) {
         mapMarker.setMap(null);
@@ -1181,11 +1758,20 @@ function GoogleMapCanvas({
       }
     }
 
-    for (const marker of markers) {
-      if (marker.lat == null || marker.lng == null) continue;
-      const isSelected = selectedMarkerId === marker.id;
-      const existing = markersRef.current.get(marker.id);
+    for (const cluster of pointClusters) {
+      const marker = cluster.points[0]!;
+      const isCluster = cluster.points.length > 1;
+      const overlayId = cluster.id;
+      const existing = markersRef.current.get(overlayId);
       if (existing) {
+        if (isCluster) {
+          existing.setPosition({ lat: cluster.lat, lng: cluster.lng });
+          existing.setContent(buildClusterEl(cluster));
+          existing.setZIndex(50);
+          continue;
+        }
+
+        const isSelected = selectedMarkerId === marker.id;
         const content = buildMarkerEl(marker, isSelected, savedIds.has(marker.id));
         attachPreviewPriority(existing, content, isSelected);
         existing.setPosition({ lat: marker.lat, lng: marker.lng });
@@ -1194,25 +1780,29 @@ function GoogleMapCanvas({
         continue;
       }
 
-      const content = buildMarkerEl(marker, isSelected, savedIds.has(marker.id));
+      const content = isCluster
+        ? buildClusterEl(cluster)
+        : buildMarkerEl(marker, selectedMarkerId === marker.id, savedIds.has(marker.id));
       const mapMarker = createHtmlMarkerOverlay(
         mapRef.current,
-        { lat: marker.lat, lng: marker.lng },
+        { lat: isCluster ? cluster.lat : marker.lat, lng: isCluster ? cluster.lng : marker.lng },
         content,
-        isSelected ? 100 : 1,
+        isCluster ? 50 : selectedMarkerId === marker.id ? 100 : 1,
       );
-      attachPreviewPriority(mapMarker, content, isSelected);
-      markersRef.current.set(marker.id, mapMarker);
+      if (!isCluster) {
+        attachPreviewPriority(mapMarker, content, selectedMarkerId === marker.id);
+      }
+      markersRef.current.set(overlayId, mapMarker);
     }
-  }, [buildMarkerEl, mapReady, markers, onMarkerClick, savedIds, selectedMarkerId]);
+  }, [buildClusterEl, buildMarkerEl, mapReady, mapZoom, markers, onMarkerClick, savedIds, selectedMarkerId]);
 
   useEffect(() => {
     if (!mapReady || !mapRef.current || !selectedMarkerId) return;
-    const marker = markers.find((item) => item.id === selectedMarkerId);
+    const marker = viewportMarkersRef.current.find((item) => item.id === selectedMarkerId);
     if (marker?.lat != null && marker.lng != null) {
       mapRef.current.panTo({ lat: marker.lat, lng: marker.lng });
     }
-  }, [mapReady, markers, selectedMarkerId]);
+  }, [mapReady, selectedMarkerId]);
 
   useEffect(() => () => {
     for (const mapMarker of markersRef.current.values()) {
@@ -1220,13 +1810,18 @@ function GoogleMapCanvas({
     }
     markersRef.current.clear();
     for (const overlay of neighborhoodOverlaysRef.current.values()) {
-      overlay.circle.setMap(null);
-      overlay.label.setMap(null);
+      overlay.polygon.setMap(null);
+      overlay.label?.setMap(null);
     }
     neighborhoodOverlaysRef.current.clear();
   }, []);
 
-  return <div ref={containerRef} className="absolute inset-0 z-0" aria-label={MAP_COPY[language].googleMap} />;
+  return (
+    <div className="absolute inset-0 z-0">
+      <div ref={containerRef} className="absolute inset-0" aria-label={MAP_COPY[language].googleMap} />
+      <DataLoadingNotice isDataLoading={isDataLoading} />
+    </div>
+  );
 }
 
 type MapProvider = 'google' | 'tiles' | 'fallback';
@@ -1238,7 +1833,11 @@ export function GoogleMapView(props: GoogleMapViewProps) {
   const useTileMap = useCallback(() => setProvider('tiles'), []);
   const useCoordinateFallback = useCallback(() => setProvider('fallback'), []);
 
-  if (props.markers.length === 0 && props.selectedNeighborhoods.length === 0) {
+  if (
+    props.markers.length === 0
+    && props.selectedNeighborhoods.length === 0
+    && !props.showAllNeighborhoods
+  ) {
     return (
       <div
         className="absolute inset-0 grid place-items-center bg-muted/40 p-6 text-center"
