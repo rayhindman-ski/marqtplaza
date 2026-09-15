@@ -428,6 +428,9 @@ test.describe('business moderation screen', () => {
     await signIn(page, { userId: 'user-editor', role: 'editor' }, 'en');
     await page.goto(MODERATION_URL);
 
+    await expect(page.getByRole('heading', { name: 'All claims have been reviewed' })).toBeVisible();
+    await page.getByRole('tab', { name: 'Deals' }).click();
+    await expect(page.getByRole('heading', { name: 'All deals have been reviewed' })).toBeVisible();
     await expect(page.getByTestId('tab-authority')).toHaveText('Ownership');
     await expect(page.getByTestId('tab-editorial')).toHaveText('Profiles');
     await expect(page.getByTestId('tab-publication')).toHaveText('Publication');
