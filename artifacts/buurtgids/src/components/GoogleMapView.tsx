@@ -1,7 +1,38 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { importLibrary, setOptions } from '@googlemaps/js-api-loader';
-import { Baby, Coffee, Gamepad2, HandHeart, Landmark, MapPin as MapPinIcon, Route, ShoppingBag, Waves, X, type LucideIcon } from 'lucide-react';
-import { type Marker as MarkerData, LOCATIONS, type Category } from '../lib/data';
+import {
+  Baby,
+  Coffee,
+  Gamepad2,
+  HandHeart,
+  Landmark,
+  MapPin as MapPinIcon,
+  Route,
+  ShoppingBag,
+  Waves,
+  X,
+  Building2,
+  Briefcase,
+  Store,
+  Cross,
+  UtensilsCrossed,
+  Croissant,
+  Martini,
+  HeartHandshake,
+  GraduationCap,
+  Bus,
+  Coins,
+  Stethoscope,
+  Palette,
+  MonitorPlay,
+  HeartPulse,
+  Wrench,
+  Car,
+  Bed,
+  Activity,
+  type LucideIcon,
+} from 'lucide-react';
+import { type Marker as MarkerData, LOCATIONS, type Category, type BusinessCategory, type SocialMapCategory, type FoodType } from '../lib/data';
 import { getMarkerCopy, translations, type Language } from '../lib/i18n';
 import { NEIGHBORHOOD_BOUNDARIES, type BoundaryPoint, type NeighborhoodBoundary } from '@workspace/geo';
 
@@ -14,10 +45,63 @@ const CATEGORY_COLORS: Record<MapCategory, string> = {
   Entertainment: '#6366f1',
   Outdoors:      '#10b981',
   Markets:       '#f59e0b',
-  Businesses:    '#f36c21',
+  Businesses:    '#0ea5e9',
   'Food & Drink': '#b45309',
   'Social map': '#0f766e',
 };
+
+function getSubcategoryIcon(marker: Pick<MarkerData, 'category' | 'businessCategory' | 'socialCategory' | 'foodType'>): LucideIcon {
+  if (marker.category === 'Food & Drink' && marker.foodType) {
+    const foodIcons: Record<FoodType, LucideIcon> = {
+      restaurant: UtensilsCrossed,
+      cafe: Coffee,
+      bar: Martini,
+      bakery: Croissant,
+      takeaway: ShoppingBag,
+      other: Coffee,
+    };
+    return foodIcons[marker.foodType] ?? Coffee;
+  }
+
+  if (marker.category === 'Businesses' && marker.businessCategory) {
+    const businessIcons: Record<BusinessCategory, LucideIcon> = {
+      'Retail & Shopping': Store,
+      'Food & Drink': UtensilsCrossed,
+      'Health & Wellness': HeartPulse,
+      'Beauty & Personal Care': HeartPulse,
+      'Professional Services': Briefcase,
+      'Finance & Legal': Building2,
+      'Home & Repair': Wrench,
+      'Automotive & Mobility': Car,
+      'Education & Childcare': GraduationCap,
+      'Hospitality & Travel': Bed,
+      'Arts, Culture & Entertainment': Palette,
+      'Fitness & Sports': Activity,
+    };
+    return businessIcons[marker.businessCategory] ?? MapPinIcon;
+  }
+
+  if (marker.category === 'Social map' && marker.socialCategory) {
+    const socialIcons: Record<SocialMapCategory, LucideIcon> = {
+      'Geldzaken': Coins,
+      'Gezin en opvoeden': Baby,
+      'Gezondheid': Stethoscope,
+      'Heilige plaatsen': Cross,
+      "Hobby's en interesses": Palette,
+      'Ondersteuning': HeartHandshake,
+      'Ontmoeten en samenleven': HandHeart,
+      'Sporten en bewegen': Activity,
+      'Taal en computer': MonitorPlay,
+      'Vervoer': Bus,
+      'Werk en opleiding': Briefcase,
+      'Wonen en huishouden': Building2,
+      'Zorg voor een naaste': HandHeart,
+    };
+    return socialIcons[marker.socialCategory] ?? HandHeart;
+  }
+
+  return CATEGORY_ICONS[marker.category] ?? MapPinIcon;
+}
 
 const CATEGORY_ICONS: Record<MapCategory, LucideIcon> = {
   Museums: Landmark,
@@ -31,6 +115,38 @@ const CATEGORY_ICONS: Record<MapCategory, LucideIcon> = {
   'Social map': HandHeart,
 };
 
+function getMarkerVisualKey(
+  marker: Pick<MarkerData, 'category' | 'businessCategory' | 'socialCategory' | 'foodType'>,
+) {
+  if (marker.category === 'Food & Drink' && marker.foodType) return `${marker.category}:${marker.foodType}`;
+  if (marker.category === 'Businesses' && marker.businessCategory) return `${marker.category}:${marker.businessCategory}`;
+  if (marker.category === 'Social map' && marker.socialCategory) return `${marker.category}:${marker.socialCategory}`;
+  return marker.category;
+}
+
+function getMarkerVisualLabel(
+  marker: Pick<MarkerData, 'category' | 'businessCategory' | 'socialCategory' | 'foodType'>,
+) {
+  return marker.foodType ?? marker.businessCategory ?? marker.socialCategory ?? marker.category;
+}
+
+function getClusterVisual(points: MapPoint[]) {
+  const counts = new Map<string, { count: number; marker: MapPoint }>();
+  for (const point of points) {
+    const key = getMarkerVisualKey(point);
+    const current = counts.get(key);
+    counts.set(key, { count: (current?.count ?? 0) + 1, marker: current?.marker ?? point });
+  }
+  const ranked = [...counts.values()].sort((a, b) => b.count - a.count);
+  const dominantMarker = ranked[0]?.marker ?? points[0]!;
+  return {
+    dominantMarker,
+    isMixed: ranked.length > 1,
+    label: getMarkerVisualLabel(dominantMarker),
+    colors: [...new Set(points.map((point) => getCategoryColor(point.category)))].slice(0, 4),
+  };
+}
+
 const MAP_STYLES: google.maps.MapTypeStyle[] = [
   { elementType: 'labels.text', stylers: [{ visibility: 'off' }] },
   { elementType: 'labels.text.stroke', stylers: [{ visibility: 'off' }] },
@@ -38,7 +154,6 @@ const MAP_STYLES: google.maps.MapTypeStyle[] = [
   // visible place icon corresponds to a currently filtered listing marker.
   { elementType: 'labels.icon', stylers: [{ visibility: 'off' }] },
 ];
-const MARQTPLAZA_MARKER_GRADIENT = 'linear-gradient(135deg, #ff9a52 0%, #f36c21 48%, #c94d12 100%)';
 const NEIGHBORHOOD_PULSE_DURATION_MS = 2_400;
 
 const TILE_SIZE = 256;
@@ -210,8 +325,8 @@ function DataLoadingNotice({ isDataLoading }: { isDataLoading: boolean }) {
 
 type MapPoint = MarkerData;
 
-function getCategoryIcon(category: MapCategory) {
-  return CATEGORY_ICONS[category] ?? MapPinIcon;
+function getCategoryIcon(marker: MapPoint) {
+  return getSubcategoryIcon(marker);
 }
 
 function getCategoryColor(category: MapCategory) {
@@ -244,7 +359,60 @@ function MarkerPreview({
   );
 }
 
-function getCategoryIconMarkup(category: MapCategory) {
+function getCategoryIconMarkup(marker: Pick<MarkerData, 'category' | 'businessCategory' | 'socialCategory' | 'foodType'>) {
+  // Use SVG path strings from Lucide matching our mapped icon choices.
+  // These represent the specific path/circle elements for each semantically distinct icon.
+
+  if (marker.category === 'Food & Drink' && marker.foodType) {
+    const foodIcons: Record<FoodType, string> = {
+      restaurant: '<path d="m16 2-2.3 2.3a3 3 0 0 0 0 4.2l1.8 1.8a3 3 0 0 0 4.2 0L22 8"/><path d="M15 15 3.3 2.8a2 2 0 0 0-2.8 2.8L12 17.3"/><path d="m20 9-4.2 4.2a3 3 0 0 1-4.2 0l-1.4-1.4"/><path d="m18 11 4 4"/><path d="m11 18-5.7 5.7a1 1 0 0 1-1.4-1.4L9.6 16.6"/><path d="M8 22 22 8"/>', // UtensilsCrossed
+      cafe: '<path d="M17 8h1a4 4 0 0 1 0 8h-1"/><path d="M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4Z"/><line x1="6" x2="6" y1="2" y2="4"/><line x1="10" x2="10" y1="2" y2="4"/><line x1="14" x2="14" y1="2" y2="4"/>', // Coffee
+      bar: '<path d="M8 22h8"/><path d="M12 15v7"/><path d="M12 15a8.03 8.03 0 0 0 8-8V5c0-1.1-.9-2-2-2H6c-1.1 0-2 .9-2 2v2a8.03 8.03 0 0 0 8 8Z"/><path d="M4 5h16"/>', // Martini
+      bakery: '<path d="m4.6 13.4-.6 6A2 2 0 0 0 6 22h12a2 2 0 0 0 2-2.6l-.6-6"/><path d="M2.5 13a22.8 22.8 0 0 1 19 0"/><path d="M17 13a5.5 5.5 0 0 0-10 0"/><path d="M11 2a4 4 0 0 0-4 4"/><path d="M17 6a4 4 0 0 0-4-4"/>', // Croissant
+      takeaway: '<path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/>', // ShoppingBag
+      other: '<path d="M17 8h1a4 4 0 0 1 0 8h-1"/><path d="M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4Z"/><line x1="6" x2="6" y1="2" y2="4"/><line x1="10" x2="10" y1="2" y2="4"/><line x1="14" x2="14" y1="2" y2="4"/>', // Coffee
+    };
+    return foodIcons[marker.foodType] ?? foodIcons.other;
+  }
+
+  if (marker.category === 'Businesses' && marker.businessCategory) {
+    const businessIcons: Record<BusinessCategory, string> = {
+      'Retail & Shopping': '<path d="m2 7 4.41-4.41A2 2 0 0 1 7.83 2h8.34a2 2 0 0 1 1.42.59L22 7"/><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><path d="M15 22v-4a2 2 0 0 0-2-2h-2a2 2 0 0 0-2 2v4"/><path d="M2 7h20"/><path d="M22 7v3a2 2 0 0 1-2 2v0a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 16 12a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 12 12a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 8 12a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 4 12a2 2 0 0 1-2-2V7"/>', // Store
+      'Food & Drink': '<path d="m16 2-2.3 2.3a3 3 0 0 0 0 4.2l1.8 1.8a3 3 0 0 0 4.2 0L22 8"/><path d="M15 15 3.3 2.8a2 2 0 0 0-2.8 2.8L12 17.3"/><path d="m20 9-4.2 4.2a3 3 0 0 1-4.2 0l-1.4-1.4"/><path d="m18 11 4 4"/><path d="m11 18-5.7 5.7a1 1 0 0 1-1.4-1.4L9.6 16.6"/><path d="M8 22 22 8"/>', // UtensilsCrossed
+      'Health & Wellness': '<path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/><path d="M3.22 12H9.5l.5-1 2 4.5 2-7 1.5 3.5h5.27"/>', // HeartPulse
+      'Beauty & Personal Care': '<path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/><path d="M3.22 12H9.5l.5-1 2 4.5 2-7 1.5 3.5h5.27"/>', // HeartPulse
+      'Professional Services': '<rect width="20" height="14" x="2" y="7" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>', // Briefcase
+      'Finance & Legal': '<rect width="16" height="20" x="4" y="2" rx="2" ry="2"/><path d="M9 22v-4h6v4"/><path d="M8 6h.01"/><path d="M16 6h.01"/><path d="M12 6h.01"/><path d="M12 10h.01"/><path d="M12 14h.01"/><path d="M16 10h.01"/><path d="M16 14h.01"/><path d="M8 10h.01"/><path d="M8 14h.01"/>', // Building2
+      'Home & Repair': '<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>', // Wrench
+      'Automotive & Mobility': '<path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2"/><circle cx="7" cy="17" r="2"/><path d="M9 17h6"/><circle cx="17" cy="17" r="2"/>', // Car
+      'Education & Childcare': '<path d="M21.42 10.922a2 2 0 0 1-.019 3.138l-8.5 7.107a2 2 0 0 1-2.541.001l-8.5-7.107a2 2 0 0 1-.019-3.138l8.5-7.107a2 2 0 0 1 2.541.001z"/><path d="M22 10v6"/><path d="M6 12.5V16a6 3 0 0 0 12 0v-3.5"/>', // GraduationCap
+      'Hospitality & Travel': '<path d="M2 4v16"/><path d="M2 8h18a2 2 0 0 1 2 2v10"/><path d="M2 17h20"/><path d="M6 8v9"/>', // Bed
+      'Arts, Culture & Entertainment': '<circle cx="13.5" cy="6.5" r=".5"/><circle cx="17.5" cy="10.5" r=".5"/><circle cx="8.5" cy="7.5" r=".5"/><circle cx="6.5" cy="12.5" r=".5"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/>', // Palette
+      'Fitness & Sports': '<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>', // Activity
+    };
+    return businessIcons[marker.businessCategory] ?? '<path d="M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1 1 16 0Z" /><circle cx="12" cy="10" r="2.5" />';
+  }
+
+  if (marker.category === 'Social map' && marker.socialCategory) {
+    const socialIcons: Record<SocialMapCategory, string> = {
+      'Geldzaken': '<circle cx="8" cy="8" r="6"/><path d="M18.09 10.37A6 6 0 1 1 10.34 18"/><path d="M7 6h1v4"/><path d="m16.71 13.88.7.71-2.82 2.82"/>', // Coins
+      'Gezin en opvoeden': '<circle cx="12" cy="8" r="4"/><path d="M5 21v-2a7 7 0 0 1 14 0v2M9 8h.01M15 8h.01"/>', // Baby
+      'Gezondheid': '<path d="M11 2h2"/><path d="M2 9h20"/><path d="M6 14h4"/><path d="M6 18h4"/><path d="M16 14h2"/><path d="M16 18h2"/><rect width="18" height="20" x="3" y="2" rx="2"/>', // Stethoscope
+      'Heilige plaatsen': '<path d="M11 2a2 2 0 0 0-2 2v5H4a2 2 0 0 0-2 2v2c0 1.1.9 2 2 2h5v5c0 1.1.9 2 2 2h2a2 2 0 0 0 2-2v-5h5a2 2 0 0 0 2-2v-2a2 2 0 0 0-2-2h-5V4a2 2 0 0 0-2-2h-2z"/>', // Cross
+      "Hobby's en interesses": '<circle cx="13.5" cy="6.5" r=".5"/><circle cx="17.5" cy="10.5" r=".5"/><circle cx="8.5" cy="7.5" r=".5"/><circle cx="6.5" cy="12.5" r=".5"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/>', // Palette
+      'Ondersteuning': '<path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/><path d="M12 5 9.04 7.96a2.17 2.17 0 0 0 0 3.08v0c.82.82 2.13.85 3 .07l2.07-1.9a2.82 2.82 0 0 1 3.79 0l2.96 2.66"/><path d="m18 15-2-2"/><path d="m15 18-2-2"/>', // HeartHandshake
+      'Ontmoeten en samenleven': '<path d="M10.68 13.31a16 16 0 0 0 3.41 2.6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7 2 2 0 0 1 1.72 2v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.42 19.42 0 0 1-3.33-2.67m-2.67-3.34a19.79 19.79 0 0 1-3.07-8.63A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91"/><path d="m21.23 9.23-5.23-5.23"/><path d="m20.23 8.23-6.23-6.23"/><path d="M16 4v6"/><path d="M10 10h6"/>', // HandHeart
+      'Sporten en bewegen': '<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>', // Activity
+      'Taal en computer': '<path d="m10 15 5-3-5-3v6Z"/><rect width="20" height="14" x="2" y="3" rx="2"/><path d="M12 17v4"/><path d="M8 21h8"/>', // MonitorPlay
+      'Vervoer': '<path d="M8 6v6"/><path d="M15 6v6"/><path d="M2 12h19.6"/><path d="M18 18h3s.5-1.7.8-2.8c.1-.4.2-.8.2-1.2 0-.4-.1-.8-.2-1.2l-1.4-5C20.1 6.8 19.1 6 18 6H4a2 2 0 0 0-2 2v10h3"/><circle cx="7" cy="18" r="2"/><path d="M9 18h5"/><circle cx="16" cy="18" r="2"/>', // Bus
+      'Werk en opleiding': '<rect width="20" height="14" x="2" y="7" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>', // Briefcase
+      'Wonen en huishouden': '<rect width="16" height="20" x="4" y="2" rx="2" ry="2"/><path d="M9 22v-4h6v4"/><path d="M8 6h.01"/><path d="M16 6h.01"/><path d="M12 6h.01"/><path d="M12 10h.01"/><path d="M12 14h.01"/><path d="M16 10h.01"/><path d="M16 14h.01"/><path d="M8 10h.01"/><path d="M8 14h.01"/>', // Building2
+      'Zorg voor een naaste': '<path d="M10.68 13.31a16 16 0 0 0 3.41 2.6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7 2 2 0 0 1 1.72 2v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.42 19.42 0 0 1-3.33-2.67m-2.67-3.34a19.79 19.79 0 0 1-3.07-8.63A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91"/><path d="m21.23 9.23-5.23-5.23"/><path d="m20.23 8.23-6.23-6.23"/><path d="M16 4v6"/><path d="M10 10h6"/>', // HandHeart
+    };
+    return socialIcons[marker.socialCategory] ?? socialIcons['Ontmoeten en samenleven'];
+  }
+
+
   const markup: Record<MapCategory, string> = {
     Museums: '<path d="M3 21h18M5 21V10m14 11V10M3 10h18L12 3 3 10Zm4 4h2m2 0h2m2 0h2M7 18h2m2 0h2m2 0h2" />',
     Tours: '<circle cx="6" cy="19" r="3" /><circle cx="18" cy="5" r="3" /><path d="m8.5 17.5 7-11" />',
@@ -256,7 +424,7 @@ function getCategoryIconMarkup(category: MapCategory) {
     'Food & Drink': '<path d="M17 8h1a4 4 0 0 1 0 8h-1M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V8Z" /><path d="M6 2v3m3-3v3m3-3v3" />',
     'Social map': '<path d="M7 11.5 10 14l7-7" /><path d="M12 21a9 9 0 1 0-9-9c0 5.1 4.4 8.6 9 9Z" /><path d="M8 8.5h.01M16 8.5h.01" />',
   };
-  return markup[category] ?? markup.Businesses;
+  return markup[marker.category] ?? markup.Businesses;
 }
 
 function getLocation(locationId: string) {
@@ -440,6 +608,12 @@ function ClusterSummaryMarker({
   const label = isInteractive
     ? `${count} listings in this area. Show listings and zoom in.`
     : `${count} listings in this area`;
+  const visual = getClusterVisual(cluster.points);
+  const ClusterIcon = getSubcategoryIcon(visual.dominantMarker);
+  const color = getCategoryColor(visual.dominantMarker.category);
+  const accessibleLabel = visual.isMixed
+    ? `${label} Mostly ${visual.label}, with other categories.`
+    : `${label} ${visual.label}.`;
 
   return (
     <div
@@ -447,8 +621,8 @@ function ClusterSummaryMarker({
       data-map-cluster
       role={isInteractive ? 'button' : 'img'}
       tabIndex={isInteractive ? 0 : undefined}
-      aria-label={label}
-      title={`${count} listings in this area`}
+      aria-label={accessibleLabel}
+      title={visual.isMixed ? `${count} listings · mostly ${visual.label}` : `${count} ${visual.label} listings`}
       className="absolute z-30 -translate-x-1/2 -translate-y-1/2"
       style={style}
       onPointerDown={(event) => {
@@ -482,15 +656,27 @@ function ClusterSummaryMarker({
       }}
     >
       <span
-        className="flex items-center justify-center rounded-full border-[3px] border-white bg-[linear-gradient(135deg,#ff9a52_0%,#f36c21_48%,#c94d12_100%)] font-black text-white shadow-[0_7px_16px_-5px_rgba(23,34,53,0.5),0_0_0_2px_rgba(243,108,33,0.3)]"
+        className="flex flex-col items-center justify-center rounded-full border-[3px] border-white font-black leading-none text-white"
         style={{
           width: size,
           height: size,
-          fontSize: count >= 100 ? 14 : 16,
+          background: color,
+          boxShadow: `0 7px 16px -5px rgba(23,34,53,0.5), 0 0 0 2px ${color}4d`,
         }}
       >
-        {count}
+        <ClusterIcon className="mb-0.5 h-3.5 w-3.5" strokeWidth={2.5} aria-hidden="true" />
+        <span className={count >= 100 ? 'text-xs' : 'text-sm'}>{count}</span>
       </span>
+      {visual.isMixed && (
+        <span
+          className="absolute -right-1 -top-1 grid h-[18px] w-[18px] grid-cols-2 gap-0.5 rounded-full bg-white p-1 shadow-sm ring-1 ring-border"
+          aria-hidden="true"
+        >
+          {visual.colors.map((dotColor) => (
+            <span key={dotColor} className="rounded-full" style={{ background: dotColor }} />
+          ))}
+        </span>
+      )}
     </div>
   );
 }
@@ -501,14 +687,20 @@ function createHtmlClusterElement(
 ): HTMLElement {
   const count = cluster.points.length;
   const size = count >= 100 ? 62 : count >= 10 ? 56 : 50;
+  const visual = getClusterVisual(cluster.points);
+  const color = getCategoryColor(visual.dominantMarker.category);
   const button = document.createElement('button');
   button.type = 'button';
   button.setAttribute('data-map-cluster', '');
-  button.setAttribute('aria-label', `${count} listings in this area. Show listings and zoom in.`);
-  button.title = `${count} listings in this area`;
+  button.setAttribute(
+    'aria-label',
+    `${count} listings in this area. ${visual.isMixed ? `Mostly ${visual.label}, with other categories.` : `${visual.label}.`} Show listings and zoom in.`,
+  );
+  button.title = visual.isMixed ? `${count} listings · mostly ${visual.label}` : `${count} ${visual.label} listings`;
   button.style.cssText = [
     'position:absolute',
     'display:flex',
+    'flex-direction:column',
     'align-items:center',
     'justify-content:center',
     'transform:translate(-50%,-50%)',
@@ -516,15 +708,58 @@ function createHtmlClusterElement(
     `height:${size}px`,
     'border:3px solid #fff',
     'border-radius:50%',
-    'background:linear-gradient(135deg,#ff9a52 0%,#f36c21 48%,#c94d12 100%)',
-    'box-shadow:0 7px 16px -5px rgba(23,34,53,0.5),0 0 0 2px rgba(243,108,33,0.3)',
+    `background:${color}`,
+    `box-shadow:0 7px 16px -5px rgba(23,34,53,0.5),0 0 0 2px ${color}4d`,
     'color:#fff',
-    `font:${count >= 100 ? 14 : 16}px/1 ui-sans-serif,system-ui,sans-serif`,
-    'font-weight:900',
+    'font:900 14px/1 ui-sans-serif,system-ui,sans-serif',
     'cursor:pointer',
     'padding:0',
   ].join(';');
-  button.textContent = String(count);
+
+  const icon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  icon.setAttribute('viewBox', '0 0 24 24');
+  icon.setAttribute('width', '14');
+  icon.setAttribute('height', '14');
+  icon.setAttribute('aria-hidden', 'true');
+  icon.setAttribute('fill', 'none');
+  icon.setAttribute('stroke', 'currentColor');
+  icon.setAttribute('stroke-width', '2.5');
+  icon.setAttribute('stroke-linecap', 'round');
+  icon.setAttribute('stroke-linejoin', 'round');
+  icon.style.marginBottom = '2px';
+  icon.innerHTML = getCategoryIconMarkup(visual.dominantMarker);
+  const countLabel = document.createElement('span');
+  countLabel.textContent = String(count);
+  countLabel.style.fontSize = count >= 100 ? '12px' : '14px';
+  button.append(icon, countLabel);
+
+  if (visual.isMixed) {
+    const mixBadge = document.createElement('span');
+    mixBadge.style.cssText = [
+      'position:absolute',
+      'top:-4px',
+      'right:-4px',
+      'width:18px',
+      'height:18px',
+      'border-radius:50%',
+      'background:#fff',
+      'border:1px solid hsl(var(--border))',
+      'box-shadow:0 1px 2px rgba(0,0,0,0.1)',
+      'display:flex',
+      'flex-wrap:wrap',
+      'align-items:center',
+      'justify-content:center',
+      'gap:2px',
+      'padding:4px',
+    ].join(';');
+    for (const dotColor of visual.colors) {
+      const dot = document.createElement('span');
+      dot.style.cssText = `width:3px;height:3px;border-radius:50%;background:${dotColor};`;
+      mixBadge.appendChild(dot);
+    }
+    button.appendChild(mixBadge);
+  }
+
   attachStationaryActivation(button, onClick);
   return button;
 }
@@ -827,7 +1062,7 @@ function CoordinateMapFallback({
         const isSelected = point.id === selectedMarkerId;
         const isMuted = Boolean(selectedMarkerId) && !isSelected;
         const color = getCategoryColor(point.category);
-        const Icon = getCategoryIcon(point.category);
+        const Icon = getCategoryIcon(point);
 
         const className = "marqtplaza-map-marker relative flex items-center justify-center rounded-full transition-transform hover:scale-110 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/35";
         const style: React.CSSProperties = {
@@ -1226,7 +1461,7 @@ function TileMapView({
         const isSelected = point.id === selectedMarkerId;
         const isMuted = Boolean(selectedMarkerId) && !isSelected;
         const color = getCategoryColor(point.category);
-        const Icon = getCategoryIcon(point.category);
+        const Icon = getCategoryIcon(point);
 
         const className = "marqtplaza-map-marker relative flex items-center justify-center rounded-full font-black text-white transition-transform hover:scale-110 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/35";
         const style: React.CSSProperties = {
@@ -1238,7 +1473,8 @@ function TileMapView({
           boxSizing: 'border-box',
           flex: '0 0 auto',
           overflow: 'hidden',
-          boxShadow: isSelected ? `0 0 0 5px ${color}44, 0 8px 18px -6px rgba(23,34,53,0.5)` : undefined,
+          background: color, // Map specific color to base provider marker
+          boxShadow: isSelected ? `0 0 0 5px ${color}44, 0 8px 18px -6px rgba(23,34,53,0.5)` : `0 7px 16px -5px rgba(23,34,53,0.42), 0 0 0 2px ${color}4d, inset 0 1px 0 rgba(255,255,255,0.48)`,
           opacity: isMuted ? 0.28 : 1,
           filter: isMuted ? 'saturate(0.35)' : undefined,
         };
@@ -1400,9 +1636,9 @@ function GoogleMapCanvas({
          'flex:0 0 auto',
          'overflow:hidden',
          'border-radius:50%',
-        `background:${MARQTPLAZA_MARKER_GRADIENT}`,
+        `background:${color}`,
         'border:3px solid rgba(255,255,255,0.96)',
-         `box-shadow:${isSelected ? `0 0 0 5px ${color}44, 0 8px 18px -6px rgba(23,34,53,0.5)` : '0 7px 16px -5px rgba(23,34,53,0.42), 0 0 0 2px rgba(243,108,33,0.28), inset 0 1px 0 rgba(255,255,255,0.48)'}`,
+         `box-shadow:${isSelected ? `0 0 0 5px ${color}44, 0 8px 18px -6px rgba(23,34,53,0.5)` : `0 7px 16px -5px rgba(23,34,53,0.42), 0 0 0 2px ${color}4d, inset 0 1px 0 rgba(255,255,255,0.48)`}`,
         `opacity:${isMuted ? 0.28 : 1}`,
         `filter:${isMuted ? 'saturate(0.35)' : 'none'}`,
         'transition:width 180ms ease,height 180ms ease,opacity 180ms ease,filter 180ms ease',
@@ -1427,7 +1663,7 @@ function GoogleMapCanvas({
       icon.setAttribute('stroke-linecap', 'round');
       icon.setAttribute('stroke-linejoin', 'round');
        icon.style.color = '#fff';
-      icon.innerHTML = getCategoryIconMarkup(marker.category);
+      icon.innerHTML = getCategoryIconMarkup(marker);
       element.appendChild(icon);
 
       if (isSaved) {
@@ -1901,7 +2137,7 @@ export function GoogleMapView(props: GoogleMapViewProps) {
             </div>
             <div className="p-2 overflow-y-auto min-h-0 space-y-1">
               {openedCluster.points.map(point => {
-                const Icon = getCategoryIcon(point.category);
+                const Icon = getCategoryIcon(point);
                 return (
                   <button
                     key={point.id}
