@@ -1598,3 +1598,18 @@ export const accountSupportTranslations = {
     resendDescription: 'The message goes back into the queue and is offered again with the same contents.',
   },
 } as const;
+
+export const reviewWorkspaceTranslations = {
+  nl: {
+    badge: 'Redactie',
+    title: 'Beoordelingsoverzicht',
+    intro: 'Behandel claims, deals, bedrijfsprofielen, publicaties en accountverzoeken op één plek.',
+    documentTitle: 'Redactie: Beoordelingsoverzicht | Buurtplaza',
+  },
+  en: {
+    badge: 'Editorial',
+    title: 'Review overview',
+    intro: 'Handle claims, deals, business profiles, publications and account requests in one place.',
+    documentTitle: 'Editorial: Review overview | Buurtplaza',
+  },
+} as const;

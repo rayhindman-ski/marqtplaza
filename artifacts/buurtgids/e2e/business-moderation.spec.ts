@@ -182,7 +182,7 @@ test.describe('business moderation screen', () => {
     await signIn(page, { userId: 'user-editor', role: 'editor' });
     await page.goto(MODERATION_URL);
 
-    await expect(page.getByRole('heading', { name: 'Bedrijven & Deals Moderatie' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Beoordelingsoverzicht' })).toBeVisible();
     await expect(page.getByTestId('tab-authority')).toHaveText('Eigenaarschap');
     await expect(page.getByTestId('tab-editorial')).toHaveText('Profielen');
     await expect(page.getByTestId('tab-publication')).toHaveText('Publicatie');

@@ -29,7 +29,7 @@ import { useEditorAccess } from '@/lib/editorAccess';
 import { featureFlags } from '@/lib/featureFlags';
 import { BusinessReviewPanel } from './BusinessReviewPanel';
 import { AccountSupportPanel } from './AccountSupportPanel';
-import { accountSupportTranslations } from '@/lib/i18n';
+import { accountSupportTranslations, reviewWorkspaceTranslations } from '@/lib/i18n';
 import { useAppLanguage } from '@/lib/useAppLanguage';
 
 // Minimal editor check based on role - assuming editor access checks are done elsewhere, 
@@ -43,6 +43,7 @@ export default function BusinessModerationView() {
   const [activeTab, setActiveTab] = useState('claims');
   const [reviewLanguage] = useAppLanguage();
   const supportCopy = accountSupportTranslations[reviewLanguage];
+  const workspaceCopy = reviewWorkspaceTranslations[reviewLanguage];
   const tabCount = 2 + (featureFlags.businessPublication ? 3 : 0) + (featureFlags.accounts ? 2 : 0);
   
   // Claim Queries & Mutations
@@ -65,8 +66,8 @@ export default function BusinessModerationView() {
   const [reviewNote, setReviewNote] = useState('');
 
   useEffect(() => {
-    document.title = 'Redactie: Bedrijven & Deals | Buurtplaza';
-  }, []);
+    document.title = workspaceCopy.documentTitle;
+  }, [workspaceCopy.documentTitle]);
 
   if (!isLoaded) {
     return <div className="min-h-screen flex items-center justify-center"><div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full" /></div>;
@@ -148,35 +149,35 @@ export default function BusinessModerationView() {
       <div className="bg-primary/5 py-10 border-b border-primary/10">
         <div className="container max-w-6xl mx-auto px-4 sm:px-6">
           <Badge variant="outline" className="mb-4 bg-background text-primary border-primary/30 font-bold uppercase tracking-widest">
-            Redactie
+            {workspaceCopy.badge}
           </Badge>
-          <h1 className="text-3xl font-extrabold text-foreground tracking-tight flex items-center gap-3">
-            Bedrijven & Deals Moderatie
+          <h1 className="text-3xl font-extrabold text-foreground tracking-tight flex items-center gap-3" data-testid="review-workspace-title">
+            {workspaceCopy.title}
           </h1>
-          <p className="text-muted-foreground mt-2">Controleer en beoordeel nieuwe bedrijfsprofielen en deals.</p>
+          <p className="text-muted-foreground mt-2" data-testid="review-workspace-intro">{workspaceCopy.intro}</p>
         </div>
       </div>
 
       <div className="container max-w-6xl mx-auto px-4 sm:px-6 py-8">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className={`grid w-full ${tabCount >= 5 ? 'max-w-5xl' : tabCount > 2 ? 'max-w-3xl' : 'max-w-md'} mb-8 bg-card border-border/50 shadow-sm p-1 rounded-xl h-auto`} style={{ gridTemplateColumns: `repeat(${tabCount}, minmax(0, 1fr))` }}>
-            <TabsTrigger value="claims" className="py-2.5 font-bold data-[state=active]:bg-primary/10 data-[state=active]:text-primary rounded-lg flex gap-2">
+          <TabsList className={`flex flex-wrap justify-start gap-1 w-full ${tabCount >= 5 ? 'max-w-5xl' : tabCount > 2 ? 'max-w-3xl' : 'max-w-md'} mb-8 bg-card border-border/50 shadow-sm p-1 rounded-xl h-auto`} data-testid="review-workspace-tabs">
+            <TabsTrigger value="claims" className="flex-1 basis-[calc(50%-0.25rem)] sm:basis-auto min-w-fit whitespace-nowrap px-4 py-2.5 font-bold data-[state=active]:bg-primary/10 data-[state=active]:text-primary rounded-lg flex gap-2">
               Claims {claims && claims.length > 0 && <Badge variant="secondary" className="bg-primary text-primary-foreground text-[10px] py-0 px-1.5 h-4 min-w-4">{claims.length}</Badge>}
             </TabsTrigger>
-            <TabsTrigger value="deals" className="py-2.5 font-bold data-[state=active]:bg-primary/10 data-[state=active]:text-primary rounded-lg flex gap-2">
+            <TabsTrigger value="deals" className="flex-1 basis-[calc(50%-0.25rem)] sm:basis-auto min-w-fit whitespace-nowrap px-4 py-2.5 font-bold data-[state=active]:bg-primary/10 data-[state=active]:text-primary rounded-lg flex gap-2">
               Deals {deals && deals.length > 0 && <Badge variant="secondary" className="bg-primary text-primary-foreground text-[10px] py-0 px-1.5 h-4 min-w-4">{deals.length}</Badge>}
             </TabsTrigger>
             {featureFlags.businessPublication && (
               <>
-                <TabsTrigger value="authority" className="py-2.5 font-bold data-[state=active]:bg-primary/10 data-[state=active]:text-primary rounded-lg" data-testid="tab-authority">{reviewLanguage === 'nl' ? 'Eigenaarschap' : 'Ownership'}</TabsTrigger>
-                <TabsTrigger value="editorial" className="py-2.5 font-bold data-[state=active]:bg-primary/10 data-[state=active]:text-primary rounded-lg" data-testid="tab-editorial">{reviewLanguage === 'nl' ? 'Profielen' : 'Profiles'}</TabsTrigger>
-                <TabsTrigger value="publication" className="py-2.5 font-bold data-[state=active]:bg-primary/10 data-[state=active]:text-primary rounded-lg" data-testid="tab-publication">{reviewLanguage === 'nl' ? 'Publicatie' : 'Publication'}</TabsTrigger>
+                <TabsTrigger value="authority" className="flex-1 basis-[calc(50%-0.25rem)] sm:basis-auto min-w-fit whitespace-nowrap px-4 py-2.5 font-bold data-[state=active]:bg-primary/10 data-[state=active]:text-primary rounded-lg" data-testid="tab-authority">{reviewLanguage === 'nl' ? 'Eigenaarschap' : 'Ownership'}</TabsTrigger>
+                <TabsTrigger value="editorial" className="flex-1 basis-[calc(50%-0.25rem)] sm:basis-auto min-w-fit whitespace-nowrap px-4 py-2.5 font-bold data-[state=active]:bg-primary/10 data-[state=active]:text-primary rounded-lg" data-testid="tab-editorial">{reviewLanguage === 'nl' ? 'Profielen' : 'Profiles'}</TabsTrigger>
+                <TabsTrigger value="publication" className="flex-1 basis-[calc(50%-0.25rem)] sm:basis-auto min-w-fit whitespace-nowrap px-4 py-2.5 font-bold data-[state=active]:bg-primary/10 data-[state=active]:text-primary rounded-lg" data-testid="tab-publication">{reviewLanguage === 'nl' ? 'Publicatie' : 'Publication'}</TabsTrigger>
               </>
             )}
             {featureFlags.accounts && (
               <>
-                <TabsTrigger value="account-requests" className="py-2.5 font-bold data-[state=active]:bg-primary/10 data-[state=active]:text-primary rounded-lg" data-testid="tab-account-requests">{supportCopy.tabRequests}</TabsTrigger>
-                <TabsTrigger value="lifecycle-messages" className="py-2.5 font-bold data-[state=active]:bg-primary/10 data-[state=active]:text-primary rounded-lg" data-testid="tab-lifecycle-messages">{supportCopy.tabMessages}</TabsTrigger>
+                <TabsTrigger value="account-requests" className="flex-1 basis-[calc(50%-0.25rem)] sm:basis-auto min-w-fit whitespace-nowrap px-4 py-2.5 font-bold data-[state=active]:bg-primary/10 data-[state=active]:text-primary rounded-lg" data-testid="tab-account-requests">{supportCopy.tabRequests}</TabsTrigger>
+                <TabsTrigger value="lifecycle-messages" className="flex-1 basis-[calc(50%-0.25rem)] sm:basis-auto min-w-fit whitespace-nowrap px-4 py-2.5 font-bold data-[state=active]:bg-primary/10 data-[state=active]:text-primary rounded-lg" data-testid="tab-lifecycle-messages">{supportCopy.tabMessages}</TabsTrigger>
               </>
             )}
           </TabsList>
