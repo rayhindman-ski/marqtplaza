@@ -34,7 +34,9 @@ const CATEGORY_ICONS: Record<MapCategory, LucideIcon> = {
 const MAP_STYLES: google.maps.MapTypeStyle[] = [
   { elementType: 'labels.text', stylers: [{ visibility: 'off' }] },
   { elementType: 'labels.text.stroke', stylers: [{ visibility: 'off' }] },
-  { elementType: 'labels.icon', stylers: [{ visibility: 'on' }] },
+  // Base-map place icons can look like Marqtplaza results. Hide them so every
+  // visible place icon corresponds to a currently filtered listing marker.
+  { elementType: 'labels.icon', stylers: [{ visibility: 'off' }] },
 ];
 const MARQTPLAZA_MARKER_GRADIENT = 'linear-gradient(135deg, #ff9a52 0%, #f36c21 48%, #c94d12 100%)';
 const NEIGHBORHOOD_PULSE_DURATION_MS = 2_400;

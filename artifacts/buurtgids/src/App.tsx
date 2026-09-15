@@ -1575,21 +1575,22 @@ function MarkerCard({
             <DetailIcon className="w-3.5 h-3.5 opacity-70" />
             {copy.details}
           </div>
-          <div className="mt-3 flex items-center justify-between gap-2 border-t border-border/40 pt-3">
-            <div className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
+          <div className="mt-3 flex min-w-0 flex-wrap items-center justify-between gap-2 border-t border-border/40 pt-3">
+            <div className="flex min-w-0 flex-1 items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
               <MapPinned className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
-              <span className="truncate max-w-[200px]">{marker.address ?? `Lat ${marker.lat.toFixed(5)} · Lng ${marker.lng.toFixed(5)}`}</span>
+              <span className="min-w-0 truncate">{marker.address ?? `Lat ${marker.lat.toFixed(5)} · Lng ${marker.lng.toFixed(5)}`}</span>
             </div>
-            <div className="flex items-center gap-3 shrink-0">
+            <div className="flex max-w-full shrink-0 flex-wrap items-center justify-end gap-x-3 gap-y-1">
               {(marker.category === 'Businesses' || marker.category === 'Food & Drink') && (
                 <Link
                   href={featureFlags.businessIntake
                     ? `/bedrijf-nieuw?kind=existing_listing&cityId=dhg&listingSource=${encodeURIComponent(marker.source || 'google_maps')}&listingId=${encodeURIComponent(String(marker.id))}`
                     : `/bedrijf-claim?listingId=${marker.id}&cityId=dhg&listingSource=${marker.source || 'google_maps'}&name=${encodeURIComponent(marker.name)}&address=${encodeURIComponent(marker.address || '')}`}
-                  className="flex items-center gap-1 text-[11px] font-bold text-primary hover:text-primary/80 transition-colors"
+                  className="inline-flex max-w-full items-center gap-1 whitespace-normal text-right text-[11px] font-bold leading-tight text-primary transition-colors hover:text-primary/80"
                   onClick={e => e.stopPropagation()}
                 >
-                  <Store className="h-3 w-3" /> Eigenaar?
+                  <Store className="h-3 w-3 shrink-0" />
+                  {language === 'nl' ? 'Dit bedrijf claimen' : 'Claim this business'}
                 </Link>
               )}
               {marker.sourceUrl && !isEvent && (
