@@ -2,6 +2,9 @@ import React, { useEffect, useState } from 'react';
 import { useAuth, useUser } from '@clerk/react';
 import { ArrowRight, Check, HeartHandshake, LoaderCircle, ShieldCheck, UserRound } from 'lucide-react';
 import { useLocation, Redirect, Link } from 'wouter';
+import { featureFlags } from '@/lib/featureFlags';
+import { accountTranslations } from '@/lib/i18n';
+import { useAppLanguage } from '@/lib/useAppLanguage';
 import {
   getGetRegistrationQueryKey,
   useGetRegistration,
@@ -28,6 +31,9 @@ function OnboardingSkeleton() {
   );
 }
 
+/** Browser cache of the server-side research registration status. */
+const REGISTRATION_MARKER_KEY = 'buurtplaza-onboarding-complete';
+
 const ratingLabels = {
   usefulness: ['Nog niet nuttig', 'Een beetje nuttig', 'Redelijk nuttig', 'Erg nuttig', 'Heel nuttig'],
   referral: ['Zeker niet', 'Waarschijnlijk niet', 'Misschien', 'Waarschijnlijk wel', 'Zeker wel'],
@@ -37,6 +43,7 @@ export default function OnboardingPage() {
   const { isLoaded, isSignedIn } = useAuth();
   const { user } = useUser();
   const [, setLocation] = useLocation();
+  const [language] = useAppLanguage();
   const registrationQuery = useGetRegistration({
     query: {
       enabled: Boolean(isLoaded && isSignedIn && user),
@@ -63,6 +70,17 @@ export default function OnboardingPage() {
     setName((current) => current || user.fullName || [user.firstName, user.lastName].filter(Boolean).join(' '));
     setEmail((current) => current || user.primaryEmailAddress?.emailAddress || '');
   }, [user]);
+
+  // The browser marker only mirrors the server-side registration; the server
+  // stays the source of truth so a cleared or foreign browser cannot lie.
+  useEffect(() => {
+    if (!registrationQuery.data) return;
+    if (registrationQuery.data.registered) {
+      window.localStorage.setItem(REGISTRATION_MARKER_KEY, 'true');
+    } else {
+      window.localStorage.removeItem(REGISTRATION_MARKER_KEY);
+    }
+  }, [registrationQuery.data]);
 
   useEffect(() => {
     const registration = registrationQuery.data?.registration;
@@ -100,7 +118,7 @@ export default function OnboardingPage() {
     }, {
       onSuccess: () => {
         setSaved(true);
-        window.localStorage.setItem('buurtplaza-onboarding-complete', 'true');
+        window.localStorage.setItem(REGISTRATION_MARKER_KEY, 'true');
       },
       onError: (saveError) => {
         const message = saveError instanceof Error ? saveError.message : '';
@@ -267,6 +285,16 @@ export default function OnboardingPage() {
                       {registrationType === 'business' ? 'Ga door met bedrijfsaanmelding' : 'Ga naar MarqtPlaza'}
                     </Link>
                   </div>
+                )}
+
+                {featureFlags.accounts && (
+                  <p data-testid="text-onboarding-account-scope" className="rounded-xl border border-border/70 bg-background/60 px-4 py-3 text-xs leading-5 text-muted-foreground">
+                    {accountTranslations[language].account.onboardingScopeBefore}{' '}
+                    <Link href="/account/voorkeuren" data-testid="link-onboarding-preferences" className="font-bold text-primary underline-offset-4 hover:underline">
+                      {accountTranslations[language].account.onboardingScopeLink}
+                    </Link>
+                    .
+                  </p>
                 )}
 
                 <div className="flex flex-col gap-3 border-t border-border/70 pt-6 sm:flex-row sm:items-center sm:justify-between">

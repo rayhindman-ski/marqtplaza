@@ -8,5 +8,8 @@
 import type { GetBusinessClaimModerationStatus } from './getBusinessClaimModerationStatus';
 
 export type GetBusinessClaimModerationParams = {
+/**
+ * `pending` returns every claim awaiting a reviewer decision (legacy `pending`, `submitted`, and `disputed`).
+ */
 status?: GetBusinessClaimModerationStatus;
 };

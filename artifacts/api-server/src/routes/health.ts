@@ -1,11 +1,21 @@
 import { Router, type IRouter } from "express";
-import { HealthCheckResponse } from "@workspace/api-zod";
+import { GetReadinessResponse, HealthCheckResponse } from "@workspace/api-zod";
 
-const router: IRouter = Router();
+import { getFeatureFlags, type FeatureFlagSource } from "../lib/featureFlags";
 
-router.get("/healthz", (_req, res) => {
-  const data = HealthCheckResponse.parse({ status: "ok" });
-  res.json(data);
-});
+export function createHealthRouter(flags: FeatureFlagSource = getFeatureFlags): IRouter {
+  const router: IRouter = Router();
 
-export default router;
+  router.get("/healthz", (_req, res) => {
+    const data = HealthCheckResponse.parse({ status: "ok" });
+    res.json(data);
+  });
+
+  router.get("/readiness", (_req, res) => {
+    res.json(GetReadinessResponse.parse(flags()));
+  });
+
+  return router;
+}
+
+export default createHealthRouter();

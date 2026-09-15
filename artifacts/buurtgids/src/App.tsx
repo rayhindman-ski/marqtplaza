@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { Route, Switch, Router as WouterRouter, Link, Redirect, useLocation, useRoute } from 'wouter';
+import { Route, Switch, Router as WouterRouter, Link, Redirect, useLocation, useRoute, useSearch } from 'wouter';
 import { QueryClient, QueryClientProvider, keepPreviousData } from '@tanstack/react-query';
-import { ClerkProvider, SignIn, SignUp, useAuth } from '@clerk/react';
+import { ClerkProvider, SignIn, SignUp, useAuth, useClerk } from '@clerk/react';
 import { publishableKeyFromHost } from '@clerk/react/internal';
 import { shadcn } from '@clerk/themes';
 import { 
@@ -55,10 +55,18 @@ import DealsView from './pages/DealsView';
 import BusinessProfileView from './pages/BusinessProfileView';
 import BusinessClaimView from './pages/BusinessClaimView';
 import MyBusinessWorkspace from './pages/MyBusinessWorkspace';
+import BusinessRevisionPage from './pages/BusinessRevisionPage';
 import BusinessModerationView from './pages/BusinessModerationView';
 import OnboardingPage from './pages/OnboardingPage';
 import AccountPage from './pages/AccountPage';
+import AccountPreferencesPage from './pages/AccountPreferencesPage';
+import AccountPrivacyPage from './pages/AccountPrivacyPage';
+import { useAccountAuth } from './lib/accountAuth';
+import { featureFlags } from './lib/featureFlags';
+import { carryReturnPath, resolveReturnPath, withReturnPath } from './lib/returnPath';
 import BusinessOnboardingPage from './pages/BusinessOnboardingPage';
+import BusinessLookupPage from './pages/BusinessLookupPage';
+import BusinessDraftPage from './pages/BusinessDraftPage';
 import { useEditorAccess } from './lib/editorAccess';
 import {
   getLocationName,
@@ -70,6 +78,8 @@ import {
   translations,
   type Language,
 } from './lib/i18n';
+import { persistLanguage, useStoredLanguage } from './lib/useAppLanguage';
+import { clerkLocalizationFor } from './lib/clerkLocalization';
 import {
   formatEventTiming,
   freshnessBadge,
@@ -747,6 +757,9 @@ function ReferenceCategoryNav({
   embedded?: boolean;
 }) {
   const t = translations[language];
+  const [location] = useLocation();
+  const search = useSearch();
+  const accountHref = withReturnPath('/account', `${location}${search ? `?${search}` : ''}`);
   const iconForCategory = (id: string) => {
     if (id === 'things-to-do') return CalendarDays;
     if (id === 'locals') return UsersRound;
@@ -811,7 +824,7 @@ function ReferenceCategoryNav({
           { href: '/deals', label: language === 'nl' ? 'Deals' : 'Deals', Icon: Tag },
           { href: '/mijn-bedrijf', label: language === 'nl' ? 'Mijn bedrijf' : 'My business', Icon: Store },
           { href: '/bedrijf-aanmelden', label: language === 'nl' ? 'Bedrijf aanmelden' : 'List a business', Icon: Building2 },
-          { href: '/account', label: language === 'nl' ? 'Mijn account' : 'My account', Icon: UserRound },
+          { href: accountHref, label: language === 'nl' ? 'Mijn account' : 'My account', Icon: UserRound },
         ].filter(({ href }) => userRole === 'designer' || !['/capture', '/bronnen'].includes(href))
           .map(({ href, label, Icon }) => (
           <span key={href} className="group relative">
@@ -1555,7 +1568,9 @@ function MarkerCard({
             <div className="flex items-center gap-3 shrink-0">
               {(marker.category === 'Businesses' || marker.category === 'Food & Drink') && (
                 <Link
-                  href={`/bedrijf-claim?listingId=${marker.id}&cityId=dhg&listingSource=${marker.source || 'google_maps'}&name=${encodeURIComponent(marker.name)}&address=${encodeURIComponent(marker.address || '')}`}
+                  href={featureFlags.businessIntake
+                    ? `/bedrijf-nieuw?kind=existing_listing&cityId=dhg&listingSource=${encodeURIComponent(marker.source || 'google_maps')}&listingId=${encodeURIComponent(String(marker.id))}`
+                    : `/bedrijf-claim?listingId=${marker.id}&cityId=dhg&listingSource=${marker.source || 'google_maps'}&name=${encodeURIComponent(marker.name)}&address=${encodeURIComponent(marker.address || '')}`}
                   className="flex items-center gap-1 text-[11px] font-bold text-primary hover:text-primary/80 transition-colors"
                   onClick={e => e.stopPropagation()}
                 >
@@ -1763,7 +1778,10 @@ function DiscoveryState({
   // narrow it correctly, so the user never sees a false "0 results" state.
   const businessesQuery = useGetListings(
     { cityId: locationId, section: 'businesses', language, neighborhoods: requestedNeighborhoods, businessCategories: requestedBusinessCategories, searchLat: requestedSearchCenter?.lat, searchLng: requestedSearchCenter?.lng, mode, anonymousId },
-    { query: { enabled: topLevelCategories.businesses && hasSearchArea && selectedBusinessCategories.length > 0, placeholderData: keepPreviousData, queryKey: getGetListingsQueryKey({ cityId: locationId, section: 'businesses', language, neighborhoods: requestedNeighborhoods, businessCategories: requestedBusinessCategories, searchLat: requestedSearchCenter?.lat, searchLng: requestedSearchCenter?.lng, mode, anonymousId }) } },
+    // Keep the query enabled even when the final subcategory is unchecked.
+    // The empty category value is a real request for the current area; the
+    // client-side filter keeps the map empty until the response settles.
+    { query: { enabled: topLevelCategories.businesses && hasSearchArea, placeholderData: keepPreviousData, queryKey: getGetListingsQueryKey({ cityId: locationId, section: 'businesses', language, neighborhoods: requestedNeighborhoods, businessCategories: requestedBusinessCategories, searchLat: requestedSearchCenter?.lat, searchLng: requestedSearchCenter?.lng, mode, anonymousId }) } },
   );
   const foodDrinkQuery = useGetListings(
     { cityId: locationId, section: 'food-drink', language, neighborhoods: requestedNeighborhoods, searchLat: requestedSearchCenter?.lat, searchLng: requestedSearchCenter?.lng, mode, anonymousId },
@@ -2698,6 +2716,7 @@ function DiscoveryState({
             selectedNeighborhoods={selectedNeighborhoods}
             showAllNeighborhoods
             highlightedNeighborhood={selectedNeighborhoods.length === 1 ? selectedNeighborhoods[0] : null}
+            isDataLoading={topLevelCategories.businesses && businessesQuery.isFetching}
             onNeighborhoodClick={toggleNeighborhood}
             markers={filteredMarkers}
             selectedMarkerId={selectedMarker}
@@ -2967,8 +2986,7 @@ function MainApp({ initialLocationId }: { initialLocationId?: string } = {}) {
   } = useSavedPlaces();
 
   useEffect(() => {
-    window.localStorage.setItem('buurtplaza-language', language);
-    document.documentElement.lang = language;
+    persistLanguage(language);
   }, [language]);
 
   useEffect(() => {
@@ -3071,14 +3089,19 @@ export default function App() {
           <Route path="/sign-in/*?" component={SignInPage} />
           <Route path="/sign-up/*?" component={SignUpPage} />
           <Route path="/onboarding" component={OnboardingPage} />
+          <Route path="/account/voorkeuren" component={AccountPreferencesPage} />
+          <Route path="/account/privacy" component={AccountPrivacyPage} />
           <Route path="/account/*?" component={AccountPage} />
           <Route path="/bedrijf-aanmelden" component={BusinessOnboardingPage} />
+          <Route path="/bedrijf-zoeken" component={BusinessLookupPage} />
+          <Route path="/bedrijf-nieuw" component={BusinessDraftPage} />
           <Route path="/nieuws" component={NewsFeedView} />
           <Route path="/nieuws/:id" component={NewsArticleView} />
           <Route path="/deals" component={DealsView} />
           <Route path="/bedrijf/:slug" component={BusinessProfileView} />
           <Route path="/bedrijf-claim" component={BusinessClaimView} />
           <Route path="/mijn-bedrijf" component={MyBusinessWorkspace} />
+          <Route path="/mijn-bedrijf/:id/profiel" component={BusinessRevisionPage} />
           <Route path="/redactie/bedrijven" component={BusinessModerationView} />
           <Route>
             <div className="min-h-screen flex items-center justify-center bg-background text-foreground">
@@ -3737,14 +3760,59 @@ const clerkAppearance = {
   },
 };
 
+/**
+ * Where Clerk sends a user after it finishes sign-in, sign-up, or verification.
+ * The `terug` parameter is validated against a local allowlist, so an external
+ * or unknown destination silently becomes the account page. New accounts go
+ * through the optional preference step first when accounts are enabled;
+ * otherwise the legacy research registration stays the landing step.
+ */
+function useClerkRedirects() {
+  const search = useSearch();
+  const returnPath = resolveReturnPath(search, '');
+  const signInTarget = `${basePath}${returnPath}`;
+  const signUpTarget = featureFlags.accounts
+    ? `${basePath}${withReturnPath('/account/voorkeuren', returnPath)}`
+    : `${basePath}/onboarding`;
+  const carry = search ? `?${search}` : '';
+  return {
+    signInTarget,
+    signUpTarget,
+    signInUrl: `${basePath}/sign-in${carry}`,
+    signUpUrl: `${basePath}/sign-up${carry}`,
+  };
+}
+
+/**
+ * Clerk renders an empty card for a stale verification step
+ * (`/sign-up/verify-email-address`) when no sign-up is in progress, for example
+ * a bookmarked or history entry reopened after the code was already used.
+ * Send those visitors back to the start of sign-up so the recovery path is visible.
+ */
+function useStaleSignUpStepRecovery() {
+  const [location, navigate] = useLocation();
+  const search = useSearch();
+  const clerk = useClerk();
+  const { isLoaded, isSignedIn } = useAuth();
+  const isVerificationStep = /^\/sign-up\/verify-/.test(location);
+  useEffect(() => {
+    if (!isVerificationStep || !isLoaded || !clerk.loaded || isSignedIn) return;
+    if (clerk.client?.signUp?.id) return;
+    navigate(`/sign-up${search ? `?${search}` : ''}`, { replace: true });
+  }, [isVerificationStep, isLoaded, isSignedIn, clerk, search, navigate]);
+}
+
 function SignUpPage() {
+  const redirects = useClerkRedirects();
+  useStaleSignUpStepRecovery();
   return (
     <div className="flex min-h-[100dvh] items-center justify-center bg-background px-4">
       <SignUp
         routing="path"
         path={`${basePath}/sign-up`}
-        signInUrl={`${basePath}/sign-in`}
-        forceRedirectUrl={`${basePath}/onboarding`}
+        signInUrl={redirects.signInUrl}
+        forceRedirectUrl={redirects.signUpTarget}
+        signInForceRedirectUrl={redirects.signInTarget}
       />
     </div>
   );
@@ -3756,7 +3824,7 @@ const clerkPubKey = publishableKeyFromHost(
 );
 
 function ApiAuthTokenBridge() {
-  const { getToken, isSignedIn } = useAuth();
+  const { getToken, isSignedIn, userId } = useAccountAuth();
 
   useEffect(() => {
     if (!isSignedIn) {
@@ -3766,22 +3834,26 @@ function ApiAuthTokenBridge() {
 
     setAuthTokenGetter(() => getToken());
     return () => setAuthTokenGetter(null);
-  }, [getToken, isSignedIn]);
+  }, [getToken, isSignedIn, userId]);
 
   return null;
 }
 
 function ClerkProviderWithRouter({ children }: { children: React.ReactNode }) {
   const [, setLocation] = useLocation();
+  // Clerk renders its own sign-in/sign-up/error cards, so it needs the app language
+  // explicitly; otherwise expired-link and code errors stay English-only.
+  const language = useStoredLanguage();
   return (
     <ClerkProvider
       publishableKey={clerkPubKey}
       proxyUrl={clerkProxyUrl}
       appearance={clerkAppearance}
+      localization={clerkLocalizationFor(language)}
       signInUrl={`${basePath}/sign-in`}
       signUpUrl={`${basePath}/sign-up`}
-      routerPush={(to) => setLocation(stripBase(to))}
-      routerReplace={(to) => setLocation(stripBase(to), { replace: true })}
+      routerPush={(to) => setLocation(carryReturnPath(stripBase(to), window.location.search))}
+      routerReplace={(to) => setLocation(carryReturnPath(stripBase(to), window.location.search), { replace: true })}
     >
       <ApiAuthTokenBridge />
       {children}
@@ -3790,9 +3862,16 @@ function ClerkProviderWithRouter({ children }: { children: React.ReactNode }) {
 }
 
 function SignInPage() {
+  const redirects = useClerkRedirects();
   return (
     <div className="flex min-h-[100dvh] items-center justify-center bg-background px-4">
-      <SignIn routing="path" path={`${basePath}/sign-in`} signUpUrl={`${basePath}/sign-up`} />
+      <SignIn
+        routing="path"
+        path={`${basePath}/sign-in`}
+        signUpUrl={redirects.signUpUrl}
+        forceRedirectUrl={redirects.signInTarget}
+        signUpForceRedirectUrl={redirects.signUpTarget}
+      />
     </div>
   );
 }

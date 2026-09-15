@@ -11,6 +11,8 @@ export type GetBusinessClaimModerationStatus = typeof GetBusinessClaimModeration
 
 export const GetBusinessClaimModerationStatus = {
   pending: 'pending',
+  changes_requested: 'changes_requested',
+  disputed: 'disputed',
   approved: 'approved',
   rejected: 'rejected',
   all: 'all',

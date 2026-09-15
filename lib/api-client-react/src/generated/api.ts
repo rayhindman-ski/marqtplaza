@@ -20,12 +20,26 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
+  AccountConsents,
+  AccountMe,
+  AccountOptions,
+  AccountRequest,
+  AccountRequests,
+  ApiError,
+  AuthorityQueuePage,
   BusinessClaim,
   BusinessClaimInput,
   BusinessClaimList,
+  BusinessClaimTransitionInput,
+  BusinessClaimUpdateInput,
+  BusinessIntakeDraftInput,
   BusinessListResult,
+  BusinessLookupResponse,
   BusinessProfile,
   BusinessProfileUpdate,
+  BusinessRevisionTransitionInput,
+  BusinessRevisionUpdateInput,
+  BusinessRevisionWorkspace,
   CapturePersistRequest,
   CaptureScanRequest,
   CaptureSearchRequest,
@@ -36,24 +50,36 @@ import type {
   CommunityPostParticipationInput,
   CommunityPostParticipationResponse,
   CommunityPostSubmission,
+  CreateAccountDeletionRequestInput,
   Deal,
   DealInput,
   DealUpdate,
+  EditorialQueueItem,
+  EditorialQueuePage,
   EventReviewDecision,
   EventReviewDecisionResult,
   EventReviewList,
+  FeatureDisabledResponse,
+  FeatureReadiness,
+  GetAuthorityQueueParams,
   GetBusinessClaimModerationParams,
   GetCommunityModerationPostsParams,
   GetCommunityPostsParams,
   GetDealModerationParams,
   GetDealsParams,
+  GetEditorialQueueParams,
   GetEventReviewCandidatesParams,
   GetListingsParams,
   GetNewsParams,
+  GetPublicationQueueParams,
+  GetSupportAccountRequestsParams,
+  GetSupportLifecycleMessagesParams,
   GetWeatherParams,
   GooglePlacesUsage,
   HealthStatus,
+  LifecycleMessages,
   ListingsResponse,
+  LookupBusinessesParams,
   ModerationDecision,
   NewsArticle,
   NewsFeed,
@@ -63,8 +89,14 @@ import type {
   OwnedBusinessProfile,
   PersistOutcome,
   PublicBusinessProfile,
+  PublicationActionInput,
+  PublicationQueueItem,
+  PublicationQueuePage,
+  RecordAccountConsentInput,
   RegistrationInput,
   RegistrationStatus,
+  ReviewClaimDecisionInput,
+  ReviewRevisionDecisionInput,
   RunSocialMapReview502,
   SavedEventsResponse,
   SavedEventsSyncRequest,
@@ -72,7 +104,15 @@ import type {
   SocialMapReviewResponse,
   SourceScanRequest,
   SourceScanResponse,
-  WeatherResponse
+  SupportAccountRequest,
+  SupportAccountRequestDecisionInput,
+  SupportAccountRequests,
+  SupportLifecycleMessage,
+  SupportLifecycleMessages,
+  UpdateAccountPreferencesInput,
+  VersionConflictResponse,
+  WeatherResponse,
+  WithdrawAccountRequestInput
 } from './api.schemas';
 
 import { customFetch } from '../custom-fetch';
@@ -168,6 +208,1180 @@ export function useHealthCheck<TData = Awaited<ReturnType<typeof healthCheck>>, 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getHealthCheckQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetAccountMeUrl = () => {
+
+
+
+
+  return `/api/account/me`
+}
+
+/**
+ * Provisions a local account for the trusted identity-provider subject on first call
+ * (idempotent and race-safe) and returns the account status, locale, onboarding state,
+ * server-derived capabilities, and whether a separate research registration exists.
+ * Identity, roles, and capabilities are never taken from the request; any request body
+ * or query parameter is ignored. Returns 404 while the accounts readiness gate is off.
+ * @summary Get the signed-in user's server-derived account summary
+ */
+export const getAccountMe = async ( options?: Parameters<typeof customFetch>[1]): Promise<AccountMe> => {
+
+  return customFetch<AccountMe>(getGetAccountMeUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetAccountMeQueryKey = () => {
+    return [
+    `/api/account/me`
+    ] as const;
+    }
+
+
+export const getGetAccountMeQueryOptions = <TData = Awaited<ReturnType<typeof getAccountMe>>, TError = ErrorType<ApiError>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAccountMe>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetAccountMeQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAccountMe>>> = ({ signal }) => getAccountMe({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAccountMe>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetAccountMeQueryResult = NonNullable<Awaited<ReturnType<typeof getAccountMe>>>
+export type GetAccountMeQueryError = ErrorType<ApiError>
+
+
+/**
+ * @summary Get the signed-in user's server-derived account summary
+ */
+
+export function useGetAccountMe<TData = Awaited<ReturnType<typeof getAccountMe>>, TError = ErrorType<ApiError>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAccountMe>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetAccountMeQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetAccountOptionsUrl = () => {
+
+
+
+
+  return `/api/account/options`
+}
+
+/**
+ * Returns the server-controlled option lists that preference updates are validated
+ * against. Preferences are never inferred. Returns 404 while the accounts readiness
+ * gate is off.
+ * @summary Get the controlled neighbourhood and interest lists for account preferences
+ */
+export const getAccountOptions = async ( options?: Parameters<typeof customFetch>[1]): Promise<AccountOptions> => {
+
+  return customFetch<AccountOptions>(getGetAccountOptionsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetAccountOptionsQueryKey = () => {
+    return [
+    `/api/account/options`
+    ] as const;
+    }
+
+
+export const getGetAccountOptionsQueryOptions = <TData = Awaited<ReturnType<typeof getAccountOptions>>, TError = ErrorType<ApiError>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAccountOptions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetAccountOptionsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAccountOptions>>> = ({ signal }) => getAccountOptions({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAccountOptions>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetAccountOptionsQueryResult = NonNullable<Awaited<ReturnType<typeof getAccountOptions>>>
+export type GetAccountOptionsQueryError = ErrorType<ApiError>
+
+
+/**
+ * @summary Get the controlled neighbourhood and interest lists for account preferences
+ */
+
+export function useGetAccountOptions<TData = Awaited<ReturnType<typeof getAccountOptions>>, TError = ErrorType<ApiError>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAccountOptions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetAccountOptionsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getUpdateAccountPreferencesUrl = () => {
+
+
+
+
+  return `/api/account/preferences`
+}
+
+/**
+ * Creates or updates the signed-in user's optional preferences. `expectedRevision` must equal
+ * the current stored revision (use 0 when no preferences exist yet); a mismatch returns
+ * 409 VERSION_CONFLICT with the current `expectedVersion` so the client can reload while keeping
+ * its draft. Every neighbourhood and interest ID is validated against `GET /account/options`;
+ * unknown IDs return 400 VALIDATION_FAILED with `not_in_controlled_list` field errors. Omitted
+ * fields stay unchanged; empty arrays clear a list. `locale` updates the account locale. Nothing
+ * is inferred, and this operation never touches the research registration or saved events.
+ * Requires a verified identity (403 EMAIL_UNVERIFIED otherwise).
+ * @summary Save controlled account preferences with optimistic concurrency
+ */
+export const updateAccountPreferences = async (updateAccountPreferencesInput: UpdateAccountPreferencesInput, options?: Parameters<typeof customFetch>[1]): Promise<AccountMe> => {
+
+  return customFetch<AccountMe>(getUpdateAccountPreferencesUrl(),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(updateAccountPreferencesInput)
+  }
+);}
+
+
+
+
+
+export const getUpdateAccountPreferencesMutationOptions = <TError = ErrorType<ApiError | FeatureDisabledResponse | VersionConflictResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAccountPreferences>>, TError,{data: BodyType<UpdateAccountPreferencesInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateAccountPreferences>>, TError,{data: BodyType<UpdateAccountPreferencesInput>}, TContext> => {
+
+const mutationKey = ['updateAccountPreferences'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateAccountPreferences>>, {data: BodyType<UpdateAccountPreferencesInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  updateAccountPreferences(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateAccountPreferencesMutationResult = NonNullable<Awaited<ReturnType<typeof updateAccountPreferences>>>
+    export type UpdateAccountPreferencesMutationBody = BodyType<UpdateAccountPreferencesInput>
+    export type UpdateAccountPreferencesMutationError = ErrorType<ApiError | FeatureDisabledResponse | VersionConflictResponse>
+
+    /**
+ * @summary Save controlled account preferences with optimistic concurrency
+ */
+export const useUpdateAccountPreferences = <TError = ErrorType<ApiError | FeatureDisabledResponse | VersionConflictResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAccountPreferences>>, TError,{data: BodyType<UpdateAccountPreferencesInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateAccountPreferences>>,
+        TError,
+        {data: BodyType<UpdateAccountPreferencesInput>},
+        TContext
+      > => {
+      return useMutation(getUpdateAccountPreferencesMutationOptions(options));
+    }
+
+export const getCompleteAccountOnboardingUrl = () => {
+
+
+
+
+  return `/api/account/onboarding/complete`
+}
+
+/**
+ * Records onboarding completion for the signed-in user independently of whether any
+ * preference exists (skipping is a valid completion). Idempotent: a repeat call keeps the
+ * original completion time. Creates no preference row, no research registration, and no consent.
+ * @summary Mark the optional onboarding step as completed on the server
+ */
+export const completeAccountOnboarding = async ( options?: Parameters<typeof customFetch>[1]): Promise<AccountMe> => {
+
+  return customFetch<AccountMe>(getCompleteAccountOnboardingUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getCompleteAccountOnboardingMutationOptions = <TError = ErrorType<ApiError | FeatureDisabledResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof completeAccountOnboarding>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof completeAccountOnboarding>>, TError,void, TContext> => {
+
+const mutationKey = ['completeAccountOnboarding'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof completeAccountOnboarding>>, void> = () => {
+
+
+          return  completeAccountOnboarding(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CompleteAccountOnboardingMutationResult = NonNullable<Awaited<ReturnType<typeof completeAccountOnboarding>>>
+
+    export type CompleteAccountOnboardingMutationError = ErrorType<ApiError | FeatureDisabledResponse>
+
+    /**
+ * @summary Mark the optional onboarding step as completed on the server
+ */
+export const useCompleteAccountOnboarding = <TError = ErrorType<ApiError | FeatureDisabledResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof completeAccountOnboarding>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof completeAccountOnboarding>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getCompleteAccountOnboardingMutationOptions(options));
+    }
+
+export const getGetAccountConsentsUrl = () => {
+
+
+
+
+  return `/api/account/consents`
+}
+
+/**
+ * Returns the current notice version, the derived current state per consent purpose (latest
+ * ledger entry wins; absent means never asked), and the append-only history. Account creation
+ * never grants any consent.
+ * @summary Get the current state and history of purpose-specific consents
+ */
+export const getAccountConsents = async ( options?: Parameters<typeof customFetch>[1]): Promise<AccountConsents> => {
+
+  return customFetch<AccountConsents>(getGetAccountConsentsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetAccountConsentsQueryKey = () => {
+    return [
+    `/api/account/consents`
+    ] as const;
+    }
+
+
+export const getGetAccountConsentsQueryOptions = <TData = Awaited<ReturnType<typeof getAccountConsents>>, TError = ErrorType<ApiError | FeatureDisabledResponse>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAccountConsents>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetAccountConsentsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAccountConsents>>> = ({ signal }) => getAccountConsents({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAccountConsents>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetAccountConsentsQueryResult = NonNullable<Awaited<ReturnType<typeof getAccountConsents>>>
+export type GetAccountConsentsQueryError = ErrorType<ApiError | FeatureDisabledResponse>
+
+
+/**
+ * @summary Get the current state and history of purpose-specific consents
+ */
+
+export function useGetAccountConsents<TData = Awaited<ReturnType<typeof getAccountConsents>>, TError = ErrorType<ApiError | FeatureDisabledResponse>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAccountConsents>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetAccountConsentsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getRecordAccountConsentUrl = () => {
+
+
+
+
+  return `/api/account/consents`
+}
+
+/**
+ * Appends one ledger entry for exactly one consent purpose. Entries are never edited or
+ * deleted. `noticeVersion` must match the current notice version served by
+ * `GET /account/consents` (400 VALIDATION_FAILED with `stale_notice_version` otherwise), so a
+ * user never agrees to text they have not seen. Requires a verified identity.
+ * @summary Grant or withdraw one purpose-specific consent
+ */
+export const recordAccountConsent = async (recordAccountConsentInput: RecordAccountConsentInput, options?: Parameters<typeof customFetch>[1]): Promise<AccountConsents> => {
+
+  return customFetch<AccountConsents>(getRecordAccountConsentUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(recordAccountConsentInput)
+  }
+);}
+
+
+
+
+
+export const getRecordAccountConsentMutationOptions = <TError = ErrorType<ApiError | FeatureDisabledResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof recordAccountConsent>>, TError,{data: BodyType<RecordAccountConsentInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof recordAccountConsent>>, TError,{data: BodyType<RecordAccountConsentInput>}, TContext> => {
+
+const mutationKey = ['recordAccountConsent'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof recordAccountConsent>>, {data: BodyType<RecordAccountConsentInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  recordAccountConsent(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RecordAccountConsentMutationResult = NonNullable<Awaited<ReturnType<typeof recordAccountConsent>>>
+    export type RecordAccountConsentMutationBody = BodyType<RecordAccountConsentInput>
+    export type RecordAccountConsentMutationError = ErrorType<ApiError | FeatureDisabledResponse>
+
+    /**
+ * @summary Grant or withdraw one purpose-specific consent
+ */
+export const useRecordAccountConsent = <TError = ErrorType<ApiError | FeatureDisabledResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof recordAccountConsent>>, TError,{data: BodyType<RecordAccountConsentInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof recordAccountConsent>>,
+        TError,
+        {data: BodyType<RecordAccountConsentInput>},
+        TContext
+      > => {
+      return useMutation(getRecordAccountConsentMutationOptions(options));
+    }
+
+export const getCreateAccountDeletionRequestUrl = () => {
+
+
+
+
+  return `/api/account/deletion-requests`
+}
+
+/**
+ * Records a tracked deletion request for the signed-in account. The caller must first
+ * acknowledge every deletion scope; the research registration and Clerk credentials are
+ * separate and are not covered by this request. Clients must re-authenticate through Clerk
+ * immediately before calling this operation. When the requester is the only owner of a
+ * business the request is stored as `blocked` with `blocked_ownership` until support records
+ * a transfer, closure, or unpublication decision. Nothing is erased by this call: erasure
+ * follows the approved retention configuration and a completed support decision.
+ * @summary Request deletion of the account
+ */
+export const createAccountDeletionRequest = async (createAccountDeletionRequestInput: CreateAccountDeletionRequestInput, options?: Parameters<typeof customFetch>[1]): Promise<AccountRequest> => {
+
+  return customFetch<AccountRequest>(getCreateAccountDeletionRequestUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(createAccountDeletionRequestInput)
+  }
+);}
+
+
+
+
+
+export const getCreateAccountDeletionRequestMutationOptions = <TError = ErrorType<ApiError | FeatureDisabledResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createAccountDeletionRequest>>, TError,{data: BodyType<CreateAccountDeletionRequestInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createAccountDeletionRequest>>, TError,{data: BodyType<CreateAccountDeletionRequestInput>}, TContext> => {
+
+const mutationKey = ['createAccountDeletionRequest'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createAccountDeletionRequest>>, {data: BodyType<CreateAccountDeletionRequestInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createAccountDeletionRequest(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateAccountDeletionRequestMutationResult = NonNullable<Awaited<ReturnType<typeof createAccountDeletionRequest>>>
+    export type CreateAccountDeletionRequestMutationBody = BodyType<CreateAccountDeletionRequestInput>
+    export type CreateAccountDeletionRequestMutationError = ErrorType<ApiError | FeatureDisabledResponse>
+
+    /**
+ * @summary Request deletion of the account
+ */
+export const useCreateAccountDeletionRequest = <TError = ErrorType<ApiError | FeatureDisabledResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createAccountDeletionRequest>>, TError,{data: BodyType<CreateAccountDeletionRequestInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createAccountDeletionRequest>>,
+        TError,
+        {data: BodyType<CreateAccountDeletionRequestInput>},
+        TContext
+      > => {
+      return useMutation(getCreateAccountDeletionRequestMutationOptions(options));
+    }
+
+export const getGetAccountRequestsUrl = () => {
+
+
+
+
+  return `/api/account/requests`
+}
+
+/**
+ * @summary List the account's tracked requests
+ */
+export const getAccountRequests = async ( options?: Parameters<typeof customFetch>[1]): Promise<AccountRequests> => {
+
+  return customFetch<AccountRequests>(getGetAccountRequestsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetAccountRequestsQueryKey = () => {
+    return [
+    `/api/account/requests`
+    ] as const;
+    }
+
+
+export const getGetAccountRequestsQueryOptions = <TData = Awaited<ReturnType<typeof getAccountRequests>>, TError = ErrorType<ApiError | FeatureDisabledResponse>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAccountRequests>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetAccountRequestsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAccountRequests>>> = ({ signal }) => getAccountRequests({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAccountRequests>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetAccountRequestsQueryResult = NonNullable<Awaited<ReturnType<typeof getAccountRequests>>>
+export type GetAccountRequestsQueryError = ErrorType<ApiError | FeatureDisabledResponse>
+
+
+/**
+ * @summary List the account's tracked requests
+ */
+
+export function useGetAccountRequests<TData = Awaited<ReturnType<typeof getAccountRequests>>, TError = ErrorType<ApiError | FeatureDisabledResponse>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAccountRequests>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetAccountRequestsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getWithdrawAccountRequestUrl = (id: number,) => {
+
+
+
+
+  return `/api/account/requests/${id}/withdraw`
+}
+
+/**
+ * @summary Withdraw a request that is not yet in review
+ */
+export const withdrawAccountRequest = async (id: number,
+    withdrawAccountRequestInput: WithdrawAccountRequestInput, options?: Parameters<typeof customFetch>[1]): Promise<AccountRequest> => {
+
+  return customFetch<AccountRequest>(getWithdrawAccountRequestUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(withdrawAccountRequestInput)
+  }
+);}
+
+
+
+
+
+export const getWithdrawAccountRequestMutationOptions = <TError = ErrorType<ApiError | VersionConflictResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof withdrawAccountRequest>>, TError,{id: number;data: BodyType<WithdrawAccountRequestInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof withdrawAccountRequest>>, TError,{id: number;data: BodyType<WithdrawAccountRequestInput>}, TContext> => {
+
+const mutationKey = ['withdrawAccountRequest'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof withdrawAccountRequest>>, {id: number;data: BodyType<WithdrawAccountRequestInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  withdrawAccountRequest(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type WithdrawAccountRequestMutationResult = NonNullable<Awaited<ReturnType<typeof withdrawAccountRequest>>>
+    export type WithdrawAccountRequestMutationBody = BodyType<WithdrawAccountRequestInput>
+    export type WithdrawAccountRequestMutationError = ErrorType<ApiError | VersionConflictResponse>
+
+    /**
+ * @summary Withdraw a request that is not yet in review
+ */
+export const useWithdrawAccountRequest = <TError = ErrorType<ApiError | VersionConflictResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof withdrawAccountRequest>>, TError,{id: number;data: BodyType<WithdrawAccountRequestInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof withdrawAccountRequest>>,
+        TError,
+        {id: number;data: BodyType<WithdrawAccountRequestInput>},
+        TContext
+      > => {
+      return useMutation(getWithdrawAccountRequestMutationOptions(options));
+    }
+
+export const getGetAccountMessagesUrl = () => {
+
+
+
+
+  return `/api/account/messages`
+}
+
+/**
+ * Lists claim, review, publication, and request messages addressed to the account with a
+ * truthful delivery state: `queued` (not handed to a provider yet), `accepted` (provider
+ * accepted it), `delivered` (provider confirmed delivery), or `failed`. Message bodies and
+ * addresses are never returned.
+ * @summary Status of application-owned lifecycle messages
+ */
+export const getAccountMessages = async ( options?: Parameters<typeof customFetch>[1]): Promise<LifecycleMessages> => {
+
+  return customFetch<LifecycleMessages>(getGetAccountMessagesUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetAccountMessagesQueryKey = () => {
+    return [
+    `/api/account/messages`
+    ] as const;
+    }
+
+
+export const getGetAccountMessagesQueryOptions = <TData = Awaited<ReturnType<typeof getAccountMessages>>, TError = ErrorType<ApiError | FeatureDisabledResponse>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAccountMessages>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetAccountMessagesQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAccountMessages>>> = ({ signal }) => getAccountMessages({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAccountMessages>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetAccountMessagesQueryResult = NonNullable<Awaited<ReturnType<typeof getAccountMessages>>>
+export type GetAccountMessagesQueryError = ErrorType<ApiError | FeatureDisabledResponse>
+
+
+/**
+ * @summary Status of application-owned lifecycle messages
+ */
+
+export function useGetAccountMessages<TData = Awaited<ReturnType<typeof getAccountMessages>>, TError = ErrorType<ApiError | FeatureDisabledResponse>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAccountMessages>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetAccountMessagesQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetSupportAccountRequestsUrl = (params?: GetSupportAccountRequestsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/review/account-requests?${stringifiedParams}` : `/api/review/account-requests`
+}
+
+/**
+ * @summary Support queue of account requests
+ */
+export const getSupportAccountRequests = async (params?: GetSupportAccountRequestsParams, options?: Parameters<typeof customFetch>[1]): Promise<SupportAccountRequests> => {
+
+  return customFetch<SupportAccountRequests>(getGetSupportAccountRequestsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetSupportAccountRequestsQueryKey = (params?: GetSupportAccountRequestsParams,) => {
+    return [
+    `/api/review/account-requests`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetSupportAccountRequestsQueryOptions = <TData = Awaited<ReturnType<typeof getSupportAccountRequests>>, TError = ErrorType<ApiError | FeatureDisabledResponse>>(params?: GetSupportAccountRequestsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSupportAccountRequests>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetSupportAccountRequestsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getSupportAccountRequests>>> = ({ signal }) => getSupportAccountRequests(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getSupportAccountRequests>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetSupportAccountRequestsQueryResult = NonNullable<Awaited<ReturnType<typeof getSupportAccountRequests>>>
+export type GetSupportAccountRequestsQueryError = ErrorType<ApiError | FeatureDisabledResponse>
+
+
+/**
+ * @summary Support queue of account requests
+ */
+
+export function useGetSupportAccountRequests<TData = Awaited<ReturnType<typeof getSupportAccountRequests>>, TError = ErrorType<ApiError | FeatureDisabledResponse>>(
+ params?: GetSupportAccountRequestsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSupportAccountRequests>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetSupportAccountRequestsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getDecideSupportAccountRequestUrl = (id: number,) => {
+
+
+
+
+  return `/api/review/account-requests/${id}/decision`
+}
+
+/**
+ * `start_review` moves a received or blocked request into review. `resolve_blocker` records
+ * how one sole-owned business was dealt with: `ownership_transferred` (another owner must
+ * already exist), `business_closed` (archives the profile), or `business_unpublished`
+ * (removes it from the public directory). Claims, memberships, and audit history are never
+ * deleted. `complete` marks the account deleted once no blocker remains; `reject` closes the
+ * request with `request_rejected`. Every decision is version-bound and appended to the
+ * request's audit trail. A reviewer cannot decide their own request.
+ * @summary Record a support decision on an account request
+ */
+export const decideSupportAccountRequest = async (id: number,
+    supportAccountRequestDecisionInput: SupportAccountRequestDecisionInput, options?: Parameters<typeof customFetch>[1]): Promise<SupportAccountRequest> => {
+
+  return customFetch<SupportAccountRequest>(getDecideSupportAccountRequestUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(supportAccountRequestDecisionInput)
+  }
+);}
+
+
+
+
+
+export const getDecideSupportAccountRequestMutationOptions = <TError = ErrorType<ApiError | VersionConflictResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof decideSupportAccountRequest>>, TError,{id: number;data: BodyType<SupportAccountRequestDecisionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof decideSupportAccountRequest>>, TError,{id: number;data: BodyType<SupportAccountRequestDecisionInput>}, TContext> => {
+
+const mutationKey = ['decideSupportAccountRequest'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof decideSupportAccountRequest>>, {id: number;data: BodyType<SupportAccountRequestDecisionInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  decideSupportAccountRequest(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DecideSupportAccountRequestMutationResult = NonNullable<Awaited<ReturnType<typeof decideSupportAccountRequest>>>
+    export type DecideSupportAccountRequestMutationBody = BodyType<SupportAccountRequestDecisionInput>
+    export type DecideSupportAccountRequestMutationError = ErrorType<ApiError | VersionConflictResponse>
+
+    /**
+ * @summary Record a support decision on an account request
+ */
+export const useDecideSupportAccountRequest = <TError = ErrorType<ApiError | VersionConflictResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof decideSupportAccountRequest>>, TError,{id: number;data: BodyType<SupportAccountRequestDecisionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof decideSupportAccountRequest>>,
+        TError,
+        {id: number;data: BodyType<SupportAccountRequestDecisionInput>},
+        TContext
+      > => {
+      return useMutation(getDecideSupportAccountRequestMutationOptions(options));
+    }
+
+export const getGetSupportLifecycleMessagesUrl = (params?: GetSupportLifecycleMessagesParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/review/lifecycle-messages?${stringifiedParams}` : `/api/review/lifecycle-messages`
+}
+
+/**
+ * @summary Lifecycle messages for support (exhausted retries first)
+ */
+export const getSupportLifecycleMessages = async (params?: GetSupportLifecycleMessagesParams, options?: Parameters<typeof customFetch>[1]): Promise<SupportLifecycleMessages> => {
+
+  return customFetch<SupportLifecycleMessages>(getGetSupportLifecycleMessagesUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetSupportLifecycleMessagesQueryKey = (params?: GetSupportLifecycleMessagesParams,) => {
+    return [
+    `/api/review/lifecycle-messages`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetSupportLifecycleMessagesQueryOptions = <TData = Awaited<ReturnType<typeof getSupportLifecycleMessages>>, TError = ErrorType<ApiError | FeatureDisabledResponse>>(params?: GetSupportLifecycleMessagesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSupportLifecycleMessages>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetSupportLifecycleMessagesQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getSupportLifecycleMessages>>> = ({ signal }) => getSupportLifecycleMessages(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getSupportLifecycleMessages>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetSupportLifecycleMessagesQueryResult = NonNullable<Awaited<ReturnType<typeof getSupportLifecycleMessages>>>
+export type GetSupportLifecycleMessagesQueryError = ErrorType<ApiError | FeatureDisabledResponse>
+
+
+/**
+ * @summary Lifecycle messages for support (exhausted retries first)
+ */
+
+export function useGetSupportLifecycleMessages<TData = Awaited<ReturnType<typeof getSupportLifecycleMessages>>, TError = ErrorType<ApiError | FeatureDisabledResponse>>(
+ params?: GetSupportLifecycleMessagesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSupportLifecycleMessages>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetSupportLifecycleMessagesQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getResendSupportLifecycleMessageUrl = (id: number,) => {
+
+
+
+
+  return `/api/review/lifecycle-messages/${id}/resend`
+}
+
+/**
+ * @summary Re-queue a permanently failed message
+ */
+export const resendSupportLifecycleMessage = async (id: number, options?: Parameters<typeof customFetch>[1]): Promise<SupportLifecycleMessage> => {
+
+  return customFetch<SupportLifecycleMessage>(getResendSupportLifecycleMessageUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getResendSupportLifecycleMessageMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof resendSupportLifecycleMessage>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof resendSupportLifecycleMessage>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['resendSupportLifecycleMessage'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof resendSupportLifecycleMessage>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  resendSupportLifecycleMessage(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ResendSupportLifecycleMessageMutationResult = NonNullable<Awaited<ReturnType<typeof resendSupportLifecycleMessage>>>
+
+    export type ResendSupportLifecycleMessageMutationError = ErrorType<ApiError>
+
+    /**
+ * @summary Re-queue a permanently failed message
+ */
+export const useResendSupportLifecycleMessage = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof resendSupportLifecycleMessage>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof resendSupportLifecycleMessage>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getResendSupportLifecycleMessageMutationOptions(options));
+    }
+
+export const getGetReadinessUrl = () => {
+
+
+
+
+  return `/api/readiness`
+}
+
+/**
+ * Reports which gated feature areas are enabled for this deployment. Flags are read-only and set by the operator environment.
+ * @summary Get the rollout readiness state of gated entry points
+ */
+export const getReadiness = async ( options?: Parameters<typeof customFetch>[1]): Promise<FeatureReadiness> => {
+
+  return customFetch<FeatureReadiness>(getGetReadinessUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetReadinessQueryKey = () => {
+    return [
+    `/api/readiness`
+    ] as const;
+    }
+
+
+export const getGetReadinessQueryOptions = <TData = Awaited<ReturnType<typeof getReadiness>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getReadiness>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetReadinessQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getReadiness>>> = ({ signal }) => getReadiness({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getReadiness>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetReadinessQueryResult = NonNullable<Awaited<ReturnType<typeof getReadiness>>>
+export type GetReadinessQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get the rollout readiness state of gated entry points
+ */
+
+export function useGetReadiness<TData = Awaited<ReturnType<typeof getReadiness>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getReadiness>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetReadinessQueryOptions(options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 
@@ -2379,6 +3593,485 @@ export const useDecideBusinessClaim = <TError = ErrorType<void>,
       return useMutation(getDecideBusinessClaimMutationOptions(options));
     }
 
+export const getLookupBusinessesUrl = (params: LookupBusinessesParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/businesses/lookup?${stringifiedParams}` : `/api/businesses/lookup`
+}
+
+/**
+ * Bounded lookup over current public business listings and existing business profiles.
+ * Every match is allowlisted to public facts only (name, neighbourhood, category, public
+ * source URL, whether the listing is already claimed). No contact details, claimant data,
+ * pending-claim details, or private drafts are ever returned. Requires a signed-in account,
+ * is rate limited per account (429 RATE_LIMITED), and returns 503 when the listing source
+ * cannot be read rather than an empty list. Returns 404 while the business intake gate is off.
+ * @summary Find public business matches to claim or to avoid duplicate drafts
+ */
+export const lookupBusinesses = async (params: LookupBusinessesParams, options?: Parameters<typeof customFetch>[1]): Promise<BusinessLookupResponse> => {
+
+  return customFetch<BusinessLookupResponse>(getLookupBusinessesUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getLookupBusinessesQueryKey = (params?: LookupBusinessesParams,) => {
+    return [
+    `/api/businesses/lookup`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getLookupBusinessesQueryOptions = <TData = Awaited<ReturnType<typeof lookupBusinesses>>, TError = ErrorType<ApiError | FeatureDisabledResponse>>(params: LookupBusinessesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof lookupBusinesses>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getLookupBusinessesQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof lookupBusinesses>>> = ({ signal }) => lookupBusinesses(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof lookupBusinesses>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type LookupBusinessesQueryResult = NonNullable<Awaited<ReturnType<typeof lookupBusinesses>>>
+export type LookupBusinessesQueryError = ErrorType<ApiError | FeatureDisabledResponse>
+
+
+/**
+ * @summary Find public business matches to claim or to avoid duplicate drafts
+ */
+
+export function useLookupBusinesses<TData = Awaited<ReturnType<typeof lookupBusinesses>>, TError = ErrorType<ApiError | FeatureDisabledResponse>>(
+ params: LookupBusinessesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof lookupBusinesses>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getLookupBusinessesQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateBusinessIntakeDraftUrl = () => {
+
+
+
+
+  return `/api/businesses`
+}
+
+/**
+ * Creates a private `draft` claim for the signed-in, verified representative. For
+ * `existing_listing` the listing is re-resolved server-side from the approved provider by
+ * city, source, and listing ID; browser-supplied names and addresses never redefine the
+ * business. For `new_business` a private draft profile (`publicationStatus = draft`) and the
+ * owner-candidate claim are created in one transaction; the draft is invisible on public
+ * routes and to other users. Drafts hold no claim slot until they are submitted.
+ * Send an `Idempotency-Key` header to make retries safe: a repeated key returns the original
+ * claim (200) instead of a duplicate; the same key with a different payload returns 409
+ * IDEMPOTENCY_CONFLICT. Creating a draft never grants ownership.
+ * @summary Create a private claim draft for an existing listing or a new business
+ */
+export const createBusinessIntakeDraft = async (businessIntakeDraftInput: BusinessIntakeDraftInput, options?: Parameters<typeof customFetch>[1]): Promise<BusinessClaim> => {
+
+  return customFetch<BusinessClaim>(getCreateBusinessIntakeDraftUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(businessIntakeDraftInput)
+  }
+);}
+
+
+
+
+
+export const getCreateBusinessIntakeDraftMutationOptions = <TError = ErrorType<ApiError | FeatureDisabledResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createBusinessIntakeDraft>>, TError,{data: BodyType<BusinessIntakeDraftInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createBusinessIntakeDraft>>, TError,{data: BodyType<BusinessIntakeDraftInput>}, TContext> => {
+
+const mutationKey = ['createBusinessIntakeDraft'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createBusinessIntakeDraft>>, {data: BodyType<BusinessIntakeDraftInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createBusinessIntakeDraft(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateBusinessIntakeDraftMutationResult = NonNullable<Awaited<ReturnType<typeof createBusinessIntakeDraft>>>
+    export type CreateBusinessIntakeDraftMutationBody = BodyType<BusinessIntakeDraftInput>
+    export type CreateBusinessIntakeDraftMutationError = ErrorType<ApiError | FeatureDisabledResponse>
+
+    /**
+ * @summary Create a private claim draft for an existing listing or a new business
+ */
+export const useCreateBusinessIntakeDraft = <TError = ErrorType<ApiError | FeatureDisabledResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createBusinessIntakeDraft>>, TError,{data: BodyType<BusinessIntakeDraftInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createBusinessIntakeDraft>>,
+        TError,
+        {data: BodyType<BusinessIntakeDraftInput>},
+        TContext
+      > => {
+      return useMutation(getCreateBusinessIntakeDraftMutationOptions(options));
+    }
+
+export const getGetBusinessClaimUrl = (id: number,) => {
+
+
+
+
+  return `/api/business-claims/${id}`
+}
+
+/**
+ * Only the claim's creator can read it; any other claim answers 404 without disclosing whether it exists. Returns 404 while the business intake gate is off.
+ * @summary Get one of the signed-in user's claims with its current status and next action
+ */
+export const getBusinessClaim = async (id: number, options?: Parameters<typeof customFetch>[1]): Promise<BusinessClaim> => {
+
+  return customFetch<BusinessClaim>(getGetBusinessClaimUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetBusinessClaimQueryKey = (id: number,) => {
+    return [
+    `/api/business-claims/${id}`
+    ] as const;
+    }
+
+
+export const getGetBusinessClaimQueryOptions = <TData = Awaited<ReturnType<typeof getBusinessClaim>>, TError = ErrorType<ApiError>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getBusinessClaim>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetBusinessClaimQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getBusinessClaim>>> = ({ signal }) => getBusinessClaim(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getBusinessClaim>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetBusinessClaimQueryResult = NonNullable<Awaited<ReturnType<typeof getBusinessClaim>>>
+export type GetBusinessClaimQueryError = ErrorType<ApiError>
+
+
+/**
+ * @summary Get one of the signed-in user's claims with its current status and next action
+ */
+
+export function useGetBusinessClaim<TData = Awaited<ReturnType<typeof getBusinessClaim>>, TError = ErrorType<ApiError>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getBusinessClaim>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetBusinessClaimQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getUpdateBusinessClaimUrl = (id: number,) => {
+
+
+
+
+  return `/api/business-claims/${id}`
+}
+
+/**
+ * Updates contact, authority, and evidence fields (and the business facts of a new-business
+ * draft) while the claim is `draft` or `changes_requested`. `expectedVersion` must equal the
+ * current `version`; a mismatch returns 409 VERSION_CONFLICT with the current
+ * `expectedVersion`. Listing identity, status, claimant, and review fields cannot be set here
+ * (400 UNKNOWN_FIELD).
+ * @summary Update a draft or changes-requested claim with optimistic concurrency
+ */
+export const updateBusinessClaim = async (id: number,
+    businessClaimUpdateInput: BusinessClaimUpdateInput, options?: Parameters<typeof customFetch>[1]): Promise<BusinessClaim> => {
+
+  return customFetch<BusinessClaim>(getUpdateBusinessClaimUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(businessClaimUpdateInput)
+  }
+);}
+
+
+
+
+
+export const getUpdateBusinessClaimMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateBusinessClaim>>, TError,{id: number;data: BodyType<BusinessClaimUpdateInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateBusinessClaim>>, TError,{id: number;data: BodyType<BusinessClaimUpdateInput>}, TContext> => {
+
+const mutationKey = ['updateBusinessClaim'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateBusinessClaim>>, {id: number;data: BodyType<BusinessClaimUpdateInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateBusinessClaim(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateBusinessClaimMutationResult = NonNullable<Awaited<ReturnType<typeof updateBusinessClaim>>>
+    export type UpdateBusinessClaimMutationBody = BodyType<BusinessClaimUpdateInput>
+    export type UpdateBusinessClaimMutationError = ErrorType<ApiError>
+
+    /**
+ * @summary Update a draft or changes-requested claim with optimistic concurrency
+ */
+export const useUpdateBusinessClaim = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateBusinessClaim>>, TError,{id: number;data: BodyType<BusinessClaimUpdateInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateBusinessClaim>>,
+        TError,
+        {id: number;data: BodyType<BusinessClaimUpdateInput>},
+        TContext
+      > => {
+      return useMutation(getUpdateBusinessClaimMutationOptions(options));
+    }
+
+export const getSubmitBusinessClaimUrl = (id: number,) => {
+
+
+
+
+  return `/api/business-claims/${id}/submit`
+}
+
+/**
+ * Moves a `draft` or `changes_requested` claim to `submitted` and takes the single open-claim
+ * slot for the business. Duplicates are re-checked transactionally at this moment: another
+ * open claim for the same business returns 409. When the business already has a verified
+ * owner the claim is recorded as `disputed` for manual review instead of granting anything.
+ * `expectedVersion` must match. Submission never grants ownership; approval is a later,
+ * explicit reviewer action.
+ * @summary Submit a draft (or resubmit a changes-requested claim) for manual review
+ */
+export const submitBusinessClaim = async (id: number,
+    businessClaimTransitionInput: BusinessClaimTransitionInput, options?: Parameters<typeof customFetch>[1]): Promise<BusinessClaim> => {
+
+  return customFetch<BusinessClaim>(getSubmitBusinessClaimUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(businessClaimTransitionInput)
+  }
+);}
+
+
+
+
+
+export const getSubmitBusinessClaimMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitBusinessClaim>>, TError,{id: number;data: BodyType<BusinessClaimTransitionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof submitBusinessClaim>>, TError,{id: number;data: BodyType<BusinessClaimTransitionInput>}, TContext> => {
+
+const mutationKey = ['submitBusinessClaim'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof submitBusinessClaim>>, {id: number;data: BodyType<BusinessClaimTransitionInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  submitBusinessClaim(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SubmitBusinessClaimMutationResult = NonNullable<Awaited<ReturnType<typeof submitBusinessClaim>>>
+    export type SubmitBusinessClaimMutationBody = BodyType<BusinessClaimTransitionInput>
+    export type SubmitBusinessClaimMutationError = ErrorType<ApiError>
+
+    /**
+ * @summary Submit a draft (or resubmit a changes-requested claim) for manual review
+ */
+export const useSubmitBusinessClaim = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitBusinessClaim>>, TError,{id: number;data: BodyType<BusinessClaimTransitionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof submitBusinessClaim>>,
+        TError,
+        {id: number;data: BodyType<BusinessClaimTransitionInput>},
+        TContext
+      > => {
+      return useMutation(getSubmitBusinessClaimMutationOptions(options));
+    }
+
+export const getWithdrawBusinessClaimUrl = (id: number,) => {
+
+
+
+
+  return `/api/business-claims/${id}/withdraw`
+}
+
+/**
+ * Moves a `draft`, `pending`, `submitted`, `changes_requested`, or `disputed` claim to
+ * `withdrawn`, keeps the audit trail, and frees the business for other claims. A withdrawn
+ * new-business draft profile is archived. `expectedVersion` must match. Approved or
+ * rejected claims cannot be withdrawn (409).
+ * @summary Withdraw a draft or open claim
+ */
+export const withdrawBusinessClaim = async (id: number,
+    businessClaimTransitionInput: BusinessClaimTransitionInput, options?: Parameters<typeof customFetch>[1]): Promise<BusinessClaim> => {
+
+  return customFetch<BusinessClaim>(getWithdrawBusinessClaimUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(businessClaimTransitionInput)
+  }
+);}
+
+
+
+
+
+export const getWithdrawBusinessClaimMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof withdrawBusinessClaim>>, TError,{id: number;data: BodyType<BusinessClaimTransitionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof withdrawBusinessClaim>>, TError,{id: number;data: BodyType<BusinessClaimTransitionInput>}, TContext> => {
+
+const mutationKey = ['withdrawBusinessClaim'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof withdrawBusinessClaim>>, {id: number;data: BodyType<BusinessClaimTransitionInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  withdrawBusinessClaim(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type WithdrawBusinessClaimMutationResult = NonNullable<Awaited<ReturnType<typeof withdrawBusinessClaim>>>
+    export type WithdrawBusinessClaimMutationBody = BodyType<BusinessClaimTransitionInput>
+    export type WithdrawBusinessClaimMutationError = ErrorType<ApiError>
+
+    /**
+ * @summary Withdraw a draft or open claim
+ */
+export const useWithdrawBusinessClaim = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof withdrawBusinessClaim>>, TError,{id: number;data: BodyType<BusinessClaimTransitionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof withdrawBusinessClaim>>,
+        TError,
+        {id: number;data: BodyType<BusinessClaimTransitionInput>},
+        TContext
+      > => {
+      return useMutation(getWithdrawBusinessClaimMutationOptions(options));
+    }
+
 export const getGetMyBusinessProfilesUrl = () => {
 
 
@@ -2750,6 +4443,803 @@ export function useGetBusinessProfile<TData = Awaited<ReturnType<typeof getBusin
 
 
 
+
+export const getGetBusinessRevisionWorkspaceUrl = (id: number,) => {
+
+
+
+
+  return `/api/business-profiles/${id}/revision`
+}
+
+/**
+ * Returns the latest revision (draft, submitted, or changes requested), the currently
+ * approved revision, the last safe reviewer decision, fact-check freshness, and the derived
+ * owner state. Requires a membership on the business and the `businessPublication` gate.
+ * @summary Owner view of the profile's editorial state
+ */
+export const getBusinessRevisionWorkspace = async (id: number, options?: Parameters<typeof customFetch>[1]): Promise<BusinessRevisionWorkspace> => {
+
+  return customFetch<BusinessRevisionWorkspace>(getGetBusinessRevisionWorkspaceUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetBusinessRevisionWorkspaceQueryKey = (id: number,) => {
+    return [
+    `/api/business-profiles/${id}/revision`
+    ] as const;
+    }
+
+
+export const getGetBusinessRevisionWorkspaceQueryOptions = <TData = Awaited<ReturnType<typeof getBusinessRevisionWorkspace>>, TError = ErrorType<ApiError>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getBusinessRevisionWorkspace>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetBusinessRevisionWorkspaceQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getBusinessRevisionWorkspace>>> = ({ signal }) => getBusinessRevisionWorkspace(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getBusinessRevisionWorkspace>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetBusinessRevisionWorkspaceQueryResult = NonNullable<Awaited<ReturnType<typeof getBusinessRevisionWorkspace>>>
+export type GetBusinessRevisionWorkspaceQueryError = ErrorType<ApiError>
+
+
+/**
+ * @summary Owner view of the profile's editorial state
+ */
+
+export function useGetBusinessRevisionWorkspace<TData = Awaited<ReturnType<typeof getBusinessRevisionWorkspace>>, TError = ErrorType<ApiError>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getBusinessRevisionWorkspace>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetBusinessRevisionWorkspaceQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getUpdateBusinessRevisionUrl = (id: number,) => {
+
+
+
+
+  return `/api/business-profiles/${id}/revision`
+}
+
+/**
+ * Merges the given NL/EN text and language-neutral facts into the owner's draft. When the
+ * latest revision is a `draft` it is edited in place; otherwise a new draft version is created
+ * from the latest revision's content. `expectedVersion` must equal the latest revision's
+ * `version` (0 when the business has no revision yet); a mismatch returns 409
+ * VERSION_CONFLICT. A `submitted` revision cannot be edited (409 with field `status`). The
+ * approved snapshot is never mutated here.
+ * @summary Save bilingual draft changes as a revision
+ */
+export const updateBusinessRevision = async (id: number,
+    businessRevisionUpdateInput: BusinessRevisionUpdateInput, options?: Parameters<typeof customFetch>[1]): Promise<BusinessRevisionWorkspace> => {
+
+  return customFetch<BusinessRevisionWorkspace>(getUpdateBusinessRevisionUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(businessRevisionUpdateInput)
+  }
+);}
+
+
+
+
+
+export const getUpdateBusinessRevisionMutationOptions = <TError = ErrorType<ApiError | VersionConflictResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateBusinessRevision>>, TError,{id: number;data: BodyType<BusinessRevisionUpdateInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateBusinessRevision>>, TError,{id: number;data: BodyType<BusinessRevisionUpdateInput>}, TContext> => {
+
+const mutationKey = ['updateBusinessRevision'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateBusinessRevision>>, {id: number;data: BodyType<BusinessRevisionUpdateInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateBusinessRevision(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateBusinessRevisionMutationResult = NonNullable<Awaited<ReturnType<typeof updateBusinessRevision>>>
+    export type UpdateBusinessRevisionMutationBody = BodyType<BusinessRevisionUpdateInput>
+    export type UpdateBusinessRevisionMutationError = ErrorType<ApiError | VersionConflictResponse>
+
+    /**
+ * @summary Save bilingual draft changes as a revision
+ */
+export const useUpdateBusinessRevision = <TError = ErrorType<ApiError | VersionConflictResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateBusinessRevision>>, TError,{id: number;data: BodyType<BusinessRevisionUpdateInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateBusinessRevision>>,
+        TError,
+        {id: number;data: BodyType<BusinessRevisionUpdateInput>},
+        TContext
+      > => {
+      return useMutation(getUpdateBusinessRevisionMutationOptions(options));
+    }
+
+export const getSubmitBusinessRevisionUrl = (id: number,) => {
+
+
+
+
+  return `/api/business-profiles/${id}/revision/submit`
+}
+
+/**
+ * Moves the latest `draft` revision to `submitted`. Content becomes immutable from this point;
+ * reviewers decide exactly this version. Requires at least one non-empty Dutch or English
+ * text field. `expectedVersion` must equal the draft's `version`.
+ * @summary Submit the current draft for editorial review
+ */
+export const submitBusinessRevision = async (id: number,
+    businessRevisionTransitionInput: BusinessRevisionTransitionInput, options?: Parameters<typeof customFetch>[1]): Promise<BusinessRevisionWorkspace> => {
+
+  return customFetch<BusinessRevisionWorkspace>(getSubmitBusinessRevisionUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(businessRevisionTransitionInput)
+  }
+);}
+
+
+
+
+
+export const getSubmitBusinessRevisionMutationOptions = <TError = ErrorType<ApiError | VersionConflictResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitBusinessRevision>>, TError,{id: number;data: BodyType<BusinessRevisionTransitionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof submitBusinessRevision>>, TError,{id: number;data: BodyType<BusinessRevisionTransitionInput>}, TContext> => {
+
+const mutationKey = ['submitBusinessRevision'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof submitBusinessRevision>>, {id: number;data: BodyType<BusinessRevisionTransitionInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  submitBusinessRevision(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SubmitBusinessRevisionMutationResult = NonNullable<Awaited<ReturnType<typeof submitBusinessRevision>>>
+    export type SubmitBusinessRevisionMutationBody = BodyType<BusinessRevisionTransitionInput>
+    export type SubmitBusinessRevisionMutationError = ErrorType<ApiError | VersionConflictResponse>
+
+    /**
+ * @summary Submit the current draft for editorial review
+ */
+export const useSubmitBusinessRevision = <TError = ErrorType<ApiError | VersionConflictResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitBusinessRevision>>, TError,{id: number;data: BodyType<BusinessRevisionTransitionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof submitBusinessRevision>>,
+        TError,
+        {id: number;data: BodyType<BusinessRevisionTransitionInput>},
+        TContext
+      > => {
+      return useMutation(getSubmitBusinessRevisionMutationOptions(options));
+    }
+
+export const getDiscardBusinessRevisionUrl = (id: number,) => {
+
+
+
+
+  return `/api/business-profiles/${id}/revision/discard`
+}
+
+/**
+ * Marks the latest `draft` revision `discarded`. Submitted and decided revisions are kept as history.
+ * @summary Discard the current draft
+ */
+export const discardBusinessRevision = async (id: number,
+    businessRevisionTransitionInput: BusinessRevisionTransitionInput, options?: Parameters<typeof customFetch>[1]): Promise<BusinessRevisionWorkspace> => {
+
+  return customFetch<BusinessRevisionWorkspace>(getDiscardBusinessRevisionUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(businessRevisionTransitionInput)
+  }
+);}
+
+
+
+
+
+export const getDiscardBusinessRevisionMutationOptions = <TError = ErrorType<ApiError | VersionConflictResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof discardBusinessRevision>>, TError,{id: number;data: BodyType<BusinessRevisionTransitionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof discardBusinessRevision>>, TError,{id: number;data: BodyType<BusinessRevisionTransitionInput>}, TContext> => {
+
+const mutationKey = ['discardBusinessRevision'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof discardBusinessRevision>>, {id: number;data: BodyType<BusinessRevisionTransitionInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  discardBusinessRevision(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DiscardBusinessRevisionMutationResult = NonNullable<Awaited<ReturnType<typeof discardBusinessRevision>>>
+    export type DiscardBusinessRevisionMutationBody = BodyType<BusinessRevisionTransitionInput>
+    export type DiscardBusinessRevisionMutationError = ErrorType<ApiError | VersionConflictResponse>
+
+    /**
+ * @summary Discard the current draft
+ */
+export const useDiscardBusinessRevision = <TError = ErrorType<ApiError | VersionConflictResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof discardBusinessRevision>>, TError,{id: number;data: BodyType<BusinessRevisionTransitionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof discardBusinessRevision>>,
+        TError,
+        {id: number;data: BodyType<BusinessRevisionTransitionInput>},
+        TContext
+      > => {
+      return useMutation(getDiscardBusinessRevisionMutationOptions(options));
+    }
+
+export const getGetAuthorityQueueUrl = (params?: GetAuthorityQueueParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/review/claims?${stringifiedParams}` : `/api/review/claims`
+}
+
+/**
+ * Claims awaiting an authority decision (`pending`, `submitted`, `disputed`), oldest first.
+ * Items carry the relationship and authority evidence needed to decide, never the
+ * claimant's e-mail address. `canDecide` is false when the reviewer is the claimant, the
+ * creator, or a member of the business.
+ * @summary Paginated authority (ownership) review queue
+ */
+export const getAuthorityQueue = async (params?: GetAuthorityQueueParams, options?: Parameters<typeof customFetch>[1]): Promise<AuthorityQueuePage> => {
+
+  return customFetch<AuthorityQueuePage>(getGetAuthorityQueueUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetAuthorityQueueQueryKey = (params?: GetAuthorityQueueParams,) => {
+    return [
+    `/api/review/claims`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetAuthorityQueueQueryOptions = <TData = Awaited<ReturnType<typeof getAuthorityQueue>>, TError = ErrorType<ApiError | FeatureDisabledResponse>>(params?: GetAuthorityQueueParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAuthorityQueue>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetAuthorityQueueQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAuthorityQueue>>> = ({ signal }) => getAuthorityQueue(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAuthorityQueue>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetAuthorityQueueQueryResult = NonNullable<Awaited<ReturnType<typeof getAuthorityQueue>>>
+export type GetAuthorityQueueQueryError = ErrorType<ApiError | FeatureDisabledResponse>
+
+
+/**
+ * @summary Paginated authority (ownership) review queue
+ */
+
+export function useGetAuthorityQueue<TData = Awaited<ReturnType<typeof getAuthorityQueue>>, TError = ErrorType<ApiError | FeatureDisabledResponse>>(
+ params?: GetAuthorityQueueParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAuthorityQueue>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetAuthorityQueueQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getReviewBusinessClaimUrl = (id: number,) => {
+
+
+
+
+  return `/api/review/claims/${id}/decision`
+}
+
+/**
+ * Approve grants exactly one owner membership atomically and rejects competing open claims;
+ * `reject` and `request_changes` require a reason that the claimant will see. The decision is
+ * applied only when the claim still has `expectedVersion` and a reviewable status (409
+ * VERSION_CONFLICT otherwise). Self-review returns 403 SELF_REVIEW_FORBIDDEN.
+ * @summary Decide an authority claim at an exact version
+ */
+export const reviewBusinessClaim = async (id: number,
+    reviewClaimDecisionInput: ReviewClaimDecisionInput, options?: Parameters<typeof customFetch>[1]): Promise<BusinessClaim> => {
+
+  return customFetch<BusinessClaim>(getReviewBusinessClaimUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(reviewClaimDecisionInput)
+  }
+);}
+
+
+
+
+
+export const getReviewBusinessClaimMutationOptions = <TError = ErrorType<ApiError | VersionConflictResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reviewBusinessClaim>>, TError,{id: number;data: BodyType<ReviewClaimDecisionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof reviewBusinessClaim>>, TError,{id: number;data: BodyType<ReviewClaimDecisionInput>}, TContext> => {
+
+const mutationKey = ['reviewBusinessClaim'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof reviewBusinessClaim>>, {id: number;data: BodyType<ReviewClaimDecisionInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  reviewBusinessClaim(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ReviewBusinessClaimMutationResult = NonNullable<Awaited<ReturnType<typeof reviewBusinessClaim>>>
+    export type ReviewBusinessClaimMutationBody = BodyType<ReviewClaimDecisionInput>
+    export type ReviewBusinessClaimMutationError = ErrorType<ApiError | VersionConflictResponse>
+
+    /**
+ * @summary Decide an authority claim at an exact version
+ */
+export const useReviewBusinessClaim = <TError = ErrorType<ApiError | VersionConflictResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reviewBusinessClaim>>, TError,{id: number;data: BodyType<ReviewClaimDecisionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof reviewBusinessClaim>>,
+        TError,
+        {id: number;data: BodyType<ReviewClaimDecisionInput>},
+        TContext
+      > => {
+      return useMutation(getReviewBusinessClaimMutationOptions(options));
+    }
+
+export const getGetEditorialQueueUrl = (params?: GetEditorialQueueParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/review/revisions?${stringifiedParams}` : `/api/review/revisions`
+}
+
+/**
+ * Submitted revisions oldest first, each with the currently approved revision for comparison.
+ * @summary Paginated editorial (profile revision) review queue
+ */
+export const getEditorialQueue = async (params?: GetEditorialQueueParams, options?: Parameters<typeof customFetch>[1]): Promise<EditorialQueuePage> => {
+
+  return customFetch<EditorialQueuePage>(getGetEditorialQueueUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetEditorialQueueQueryKey = (params?: GetEditorialQueueParams,) => {
+    return [
+    `/api/review/revisions`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetEditorialQueueQueryOptions = <TData = Awaited<ReturnType<typeof getEditorialQueue>>, TError = ErrorType<ApiError | FeatureDisabledResponse>>(params?: GetEditorialQueueParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getEditorialQueue>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetEditorialQueueQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getEditorialQueue>>> = ({ signal }) => getEditorialQueue(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getEditorialQueue>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetEditorialQueueQueryResult = NonNullable<Awaited<ReturnType<typeof getEditorialQueue>>>
+export type GetEditorialQueueQueryError = ErrorType<ApiError | FeatureDisabledResponse>
+
+
+/**
+ * @summary Paginated editorial (profile revision) review queue
+ */
+
+export function useGetEditorialQueue<TData = Awaited<ReturnType<typeof getEditorialQueue>>, TError = ErrorType<ApiError | FeatureDisabledResponse>>(
+ params?: GetEditorialQueueParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getEditorialQueue>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetEditorialQueueQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getReviewBusinessRevisionUrl = (id: number,) => {
+
+
+
+
+  return `/api/review/revisions/${id}/decision`
+}
+
+/**
+ * `approve` atomically makes this revision the business's approved snapshot (the previous
+ * approved revision becomes `superseded`) and records the supplied fact checks; fields marked
+ * `contradicted` are withheld from the public projection. `reject` and `request_changes`
+ * require a reason. Applied only while the revision is `submitted` with exactly
+ * `expectedVersion` (409 otherwise). Approval never publishes by itself.
+ * @summary Decide a submitted revision at an exact version
+ */
+export const reviewBusinessRevision = async (id: number,
+    reviewRevisionDecisionInput: ReviewRevisionDecisionInput, options?: Parameters<typeof customFetch>[1]): Promise<EditorialQueueItem> => {
+
+  return customFetch<EditorialQueueItem>(getReviewBusinessRevisionUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(reviewRevisionDecisionInput)
+  }
+);}
+
+
+
+
+
+export const getReviewBusinessRevisionMutationOptions = <TError = ErrorType<ApiError | VersionConflictResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reviewBusinessRevision>>, TError,{id: number;data: BodyType<ReviewRevisionDecisionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof reviewBusinessRevision>>, TError,{id: number;data: BodyType<ReviewRevisionDecisionInput>}, TContext> => {
+
+const mutationKey = ['reviewBusinessRevision'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof reviewBusinessRevision>>, {id: number;data: BodyType<ReviewRevisionDecisionInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  reviewBusinessRevision(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ReviewBusinessRevisionMutationResult = NonNullable<Awaited<ReturnType<typeof reviewBusinessRevision>>>
+    export type ReviewBusinessRevisionMutationBody = BodyType<ReviewRevisionDecisionInput>
+    export type ReviewBusinessRevisionMutationError = ErrorType<ApiError | VersionConflictResponse>
+
+    /**
+ * @summary Decide a submitted revision at an exact version
+ */
+export const useReviewBusinessRevision = <TError = ErrorType<ApiError | VersionConflictResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reviewBusinessRevision>>, TError,{id: number;data: BodyType<ReviewRevisionDecisionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof reviewBusinessRevision>>,
+        TError,
+        {id: number;data: BodyType<ReviewRevisionDecisionInput>},
+        TContext
+      > => {
+      return useMutation(getReviewBusinessRevisionMutationOptions(options));
+    }
+
+export const getGetPublicationQueueUrl = (params?: GetPublicationQueueParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/review/businesses?${stringifiedParams}` : `/api/review/businesses`
+}
+
+/**
+ * Businesses that have an approved revision or a non-default publication status, newest change first.
+ * With `recheckDue=true` the page only contains businesses whose confirmed fact checks are inside the
+ * re-check window (`freshness.recheckDue`), ordered by `freshness.staleOn` ascending so the soonest
+ * expiring facts come first. Cursors are specific to the ordering they were issued for.
+ * @summary Paginated publication overview
+ */
+export const getPublicationQueue = async (params?: GetPublicationQueueParams, options?: Parameters<typeof customFetch>[1]): Promise<PublicationQueuePage> => {
+
+  return customFetch<PublicationQueuePage>(getGetPublicationQueueUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetPublicationQueueQueryKey = (params?: GetPublicationQueueParams,) => {
+    return [
+    `/api/review/businesses`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetPublicationQueueQueryOptions = <TData = Awaited<ReturnType<typeof getPublicationQueue>>, TError = ErrorType<ApiError | FeatureDisabledResponse>>(params?: GetPublicationQueueParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPublicationQueue>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetPublicationQueueQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getPublicationQueue>>> = ({ signal }) => getPublicationQueue(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getPublicationQueue>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetPublicationQueueQueryResult = NonNullable<Awaited<ReturnType<typeof getPublicationQueue>>>
+export type GetPublicationQueueQueryError = ErrorType<ApiError | FeatureDisabledResponse>
+
+
+/**
+ * @summary Paginated publication overview
+ */
+
+export function useGetPublicationQueue<TData = Awaited<ReturnType<typeof getPublicationQueue>>, TError = ErrorType<ApiError | FeatureDisabledResponse>>(
+ params?: GetPublicationQueueParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPublicationQueue>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetPublicationQueueQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getSetBusinessPublicationUrl = (id: number,) => {
+
+
+
+
+  return `/api/review/businesses/${id}/publication`
+}
+
+/**
+ * `publish` requires an approved revision and moves `draft`/`unpublished` to `published`;
+ * `unpublish` and `suspend` require a reason and keep the approved snapshot so a later
+ * `publish` restores exactly it. `expectedRevisionVersion` must equal the approved
+ * revision's version (409 otherwise), so a reviewer never publishes a snapshot they did not
+ * see. Every action is recorded as an immutable review entry.
+ * @summary Publish, unpublish, or suspend a business
+ */
+export const setBusinessPublication = async (id: number,
+    publicationActionInput: PublicationActionInput, options?: Parameters<typeof customFetch>[1]): Promise<PublicationQueueItem> => {
+
+  return customFetch<PublicationQueueItem>(getSetBusinessPublicationUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(publicationActionInput)
+  }
+);}
+
+
+
+
+
+export const getSetBusinessPublicationMutationOptions = <TError = ErrorType<ApiError | VersionConflictResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof setBusinessPublication>>, TError,{id: number;data: BodyType<PublicationActionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof setBusinessPublication>>, TError,{id: number;data: BodyType<PublicationActionInput>}, TContext> => {
+
+const mutationKey = ['setBusinessPublication'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof setBusinessPublication>>, {id: number;data: BodyType<PublicationActionInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  setBusinessPublication(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SetBusinessPublicationMutationResult = NonNullable<Awaited<ReturnType<typeof setBusinessPublication>>>
+    export type SetBusinessPublicationMutationBody = BodyType<PublicationActionInput>
+    export type SetBusinessPublicationMutationError = ErrorType<ApiError | VersionConflictResponse>
+
+    /**
+ * @summary Publish, unpublish, or suspend a business
+ */
+export const useSetBusinessPublication = <TError = ErrorType<ApiError | VersionConflictResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof setBusinessPublication>>, TError,{id: number;data: BodyType<PublicationActionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof setBusinessPublication>>,
+        TError,
+        {id: number;data: BodyType<PublicationActionInput>},
+        TContext
+      > => {
+      return useMutation(getSetBusinessPublicationMutationOptions(options));
+    }
 
 export const getGetDealsUrl = (params: GetDealsParams,) => {
   const normalizedParams = new URLSearchParams();

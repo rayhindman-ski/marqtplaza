@@ -5,45 +5,1019 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+/**
+ * Claim lifecycle. `pending` is the legacy alias of `submitted` (awaiting review).
+ * Open states that hold the one-open-claim-per-listing slot: pending, submitted,
+ * changes_requested, disputed. Transitions: pending|submitted -> approved | rejected |
+ * changes_requested | withdrawn; changes_requested -> submitted | withdrawn;
+ * approved -> disputed; disputed -> approved | rejected.
+ */
 export type ClaimStatus = typeof ClaimStatus[keyof typeof ClaimStatus];
 
 
 export const ClaimStatus = {
+  draft: 'draft',
   pending: 'pending',
+  submitted: 'submitted',
+  changes_requested: 'changes_requested',
   approved: 'approved',
   rejected: 'rejected',
+  disputed: 'disputed',
+  withdrawn: 'withdrawn',
 } as const;
 
-export type DealStatus = typeof DealStatus[keyof typeof DealStatus];
+/**
+ * What the claimant can do next; derived server-side from the claim status. `submit` applies to private drafts, `provide_changes` after a reviewer asked for changes.
+ */
+export type ClaimNextAction = typeof ClaimNextAction[keyof typeof ClaimNextAction];
 
 
-export const DealStatus = {
-  pending: 'pending',
-  approved: 'approved',
+export const ClaimNextAction = {
+  submit: 'submit',
+  wait_for_review: 'wait_for_review',
+  provide_changes: 'provide_changes',
+  none: 'none',
+} as const;
+
+/**
+ * Whether a claim targets a current public listing or a new business that is not listed yet.
+ */
+export type BusinessIntakeKind = typeof BusinessIntakeKind[keyof typeof BusinessIntakeKind];
+
+
+export const BusinessIntakeKind = {
+  existing_listing: 'existing_listing',
+  new_business: 'new_business',
+} as const;
+
+/**
+ * `listing` comes from the current public listing source; `profile` is a business already known to Buurtplaza.
+ */
+export type BusinessLookupMatchKind = typeof BusinessLookupMatchKind[keyof typeof BusinessLookupMatchKind];
+
+
+export const BusinessLookupMatchKind = {
+  listing: 'listing',
+  profile: 'profile',
+} as const;
+
+/**
+ * Public-only business match. Never contains contact details, claimant data, or pending-claim details.
+ */
+export interface BusinessLookupMatch {
+  /** `listing` comes from the current public listing source; `profile` is a business already known to Buurtplaza. */
+  kind: BusinessLookupMatchKind;
+  cityId: string;
+  listingSource: string;
+  listingId: string;
+  name: string;
+  /** @nullable */
+  neighborhood?: string | null;
+  /** @nullable */
+  category?: string | null;
+  /** @nullable */
+  sourceUrl?: string | null;
+  /** A verified representative already manages this business; a new claim would be recorded as disputed. */
+  isClaimed: boolean;
+}
+
+export interface BusinessLookupResponse {
+  query: string;
+  matches: BusinessLookupMatch[];
+  /** More matches exist than the bounded result set; refine the query. */
+  truncated: boolean;
+}
+
+/**
+ * Public facts for a business that is not listed yet. Stored privately until publication review.
+ */
+export interface NewBusinessFacts {
+  /**
+     * @minLength 2
+     * @maxLength 160
+     */
+  name: string;
+  /**
+     * @minLength 2
+     * @maxLength 80
+     */
+  category: string;
+  /**
+     * @minLength 2
+     * @maxLength 120
+     */
+  neighborhood: string;
+  /** @maxLength 240 */
+  address?: string;
+  /** @maxLength 400 */
+  websiteUrl?: string;
+}
+
+/**
+ * Required for `existing_listing`; resolved server-side, never trusted for facts.
+ */
+export type BusinessIntakeDraftInputListing = {
+  /** @minLength 1 */
+  cityId: string;
+  /** @minLength 1 */
+  listingSource: string;
+  /** @minLength 1 */
+  listingId: string;
+};
+
+export interface BusinessIntakeDraftInput {
+  kind: BusinessIntakeKind;
+  /** Required for `existing_listing`; resolved server-side, never trusted for facts. */
+  listing?: BusinessIntakeDraftInputListing;
+  business?: NewBusinessFacts;
+  /**
+     * @minLength 2
+     * @maxLength 120
+     */
+  contactName: string;
+  /**
+     * @minLength 3
+     * @maxLength 254
+     * @pattern ^[^\s@]+@[^\s@]+\.[^\s@]+$
+     */
+  contactEmail: string;
+  /**
+     * @minLength 2
+     * @maxLength 120
+     */
+  relationship: string;
+  /**
+     * The representative's own statement of their authority over the business (private).
+     * @minLength 10
+     * @maxLength 1200
+     */
+  authorityDeclaration: string;
+  /**
+     * Optional URL or short text reference supporting the declaration (private). No uploads.
+     * @maxLength 400
+     */
+  evidenceReference?: string;
+  /** @maxLength 1200 */
+  message?: string;
+}
+
+export interface BusinessClaimUpdateInput {
+  expectedVersion: number;
+  /**
+     * @minLength 2
+     * @maxLength 120
+     */
+  contactName?: string;
+  /**
+     * @minLength 3
+     * @maxLength 254
+     * @pattern ^[^\s@]+@[^\s@]+\.[^\s@]+$
+     */
+  contactEmail?: string;
+  /**
+     * @minLength 2
+     * @maxLength 120
+     */
+  relationship?: string;
+  /**
+     * @minLength 10
+     * @maxLength 1200
+     */
+  authorityDeclaration?: string;
+  /**
+     * @maxLength 400
+     * @nullable
+     */
+  evidenceReference?: string | null;
+  /**
+     * @maxLength 1200
+     * @nullable
+     */
+  message?: string | null;
+  business?: NewBusinessFacts;
+}
+
+export interface BusinessClaimTransitionInput {
+  expectedVersion: number;
+  /**
+     * Only meaningful when submitting a `new_business` draft. Submission re-checks public
+     * listings and published profiles for equivalent businesses; when candidates exist and
+     * this flag is not `true`, the server answers 409 `DUPLICATE_CANDIDATES` with the
+     * candidates so the representative can claim one instead or explicitly confirm.
+     */
+  confirmNoDuplicate?: boolean;
+}
+
+/**
+ * Business publication lifecycle. Existing profiles are `published`.
+ * draft -> published (explicit reviewer publication); published <-> unpublished;
+ * published -> suspended (reviewer); any -> archived (terminal). Only `published`
+ * profiles and their deals are served on public routes.
+ */
+export type PublicationStatus = typeof PublicationStatus[keyof typeof PublicationStatus];
+
+
+export const PublicationStatus = {
+  draft: 'draft',
+  unpublished: 'unpublished',
+  published: 'published',
+  suspended: 'suspended',
+  archived: 'archived',
+} as const;
+
+export type ApiErrorCode = typeof ApiErrorCode[keyof typeof ApiErrorCode];
+
+
+export const ApiErrorCode = {
+  AUTH_REQUIRED: 'AUTH_REQUIRED',
+  EMAIL_UNVERIFIED: 'EMAIL_UNVERIFIED',
+  ACCOUNT_SUSPENDED: 'ACCOUNT_SUSPENDED',
+  ACCOUNT_DELETED: 'ACCOUNT_DELETED',
+  FORBIDDEN: 'FORBIDDEN',
+  SELF_REVIEW_FORBIDDEN: 'SELF_REVIEW_FORBIDDEN',
+  NOT_FOUND: 'NOT_FOUND',
+  FEATURE_DISABLED: 'FEATURE_DISABLED',
+  VALIDATION_FAILED: 'VALIDATION_FAILED',
+  UNKNOWN_FIELD: 'UNKNOWN_FIELD',
+  VERSION_CONFLICT: 'VERSION_CONFLICT',
+  IDEMPOTENCY_CONFLICT: 'IDEMPOTENCY_CONFLICT',
+  DUPLICATE_CANDIDATES: 'DUPLICATE_CANDIDATES',
+  RATE_LIMITED: 'RATE_LIMITED',
+  PROVISIONING_UNAVAILABLE: 'PROVISIONING_UNAVAILABLE',
+  DEPENDENCY_UNAVAILABLE: 'DEPENDENCY_UNAVAILABLE',
+} as const;
+
+export interface ApiFieldError {
+  field: string;
+  /** Machine-readable per-field reason, e.g. `required`, `unknown`, `not_in_controlled_list`. */
+  code: string;
+}
+
+/**
+ * Stable, safe error shape for account and lifecycle operations. `code` is machine-readable,
+ * `messageKey` maps to a localized message on the client, and `correlationId` matches the
+ * server log entry. Never contains personal data or provider details. Existing operations
+ * keep their `{ error }` string responses for compatibility.
+ */
+export interface ApiError {
+  code: ApiErrorCode;
+  /** Localization key, e.g. `errors.auth_required`. */
+  messageKey: string;
+  fieldErrors?: ApiFieldError[];
+  correlationId: string;
+  /** Present on VERSION_CONFLICT responses; the current server version the client must reload before retrying. */
+  expectedVersion?: number;
+  /** Present on DUPLICATE_CANDIDATES responses; public matches that may already represent the submitted new business. */
+  duplicateCandidates?: BusinessLookupMatch[];
+}
+
+/**
+ * Cursor pagination envelope shared by list operations added after this contract version.
+ */
+export interface PageInfo {
+  /** @nullable */
+  nextCursor: string | null;
+  hasMore: boolean;
+}
+
+/**
+ * Read-only rollout flags; each entry point stays disabled (404) until its gate is met.
+ */
+export interface FeatureReadiness {
+  accounts: boolean;
+  businessIntake: boolean;
+  businessPublication: boolean;
+}
+
+/**
+ * Persisted account state, changed only server-side: active <-> suspended (operator),
+ * active|suspended -> deleted (approved deletion request; terminal). Email verification is
+ * not an account state; it is derived from the identity provider per request.
+ */
+export type AccountStatus = typeof AccountStatus[keyof typeof AccountStatus];
+
+
+export const AccountStatus = {
+  active: 'active',
+  suspended: 'suspended',
+  deleted: 'deleted',
+} as const;
+
+export type AccountLocale = typeof AccountLocale[keyof typeof AccountLocale];
+
+
+export const AccountLocale = {
+  nl: 'nl',
+  en: 'en',
+} as const;
+
+/**
+ * The single highest server-derived role for the current request.
+ */
+export type AccountRole = typeof AccountRole[keyof typeof AccountRole];
+
+
+export const AccountRole = {
+  unverified: 'unverified',
+  user: 'user',
+  business_member: 'business_member',
+  reviewer: 'reviewer',
+} as const;
+
+/**
+ * Server-derived capabilities. Clients must never send these; they are recomputed on every request.
+ */
+export interface AccountCapabilities {
+  /** The identity provider reports a verified primary email for this session. */
+  isVerified: boolean;
+  /** The session carries the trusted editor or admin role claim. */
+  isEditor: boolean;
+  /** The user has at least one business membership. */
+  isBusinessMember: boolean;
+  /** Verified, active, and the business intake gate is on. */
+  canClaimBusiness: boolean;
+  /** Editor and the business publication gate is on. */
+  canPublishBusiness: boolean;
+  /** Editor; self-review of the user's own businesses or claims is still refused per request. */
+  canReview: boolean;
+}
+
+/**
+ * Optional controlled preferences owned by exactly one account. Updates require expectedRevision and return 409 VERSION_CONFLICT on mismatch. Unresolved IDs are stored legacy choices that no longer occur in the current taxonomy; they remain in the ID arrays until the user removes them.
+ */
+export interface ConsumerPreferences {
+  revision: number;
+  /** @maxItems 20 */
+  neighborhoodIds: string[];
+  /** @maxItems 20 */
+  interestIds: string[];
+  /**
+     * Subset of neighborhoodIds that no longer resolves in the current account option taxonomy.
+     * @maxItems 20
+     */
+  unresolvedNeighborhoodIds: string[];
+  /**
+     * Subset of interestIds that no longer resolves in the current account option taxonomy.
+     * @maxItems 20
+     */
+  unresolvedInterestIds: string[];
+  updatedAt: string;
+}
+
+/**
+ * Private account summary for the signed-in user only. Never served on public routes.
+ */
+export interface AccountMe {
+  /** Local account id (never the identity-provider subject). */
+  id: number;
+  status: AccountStatus;
+  role: AccountRole;
+  locale: AccountLocale;
+  onboardingCompleted: boolean;
+  /** @nullable */
+  onboardingCompletedAt?: string | null;
+  capabilities: AccountCapabilities;
+  /** Whether the separate campaign-style research registration exists. Never merged into account data. */
+  hasResearchRegistration: boolean;
+  businessMembershipCount: number;
+  preferences: ConsumerPreferences | null;
+  createdAt: string;
+}
+
+/**
+ * Purpose-specific consents that are asked separately from account creation and from
+ * the research registration. `marketing_updates`: occasional product and neighbourhood
+ * updates by e-mail. `research_contact`: may be contacted about product research.
+ */
+export type ConsentPurpose = typeof ConsentPurpose[keyof typeof ConsentPurpose];
+
+
+export const ConsentPurpose = {
+  marketing_updates: 'marketing_updates',
+  research_contact: 'research_contact',
+} as const;
+
+export interface UpdateAccountPreferencesInput {
+  /**
+     * Current stored revision, or 0 when no preferences exist yet.
+     * @minimum 0
+     */
+  expectedRevision: number;
+  locale?: AccountLocale;
+  /**
+     * @maxItems 20
+     * @items.maxLength 120
+     */
+  neighborhoodIds?: string[];
+  /**
+     * @maxItems 20
+     * @items.maxLength 120
+     */
+  interestIds?: string[];
+}
+
+/**
+ * Where the user made the choice; support and system entries are never accepted from clients.
+ */
+export type RecordAccountConsentInputSource = typeof RecordAccountConsentInputSource[keyof typeof RecordAccountConsentInputSource];
+
+
+export const RecordAccountConsentInputSource = {
+  onboarding: 'onboarding',
+  account_settings: 'account_settings',
+} as const;
+
+export interface RecordAccountConsentInput {
+  consentType: ConsentPurpose;
+  /** @maxLength 80 */
+  noticeVersion: string;
+  granted: boolean;
+  /** Where the user made the choice; support and system entries are never accepted from clients. */
+  source: RecordAccountConsentInputSource;
+}
+
+export interface ConsentState {
+  consentType: ConsentPurpose;
+  granted: boolean;
+  noticeVersion: string;
+  recordedAt: string;
+}
+
+export type ConsentEventSource = typeof ConsentEventSource[keyof typeof ConsentEventSource];
+
+
+export const ConsentEventSource = {
+  onboarding: 'onboarding',
+  account_settings: 'account_settings',
+  support: 'support',
+  system: 'system',
+} as const;
+
+/**
+ * One append-only consent ledger entry. Entries are never edited; the latest entry per consentType is the current state.
+ */
+export interface ConsentEvent {
+  id: number;
+  consentType: string;
+  noticeVersion: string;
+  granted: boolean;
+  source: ConsentEventSource;
+  createdAt: string;
+}
+
+export interface AccountConsents {
+  /** Version of the consent notice text the client must show before recording a choice. */
+  currentNoticeVersion: string;
+  /** All purposes that can be asked; a purpose without a current entry has never been asked. */
+  purposes: ConsentPurpose[];
+  current: ConsentState[];
+  history: ConsentEvent[];
+}
+
+/**
+ * What an account deletion request covers. The research registration, community
+ * contributions, and Clerk credentials are separate scopes handled outside this request.
+ */
+export type AccountDeletionScope = typeof AccountDeletionScope[keyof typeof AccountDeletionScope];
+
+
+export const AccountDeletionScope = {
+  account_profile: 'account_profile',
+  preferences: 'preferences',
+  consents: 'consents',
+  saved_events: 'saved_events',
+  business_memberships: 'business_memberships',
+} as const;
+
+export interface CreateAccountDeletionRequestInput {
+  /**
+     * Must contain every AccountDeletionScope value exactly once.
+     * @minItems 1
+     * @maxItems 10
+     */
+  acknowledgedScopes: AccountDeletionScope[];
+}
+
+export interface WithdrawAccountRequestInput {
+  /** @minimum 1 */
+  expectedVersion: number;
+}
+
+/**
+ * `received` awaits support; `blocked` needs a support decision about a sole-owned business
+ * first; `in_review` is being handled; `completed`, `rejected`, and `withdrawn` are final.
+ */
+export type AccountRequestStatus = typeof AccountRequestStatus[keyof typeof AccountRequestStatus];
+
+
+export const AccountRequestStatus = {
+  received: 'received',
+  blocked: 'blocked',
+  in_review: 'in_review',
+  completed: 'completed',
   rejected: 'rejected',
   withdrawn: 'withdrawn',
 } as const;
 
-export interface BusinessListingReference {
-  /** @minLength 1 */
-  cityId: string;
-  /** @minLength 1 */
-  listingId: string;
-  /** @minLength 1 */
-  listingSource: string;
-  /**
-     * @minLength 1
-     * @maxLength 160
-     */
+export type AccountRequestResolution = typeof AccountRequestResolution[keyof typeof AccountRequestResolution];
+
+
+export const AccountRequestResolution = {
+  ownership_transferred: 'ownership_transferred',
+  business_closed: 'business_closed',
+  business_unpublished: 'business_unpublished',
+  account_deleted: 'account_deleted',
+  request_rejected: 'request_rejected',
+} as const;
+
+export interface AccountRequestBlockedBusiness {
+  businessProfileId: number;
   name: string;
-  /** @maxLength 240 */
-  address?: string;
-  /** @maxLength 120 */
-  neighborhood?: string;
-  latitude?: number;
-  longitude?: number;
-  sourceUrl?: string;
+  publicationStatus: string;
+  /** True once a support resolution has been recorded for this business. */
+  resolved: boolean;
 }
+
+export type AccountRequestBlockerCode = typeof AccountRequestBlockerCode[keyof typeof AccountRequestBlockerCode];
+
+
+export const AccountRequestBlockerCode = {
+  blocked_ownership: 'blocked_ownership',
+} as const;
+
+export interface AccountRequestBlocker {
+  code: AccountRequestBlockerCode;
+  businesses: AccountRequestBlockedBusiness[];
+}
+
+export type AccountRequestScope = typeof AccountRequestScope[keyof typeof AccountRequestScope];
+
+
+export const AccountRequestScope = {
+  account: 'account',
+  business: 'business',
+} as const;
+
+export type AccountRequestType = typeof AccountRequestType[keyof typeof AccountRequestType];
+
+
+export const AccountRequestType = {
+  deletion: 'deletion',
+  export: 'export',
+  suspension_appeal: 'suspension_appeal',
+} as const;
+
+/**
+ * Requester-facing view. Support notes and the handling reviewer are never included.
+ */
+export interface AccountRequest {
+  id: number;
+  scope: AccountRequestScope;
+  type: AccountRequestType;
+  status: AccountRequestStatus;
+  version: number;
+  acknowledgedScopes: string[];
+  blocker: AccountRequestBlocker | null;
+  /** @nullable */
+  resolutionCode: string | null;
+  /**
+     * Null until a handling deadline is approved in release configuration.
+     * @nullable
+     */
+  deadlineAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  /** @nullable */
+  resolvedAt: string | null;
+  /** @nullable */
+  withdrawnAt: string | null;
+}
+
+export interface AccountRequests {
+  requests: AccountRequest[];
+}
+
+export type AccountRequestEventActor = typeof AccountRequestEventActor[keyof typeof AccountRequestEventActor];
+
+
+export const AccountRequestEventActor = {
+  requester: 'requester',
+  support: 'support',
+  system: 'system',
+} as const;
+
+export interface AccountRequestEvent {
+  id: number;
+  /** @nullable */
+  fromStatus: string | null;
+  toStatus: string;
+  actor: AccountRequestEventActor;
+  /** @nullable */
+  resolutionCode: string | null;
+  /** @nullable */
+  businessProfileId: number | null;
+  /** @nullable */
+  note: string | null;
+  createdAt: string;
+}
+
+export type SupportAccountRequest = AccountRequest & ({
+  /** Internal app user id of the requester; never contact data. */
+  userId: number;
+  /** @nullable */
+  resolutionNote: string | null;
+  /** @nullable */
+  resolvedByUserId: string | null;
+  events: AccountRequestEvent[];
+});
+
+export interface SupportAccountRequests {
+  requests: SupportAccountRequest[];
+}
+
+export type SupportAccountRequestDecisionInputDecision = typeof SupportAccountRequestDecisionInputDecision[keyof typeof SupportAccountRequestDecisionInputDecision];
+
+
+export const SupportAccountRequestDecisionInputDecision = {
+  start_review: 'start_review',
+  resolve_blocker: 'resolve_blocker',
+  complete: 'complete',
+  reject: 'reject',
+} as const;
+
+export interface SupportAccountRequestDecisionInput {
+  /** @minimum 1 */
+  expectedVersion: number;
+  decision: SupportAccountRequestDecisionInputDecision;
+  resolutionCode?: AccountRequestResolution;
+  /** Required for `resolve_blocker`; must be one of the request's blocked businesses. */
+  businessProfileId?: number;
+  /**
+     * Internal support note; never shown to the requester.
+     * @maxLength 1000
+     */
+  note?: string;
+}
+
+export type LifecycleMessageStatus = typeof LifecycleMessageStatus[keyof typeof LifecycleMessageStatus];
+
+
+export const LifecycleMessageStatus = {
+  queued: 'queued',
+  sending: 'sending',
+  accepted: 'accepted',
+  delivered: 'delivered',
+  failed: 'failed',
+  cancelled: 'cancelled',
+} as const;
+
+export interface LifecycleMessage {
+  id: number;
+  eventCode: string;
+  status: LifecycleMessageStatus;
+  locale: string;
+  /** @nullable */
+  businessName: string | null;
+  attempts: number;
+  maxAttempts: number;
+  /** @nullable */
+  nextRetryAt: string | null;
+  /** @nullable */
+  acceptedAt: string | null;
+  /** @nullable */
+  deliveredAt: string | null;
+  /** @nullable */
+  failedAt: string | null;
+  createdAt: string;
+}
+
+export interface LifecycleMessages {
+  messages: LifecycleMessage[];
+}
+
+export type SupportLifecycleMessage = LifecycleMessage & ({
+  /** @nullable */
+  recipientUserId: number | null;
+  /** @nullable */
+  lastErrorCode: string | null;
+  /** @nullable */
+  lastErrorAt: string | null;
+});
+
+export interface SupportLifecycleMessages {
+  messages: SupportLifecycleMessage[];
+}
+
+export type AccountOptionLabel = {
+  nl: string;
+  en: string;
+};
+
+export interface AccountOption {
+  id: string;
+  label: AccountOptionLabel;
+}
+
+export interface AccountOptions {
+  /** Identifier of the controlled list version; stored IDs that no longer resolve are shown as no longer available, never dropped. */
+  taxonomyVersion: string;
+  neighborhoods: AccountOption[];
+  interests: AccountOption[];
+}
+
+/**
+ * draft -> submitted (owner); submitted -> approved | changes_requested | rejected (reviewer);
+ * changes_requested -> submitted (owner, new version); approved -> superseded (later approval);
+ * draft -> discarded (owner). A business has at most one approved revision.
+ */
+export type BusinessRevisionStatus = typeof BusinessRevisionStatus[keyof typeof BusinessRevisionStatus];
+
+
+export const BusinessRevisionStatus = {
+  draft: 'draft',
+  submitted: 'submitted',
+  changes_requested: 'changes_requested',
+  approved: 'approved',
+  rejected: 'rejected',
+  superseded: 'superseded',
+  discarded: 'discarded',
+} as const;
+
+/**
+ * Owner- and reviewer-visible revision metadata. Draft content is never served on public routes.
+ */
+export interface BusinessRevisionSummary {
+  id: number;
+  businessProfileId: number;
+  version: number;
+  status: BusinessRevisionStatus;
+  /** @nullable */
+  submittedAt?: string | null;
+  /** @nullable */
+  decidedAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type ReviewDecisionRecordTargetType = typeof ReviewDecisionRecordTargetType[keyof typeof ReviewDecisionRecordTargetType];
+
+
+export const ReviewDecisionRecordTargetType = {
+  claim: 'claim',
+  revision: 'revision',
+  publication: 'publication',
+} as const;
+
+export type ReviewDecisionRecordDecision = typeof ReviewDecisionRecordDecision[keyof typeof ReviewDecisionRecordDecision];
+
+
+export const ReviewDecisionRecordDecision = {
+  approve: 'approve',
+  reject: 'reject',
+  request_changes: 'request_changes',
+  publish: 'publish',
+  unpublish: 'unpublish',
+  suspend: 'suspend',
+} as const;
+
+/**
+ * Immutable audit entry for a reviewer decision. The reviewer is derived from the session and must not own the target (self-review is refused with SELF_REVIEW_FORBIDDEN).
+ */
+export interface ReviewDecisionRecord {
+  id: number;
+  targetType: ReviewDecisionRecordTargetType;
+  targetId: number;
+  targetVersion: number;
+  decision: ReviewDecisionRecordDecision;
+  /** @nullable */
+  reasonCode?: string | null;
+  /** @nullable */
+  reason?: string | null;
+  createdAt: string;
+}
+
+/**
+ * Stored editorial text in one language as it was approved or drafted. Null or missing values mean "not provided"; nothing is machine-translated or invented. No length limits apply here: content migrated from the older profile contract is preserved verbatim. New owner input is validated by `BusinessRevisionTextInput`.
+ */
+export interface BusinessRevisionText {
+  /** @nullable */
+  tagline?: string | null;
+  /** @nullable */
+  description?: string | null;
+  /**
+     * Free-text opening hours as stated by the owner; never derived.
+     * @nullable
+     */
+  openingHours?: string | null;
+}
+
+/**
+ * Stored language-neutral facts. Migrated legacy values are preserved verbatim; new owner input is validated by `BusinessRevisionFactsInput`.
+ */
+export interface BusinessRevisionFacts {
+  /** @nullable */
+  websiteUrl?: string | null;
+  /** @nullable */
+  phone?: string | null;
+  /** @nullable */
+  email?: string | null;
+  /** @nullable */
+  address?: string | null;
+  /** @nullable */
+  logoUrl?: string | null;
+  /** @nullable */
+  coverUrl?: string | null;
+}
+
+/**
+ * Owner-supplied editorial text in one language. Omitted fields are left untouched; null clears a field.
+ */
+export interface BusinessRevisionTextInput {
+  /**
+     * @maxLength 160
+     * @nullable
+     */
+  tagline?: string | null;
+  /**
+     * @maxLength 2000
+     * @nullable
+     */
+  description?: string | null;
+  /**
+     * @maxLength 500
+     * @nullable
+     */
+  openingHours?: string | null;
+}
+
+/**
+ * Owner-supplied language-neutral facts. Only http(s) URLs are accepted.
+ */
+export interface BusinessRevisionFactsInput {
+  /**
+     * @maxLength 500
+     * @nullable
+     */
+  websiteUrl?: string | null;
+  /**
+     * @maxLength 40
+     * @nullable
+     */
+  phone?: string | null;
+  /**
+     * @maxLength 160
+     * @nullable
+     * @pattern ^$|^[^\s@]+@[^\s@]+\.[^\s@]+$
+     */
+  email?: string | null;
+  /**
+     * @maxLength 240
+     * @nullable
+     */
+  address?: string | null;
+  /**
+     * @maxLength 500
+     * @nullable
+     */
+  logoUrl?: string | null;
+  /**
+     * @maxLength 500
+     * @nullable
+     */
+  coverUrl?: string | null;
+}
+
+export interface BusinessRevisionContent {
+  nl: BusinessRevisionText;
+  en: BusinessRevisionText;
+  facts: BusinessRevisionFacts;
+}
+
+export type BusinessRevision = BusinessRevisionSummary & {
+  content: BusinessRevisionContent;
+};
+
+export interface BusinessRevisionUpdateInput {
+  /** Version of the latest revision the owner saw; 0 when the business has none yet. */
+  expectedVersion: number;
+  nl?: BusinessRevisionTextInput;
+  en?: BusinessRevisionTextInput;
+  facts?: BusinessRevisionFactsInput;
+}
+
+export interface BusinessRevisionTransitionInput {
+  expectedVersion: number;
+}
+
+/**
+ * Reviewer verdict for one approved field. `contradicted` fields are withheld publicly; `unchecked` and `unavailable` are shown with that provenance.
+ */
+export type FactCheckStatus = typeof FactCheckStatus[keyof typeof FactCheckStatus];
+
+
+export const FactCheckStatus = {
+  unchecked: 'unchecked',
+  confirmed: 'confirmed',
+  contradicted: 'contradicted',
+  unavailable: 'unavailable',
+} as const;
+
+export interface BusinessFactCheck {
+  field: string;
+  status: FactCheckStatus;
+  /** @nullable */
+  sourceUrl: string | null;
+  /** @nullable */
+  checkedOn: string | null;
+  /**
+     * Reviewer note; only served to owners and reviewers, never publicly.
+     * @nullable
+     */
+  note?: string | null;
+}
+
+export type BusinessFactCheckInputField = typeof BusinessFactCheckInputField[keyof typeof BusinessFactCheckInputField];
+
+
+export const BusinessFactCheckInputField = {
+  tagline: 'tagline',
+  description: 'description',
+  openingHours: 'openingHours',
+  websiteUrl: 'websiteUrl',
+  phone: 'phone',
+  email: 'email',
+  address: 'address',
+  logoUrl: 'logoUrl',
+  coverUrl: 'coverUrl',
+} as const;
+
+export interface BusinessFactCheckInput {
+  field: BusinessFactCheckInputField;
+  status: FactCheckStatus;
+  /**
+     * @maxLength 500
+     * @nullable
+     */
+  sourceUrl?: string | null;
+  /**
+     * @maxLength 500
+     * @nullable
+     */
+  note?: string | null;
+}
+
+export type BusinessFreshnessStatus = typeof BusinessFreshnessStatus[keyof typeof BusinessFreshnessStatus];
+
+
+export const BusinessFreshnessStatus = {
+  unverified: 'unverified',
+  fresh: 'fresh',
+  stale: 'stale',
+} as const;
+
+/**
+ * Truthful freshness of the approved snapshot. `unverified` when no field was ever confirmed;
+ * `stale` when the newest confirmation is older than `staleAfterDays`. `recheckDue` flags a
+ * still-fresh snapshot that turns stale within `recheckWindowDays`, so owners and reviewers can
+ * schedule a re-check before it flips. `staleOn` is derived from `checkedOn`, never stored.
+ * Freshness is independent from publication status.
+ */
+export interface BusinessFreshness {
+  status: BusinessFreshnessStatus;
+  /** @nullable */
+  checkedOn: string | null;
+  staleAfterDays: number;
+  /**
+     * ISO date-time when the snapshot turns (or turned) stale; null when unverified.
+     * @nullable
+     */
+  staleOn: string | null;
+  /**
+     * Whole days until `staleOn`; negative once stale; null when unverified.
+     * @nullable
+     */
+  daysUntilStale: number | null;
+  recheckWindowDays: number;
+  recheckDue: boolean;
+}
+
+/**
+ * Derived owner-facing summary; publication and revision states stay independent underneath.
+ */
+export type BusinessOwnerState = typeof BusinessOwnerState[keyof typeof BusinessOwnerState];
+
+
+export const BusinessOwnerState = {
+  unknown: 'unknown',
+  draft: 'draft',
+  submitted: 'submitted',
+  changes_requested: 'changes_requested',
+  approved: 'approved',
+  published: 'published',
+  stale: 'stale',
+  suspended: 'suspended',
+  unpublished: 'unpublished',
+} as const;
 
 export interface BusinessProfile {
   id: number;
@@ -79,8 +1053,216 @@ export interface BusinessProfile {
   isClaimed: boolean;
   /** @nullable */
   claimedAt?: string | null;
+  publicationStatus?: PublicationStatus;
+  /**
+     * Self-reported category of a new-business draft; null for listing-derived profiles.
+     * @nullable
+     */
+  category?: string | null;
+  /**
+     * Version of the approved revision when publication review is enabled; null when the profile is served from its columns.
+     * @nullable
+     */
+  approvedRevisionVersion?: number | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface BusinessRevisionWorkspace {
+  profile: BusinessProfile;
+  role: string;
+  state: BusinessOwnerState;
+  latestRevision: BusinessRevision | null;
+  approvedRevision: BusinessRevision | null;
+  latestDecision: ReviewDecisionRecord | null;
+  /** Fact checks recorded for the approved revision. */
+  factChecks: BusinessFactCheck[];
+  freshness: BusinessFreshness;
+}
+
+/**
+ * Non-sensitive business context for reviewer queues.
+ */
+export interface BusinessProfileSummary {
+  id: number;
+  slug: string;
+  name: string;
+  /** @nullable */
+  neighborhood: string | null;
+  /** @nullable */
+  category: string | null;
+  listingSource: string;
+  /** @nullable */
+  sourceUrl: string | null;
+  isClaimed: boolean;
+  publicationStatus: PublicationStatus;
+}
+
+export interface AuthorityQueueItem {
+  id: number;
+  version: number;
+  status: ClaimStatus;
+  kind: BusinessIntakeKind;
+  relationship: string;
+  /** @nullable */
+  authorityDeclaration: string | null;
+  /** @nullable */
+  evidenceReference: string | null;
+  /** @nullable */
+  message: string | null;
+  contactName: string;
+  submittedAt: string;
+  createdAt: string;
+  profile: BusinessProfileSummary;
+  /** False when deciding would be self-review for the signed-in reviewer. */
+  canDecide: boolean;
+}
+
+export interface AuthorityQueuePage {
+  items: AuthorityQueueItem[];
+  pageInfo: PageInfo;
+}
+
+export type ReviewClaimDecisionInputDecision = typeof ReviewClaimDecisionInputDecision[keyof typeof ReviewClaimDecisionInputDecision];
+
+
+export const ReviewClaimDecisionInputDecision = {
+  approve: 'approve',
+  reject: 'reject',
+  request_changes: 'request_changes',
+} as const;
+
+export interface ReviewClaimDecisionInput {
+  decision: ReviewClaimDecisionInputDecision;
+  expectedVersion: number;
+  /**
+     * Shown to the claimant; required for reject and request_changes.
+     * @maxLength 500
+     */
+  reason?: string;
+}
+
+export interface EditorialQueueItem {
+  revision: BusinessRevision;
+  profile: BusinessProfileSummary;
+  approvedRevision: BusinessRevision | null;
+  canDecide: boolean;
+}
+
+export interface EditorialQueuePage {
+  items: EditorialQueueItem[];
+  pageInfo: PageInfo;
+}
+
+export type ReviewRevisionDecisionInputDecision = typeof ReviewRevisionDecisionInputDecision[keyof typeof ReviewRevisionDecisionInputDecision];
+
+
+export const ReviewRevisionDecisionInputDecision = {
+  approve: 'approve',
+  reject: 'reject',
+  request_changes: 'request_changes',
+} as const;
+
+export interface ReviewRevisionDecisionInput {
+  decision: ReviewRevisionDecisionInputDecision;
+  expectedVersion: number;
+  /**
+     * Shown to the owner; required for reject and request_changes.
+     * @maxLength 500
+     */
+  reason?: string;
+  /**
+     * Per-field verdicts recorded with an approval. Omitted fields stay `unchecked`.
+     * @maxItems 20
+     */
+  factChecks?: BusinessFactCheckInput[];
+}
+
+export interface PublicationQueueItem {
+  profile: BusinessProfileSummary;
+  approvedRevision: BusinessRevision | null;
+  latestDecision: ReviewDecisionRecord | null;
+  freshness: BusinessFreshness;
+  canDecide: boolean;
+}
+
+export interface PublicationQueuePage {
+  items: PublicationQueueItem[];
+  pageInfo: PageInfo;
+}
+
+export type PublicationActionInputAction = typeof PublicationActionInputAction[keyof typeof PublicationActionInputAction];
+
+
+export const PublicationActionInputAction = {
+  publish: 'publish',
+  unpublish: 'unpublish',
+  suspend: 'suspend',
+} as const;
+
+export interface PublicationActionInput {
+  action: PublicationActionInputAction;
+  /** Version of the approved revision the reviewer saw; 0 when none exists. */
+  expectedRevisionVersion: number;
+  /**
+     * Required for unpublish and suspend.
+     * @maxLength 500
+     */
+  reason?: string;
+}
+
+export type PublicBusinessProvenanceChecksItem = {
+  field: string;
+  status: FactCheckStatus;
+  /** @nullable */
+  sourceUrl: string | null;
+  /** @nullable */
+  checkedOn: string | null;
+};
+
+/**
+ * Truthful source, check, and freshness metadata for the approved snapshot. Never includes reviewer identities or notes.
+ */
+export interface PublicBusinessProvenance {
+  listingSource: string;
+  /** @nullable */
+  sourceUrl: string | null;
+  approvedVersion: number;
+  /** @nullable */
+  approvedAt: string | null;
+  freshness: BusinessFreshness;
+  checks: PublicBusinessProvenanceChecksItem[];
+}
+
+export type DealStatus = typeof DealStatus[keyof typeof DealStatus];
+
+
+export const DealStatus = {
+  pending: 'pending',
+  approved: 'approved',
+  rejected: 'rejected',
+  withdrawn: 'withdrawn',
+} as const;
+
+export interface BusinessListingReference {
+  /** @minLength 1 */
+  cityId: string;
+  /** @minLength 1 */
+  listingId: string;
+  /** @minLength 1 */
+  listingSource: string;
+  /**
+     * @minLength 1
+     * @maxLength 160
+     */
+  name: string;
+  /** @maxLength 240 */
+  address?: string;
+  /** @maxLength 120 */
+  neighborhood?: string;
+  latitude?: number;
+  longitude?: number;
+  sourceUrl?: string;
 }
 
 export interface BusinessClaim {
@@ -99,6 +1281,22 @@ export interface BusinessClaim {
   reviewNote?: string | null;
   /** @nullable */
   reviewedAt?: string | null;
+  /** Optimistic-concurrency version; send it back as expectedVersion on later claim updates. */
+  version?: number;
+  nextAction?: ClaimNextAction;
+  kind?: BusinessIntakeKind;
+  /**
+     * Only returned to the claimant and reviewers; never to other claimants.
+     * @nullable
+     */
+  authorityDeclaration?: string | null;
+  /**
+     * Only returned to the claimant and reviewers; never to other claimants.
+     * @nullable
+     */
+  evidenceReference?: string | null;
+  /** @nullable */
+  withdrawnAt?: string | null;
   createdAt: string;
   updatedAt: string;
   profile: BusinessProfile;
@@ -237,18 +1435,30 @@ export interface DealUpdate {
   status?: DealUpdateStatus;
 }
 
+/**
+ * `request_changes` is only valid for business claims and asks the claimant for more authority evidence.
+ */
 export type ModerationDecisionDecision = typeof ModerationDecisionDecision[keyof typeof ModerationDecisionDecision];
 
 
 export const ModerationDecisionDecision = {
   approve: 'approve',
   reject: 'reject',
+  request_changes: 'request_changes',
 } as const;
 
 export interface ModerationDecision {
+  /** `request_changes` is only valid for business claims and asks the claimant for more authority evidence. */
   decision: ModerationDecisionDecision;
   /** @maxLength 500 */
   reviewNote?: string;
+  /**
+     * Required for business claim decisions: the claim `version` the reviewer saw. The
+     * decision is applied only when the claim still has exactly that version and a
+     * reviewable status; otherwise 409 so a stale moderation tab can never grant
+     * ownership based on evidence the reviewer never saw. Ignored for deals.
+     */
+  expectedVersion?: number;
 }
 
 export type OwnedBusinessProfile = BusinessProfile & {
@@ -256,9 +1466,11 @@ export type OwnedBusinessProfile = BusinessProfile & {
   deals: Deal[];
 };
 
-export type PublicBusinessProfile = BusinessProfile & {
+export type PublicBusinessProfile = BusinessProfile & ({
   deals: Deal[];
-};
+  content?: BusinessRevisionContent | null;
+  provenance?: PublicBusinessProvenance | null;
+});
 
 export interface HealthStatus {
   status: string;
@@ -1340,6 +2552,41 @@ export interface NewsScanResponse {
   error?: string;
 }
 
+/**
+ * The expectedVersion or expectedRevision did not match the current server version. Reload and retry with the returned expectedVersion.
+ */
+export type VersionConflictResponse = ApiError;
+
+/**
+ * This entry point is disabled until its readiness gate is met.
+ */
+export type FeatureDisabledResponse = ApiError;
+
+/**
+ * Client-generated key (8-128 characters) for mutating lifecycle operations. Replaying the same key
+ * with the same payload returns the original result; the same key with a different payload
+ * returns 409 IDEMPOTENCY_CONFLICT.
+ */
+export type IdempotencyKeyParameter = string;
+
+/**
+ * Opaque cursor from a previous PageInfo.nextCursor.
+ */
+export type PageCursorParameter = string;
+
+/**
+ * Page size for cursor-paginated lists.
+ */
+export type PageLimitParameter = number;
+
+export type GetSupportAccountRequestsParams = {
+status?: AccountRequestStatus;
+};
+
+export type GetSupportLifecycleMessagesParams = {
+status?: LifecycleMessageStatus;
+};
+
 export type GetWeatherParams = {
 /**
  * The city identifier (ams, rot, utr, dhg, ein)
@@ -1459,6 +2706,9 @@ export const GetCommunityModerationPostsStatus = {
 } as const;
 
 export type GetBusinessClaimModerationParams = {
+/**
+ * `pending` returns every claim awaiting a reviewer decision (legacy `pending`, `submitted`, and `disputed`).
+ */
 status?: GetBusinessClaimModerationStatus;
 };
 
@@ -1467,10 +2717,67 @@ export type GetBusinessClaimModerationStatus = typeof GetBusinessClaimModeration
 
 export const GetBusinessClaimModerationStatus = {
   pending: 'pending',
+  changes_requested: 'changes_requested',
+  disputed: 'disputed',
   approved: 'approved',
   rejected: 'rejected',
   all: 'all',
 } as const;
+
+export type LookupBusinessesParams = {
+/**
+ * Business name (or part of it) to look up.
+ * @minLength 2
+ * @maxLength 80
+ */
+q: string;
+};
+
+export type GetAuthorityQueueParams = {
+/**
+ * Opaque cursor from a previous PageInfo.nextCursor.
+ * @maxLength 200
+ */
+cursor?: PageCursorParameter;
+/**
+ * Page size for cursor-paginated lists.
+ * @minimum 1
+ * @maximum 50
+ */
+limit?: PageLimitParameter;
+};
+
+export type GetEditorialQueueParams = {
+/**
+ * Opaque cursor from a previous PageInfo.nextCursor.
+ * @maxLength 200
+ */
+cursor?: PageCursorParameter;
+/**
+ * Page size for cursor-paginated lists.
+ * @minimum 1
+ * @maximum 50
+ */
+limit?: PageLimitParameter;
+};
+
+export type GetPublicationQueueParams = {
+/**
+ * Opaque cursor from a previous PageInfo.nextCursor.
+ * @maxLength 200
+ */
+cursor?: PageCursorParameter;
+/**
+ * Page size for cursor-paginated lists.
+ * @minimum 1
+ * @maximum 50
+ */
+limit?: PageLimitParameter;
+/**
+ * When true, restrict to businesses whose fact re-check is due and order by soonest staleOn.
+ */
+recheckDue?: boolean;
+};
 
 export type GetDealsParams = {
 cityId: string;

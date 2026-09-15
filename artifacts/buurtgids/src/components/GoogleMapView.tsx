@@ -37,10 +37,13 @@ const MAP_STYLES: google.maps.MapTypeStyle[] = [
   { elementType: 'labels.icon', stylers: [{ visibility: 'on' }] },
 ];
 const MARQTPLAZA_MARKER_GRADIENT = 'linear-gradient(135deg, #ff9a52 0%, #f36c21 48%, #c94d12 100%)';
+const NEIGHBORHOOD_PULSE_DURATION_MS = 2_400;
 
 const TILE_SIZE = 256;
 const MIN_TILE_ZOOM = 10;
 const MAX_TILE_ZOOM = 18;
+const MAP_CLUSTER_RADIUS_PX = 56;
+const CLUSTER_DRAG_THRESHOLD_PX = 6;
 const GOOGLE_MAPS_LOAD_TIMEOUT_MS = 4_000;
 const googleMapsApiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string | undefined;
 const googleMapsBrowserKeyPattern = /^AIza[0-9A-Za-z_-]{35}$/;
@@ -57,6 +60,7 @@ interface GoogleMapViewProps {
   showAllNeighborhoods?: boolean;
   showNeighborhoodLabels?: boolean;
   highlightedNeighborhood?: string | null;
+  isDataLoading?: boolean;
   onNeighborhoodClick?: (name: string) => void;
   onNeighborhoodHover?: (name: string | null) => void;
   markers: MarkerData[];
@@ -182,9 +186,26 @@ const MAP_COPY = {
   },
 } as const;
 
-type MapPoint = Pick<MarkerData, 'id' | 'name' | 'category' | 'description' | 'details' | 'lat' | 'lng'> & {
-  category: MapCategory;
-};
+function DataLoadingNotice({ isDataLoading }: { isDataLoading: boolean }) {
+  if (!isDataLoading) return null;
+
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      data-testid="map-fetching-notice"
+      className="pointer-events-none absolute left-1/2 top-4 z-30 -translate-x-1/2 rounded-full border border-primary/30 bg-card/95 px-4 py-2 text-xs font-extrabold text-primary shadow-lg backdrop-blur-sm"
+    >
+      <span
+        aria-hidden="true"
+        className="mr-2 inline-block h-2 w-2 animate-pulse rounded-full bg-primary align-middle"
+      />
+      Fetching data please wait
+    </div>
+  );
+}
+
+type MapPoint = MarkerData;
 
 function getCategoryIcon(category: MapCategory) {
   return CATEGORY_ICONS[category] ?? MapPinIcon;
@@ -283,6 +304,226 @@ function worldToLatLng(x: number, y: number, zoom: number): LatLng {
     lat: (180 / Math.PI) * Math.atan(Math.sinh(mercatorY)),
     lng: ((longitude + 540) % 360) - 180,
   };
+}
+
+type MapPointCluster = {
+  id: string;
+  points: MapPoint[];
+  lat: number;
+  lng: number;
+  x: number;
+  y: number;
+};
+
+function clusterMapPoints(
+  points: MapPoint[],
+  getPosition: (point: MapPoint) => { x: number; y: number },
+  radius: number,
+  selectedMarkerId: string | null = null,
+): MapPointCluster[] {
+  const clusters: MapPointCluster[] = [];
+  // The selected listing is always rendered on its own so it can never be
+  // hidden inside a count badge; cluster only the remaining points.
+  const selectedPoint = selectedMarkerId
+    ? points.find((point) => point.id === selectedMarkerId)
+    : undefined;
+
+  for (const point of points) {
+    if (point === selectedPoint) continue;
+    const position = getPosition(point);
+    const cluster = clusters.find((candidate) => (
+      Math.hypot(candidate.x - position.x, candidate.y - position.y) <= radius
+    ));
+
+    if (!cluster) {
+      clusters.push({
+        id: `cluster-${point.id}`,
+        points: [point],
+        lat: point.lat,
+        lng: point.lng,
+        x: position.x,
+        y: position.y,
+      });
+      continue;
+    }
+
+    const nextCount = cluster.points.length + 1;
+    cluster.points.push(point);
+    cluster.lat = (cluster.lat * (nextCount - 1) + point.lat) / nextCount;
+    cluster.lng = (cluster.lng * (nextCount - 1) + point.lng) / nextCount;
+    cluster.x = (cluster.x * (nextCount - 1) + position.x) / nextCount;
+    cluster.y = (cluster.y * (nextCount - 1) + position.y) / nextCount;
+    cluster.id = `cluster-${cluster.points.map(({ id }) => id).sort().join('-')}`;
+  }
+
+  if (selectedPoint) {
+    const position = getPosition(selectedPoint);
+    clusters.push({
+      id: `cluster-${selectedPoint.id}`,
+      points: [selectedPoint],
+      lat: selectedPoint.lat,
+      lng: selectedPoint.lng,
+      x: position.x,
+      y: position.y,
+    });
+  }
+
+  return clusters;
+}
+
+function useElementSize<T extends HTMLElement>() {
+  const ref = useRef<T>(null);
+  const [size, setSize] = useState({ width: 0, height: 0 });
+  useEffect(() => {
+    const element = ref.current;
+    if (!element) return;
+    const update = () => {
+      const rect = element.getBoundingClientRect();
+      setSize((current) => (
+        current.width === rect.width && current.height === rect.height
+          ? current
+          : { width: rect.width, height: rect.height }
+      ));
+    };
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+  return [ref, size] as const;
+}
+
+/** Runs onActivate only for a stationary pointer release, so a map drag that
+ *  starts or ends on a cluster badge does not zoom. */
+function attachStationaryActivation(element: HTMLElement, onActivate: () => void) {
+  let down: { x: number; y: number } | null = null;
+  let dragged = false;
+  element.addEventListener('pointerdown', (event) => {
+    down = { x: event.clientX, y: event.clientY };
+    dragged = false;
+    event.stopPropagation();
+    element.setPointerCapture(event.pointerId);
+  });
+  element.addEventListener('pointermove', (event) => {
+    if (!down) return;
+    if (Math.hypot(event.clientX - down.x, event.clientY - down.y) > CLUSTER_DRAG_THRESHOLD_PX) {
+      dragged = true;
+    }
+  });
+  element.addEventListener('click', (event) => {
+    event.stopPropagation();
+    const wasDragged = dragged;
+    down = null;
+    dragged = false;
+    if (wasDragged) return;
+    onActivate();
+  });
+}
+
+function ClusterSummaryMarker({
+  cluster,
+  style,
+  onClick,
+}: {
+  cluster: MapPointCluster;
+  style: React.CSSProperties;
+  onClick?: () => void;
+}) {
+  const count = cluster.points.length;
+  const size = count >= 100 ? 62 : count >= 10 ? 56 : 50;
+  const isInteractive = Boolean(onClick);
+  const downRef = useRef<{ x: number; y: number } | null>(null);
+  const draggedRef = useRef(false);
+  const label = isInteractive
+    ? `${count} listings in this area. Zoom in to expand.`
+    : `${count} listings in this area`;
+
+  return (
+    <div
+      key={cluster.id}
+      data-map-cluster
+      role={isInteractive ? 'button' : 'img'}
+      tabIndex={isInteractive ? 0 : undefined}
+      aria-label={label}
+      title={`${count} listings in this area`}
+      className="absolute z-30 -translate-x-1/2 -translate-y-1/2"
+      style={style}
+      onPointerDown={(event) => {
+        downRef.current = { x: event.clientX, y: event.clientY };
+        draggedRef.current = false;
+        if (isInteractive) {
+          // Keep the map from starting a pan (and capturing the pointer, which
+          // would swallow our click); the badge tracks its own movement.
+          event.stopPropagation();
+          event.currentTarget.setPointerCapture(event.pointerId);
+        }
+      }}
+      onPointerMove={(event) => {
+        const down = downRef.current;
+        if (down && Math.hypot(event.clientX - down.x, event.clientY - down.y) > CLUSTER_DRAG_THRESHOLD_PX) {
+          draggedRef.current = true;
+        }
+      }}
+      onClick={(event) => {
+        event.stopPropagation();
+        const wasDragged = draggedRef.current;
+        downRef.current = null;
+        draggedRef.current = false;
+        if (!wasDragged) onClick?.();
+      }}
+      onKeyDown={(event) => {
+        if (isInteractive && (event.key === 'Enter' || event.key === ' ')) {
+          event.preventDefault();
+          onClick?.();
+        }
+      }}
+    >
+      <span
+        className="flex items-center justify-center rounded-full border-[3px] border-white bg-[linear-gradient(135deg,#ff9a52_0%,#f36c21_48%,#c94d12_100%)] font-black text-white shadow-[0_7px_16px_-5px_rgba(23,34,53,0.5),0_0_0_2px_rgba(243,108,33,0.3)]"
+        style={{
+          width: size,
+          height: size,
+          fontSize: count >= 100 ? 14 : 16,
+        }}
+      >
+        {count}
+      </span>
+    </div>
+  );
+}
+
+function createHtmlClusterElement(
+  cluster: MapPointCluster,
+  onClick: () => void,
+): HTMLElement {
+  const count = cluster.points.length;
+  const size = count >= 100 ? 62 : count >= 10 ? 56 : 50;
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.setAttribute('data-map-cluster', '');
+  button.setAttribute('aria-label', `${count} listings in this area. Zoom in to expand.`);
+  button.title = `${count} listings in this area`;
+  button.style.cssText = [
+    'position:absolute',
+    'display:flex',
+    'align-items:center',
+    'justify-content:center',
+    'transform:translate(-50%,-50%)',
+    `width:${size}px`,
+    `height:${size}px`,
+    'border:3px solid #fff',
+    'border-radius:50%',
+    'background:linear-gradient(135deg,#ff9a52 0%,#f36c21 48%,#c94d12 100%)',
+    'box-shadow:0 7px 16px -5px rgba(23,34,53,0.5),0 0 0 2px rgba(243,108,33,0.3)',
+    'color:#fff',
+    `font:${count >= 100 ? 14 : 16}px/1 ui-sans-serif,system-ui,sans-serif`,
+    'font-weight:900',
+    'cursor:pointer',
+    'padding:0',
+  ].join(';');
+  button.textContent = String(count);
+  attachStationaryActivation(button, onClick);
+  return button;
 }
 
 function getInitialViewport(locationId: string): TileViewport {
@@ -405,6 +646,7 @@ function CoordinateMapFallback({
   showAllNeighborhoods = false,
   showNeighborhoodLabels = true,
   highlightedNeighborhood = null,
+  isDataLoading = false,
   onNeighborhoodClick,
   onNeighborhoodHover,
   markers,
@@ -418,6 +660,7 @@ function CoordinateMapFallback({
   | 'showAllNeighborhoods'
   | 'showNeighborhoodLabels'
   | 'highlightedNeighborhood'
+   | 'isDataLoading'
   | 'onNeighborhoodClick'
    | 'onNeighborhoodHover'
   | 'markers'
@@ -431,6 +674,7 @@ function CoordinateMapFallback({
   const neighborhoodAreas = getNeighborhoodAreas(locationId, displayedNeighborhoods);
   const mapCopy = MAP_COPY[language];
   const [hoveredMarkerId, setHoveredMarkerId] = useState<string | null>(null);
+  const [containerRef, containerSize] = useElementSize<HTMLDivElement>();
 
   if (points.length === 0 && neighborhoodAreas.length === 0) {
     return (
@@ -470,9 +714,24 @@ function CoordinateMapFallback({
   const minLng = Math.min(...longitudes) - longitudePadding;
   const maxLng = Math.max(...longitudes) + longitudePadding;
   const bounds = { minLat, maxLat, minLng, maxLng };
+  // Cluster in CSS pixels (percent × measured size) so grouping matches the
+  // other providers regardless of the container's aspect ratio. Until the
+  // container is measured, assume a square so the first paint is stable.
+  const pixelWidth = containerSize.width || 100;
+  const pixelHeight = containerSize.height || 100;
+  const pointClusters = clusterMapPoints(
+    points,
+    (point) => ({
+      x: ((point.lng - minLng) / (maxLng - minLng)) * pixelWidth,
+      y: ((maxLat - point.lat) / (maxLat - minLat)) * pixelHeight,
+    }),
+    MAP_CLUSTER_RADIUS_PX,
+    selectedMarkerId,
+  );
 
   return (
     <div
+      ref={containerRef}
       className="absolute inset-0 overflow-hidden bg-[linear-gradient(135deg,_#e8f0e9_0%,_#f7f4ed_46%,_#dceaf0_100%)]"
       aria-label={mapCopy.coordinateMap}
     >
@@ -519,9 +778,14 @@ function CoordinateMapFallback({
                   style={{
                     strokeWidth: highlightedNeighborhood === area.name ? 0.8 : 0.35,
                     strokeOpacity: highlightedNeighborhood === area.name ? 1 : 0.2,
-                    transition: 'stroke 180ms ease, stroke-opacity 180ms ease',
+                     fillOpacity: highlightedNeighborhood === area.name ? 0.2 : 0.1,
+                     animation: isDataLoading && highlightedNeighborhood === area.name
+                       ? `buurtplaza-neighborhood-pulse ${NEIGHBORHOOD_PULSE_DURATION_MS}ms ease-in-out infinite`
+                       : undefined,
+                     transition: 'stroke 180ms ease, stroke-opacity 180ms ease, fill-opacity 180ms ease',
                     vectorEffect: 'non-scaling-stroke',
                   }}
+                   data-neighborhood-loading={isDataLoading && highlightedNeighborhood === area.name ? 'true' : undefined}
                 />
               ))}
             </svg>
@@ -537,7 +801,22 @@ function CoordinateMapFallback({
           </div>
         );
       })}
-      {points.map((point) => {
+      <DataLoadingNotice isDataLoading={isDataLoading} />
+      {pointClusters.map((cluster) => {
+        const point = cluster.points[0]!;
+        if (cluster.points.length > 1) {
+          return (
+            <ClusterSummaryMarker
+              key={cluster.id}
+              cluster={cluster}
+              style={{
+                left: `${(cluster.x / pixelWidth) * 100}%`,
+                top: `${(cluster.y / pixelHeight) * 100}%`,
+              }}
+            />
+          );
+        }
+
         const left = ((point.lng - minLng) / (maxLng - minLng)) * 100;
         const top = ((maxLat - point.lat) / (maxLat - minLat)) * 100;
         const isSelected = point.id === selectedMarkerId;
@@ -608,6 +887,7 @@ function TileMapView({
   showAllNeighborhoods = false,
   showNeighborhoodLabels = true,
   highlightedNeighborhood = null,
+  isDataLoading = false,
   onNeighborhoodClick,
   onNeighborhoodHover,
   markers,
@@ -771,6 +1051,15 @@ function TileMapView({
   const center = latLngToWorld(viewport.center, viewport.zoom);
   const mapLeft = center.x - size.width / 2;
   const mapTop = center.y - size.height / 2;
+  const pointClusters = clusterMapPoints(
+    points,
+    (point) => {
+      const world = latLngToWorld({ lat: point.lat, lng: point.lng }, viewport.zoom);
+      return { x: world.x - mapLeft, y: world.y - mapTop };
+    },
+    MAP_CLUSTER_RADIUS_PX,
+    selectedMarkerId,
+  );
 
   const changeZoom = (amount: number) => {
     setViewport((current) => ({
@@ -808,6 +1097,13 @@ function TileMapView({
     if (dragRef.current?.pointerId === event.pointerId) {
       dragRef.current = null;
     }
+  };
+
+  const zoomToCluster = (cluster: MapPointCluster) => {
+    setViewport((current) => ({
+      center: { lat: cluster.lat, lng: cluster.lng },
+      zoom: Math.min(MAX_TILE_ZOOM, current.zoom + 2),
+    }));
   };
 
   return (
@@ -871,13 +1167,19 @@ function TileMapView({
               style={{
                 strokeWidth: highlightedNeighborhood === area.name ? 5 : 2.5,
                 strokeOpacity: highlightedNeighborhood === area.name ? 1 : 0.2,
-                transition: 'stroke 180ms ease, stroke-opacity 180ms ease',
+                 fillOpacity: highlightedNeighborhood === area.name ? 0.2 : 0.1,
+                 animation: isDataLoading && highlightedNeighborhood === area.name
+                 ? `buurtplaza-neighborhood-pulse ${NEIGHBORHOOD_PULSE_DURATION_MS}ms ease-in-out infinite`
+                   : undefined,
+                 transition: 'stroke 180ms ease, stroke-opacity 180ms ease, fill-opacity 180ms ease',
                 vectorEffect: 'non-scaling-stroke',
               }}
+               data-neighborhood-loading={isDataLoading && highlightedNeighborhood === area.name ? 'true' : undefined}
             />
           )))}
         </svg>
       )}
+      <DataLoadingNotice isDataLoading={isDataLoading} />
       {neighborhoodAreas.map((area) => {
         if (!shouldShowNeighborhoodLabel(area.name, { showNeighborhoodLabels, showAllNeighborhoods, selectedNeighborhoods, highlightedNeighborhood })) return null;
         const world = latLngToWorld(area, viewport.zoom);
@@ -898,7 +1200,19 @@ function TileMapView({
         );
       })}
 
-      {points.map((point) => {
+      {pointClusters.map((cluster) => {
+        const point = cluster.points[0]!;
+        if (cluster.points.length > 1) {
+          return (
+            <ClusterSummaryMarker
+              key={cluster.id}
+              cluster={cluster}
+              style={{ left: cluster.x, top: cluster.y }}
+              onClick={() => zoomToCluster(cluster)}
+            />
+          );
+        }
+
         const world = latLngToWorld({ lat: point.lat, lng: point.lng }, viewport.zoom);
         const left = world.x - mapLeft;
         const top = world.y - mapTop;
@@ -1013,6 +1327,7 @@ function GoogleMapCanvas({
   showAllNeighborhoods = false,
   showNeighborhoodLabels = true,
   highlightedNeighborhood = null,
+  isDataLoading = false,
   onNeighborhoodClick,
   onNeighborhoodHover,
   markers,
@@ -1028,8 +1343,9 @@ function GoogleMapCanvas({
     polygon: google.maps.Polygon;
     label?: HtmlMarkerOverlay;
   }>>(new Map());
-  const [mapReady, setMapReady] = useState(false);
   const location = getLocation(locationId);
+  const [mapReady, setMapReady] = useState(false);
+  const [mapZoom, setMapZoom] = useState(() => location?.zoom ?? 12);
   // Polygon listeners are bound once per overlay; route them through refs so
   // they always call the latest React callbacks instead of a stale closure.
   const neighborhoodClickRef = useRef(onNeighborhoodClick);
@@ -1184,6 +1500,18 @@ function GoogleMapCanvas({
     [language, onMarkerClick, selectedMarkerId],
   );
 
+  const buildClusterEl = useCallback(
+    (cluster: MapPointCluster): HTMLElement => {
+      return createHtmlClusterElement(cluster, () => {
+        const map = mapRef.current;
+        if (!map) return;
+        map.panTo({ lat: cluster.lat, lng: cluster.lng });
+        map.setZoom(Math.min(18, (map.getZoom() ?? mapZoom) + 2));
+      });
+    },
+    [mapZoom],
+  );
+
   useEffect(() => {
     if (!location || !containerRef.current) {
       onUnavailable();
@@ -1221,6 +1549,7 @@ function GoogleMapCanvas({
           streetViewControl: false,
           fullscreenControl: false,
         });
+        setMapZoom(location.zoom);
         setMapReady(true);
       })
       .catch(onUnavailable)
@@ -1234,6 +1563,14 @@ function GoogleMapCanvas({
       mapsWindow.gm_authFailure = previousAuthFailure;
     };
   }, [location, onUnavailable]);
+
+  useEffect(() => {
+    if (!mapReady || !mapRef.current) return;
+    const zoomListener = mapRef.current.addListener('zoom_changed', () => {
+      setMapZoom(mapRef.current?.getZoom() ?? location?.zoom ?? 12);
+    });
+    return () => zoomListener.remove();
+  }, [location?.zoom, mapReady]);
 
   // Only refit the camera when the content actually changes; parent re-renders
   // (e.g. hover state) that pass equivalent props must never reset user zoom.
@@ -1355,6 +1692,7 @@ function GoogleMapCanvas({
      location,
      locationId,
      highlightedNeighborhood,
+      isDataLoading,
      mapReady,
      onNeighborhoodClick,
       onNeighborhoodHover,
@@ -1362,6 +1700,31 @@ function GoogleMapCanvas({
       showAllNeighborhoods,
       showNeighborhoodLabels,
    ]);
+
+  // Google polygons are canvas-rendered, so CSS animation cannot change their
+  // fill. Pulse the selected boundary directly while the filtered request is
+  // in flight, then restore the normal selected opacity on cleanup.
+  useEffect(() => {
+    if (!mapReady || !highlightedNeighborhood || !isDataLoading) return;
+
+    const startedAt = performance.now();
+    let frame = 0;
+    const animate = (now: number) => {
+      const overlay = neighborhoodOverlaysRef.current.get(highlightedNeighborhood);
+      if (overlay) {
+        const phase = (Math.sin(((now - startedAt) / NEIGHBORHOOD_PULSE_DURATION_MS) * Math.PI * 2) + 1) / 2;
+        overlay.polygon.setOptions({ fillOpacity: 0.2 + phase * 0.22 });
+      }
+      frame = requestAnimationFrame(animate);
+    };
+    frame = requestAnimationFrame(animate);
+
+    return () => {
+      cancelAnimationFrame(frame);
+      const overlay = neighborhoodOverlaysRef.current.get(highlightedNeighborhood);
+      overlay?.polygon.setOptions({ fillOpacity: 0.2 });
+    };
+  }, [highlightedNeighborhood, isDataLoading, mapReady]);
 
   useEffect(() => {
     if (!mapReady || !mapRef.current) return;
@@ -1378,7 +1741,16 @@ function GoogleMapCanvas({
       content.addEventListener('marker-preview-visibility', handlePreviewVisibility);
     };
 
-    const newIds = new Set(markers.map((marker) => marker.id));
+    const pointClusters = clusterMapPoints(
+      markers,
+      (marker) => {
+        const world = latLngToWorld({ lat: marker.lat, lng: marker.lng }, mapZoom);
+        return { x: world.x, y: world.y };
+      },
+      MAP_CLUSTER_RADIUS_PX,
+      selectedMarkerId,
+    );
+    const newIds = new Set(pointClusters.map((cluster) => cluster.id));
     for (const [id, mapMarker] of markersRef.current) {
       if (!newIds.has(id)) {
         mapMarker.setMap(null);
@@ -1386,11 +1758,20 @@ function GoogleMapCanvas({
       }
     }
 
-    for (const marker of markers) {
-      if (marker.lat == null || marker.lng == null) continue;
-      const isSelected = selectedMarkerId === marker.id;
-      const existing = markersRef.current.get(marker.id);
+    for (const cluster of pointClusters) {
+      const marker = cluster.points[0]!;
+      const isCluster = cluster.points.length > 1;
+      const overlayId = cluster.id;
+      const existing = markersRef.current.get(overlayId);
       if (existing) {
+        if (isCluster) {
+          existing.setPosition({ lat: cluster.lat, lng: cluster.lng });
+          existing.setContent(buildClusterEl(cluster));
+          existing.setZIndex(50);
+          continue;
+        }
+
+        const isSelected = selectedMarkerId === marker.id;
         const content = buildMarkerEl(marker, isSelected, savedIds.has(marker.id));
         attachPreviewPriority(existing, content, isSelected);
         existing.setPosition({ lat: marker.lat, lng: marker.lng });
@@ -1399,17 +1780,21 @@ function GoogleMapCanvas({
         continue;
       }
 
-      const content = buildMarkerEl(marker, isSelected, savedIds.has(marker.id));
+      const content = isCluster
+        ? buildClusterEl(cluster)
+        : buildMarkerEl(marker, selectedMarkerId === marker.id, savedIds.has(marker.id));
       const mapMarker = createHtmlMarkerOverlay(
         mapRef.current,
-        { lat: marker.lat, lng: marker.lng },
+        { lat: isCluster ? cluster.lat : marker.lat, lng: isCluster ? cluster.lng : marker.lng },
         content,
-        isSelected ? 100 : 1,
+        isCluster ? 50 : selectedMarkerId === marker.id ? 100 : 1,
       );
-      attachPreviewPriority(mapMarker, content, isSelected);
-      markersRef.current.set(marker.id, mapMarker);
+      if (!isCluster) {
+        attachPreviewPriority(mapMarker, content, selectedMarkerId === marker.id);
+      }
+      markersRef.current.set(overlayId, mapMarker);
     }
-  }, [buildMarkerEl, mapReady, markers, onMarkerClick, savedIds, selectedMarkerId]);
+  }, [buildClusterEl, buildMarkerEl, mapReady, mapZoom, markers, onMarkerClick, savedIds, selectedMarkerId]);
 
   useEffect(() => {
     if (!mapReady || !mapRef.current || !selectedMarkerId) return;
@@ -1431,7 +1816,12 @@ function GoogleMapCanvas({
     neighborhoodOverlaysRef.current.clear();
   }, []);
 
-  return <div ref={containerRef} className="absolute inset-0 z-0" aria-label={MAP_COPY[language].googleMap} />;
+  return (
+    <div className="absolute inset-0 z-0">
+      <div ref={containerRef} className="absolute inset-0" aria-label={MAP_COPY[language].googleMap} />
+      <DataLoadingNotice isDataLoading={isDataLoading} />
+    </div>
+  );
 }
 
 type MapProvider = 'google' | 'tiles' | 'fallback';

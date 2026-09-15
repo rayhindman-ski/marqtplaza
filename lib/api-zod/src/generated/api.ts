@@ -18,6 +18,574 @@ export const HealthCheckResponse = zod.object({
 
 
 /**
+ * Provisions a local account for the trusted identity-provider subject on first call
+ * (idempotent and race-safe) and returns the account status, locale, onboarding state,
+ * server-derived capabilities, and whether a separate research registration exists.
+ * Identity, roles, and capabilities are never taken from the request; any request body
+ * or query parameter is ignored. Returns 404 while the accounts readiness gate is off.
+ * @summary Get the signed-in user's server-derived account summary
+ */
+export const getAccountMeResponsePreferencesOneNeighborhoodIdsMax = 20;
+
+export const getAccountMeResponsePreferencesOneInterestIdsMax = 20;
+
+export const getAccountMeResponsePreferencesOneUnresolvedNeighborhoodIdsMax = 20;
+
+export const getAccountMeResponsePreferencesOneUnresolvedInterestIdsMax = 20;
+
+
+
+export const GetAccountMeResponse = zod.object({
+  "id": zod.number().describe('Local account id (never the identity-provider subject).'),
+  "status": zod.enum(['active', 'suspended', 'deleted']).describe('Persisted account state, changed only server-side: active <-> suspended (operator),\nactive|suspended -> deleted (approved deletion request; terminal). Email verification is\nnot an account state; it is derived from the identity provider per request.\n'),
+  "role": zod.enum(['unverified', 'user', 'business_member', 'reviewer']).describe('The single highest server-derived role for the current request.'),
+  "locale": zod.enum(['nl', 'en']),
+  "onboardingCompleted": zod.boolean(),
+  "onboardingCompletedAt": zod.string().nullish(),
+  "capabilities": zod.object({
+  "isVerified": zod.boolean().describe('The identity provider reports a verified primary email for this session.'),
+  "isEditor": zod.boolean().describe('The session carries the trusted editor or admin role claim.'),
+  "isBusinessMember": zod.boolean().describe('The user has at least one business membership.'),
+  "canClaimBusiness": zod.boolean().describe('Verified, active, and the business intake gate is on.'),
+  "canPublishBusiness": zod.boolean().describe('Editor and the business publication gate is on.'),
+  "canReview": zod.boolean().describe('Editor; self-review of the user\'s own businesses or claims is still refused per request.')
+}).describe('Server-derived capabilities. Clients must never send these; they are recomputed on every request.'),
+  "hasResearchRegistration": zod.boolean().describe('Whether the separate campaign-style research registration exists. Never merged into account data.'),
+  "businessMembershipCount": zod.number(),
+  "preferences": zod.union([zod.object({
+  "revision": zod.number(),
+  "neighborhoodIds": zod.array(zod.string()).max(getAccountMeResponsePreferencesOneNeighborhoodIdsMax),
+  "interestIds": zod.array(zod.string()).max(getAccountMeResponsePreferencesOneInterestIdsMax),
+  "unresolvedNeighborhoodIds": zod.array(zod.string()).max(getAccountMeResponsePreferencesOneUnresolvedNeighborhoodIdsMax).describe('Subset of neighborhoodIds that no longer resolves in the current account option taxonomy.'),
+  "unresolvedInterestIds": zod.array(zod.string()).max(getAccountMeResponsePreferencesOneUnresolvedInterestIdsMax).describe('Subset of interestIds that no longer resolves in the current account option taxonomy.'),
+  "updatedAt": zod.string()
+}).describe('Optional controlled preferences owned by exactly one account. Updates require expectedRevision and return 409 VERSION_CONFLICT on mismatch. Unresolved IDs are stored legacy choices that no longer occur in the current taxonomy; they remain in the ID arrays until the user removes them.'),zod.null()]),
+  "createdAt": zod.string()
+}).describe('Private account summary for the signed-in user only. Never served on public routes.')
+
+
+/**
+ * Returns the server-controlled option lists that preference updates are validated
+ * against. Preferences are never inferred. Returns 404 while the accounts readiness
+ * gate is off.
+ * @summary Get the controlled neighbourhood and interest lists for account preferences
+ */
+export const GetAccountOptionsResponse = zod.object({
+  "taxonomyVersion": zod.string().describe('Identifier of the controlled list version; stored IDs that no longer resolve are shown as no longer available, never dropped.'),
+  "neighborhoods": zod.array(zod.object({
+  "id": zod.string(),
+  "label": zod.object({
+  "nl": zod.string(),
+  "en": zod.string()
+})
+})),
+  "interests": zod.array(zod.object({
+  "id": zod.string(),
+  "label": zod.object({
+  "nl": zod.string(),
+  "en": zod.string()
+})
+}))
+})
+
+
+/**
+ * Creates or updates the signed-in user's optional preferences. `expectedRevision` must equal
+ * the current stored revision (use 0 when no preferences exist yet); a mismatch returns
+ * 409 VERSION_CONFLICT with the current `expectedVersion` so the client can reload while keeping
+ * its draft. Every neighbourhood and interest ID is validated against `GET /account/options`;
+ * unknown IDs return 400 VALIDATION_FAILED with `not_in_controlled_list` field errors. Omitted
+ * fields stay unchanged; empty arrays clear a list. `locale` updates the account locale. Nothing
+ * is inferred, and this operation never touches the research registration or saved events.
+ * Requires a verified identity (403 EMAIL_UNVERIFIED otherwise).
+ * @summary Save controlled account preferences with optimistic concurrency
+ */
+export const updateAccountPreferencesBodyExpectedRevisionMin = 0;
+
+export const updateAccountPreferencesBodyNeighborhoodIdsItemMax = 120;
+
+export const updateAccountPreferencesBodyNeighborhoodIdsMax = 20;
+
+export const updateAccountPreferencesBodyInterestIdsItemMax = 120;
+
+export const updateAccountPreferencesBodyInterestIdsMax = 20;
+
+
+
+export const UpdateAccountPreferencesBody = zod.object({
+  "expectedRevision": zod.number().min(updateAccountPreferencesBodyExpectedRevisionMin).describe('Current stored revision, or 0 when no preferences exist yet.'),
+  "locale": zod.enum(['nl', 'en']).optional(),
+  "neighborhoodIds": zod.array(zod.string().max(updateAccountPreferencesBodyNeighborhoodIdsItemMax)).max(updateAccountPreferencesBodyNeighborhoodIdsMax).optional(),
+  "interestIds": zod.array(zod.string().max(updateAccountPreferencesBodyInterestIdsItemMax)).max(updateAccountPreferencesBodyInterestIdsMax).optional()
+})
+
+export const updateAccountPreferencesResponsePreferencesOneNeighborhoodIdsMax = 20;
+
+export const updateAccountPreferencesResponsePreferencesOneInterestIdsMax = 20;
+
+export const updateAccountPreferencesResponsePreferencesOneUnresolvedNeighborhoodIdsMax = 20;
+
+export const updateAccountPreferencesResponsePreferencesOneUnresolvedInterestIdsMax = 20;
+
+
+
+export const UpdateAccountPreferencesResponse = zod.object({
+  "id": zod.number().describe('Local account id (never the identity-provider subject).'),
+  "status": zod.enum(['active', 'suspended', 'deleted']).describe('Persisted account state, changed only server-side: active <-> suspended (operator),\nactive|suspended -> deleted (approved deletion request; terminal). Email verification is\nnot an account state; it is derived from the identity provider per request.\n'),
+  "role": zod.enum(['unverified', 'user', 'business_member', 'reviewer']).describe('The single highest server-derived role for the current request.'),
+  "locale": zod.enum(['nl', 'en']),
+  "onboardingCompleted": zod.boolean(),
+  "onboardingCompletedAt": zod.string().nullish(),
+  "capabilities": zod.object({
+  "isVerified": zod.boolean().describe('The identity provider reports a verified primary email for this session.'),
+  "isEditor": zod.boolean().describe('The session carries the trusted editor or admin role claim.'),
+  "isBusinessMember": zod.boolean().describe('The user has at least one business membership.'),
+  "canClaimBusiness": zod.boolean().describe('Verified, active, and the business intake gate is on.'),
+  "canPublishBusiness": zod.boolean().describe('Editor and the business publication gate is on.'),
+  "canReview": zod.boolean().describe('Editor; self-review of the user\'s own businesses or claims is still refused per request.')
+}).describe('Server-derived capabilities. Clients must never send these; they are recomputed on every request.'),
+  "hasResearchRegistration": zod.boolean().describe('Whether the separate campaign-style research registration exists. Never merged into account data.'),
+  "businessMembershipCount": zod.number(),
+  "preferences": zod.union([zod.object({
+  "revision": zod.number(),
+  "neighborhoodIds": zod.array(zod.string()).max(updateAccountPreferencesResponsePreferencesOneNeighborhoodIdsMax),
+  "interestIds": zod.array(zod.string()).max(updateAccountPreferencesResponsePreferencesOneInterestIdsMax),
+  "unresolvedNeighborhoodIds": zod.array(zod.string()).max(updateAccountPreferencesResponsePreferencesOneUnresolvedNeighborhoodIdsMax).describe('Subset of neighborhoodIds that no longer resolves in the current account option taxonomy.'),
+  "unresolvedInterestIds": zod.array(zod.string()).max(updateAccountPreferencesResponsePreferencesOneUnresolvedInterestIdsMax).describe('Subset of interestIds that no longer resolves in the current account option taxonomy.'),
+  "updatedAt": zod.string()
+}).describe('Optional controlled preferences owned by exactly one account. Updates require expectedRevision and return 409 VERSION_CONFLICT on mismatch. Unresolved IDs are stored legacy choices that no longer occur in the current taxonomy; they remain in the ID arrays until the user removes them.'),zod.null()]),
+  "createdAt": zod.string()
+}).describe('Private account summary for the signed-in user only. Never served on public routes.')
+
+
+/**
+ * Records onboarding completion for the signed-in user independently of whether any
+ * preference exists (skipping is a valid completion). Idempotent: a repeat call keeps the
+ * original completion time. Creates no preference row, no research registration, and no consent.
+ * @summary Mark the optional onboarding step as completed on the server
+ */
+export const completeAccountOnboardingResponsePreferencesOneNeighborhoodIdsMax = 20;
+
+export const completeAccountOnboardingResponsePreferencesOneInterestIdsMax = 20;
+
+export const completeAccountOnboardingResponsePreferencesOneUnresolvedNeighborhoodIdsMax = 20;
+
+export const completeAccountOnboardingResponsePreferencesOneUnresolvedInterestIdsMax = 20;
+
+
+
+export const CompleteAccountOnboardingResponse = zod.object({
+  "id": zod.number().describe('Local account id (never the identity-provider subject).'),
+  "status": zod.enum(['active', 'suspended', 'deleted']).describe('Persisted account state, changed only server-side: active <-> suspended (operator),\nactive|suspended -> deleted (approved deletion request; terminal). Email verification is\nnot an account state; it is derived from the identity provider per request.\n'),
+  "role": zod.enum(['unverified', 'user', 'business_member', 'reviewer']).describe('The single highest server-derived role for the current request.'),
+  "locale": zod.enum(['nl', 'en']),
+  "onboardingCompleted": zod.boolean(),
+  "onboardingCompletedAt": zod.string().nullish(),
+  "capabilities": zod.object({
+  "isVerified": zod.boolean().describe('The identity provider reports a verified primary email for this session.'),
+  "isEditor": zod.boolean().describe('The session carries the trusted editor or admin role claim.'),
+  "isBusinessMember": zod.boolean().describe('The user has at least one business membership.'),
+  "canClaimBusiness": zod.boolean().describe('Verified, active, and the business intake gate is on.'),
+  "canPublishBusiness": zod.boolean().describe('Editor and the business publication gate is on.'),
+  "canReview": zod.boolean().describe('Editor; self-review of the user\'s own businesses or claims is still refused per request.')
+}).describe('Server-derived capabilities. Clients must never send these; they are recomputed on every request.'),
+  "hasResearchRegistration": zod.boolean().describe('Whether the separate campaign-style research registration exists. Never merged into account data.'),
+  "businessMembershipCount": zod.number(),
+  "preferences": zod.union([zod.object({
+  "revision": zod.number(),
+  "neighborhoodIds": zod.array(zod.string()).max(completeAccountOnboardingResponsePreferencesOneNeighborhoodIdsMax),
+  "interestIds": zod.array(zod.string()).max(completeAccountOnboardingResponsePreferencesOneInterestIdsMax),
+  "unresolvedNeighborhoodIds": zod.array(zod.string()).max(completeAccountOnboardingResponsePreferencesOneUnresolvedNeighborhoodIdsMax).describe('Subset of neighborhoodIds that no longer resolves in the current account option taxonomy.'),
+  "unresolvedInterestIds": zod.array(zod.string()).max(completeAccountOnboardingResponsePreferencesOneUnresolvedInterestIdsMax).describe('Subset of interestIds that no longer resolves in the current account option taxonomy.'),
+  "updatedAt": zod.string()
+}).describe('Optional controlled preferences owned by exactly one account. Updates require expectedRevision and return 409 VERSION_CONFLICT on mismatch. Unresolved IDs are stored legacy choices that no longer occur in the current taxonomy; they remain in the ID arrays until the user removes them.'),zod.null()]),
+  "createdAt": zod.string()
+}).describe('Private account summary for the signed-in user only. Never served on public routes.')
+
+
+/**
+ * Returns the current notice version, the derived current state per consent purpose (latest
+ * ledger entry wins; absent means never asked), and the append-only history. Account creation
+ * never grants any consent.
+ * @summary Get the current state and history of purpose-specific consents
+ */
+export const GetAccountConsentsResponse = zod.object({
+  "currentNoticeVersion": zod.string().describe('Version of the consent notice text the client must show before recording a choice.'),
+  "purposes": zod.array(zod.enum(['marketing_updates', 'research_contact']).describe('Purpose-specific consents that are asked separately from account creation and from\nthe research registration. `marketing_updates`: occasional product and neighbourhood\nupdates by e-mail. `research_contact`: may be contacted about product research.\n')).describe('All purposes that can be asked; a purpose without a current entry has never been asked.'),
+  "current": zod.array(zod.object({
+  "consentType": zod.enum(['marketing_updates', 'research_contact']).describe('Purpose-specific consents that are asked separately from account creation and from\nthe research registration. `marketing_updates`: occasional product and neighbourhood\nupdates by e-mail. `research_contact`: may be contacted about product research.\n'),
+  "granted": zod.boolean(),
+  "noticeVersion": zod.string(),
+  "recordedAt": zod.string()
+})),
+  "history": zod.array(zod.object({
+  "id": zod.number(),
+  "consentType": zod.string(),
+  "noticeVersion": zod.string(),
+  "granted": zod.boolean(),
+  "source": zod.enum(['onboarding', 'account_settings', 'support', 'system']),
+  "createdAt": zod.string()
+}).describe('One append-only consent ledger entry. Entries are never edited; the latest entry per consentType is the current state.'))
+})
+
+
+/**
+ * Appends one ledger entry for exactly one consent purpose. Entries are never edited or
+ * deleted. `noticeVersion` must match the current notice version served by
+ * `GET /account/consents` (400 VALIDATION_FAILED with `stale_notice_version` otherwise), so a
+ * user never agrees to text they have not seen. Requires a verified identity.
+ * @summary Grant or withdraw one purpose-specific consent
+ */
+export const recordAccountConsentBodyNoticeVersionMax = 80;
+
+
+
+export const RecordAccountConsentBody = zod.object({
+  "consentType": zod.enum(['marketing_updates', 'research_contact']).describe('Purpose-specific consents that are asked separately from account creation and from\nthe research registration. `marketing_updates`: occasional product and neighbourhood\nupdates by e-mail. `research_contact`: may be contacted about product research.\n'),
+  "noticeVersion": zod.string().max(recordAccountConsentBodyNoticeVersionMax),
+  "granted": zod.boolean(),
+  "source": zod.enum(['onboarding', 'account_settings']).describe('Where the user made the choice; support and system entries are never accepted from clients.')
+})
+
+export const RecordAccountConsentResponse = zod.object({
+  "currentNoticeVersion": zod.string().describe('Version of the consent notice text the client must show before recording a choice.'),
+  "purposes": zod.array(zod.enum(['marketing_updates', 'research_contact']).describe('Purpose-specific consents that are asked separately from account creation and from\nthe research registration. `marketing_updates`: occasional product and neighbourhood\nupdates by e-mail. `research_contact`: may be contacted about product research.\n')).describe('All purposes that can be asked; a purpose without a current entry has never been asked.'),
+  "current": zod.array(zod.object({
+  "consentType": zod.enum(['marketing_updates', 'research_contact']).describe('Purpose-specific consents that are asked separately from account creation and from\nthe research registration. `marketing_updates`: occasional product and neighbourhood\nupdates by e-mail. `research_contact`: may be contacted about product research.\n'),
+  "granted": zod.boolean(),
+  "noticeVersion": zod.string(),
+  "recordedAt": zod.string()
+})),
+  "history": zod.array(zod.object({
+  "id": zod.number(),
+  "consentType": zod.string(),
+  "noticeVersion": zod.string(),
+  "granted": zod.boolean(),
+  "source": zod.enum(['onboarding', 'account_settings', 'support', 'system']),
+  "createdAt": zod.string()
+}).describe('One append-only consent ledger entry. Entries are never edited; the latest entry per consentType is the current state.'))
+})
+
+
+/**
+ * Records a tracked deletion request for the signed-in account. The caller must first
+ * acknowledge every deletion scope; the research registration and Clerk credentials are
+ * separate and are not covered by this request. Clients must re-authenticate through Clerk
+ * immediately before calling this operation. When the requester is the only owner of a
+ * business the request is stored as `blocked` with `blocked_ownership` until support records
+ * a transfer, closure, or unpublication decision. Nothing is erased by this call: erasure
+ * follows the approved retention configuration and a completed support decision.
+ * @summary Request deletion of the account
+ */
+export const createAccountDeletionRequestBodyAcknowledgedScopesMax = 10;
+
+
+
+export const CreateAccountDeletionRequestBody = zod.object({
+  "acknowledgedScopes": zod.array(zod.enum(['account_profile', 'preferences', 'consents', 'saved_events', 'business_memberships']).describe('What an account deletion request covers. The research registration, community\ncontributions, and Clerk credentials are separate scopes handled outside this request.\n')).min(1).max(createAccountDeletionRequestBodyAcknowledgedScopesMax).describe('Must contain every AccountDeletionScope value exactly once.')
+})
+
+export const CreateAccountDeletionRequestResponse = zod.object({
+  "id": zod.number(),
+  "scope": zod.enum(['account', 'business']),
+  "type": zod.enum(['deletion', 'export', 'suspension_appeal']),
+  "status": zod.enum(['received', 'blocked', 'in_review', 'completed', 'rejected', 'withdrawn']).describe('`received` awaits support; `blocked` needs a support decision about a sole-owned business\nfirst; `in_review` is being handled; `completed`, `rejected`, and `withdrawn` are final.\n'),
+  "version": zod.number(),
+  "acknowledgedScopes": zod.array(zod.string()),
+  "blocker": zod.union([zod.object({
+  "code": zod.enum(['blocked_ownership']),
+  "businesses": zod.array(zod.object({
+  "businessProfileId": zod.number(),
+  "name": zod.string(),
+  "publicationStatus": zod.string(),
+  "resolved": zod.boolean().describe('True once a support resolution has been recorded for this business.')
+}))
+}),zod.null()]),
+  "resolutionCode": zod.string().nullable(),
+  "deadlineAt": zod.string().nullable().describe('Null until a handling deadline is approved in release configuration.'),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string(),
+  "resolvedAt": zod.string().nullable(),
+  "withdrawnAt": zod.string().nullable()
+}).describe('Requester-facing view. Support notes and the handling reviewer are never included.')
+
+
+/**
+ * @summary List the account's tracked requests
+ */
+export const GetAccountRequestsResponse = zod.object({
+  "requests": zod.array(zod.object({
+  "id": zod.number(),
+  "scope": zod.enum(['account', 'business']),
+  "type": zod.enum(['deletion', 'export', 'suspension_appeal']),
+  "status": zod.enum(['received', 'blocked', 'in_review', 'completed', 'rejected', 'withdrawn']).describe('`received` awaits support; `blocked` needs a support decision about a sole-owned business\nfirst; `in_review` is being handled; `completed`, `rejected`, and `withdrawn` are final.\n'),
+  "version": zod.number(),
+  "acknowledgedScopes": zod.array(zod.string()),
+  "blocker": zod.union([zod.object({
+  "code": zod.enum(['blocked_ownership']),
+  "businesses": zod.array(zod.object({
+  "businessProfileId": zod.number(),
+  "name": zod.string(),
+  "publicationStatus": zod.string(),
+  "resolved": zod.boolean().describe('True once a support resolution has been recorded for this business.')
+}))
+}),zod.null()]),
+  "resolutionCode": zod.string().nullable(),
+  "deadlineAt": zod.string().nullable().describe('Null until a handling deadline is approved in release configuration.'),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string(),
+  "resolvedAt": zod.string().nullable(),
+  "withdrawnAt": zod.string().nullable()
+}).describe('Requester-facing view. Support notes and the handling reviewer are never included.'))
+})
+
+
+/**
+ * @summary Withdraw a request that is not yet in review
+ */
+export const WithdrawAccountRequestParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+
+
+export const WithdrawAccountRequestBody = zod.object({
+  "expectedVersion": zod.number().min(1)
+})
+
+export const WithdrawAccountRequestResponse = zod.object({
+  "id": zod.number(),
+  "scope": zod.enum(['account', 'business']),
+  "type": zod.enum(['deletion', 'export', 'suspension_appeal']),
+  "status": zod.enum(['received', 'blocked', 'in_review', 'completed', 'rejected', 'withdrawn']).describe('`received` awaits support; `blocked` needs a support decision about a sole-owned business\nfirst; `in_review` is being handled; `completed`, `rejected`, and `withdrawn` are final.\n'),
+  "version": zod.number(),
+  "acknowledgedScopes": zod.array(zod.string()),
+  "blocker": zod.union([zod.object({
+  "code": zod.enum(['blocked_ownership']),
+  "businesses": zod.array(zod.object({
+  "businessProfileId": zod.number(),
+  "name": zod.string(),
+  "publicationStatus": zod.string(),
+  "resolved": zod.boolean().describe('True once a support resolution has been recorded for this business.')
+}))
+}),zod.null()]),
+  "resolutionCode": zod.string().nullable(),
+  "deadlineAt": zod.string().nullable().describe('Null until a handling deadline is approved in release configuration.'),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string(),
+  "resolvedAt": zod.string().nullable(),
+  "withdrawnAt": zod.string().nullable()
+}).describe('Requester-facing view. Support notes and the handling reviewer are never included.')
+
+
+/**
+ * Lists claim, review, publication, and request messages addressed to the account with a
+ * truthful delivery state: `queued` (not handed to a provider yet), `accepted` (provider
+ * accepted it), `delivered` (provider confirmed delivery), or `failed`. Message bodies and
+ * addresses are never returned.
+ * @summary Status of application-owned lifecycle messages
+ */
+export const GetAccountMessagesResponse = zod.object({
+  "messages": zod.array(zod.object({
+  "id": zod.number(),
+  "eventCode": zod.string(),
+  "status": zod.enum(['queued', 'sending', 'accepted', 'delivered', 'failed', 'cancelled']),
+  "locale": zod.string(),
+  "businessName": zod.string().nullable(),
+  "attempts": zod.number(),
+  "maxAttempts": zod.number(),
+  "nextRetryAt": zod.string().nullable(),
+  "acceptedAt": zod.string().nullable(),
+  "deliveredAt": zod.string().nullable(),
+  "failedAt": zod.string().nullable(),
+  "createdAt": zod.string()
+}))
+})
+
+
+/**
+ * @summary Support queue of account requests
+ */
+export const GetSupportAccountRequestsQueryParams = zod.object({
+  "status": zod.enum(['received', 'blocked', 'in_review', 'completed', 'rejected', 'withdrawn']).optional()
+})
+
+export const GetSupportAccountRequestsResponse = zod.object({
+  "requests": zod.array(zod.object({
+  "id": zod.number(),
+  "scope": zod.enum(['account', 'business']),
+  "type": zod.enum(['deletion', 'export', 'suspension_appeal']),
+  "status": zod.enum(['received', 'blocked', 'in_review', 'completed', 'rejected', 'withdrawn']).describe('`received` awaits support; `blocked` needs a support decision about a sole-owned business\nfirst; `in_review` is being handled; `completed`, `rejected`, and `withdrawn` are final.\n'),
+  "version": zod.number(),
+  "acknowledgedScopes": zod.array(zod.string()),
+  "blocker": zod.union([zod.object({
+  "code": zod.enum(['blocked_ownership']),
+  "businesses": zod.array(zod.object({
+  "businessProfileId": zod.number(),
+  "name": zod.string(),
+  "publicationStatus": zod.string(),
+  "resolved": zod.boolean().describe('True once a support resolution has been recorded for this business.')
+}))
+}),zod.null()]),
+  "resolutionCode": zod.string().nullable(),
+  "deadlineAt": zod.string().nullable().describe('Null until a handling deadline is approved in release configuration.'),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string(),
+  "resolvedAt": zod.string().nullable(),
+  "withdrawnAt": zod.string().nullable()
+}).describe('Requester-facing view. Support notes and the handling reviewer are never included.').and(zod.object({
+  "userId": zod.number().describe('Internal app user id of the requester; never contact data.'),
+  "resolutionNote": zod.string().nullable(),
+  "resolvedByUserId": zod.string().nullable(),
+  "events": zod.array(zod.object({
+  "id": zod.number(),
+  "fromStatus": zod.string().nullable(),
+  "toStatus": zod.string(),
+  "actor": zod.enum(['requester', 'support', 'system']),
+  "resolutionCode": zod.string().nullable(),
+  "businessProfileId": zod.number().nullable(),
+  "note": zod.string().nullable(),
+  "createdAt": zod.string()
+}))
+})))
+})
+
+
+/**
+ * `start_review` moves a received or blocked request into review. `resolve_blocker` records
+ * how one sole-owned business was dealt with: `ownership_transferred` (another owner must
+ * already exist), `business_closed` (archives the profile), or `business_unpublished`
+ * (removes it from the public directory). Claims, memberships, and audit history are never
+ * deleted. `complete` marks the account deleted once no blocker remains; `reject` closes the
+ * request with `request_rejected`. Every decision is version-bound and appended to the
+ * request's audit trail. A reviewer cannot decide their own request.
+ * @summary Record a support decision on an account request
+ */
+export const DecideSupportAccountRequestParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+export const decideSupportAccountRequestBodyNoteMax = 1000;
+
+
+
+export const DecideSupportAccountRequestBody = zod.object({
+  "expectedVersion": zod.number().min(1),
+  "decision": zod.enum(['start_review', 'resolve_blocker', 'complete', 'reject']),
+  "resolutionCode": zod.enum(['ownership_transferred', 'business_closed', 'business_unpublished', 'account_deleted', 'request_rejected']).optional(),
+  "businessProfileId": zod.number().optional().describe('Required for `resolve_blocker`; must be one of the request\'s blocked businesses.'),
+  "note": zod.string().max(decideSupportAccountRequestBodyNoteMax).optional().describe('Internal support note; never shown to the requester.')
+})
+
+export const DecideSupportAccountRequestResponse = zod.object({
+  "id": zod.number(),
+  "scope": zod.enum(['account', 'business']),
+  "type": zod.enum(['deletion', 'export', 'suspension_appeal']),
+  "status": zod.enum(['received', 'blocked', 'in_review', 'completed', 'rejected', 'withdrawn']).describe('`received` awaits support; `blocked` needs a support decision about a sole-owned business\nfirst; `in_review` is being handled; `completed`, `rejected`, and `withdrawn` are final.\n'),
+  "version": zod.number(),
+  "acknowledgedScopes": zod.array(zod.string()),
+  "blocker": zod.union([zod.object({
+  "code": zod.enum(['blocked_ownership']),
+  "businesses": zod.array(zod.object({
+  "businessProfileId": zod.number(),
+  "name": zod.string(),
+  "publicationStatus": zod.string(),
+  "resolved": zod.boolean().describe('True once a support resolution has been recorded for this business.')
+}))
+}),zod.null()]),
+  "resolutionCode": zod.string().nullable(),
+  "deadlineAt": zod.string().nullable().describe('Null until a handling deadline is approved in release configuration.'),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string(),
+  "resolvedAt": zod.string().nullable(),
+  "withdrawnAt": zod.string().nullable()
+}).describe('Requester-facing view. Support notes and the handling reviewer are never included.').and(zod.object({
+  "userId": zod.number().describe('Internal app user id of the requester; never contact data.'),
+  "resolutionNote": zod.string().nullable(),
+  "resolvedByUserId": zod.string().nullable(),
+  "events": zod.array(zod.object({
+  "id": zod.number(),
+  "fromStatus": zod.string().nullable(),
+  "toStatus": zod.string(),
+  "actor": zod.enum(['requester', 'support', 'system']),
+  "resolutionCode": zod.string().nullable(),
+  "businessProfileId": zod.number().nullable(),
+  "note": zod.string().nullable(),
+  "createdAt": zod.string()
+}))
+}))
+
+
+/**
+ * @summary Lifecycle messages for support (exhausted retries first)
+ */
+export const GetSupportLifecycleMessagesQueryParams = zod.object({
+  "status": zod.enum(['queued', 'sending', 'accepted', 'delivered', 'failed', 'cancelled']).optional()
+})
+
+export const GetSupportLifecycleMessagesResponse = zod.object({
+  "messages": zod.array(zod.object({
+  "id": zod.number(),
+  "eventCode": zod.string(),
+  "status": zod.enum(['queued', 'sending', 'accepted', 'delivered', 'failed', 'cancelled']),
+  "locale": zod.string(),
+  "businessName": zod.string().nullable(),
+  "attempts": zod.number(),
+  "maxAttempts": zod.number(),
+  "nextRetryAt": zod.string().nullable(),
+  "acceptedAt": zod.string().nullable(),
+  "deliveredAt": zod.string().nullable(),
+  "failedAt": zod.string().nullable(),
+  "createdAt": zod.string()
+}).and(zod.object({
+  "recipientUserId": zod.number().nullable(),
+  "lastErrorCode": zod.string().nullable(),
+  "lastErrorAt": zod.string().nullable()
+})))
+})
+
+
+/**
+ * @summary Re-queue a permanently failed message
+ */
+export const ResendSupportLifecycleMessageParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const ResendSupportLifecycleMessageResponse = zod.object({
+  "id": zod.number(),
+  "eventCode": zod.string(),
+  "status": zod.enum(['queued', 'sending', 'accepted', 'delivered', 'failed', 'cancelled']),
+  "locale": zod.string(),
+  "businessName": zod.string().nullable(),
+  "attempts": zod.number(),
+  "maxAttempts": zod.number(),
+  "nextRetryAt": zod.string().nullable(),
+  "acceptedAt": zod.string().nullable(),
+  "deliveredAt": zod.string().nullable(),
+  "failedAt": zod.string().nullable(),
+  "createdAt": zod.string()
+}).and(zod.object({
+  "recipientUserId": zod.number().nullable(),
+  "lastErrorCode": zod.string().nullable(),
+  "lastErrorAt": zod.string().nullable()
+}))
+
+
+/**
+ * Reports which gated feature areas are enabled for this deployment. Flags are read-only and set by the operator environment.
+ * @summary Get the rollout readiness state of gated entry points
+ */
+export const GetReadinessResponse = zod.object({
+  "accounts": zod.boolean(),
+  "businessIntake": zod.boolean(),
+  "businessPublication": zod.boolean()
+}).describe('Read-only rollout flags; each entry point stays disabled (404) until its gate is met.')
+
+
+/**
  * @summary Get the signed-in user's registration profile
  */
 export const getRegistrationResponseRegistrationOneOneNameMax = 160;
@@ -924,9 +1492,15 @@ export const GetMyBusinessClaimsResponseItem = zod.object({
   "relationship": zod.string(),
   "evidenceUrl": zod.string().nullish(),
   "message": zod.string().nullish(),
-  "status": zod.enum(['pending', 'approved', 'rejected']),
+  "status": zod.enum(['draft', 'pending', 'submitted', 'changes_requested', 'approved', 'rejected', 'disputed', 'withdrawn']).describe('Claim lifecycle. `pending` is the legacy alias of `submitted` (awaiting review).\nOpen states that hold the one-open-claim-per-listing slot: pending, submitted,\nchanges_requested, disputed. Transitions: pending|submitted -> approved | rejected |\nchanges_requested | withdrawn; changes_requested -> submitted | withdrawn;\napproved -> disputed; disputed -> approved | rejected.\n'),
   "reviewNote": zod.string().nullish(),
   "reviewedAt": zod.string().nullish(),
+  "version": zod.number().optional().describe('Optimistic-concurrency version; send it back as expectedVersion on later claim updates.'),
+  "nextAction": zod.enum(['submit', 'wait_for_review', 'provide_changes', 'none']).optional().describe('What the claimant can do next; derived server-side from the claim status. `submit` applies to private drafts, `provide_changes` after a reviewer asked for changes.'),
+  "kind": zod.enum(['existing_listing', 'new_business']).optional().describe('Whether a claim targets a current public listing or a new business that is not listed yet.'),
+  "authorityDeclaration": zod.string().nullish().describe('Only returned to the claimant and reviewers; never to other claimants.'),
+  "evidenceReference": zod.string().nullish().describe('Only returned to the claimant and reviewers; never to other claimants.'),
+  "withdrawnAt": zod.string().nullish(),
   "createdAt": zod.string(),
   "updatedAt": zod.string(),
   "profile": zod.object({
@@ -949,6 +1523,9 @@ export const GetMyBusinessClaimsResponseItem = zod.object({
   "coverUrl": zod.string().nullish(),
   "isClaimed": zod.boolean(),
   "claimedAt": zod.string().nullish(),
+  "publicationStatus": zod.enum(['draft', 'unpublished', 'published', 'suspended', 'archived']).optional().describe('Business publication lifecycle. Existing profiles are `published`.\ndraft -> published (explicit reviewer publication); published <-> unpublished;\npublished -> suspended (reviewer); any -> archived (terminal). Only `published`\nprofiles and their deals are served on public routes.\n'),
+  "category": zod.string().nullish().describe('Self-reported category of a new-business draft; null for listing-derived profiles.'),
+  "approvedRevisionVersion": zod.number().nullish().describe('Version of the approved revision when publication review is enabled; null when the profile is served from its columns.'),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
 })
@@ -1006,9 +1583,15 @@ export const CreateBusinessClaimResponse = zod.object({
   "relationship": zod.string(),
   "evidenceUrl": zod.string().nullish(),
   "message": zod.string().nullish(),
-  "status": zod.enum(['pending', 'approved', 'rejected']),
+  "status": zod.enum(['draft', 'pending', 'submitted', 'changes_requested', 'approved', 'rejected', 'disputed', 'withdrawn']).describe('Claim lifecycle. `pending` is the legacy alias of `submitted` (awaiting review).\nOpen states that hold the one-open-claim-per-listing slot: pending, submitted,\nchanges_requested, disputed. Transitions: pending|submitted -> approved | rejected |\nchanges_requested | withdrawn; changes_requested -> submitted | withdrawn;\napproved -> disputed; disputed -> approved | rejected.\n'),
   "reviewNote": zod.string().nullish(),
   "reviewedAt": zod.string().nullish(),
+  "version": zod.number().optional().describe('Optimistic-concurrency version; send it back as expectedVersion on later claim updates.'),
+  "nextAction": zod.enum(['submit', 'wait_for_review', 'provide_changes', 'none']).optional().describe('What the claimant can do next; derived server-side from the claim status. `submit` applies to private drafts, `provide_changes` after a reviewer asked for changes.'),
+  "kind": zod.enum(['existing_listing', 'new_business']).optional().describe('Whether a claim targets a current public listing or a new business that is not listed yet.'),
+  "authorityDeclaration": zod.string().nullish().describe('Only returned to the claimant and reviewers; never to other claimants.'),
+  "evidenceReference": zod.string().nullish().describe('Only returned to the claimant and reviewers; never to other claimants.'),
+  "withdrawnAt": zod.string().nullish(),
   "createdAt": zod.string(),
   "updatedAt": zod.string(),
   "profile": zod.object({
@@ -1031,6 +1614,9 @@ export const CreateBusinessClaimResponse = zod.object({
   "coverUrl": zod.string().nullish(),
   "isClaimed": zod.boolean(),
   "claimedAt": zod.string().nullish(),
+  "publicationStatus": zod.enum(['draft', 'unpublished', 'published', 'suspended', 'archived']).optional().describe('Business publication lifecycle. Existing profiles are `published`.\ndraft -> published (explicit reviewer publication); published <-> unpublished;\npublished -> suspended (reviewer); any -> archived (terminal). Only `published`\nprofiles and their deals are served on public routes.\n'),
+  "category": zod.string().nullish().describe('Self-reported category of a new-business draft; null for listing-derived profiles.'),
+  "approvedRevisionVersion": zod.number().nullish().describe('Version of the approved revision when publication review is enabled; null when the profile is served from its columns.'),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
 })
@@ -1043,7 +1629,7 @@ export const CreateBusinessClaimResponse = zod.object({
 export const getBusinessClaimModerationQueryStatusDefault = `pending`;
 
 export const GetBusinessClaimModerationQueryParams = zod.object({
-  "status": zod.enum(['pending', 'approved', 'rejected', 'all']).default(getBusinessClaimModerationQueryStatusDefault)
+  "status": zod.enum(['pending', 'changes_requested', 'disputed', 'approved', 'rejected', 'all']).default(getBusinessClaimModerationQueryStatusDefault).describe('`pending` returns every claim awaiting a reviewer decision (legacy `pending`, `submitted`, and `disputed`).')
 })
 
 export const GetBusinessClaimModerationResponseItem = zod.object({
@@ -1055,9 +1641,15 @@ export const GetBusinessClaimModerationResponseItem = zod.object({
   "relationship": zod.string(),
   "evidenceUrl": zod.string().nullish(),
   "message": zod.string().nullish(),
-  "status": zod.enum(['pending', 'approved', 'rejected']),
+  "status": zod.enum(['draft', 'pending', 'submitted', 'changes_requested', 'approved', 'rejected', 'disputed', 'withdrawn']).describe('Claim lifecycle. `pending` is the legacy alias of `submitted` (awaiting review).\nOpen states that hold the one-open-claim-per-listing slot: pending, submitted,\nchanges_requested, disputed. Transitions: pending|submitted -> approved | rejected |\nchanges_requested | withdrawn; changes_requested -> submitted | withdrawn;\napproved -> disputed; disputed -> approved | rejected.\n'),
   "reviewNote": zod.string().nullish(),
   "reviewedAt": zod.string().nullish(),
+  "version": zod.number().optional().describe('Optimistic-concurrency version; send it back as expectedVersion on later claim updates.'),
+  "nextAction": zod.enum(['submit', 'wait_for_review', 'provide_changes', 'none']).optional().describe('What the claimant can do next; derived server-side from the claim status. `submit` applies to private drafts, `provide_changes` after a reviewer asked for changes.'),
+  "kind": zod.enum(['existing_listing', 'new_business']).optional().describe('Whether a claim targets a current public listing or a new business that is not listed yet.'),
+  "authorityDeclaration": zod.string().nullish().describe('Only returned to the claimant and reviewers; never to other claimants.'),
+  "evidenceReference": zod.string().nullish().describe('Only returned to the claimant and reviewers; never to other claimants.'),
+  "withdrawnAt": zod.string().nullish(),
   "createdAt": zod.string(),
   "updatedAt": zod.string(),
   "profile": zod.object({
@@ -1080,6 +1672,9 @@ export const GetBusinessClaimModerationResponseItem = zod.object({
   "coverUrl": zod.string().nullish(),
   "isClaimed": zod.boolean(),
   "claimedAt": zod.string().nullish(),
+  "publicationStatus": zod.enum(['draft', 'unpublished', 'published', 'suspended', 'archived']).optional().describe('Business publication lifecycle. Existing profiles are `published`.\ndraft -> published (explicit reviewer publication); published <-> unpublished;\npublished -> suspended (reviewer); any -> archived (terminal). Only `published`\nprofiles and their deals are served on public routes.\n'),
+  "category": zod.string().nullish().describe('Self-reported category of a new-business draft; null for listing-derived profiles.'),
+  "approvedRevisionVersion": zod.number().nullish().describe('Version of the approved revision when publication review is enabled; null when the profile is served from its columns.'),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
 })
@@ -1099,8 +1694,9 @@ export const decideBusinessClaimBodyReviewNoteMax = 500;
 
 
 export const DecideBusinessClaimBody = zod.object({
-  "decision": zod.enum(['approve', 'reject']),
-  "reviewNote": zod.string().max(decideBusinessClaimBodyReviewNoteMax).optional()
+  "decision": zod.enum(['approve', 'reject', 'request_changes']).describe('`request_changes` is only valid for business claims and asks the claimant for more authority evidence.'),
+  "reviewNote": zod.string().max(decideBusinessClaimBodyReviewNoteMax).optional(),
+  "expectedVersion": zod.number().optional().describe('Required for business claim decisions: the claim `version` the reviewer saw. The\ndecision is applied only when the claim still has exactly that version and a\nreviewable status; otherwise 409 so a stale moderation tab can never grant\nownership based on evidence the reviewer never saw. Ignored for deals.\n')
 })
 
 export const DecideBusinessClaimResponse = zod.object({
@@ -1112,9 +1708,15 @@ export const DecideBusinessClaimResponse = zod.object({
   "relationship": zod.string(),
   "evidenceUrl": zod.string().nullish(),
   "message": zod.string().nullish(),
-  "status": zod.enum(['pending', 'approved', 'rejected']),
+  "status": zod.enum(['draft', 'pending', 'submitted', 'changes_requested', 'approved', 'rejected', 'disputed', 'withdrawn']).describe('Claim lifecycle. `pending` is the legacy alias of `submitted` (awaiting review).\nOpen states that hold the one-open-claim-per-listing slot: pending, submitted,\nchanges_requested, disputed. Transitions: pending|submitted -> approved | rejected |\nchanges_requested | withdrawn; changes_requested -> submitted | withdrawn;\napproved -> disputed; disputed -> approved | rejected.\n'),
   "reviewNote": zod.string().nullish(),
   "reviewedAt": zod.string().nullish(),
+  "version": zod.number().optional().describe('Optimistic-concurrency version; send it back as expectedVersion on later claim updates.'),
+  "nextAction": zod.enum(['submit', 'wait_for_review', 'provide_changes', 'none']).optional().describe('What the claimant can do next; derived server-side from the claim status. `submit` applies to private drafts, `provide_changes` after a reviewer asked for changes.'),
+  "kind": zod.enum(['existing_listing', 'new_business']).optional().describe('Whether a claim targets a current public listing or a new business that is not listed yet.'),
+  "authorityDeclaration": zod.string().nullish().describe('Only returned to the claimant and reviewers; never to other claimants.'),
+  "evidenceReference": zod.string().nullish().describe('Only returned to the claimant and reviewers; never to other claimants.'),
+  "withdrawnAt": zod.string().nullish(),
   "createdAt": zod.string(),
   "updatedAt": zod.string(),
   "profile": zod.object({
@@ -1137,6 +1739,472 @@ export const DecideBusinessClaimResponse = zod.object({
   "coverUrl": zod.string().nullish(),
   "isClaimed": zod.boolean(),
   "claimedAt": zod.string().nullish(),
+  "publicationStatus": zod.enum(['draft', 'unpublished', 'published', 'suspended', 'archived']).optional().describe('Business publication lifecycle. Existing profiles are `published`.\ndraft -> published (explicit reviewer publication); published <-> unpublished;\npublished -> suspended (reviewer); any -> archived (terminal). Only `published`\nprofiles and their deals are served on public routes.\n'),
+  "category": zod.string().nullish().describe('Self-reported category of a new-business draft; null for listing-derived profiles.'),
+  "approvedRevisionVersion": zod.number().nullish().describe('Version of the approved revision when publication review is enabled; null when the profile is served from its columns.'),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+})
+
+
+/**
+ * Bounded lookup over current public business listings and existing business profiles.
+ * Every match is allowlisted to public facts only (name, neighbourhood, category, public
+ * source URL, whether the listing is already claimed). No contact details, claimant data,
+ * pending-claim details, or private drafts are ever returned. Requires a signed-in account,
+ * is rate limited per account (429 RATE_LIMITED), and returns 503 when the listing source
+ * cannot be read rather than an empty list. Returns 404 while the business intake gate is off.
+ * @summary Find public business matches to claim or to avoid duplicate drafts
+ */
+export const lookupBusinessesQueryQMin = 2;
+export const lookupBusinessesQueryQMax = 80;
+
+
+
+export const LookupBusinessesQueryParams = zod.object({
+  "q": zod.coerce.string().min(lookupBusinessesQueryQMin).max(lookupBusinessesQueryQMax).describe('Business name (or part of it) to look up.')
+})
+
+export const LookupBusinessesResponse = zod.object({
+  "query": zod.string(),
+  "matches": zod.array(zod.object({
+  "kind": zod.enum(['listing', 'profile']).describe('`listing` comes from the current public listing source; `profile` is a business already known to Buurtplaza.'),
+  "cityId": zod.string(),
+  "listingSource": zod.string(),
+  "listingId": zod.string(),
+  "name": zod.string(),
+  "neighborhood": zod.string().nullish(),
+  "category": zod.string().nullish(),
+  "sourceUrl": zod.string().nullish(),
+  "isClaimed": zod.boolean().describe('A verified representative already manages this business; a new claim would be recorded as disputed.')
+}).describe('Public-only business match. Never contains contact details, claimant data, or pending-claim details.')),
+  "truncated": zod.boolean().describe('More matches exist than the bounded result set; refine the query.')
+})
+
+
+/**
+ * Creates a private `draft` claim for the signed-in, verified representative. For
+ * `existing_listing` the listing is re-resolved server-side from the approved provider by
+ * city, source, and listing ID; browser-supplied names and addresses never redefine the
+ * business. For `new_business` a private draft profile (`publicationStatus = draft`) and the
+ * owner-candidate claim are created in one transaction; the draft is invisible on public
+ * routes and to other users. Drafts hold no claim slot until they are submitted.
+ * Send an `Idempotency-Key` header to make retries safe: a repeated key returns the original
+ * claim (200) instead of a duplicate; the same key with a different payload returns 409
+ * IDEMPOTENCY_CONFLICT. Creating a draft never grants ownership.
+ * @summary Create a private claim draft for an existing listing or a new business
+ */
+export const createBusinessIntakeDraftHeaderIdempotencyKeyMin = 8;
+export const createBusinessIntakeDraftHeaderIdempotencyKeyMax = 128;
+
+
+
+export const CreateBusinessIntakeDraftHeader = zod.object({
+  "Idempotency-Key": zod.string().min(createBusinessIntakeDraftHeaderIdempotencyKeyMin).max(createBusinessIntakeDraftHeaderIdempotencyKeyMax).optional().describe('Client-generated key (8-128 characters) for mutating lifecycle operations. Replaying the same key\nwith the same payload returns the original result; the same key with a different payload\nreturns 409 IDEMPOTENCY_CONFLICT.\n')
+})
+
+
+
+
+export const createBusinessIntakeDraftBodyBusinessNameMin = 2;
+export const createBusinessIntakeDraftBodyBusinessNameMax = 160;
+
+export const createBusinessIntakeDraftBodyBusinessCategoryMin = 2;
+export const createBusinessIntakeDraftBodyBusinessCategoryMax = 80;
+
+export const createBusinessIntakeDraftBodyBusinessNeighborhoodMin = 2;
+export const createBusinessIntakeDraftBodyBusinessNeighborhoodMax = 120;
+
+export const createBusinessIntakeDraftBodyBusinessAddressMax = 240;
+
+export const createBusinessIntakeDraftBodyBusinessWebsiteUrlMax = 400;
+
+export const createBusinessIntakeDraftBodyContactNameMin = 2;
+export const createBusinessIntakeDraftBodyContactNameMax = 120;
+
+export const createBusinessIntakeDraftBodyContactEmailMin = 3;
+export const createBusinessIntakeDraftBodyContactEmailMax = 254;
+
+
+export const createBusinessIntakeDraftBodyContactEmailRegExp = new RegExp('^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$');
+export const createBusinessIntakeDraftBodyRelationshipMin = 2;
+export const createBusinessIntakeDraftBodyRelationshipMax = 120;
+
+export const createBusinessIntakeDraftBodyAuthorityDeclarationMin = 10;
+export const createBusinessIntakeDraftBodyAuthorityDeclarationMax = 1200;
+
+export const createBusinessIntakeDraftBodyEvidenceReferenceMax = 400;
+
+export const createBusinessIntakeDraftBodyMessageMax = 1200;
+
+
+
+export const CreateBusinessIntakeDraftBody = zod.object({
+  "kind": zod.enum(['existing_listing', 'new_business']).describe('Whether a claim targets a current public listing or a new business that is not listed yet.'),
+  "listing": zod.object({
+  "cityId": zod.string().min(1),
+  "listingSource": zod.string().min(1),
+  "listingId": zod.string().min(1)
+}).optional().describe('Required for `existing_listing`; resolved server-side, never trusted for facts.'),
+  "business": zod.object({
+  "name": zod.string().min(createBusinessIntakeDraftBodyBusinessNameMin).max(createBusinessIntakeDraftBodyBusinessNameMax),
+  "category": zod.string().min(createBusinessIntakeDraftBodyBusinessCategoryMin).max(createBusinessIntakeDraftBodyBusinessCategoryMax),
+  "neighborhood": zod.string().min(createBusinessIntakeDraftBodyBusinessNeighborhoodMin).max(createBusinessIntakeDraftBodyBusinessNeighborhoodMax),
+  "address": zod.string().max(createBusinessIntakeDraftBodyBusinessAddressMax).optional(),
+  "websiteUrl": zod.string().max(createBusinessIntakeDraftBodyBusinessWebsiteUrlMax).optional()
+}).optional().describe('Public facts for a business that is not listed yet. Stored privately until publication review.'),
+  "contactName": zod.string().min(createBusinessIntakeDraftBodyContactNameMin).max(createBusinessIntakeDraftBodyContactNameMax),
+  "contactEmail": zod.string().min(createBusinessIntakeDraftBodyContactEmailMin).max(createBusinessIntakeDraftBodyContactEmailMax).regex(createBusinessIntakeDraftBodyContactEmailRegExp),
+  "relationship": zod.string().min(createBusinessIntakeDraftBodyRelationshipMin).max(createBusinessIntakeDraftBodyRelationshipMax),
+  "authorityDeclaration": zod.string().min(createBusinessIntakeDraftBodyAuthorityDeclarationMin).max(createBusinessIntakeDraftBodyAuthorityDeclarationMax).describe('The representative\'s own statement of their authority over the business (private).'),
+  "evidenceReference": zod.string().max(createBusinessIntakeDraftBodyEvidenceReferenceMax).optional().describe('Optional URL or short text reference supporting the declaration (private). No uploads.'),
+  "message": zod.string().max(createBusinessIntakeDraftBodyMessageMax).optional()
+})
+
+export const CreateBusinessIntakeDraftResponse = zod.object({
+  "id": zod.number(),
+  "businessProfileId": zod.number(),
+  "claimantId": zod.string(),
+  "contactName": zod.string(),
+  "contactEmail": zod.string(),
+  "relationship": zod.string(),
+  "evidenceUrl": zod.string().nullish(),
+  "message": zod.string().nullish(),
+  "status": zod.enum(['draft', 'pending', 'submitted', 'changes_requested', 'approved', 'rejected', 'disputed', 'withdrawn']).describe('Claim lifecycle. `pending` is the legacy alias of `submitted` (awaiting review).\nOpen states that hold the one-open-claim-per-listing slot: pending, submitted,\nchanges_requested, disputed. Transitions: pending|submitted -> approved | rejected |\nchanges_requested | withdrawn; changes_requested -> submitted | withdrawn;\napproved -> disputed; disputed -> approved | rejected.\n'),
+  "reviewNote": zod.string().nullish(),
+  "reviewedAt": zod.string().nullish(),
+  "version": zod.number().optional().describe('Optimistic-concurrency version; send it back as expectedVersion on later claim updates.'),
+  "nextAction": zod.enum(['submit', 'wait_for_review', 'provide_changes', 'none']).optional().describe('What the claimant can do next; derived server-side from the claim status. `submit` applies to private drafts, `provide_changes` after a reviewer asked for changes.'),
+  "kind": zod.enum(['existing_listing', 'new_business']).optional().describe('Whether a claim targets a current public listing or a new business that is not listed yet.'),
+  "authorityDeclaration": zod.string().nullish().describe('Only returned to the claimant and reviewers; never to other claimants.'),
+  "evidenceReference": zod.string().nullish().describe('Only returned to the claimant and reviewers; never to other claimants.'),
+  "withdrawnAt": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string(),
+  "profile": zod.object({
+  "id": zod.number(),
+  "slug": zod.string(),
+  "cityId": zod.string(),
+  "name": zod.string(),
+  "address": zod.string().nullish(),
+  "neighborhood": zod.string().nullish(),
+  "latitude": zod.number().nullish(),
+  "longitude": zod.number().nullish(),
+  "sourceUrl": zod.string().nullish(),
+  "tagline": zod.string().nullish(),
+  "description": zod.string().nullish(),
+  "websiteUrl": zod.string().nullish(),
+  "phone": zod.string().nullish(),
+  "email": zod.string().nullish(),
+  "openingHours": zod.string().nullish(),
+  "logoUrl": zod.string().nullish(),
+  "coverUrl": zod.string().nullish(),
+  "isClaimed": zod.boolean(),
+  "claimedAt": zod.string().nullish(),
+  "publicationStatus": zod.enum(['draft', 'unpublished', 'published', 'suspended', 'archived']).optional().describe('Business publication lifecycle. Existing profiles are `published`.\ndraft -> published (explicit reviewer publication); published <-> unpublished;\npublished -> suspended (reviewer); any -> archived (terminal). Only `published`\nprofiles and their deals are served on public routes.\n'),
+  "category": zod.string().nullish().describe('Self-reported category of a new-business draft; null for listing-derived profiles.'),
+  "approvedRevisionVersion": zod.number().nullish().describe('Version of the approved revision when publication review is enabled; null when the profile is served from its columns.'),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+})
+
+
+/**
+ * Only the claim's creator can read it; any other claim answers 404 without disclosing whether it exists. Returns 404 while the business intake gate is off.
+ * @summary Get one of the signed-in user's claims with its current status and next action
+ */
+export const GetBusinessClaimParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GetBusinessClaimResponse = zod.object({
+  "id": zod.number(),
+  "businessProfileId": zod.number(),
+  "claimantId": zod.string(),
+  "contactName": zod.string(),
+  "contactEmail": zod.string(),
+  "relationship": zod.string(),
+  "evidenceUrl": zod.string().nullish(),
+  "message": zod.string().nullish(),
+  "status": zod.enum(['draft', 'pending', 'submitted', 'changes_requested', 'approved', 'rejected', 'disputed', 'withdrawn']).describe('Claim lifecycle. `pending` is the legacy alias of `submitted` (awaiting review).\nOpen states that hold the one-open-claim-per-listing slot: pending, submitted,\nchanges_requested, disputed. Transitions: pending|submitted -> approved | rejected |\nchanges_requested | withdrawn; changes_requested -> submitted | withdrawn;\napproved -> disputed; disputed -> approved | rejected.\n'),
+  "reviewNote": zod.string().nullish(),
+  "reviewedAt": zod.string().nullish(),
+  "version": zod.number().optional().describe('Optimistic-concurrency version; send it back as expectedVersion on later claim updates.'),
+  "nextAction": zod.enum(['submit', 'wait_for_review', 'provide_changes', 'none']).optional().describe('What the claimant can do next; derived server-side from the claim status. `submit` applies to private drafts, `provide_changes` after a reviewer asked for changes.'),
+  "kind": zod.enum(['existing_listing', 'new_business']).optional().describe('Whether a claim targets a current public listing or a new business that is not listed yet.'),
+  "authorityDeclaration": zod.string().nullish().describe('Only returned to the claimant and reviewers; never to other claimants.'),
+  "evidenceReference": zod.string().nullish().describe('Only returned to the claimant and reviewers; never to other claimants.'),
+  "withdrawnAt": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string(),
+  "profile": zod.object({
+  "id": zod.number(),
+  "slug": zod.string(),
+  "cityId": zod.string(),
+  "name": zod.string(),
+  "address": zod.string().nullish(),
+  "neighborhood": zod.string().nullish(),
+  "latitude": zod.number().nullish(),
+  "longitude": zod.number().nullish(),
+  "sourceUrl": zod.string().nullish(),
+  "tagline": zod.string().nullish(),
+  "description": zod.string().nullish(),
+  "websiteUrl": zod.string().nullish(),
+  "phone": zod.string().nullish(),
+  "email": zod.string().nullish(),
+  "openingHours": zod.string().nullish(),
+  "logoUrl": zod.string().nullish(),
+  "coverUrl": zod.string().nullish(),
+  "isClaimed": zod.boolean(),
+  "claimedAt": zod.string().nullish(),
+  "publicationStatus": zod.enum(['draft', 'unpublished', 'published', 'suspended', 'archived']).optional().describe('Business publication lifecycle. Existing profiles are `published`.\ndraft -> published (explicit reviewer publication); published <-> unpublished;\npublished -> suspended (reviewer); any -> archived (terminal). Only `published`\nprofiles and their deals are served on public routes.\n'),
+  "category": zod.string().nullish().describe('Self-reported category of a new-business draft; null for listing-derived profiles.'),
+  "approvedRevisionVersion": zod.number().nullish().describe('Version of the approved revision when publication review is enabled; null when the profile is served from its columns.'),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+})
+
+
+/**
+ * Updates contact, authority, and evidence fields (and the business facts of a new-business
+ * draft) while the claim is `draft` or `changes_requested`. `expectedVersion` must equal the
+ * current `version`; a mismatch returns 409 VERSION_CONFLICT with the current
+ * `expectedVersion`. Listing identity, status, claimant, and review fields cannot be set here
+ * (400 UNKNOWN_FIELD).
+ * @summary Update a draft or changes-requested claim with optimistic concurrency
+ */
+export const UpdateBusinessClaimParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const updateBusinessClaimBodyContactNameMin = 2;
+export const updateBusinessClaimBodyContactNameMax = 120;
+
+export const updateBusinessClaimBodyContactEmailMin = 3;
+export const updateBusinessClaimBodyContactEmailMax = 254;
+
+
+export const updateBusinessClaimBodyContactEmailRegExp = new RegExp('^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$');
+export const updateBusinessClaimBodyRelationshipMin = 2;
+export const updateBusinessClaimBodyRelationshipMax = 120;
+
+export const updateBusinessClaimBodyAuthorityDeclarationMin = 10;
+export const updateBusinessClaimBodyAuthorityDeclarationMax = 1200;
+
+export const updateBusinessClaimBodyEvidenceReferenceMax = 400;
+
+export const updateBusinessClaimBodyMessageMax = 1200;
+
+export const updateBusinessClaimBodyBusinessNameMin = 2;
+export const updateBusinessClaimBodyBusinessNameMax = 160;
+
+export const updateBusinessClaimBodyBusinessCategoryMin = 2;
+export const updateBusinessClaimBodyBusinessCategoryMax = 80;
+
+export const updateBusinessClaimBodyBusinessNeighborhoodMin = 2;
+export const updateBusinessClaimBodyBusinessNeighborhoodMax = 120;
+
+export const updateBusinessClaimBodyBusinessAddressMax = 240;
+
+export const updateBusinessClaimBodyBusinessWebsiteUrlMax = 400;
+
+
+
+export const UpdateBusinessClaimBody = zod.object({
+  "expectedVersion": zod.number(),
+  "contactName": zod.string().min(updateBusinessClaimBodyContactNameMin).max(updateBusinessClaimBodyContactNameMax).optional(),
+  "contactEmail": zod.string().min(updateBusinessClaimBodyContactEmailMin).max(updateBusinessClaimBodyContactEmailMax).regex(updateBusinessClaimBodyContactEmailRegExp).optional(),
+  "relationship": zod.string().min(updateBusinessClaimBodyRelationshipMin).max(updateBusinessClaimBodyRelationshipMax).optional(),
+  "authorityDeclaration": zod.string().min(updateBusinessClaimBodyAuthorityDeclarationMin).max(updateBusinessClaimBodyAuthorityDeclarationMax).optional(),
+  "evidenceReference": zod.string().max(updateBusinessClaimBodyEvidenceReferenceMax).nullish(),
+  "message": zod.string().max(updateBusinessClaimBodyMessageMax).nullish(),
+  "business": zod.object({
+  "name": zod.string().min(updateBusinessClaimBodyBusinessNameMin).max(updateBusinessClaimBodyBusinessNameMax),
+  "category": zod.string().min(updateBusinessClaimBodyBusinessCategoryMin).max(updateBusinessClaimBodyBusinessCategoryMax),
+  "neighborhood": zod.string().min(updateBusinessClaimBodyBusinessNeighborhoodMin).max(updateBusinessClaimBodyBusinessNeighborhoodMax),
+  "address": zod.string().max(updateBusinessClaimBodyBusinessAddressMax).optional(),
+  "websiteUrl": zod.string().max(updateBusinessClaimBodyBusinessWebsiteUrlMax).optional()
+}).optional().describe('Public facts for a business that is not listed yet. Stored privately until publication review.')
+})
+
+export const UpdateBusinessClaimResponse = zod.object({
+  "id": zod.number(),
+  "businessProfileId": zod.number(),
+  "claimantId": zod.string(),
+  "contactName": zod.string(),
+  "contactEmail": zod.string(),
+  "relationship": zod.string(),
+  "evidenceUrl": zod.string().nullish(),
+  "message": zod.string().nullish(),
+  "status": zod.enum(['draft', 'pending', 'submitted', 'changes_requested', 'approved', 'rejected', 'disputed', 'withdrawn']).describe('Claim lifecycle. `pending` is the legacy alias of `submitted` (awaiting review).\nOpen states that hold the one-open-claim-per-listing slot: pending, submitted,\nchanges_requested, disputed. Transitions: pending|submitted -> approved | rejected |\nchanges_requested | withdrawn; changes_requested -> submitted | withdrawn;\napproved -> disputed; disputed -> approved | rejected.\n'),
+  "reviewNote": zod.string().nullish(),
+  "reviewedAt": zod.string().nullish(),
+  "version": zod.number().optional().describe('Optimistic-concurrency version; send it back as expectedVersion on later claim updates.'),
+  "nextAction": zod.enum(['submit', 'wait_for_review', 'provide_changes', 'none']).optional().describe('What the claimant can do next; derived server-side from the claim status. `submit` applies to private drafts, `provide_changes` after a reviewer asked for changes.'),
+  "kind": zod.enum(['existing_listing', 'new_business']).optional().describe('Whether a claim targets a current public listing or a new business that is not listed yet.'),
+  "authorityDeclaration": zod.string().nullish().describe('Only returned to the claimant and reviewers; never to other claimants.'),
+  "evidenceReference": zod.string().nullish().describe('Only returned to the claimant and reviewers; never to other claimants.'),
+  "withdrawnAt": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string(),
+  "profile": zod.object({
+  "id": zod.number(),
+  "slug": zod.string(),
+  "cityId": zod.string(),
+  "name": zod.string(),
+  "address": zod.string().nullish(),
+  "neighborhood": zod.string().nullish(),
+  "latitude": zod.number().nullish(),
+  "longitude": zod.number().nullish(),
+  "sourceUrl": zod.string().nullish(),
+  "tagline": zod.string().nullish(),
+  "description": zod.string().nullish(),
+  "websiteUrl": zod.string().nullish(),
+  "phone": zod.string().nullish(),
+  "email": zod.string().nullish(),
+  "openingHours": zod.string().nullish(),
+  "logoUrl": zod.string().nullish(),
+  "coverUrl": zod.string().nullish(),
+  "isClaimed": zod.boolean(),
+  "claimedAt": zod.string().nullish(),
+  "publicationStatus": zod.enum(['draft', 'unpublished', 'published', 'suspended', 'archived']).optional().describe('Business publication lifecycle. Existing profiles are `published`.\ndraft -> published (explicit reviewer publication); published <-> unpublished;\npublished -> suspended (reviewer); any -> archived (terminal). Only `published`\nprofiles and their deals are served on public routes.\n'),
+  "category": zod.string().nullish().describe('Self-reported category of a new-business draft; null for listing-derived profiles.'),
+  "approvedRevisionVersion": zod.number().nullish().describe('Version of the approved revision when publication review is enabled; null when the profile is served from its columns.'),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+})
+
+
+/**
+ * Moves a `draft` or `changes_requested` claim to `submitted` and takes the single open-claim
+ * slot for the business. Duplicates are re-checked transactionally at this moment: another
+ * open claim for the same business returns 409. When the business already has a verified
+ * owner the claim is recorded as `disputed` for manual review instead of granting anything.
+ * `expectedVersion` must match. Submission never grants ownership; approval is a later,
+ * explicit reviewer action.
+ * @summary Submit a draft (or resubmit a changes-requested claim) for manual review
+ */
+export const SubmitBusinessClaimParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const SubmitBusinessClaimBody = zod.object({
+  "expectedVersion": zod.number(),
+  "confirmNoDuplicate": zod.boolean().optional().describe('Only meaningful when submitting a `new_business` draft. Submission re-checks public\nlistings and published profiles for equivalent businesses; when candidates exist and\nthis flag is not `true`, the server answers 409 `DUPLICATE_CANDIDATES` with the\ncandidates so the representative can claim one instead or explicitly confirm.\n')
+})
+
+export const SubmitBusinessClaimResponse = zod.object({
+  "id": zod.number(),
+  "businessProfileId": zod.number(),
+  "claimantId": zod.string(),
+  "contactName": zod.string(),
+  "contactEmail": zod.string(),
+  "relationship": zod.string(),
+  "evidenceUrl": zod.string().nullish(),
+  "message": zod.string().nullish(),
+  "status": zod.enum(['draft', 'pending', 'submitted', 'changes_requested', 'approved', 'rejected', 'disputed', 'withdrawn']).describe('Claim lifecycle. `pending` is the legacy alias of `submitted` (awaiting review).\nOpen states that hold the one-open-claim-per-listing slot: pending, submitted,\nchanges_requested, disputed. Transitions: pending|submitted -> approved | rejected |\nchanges_requested | withdrawn; changes_requested -> submitted | withdrawn;\napproved -> disputed; disputed -> approved | rejected.\n'),
+  "reviewNote": zod.string().nullish(),
+  "reviewedAt": zod.string().nullish(),
+  "version": zod.number().optional().describe('Optimistic-concurrency version; send it back as expectedVersion on later claim updates.'),
+  "nextAction": zod.enum(['submit', 'wait_for_review', 'provide_changes', 'none']).optional().describe('What the claimant can do next; derived server-side from the claim status. `submit` applies to private drafts, `provide_changes` after a reviewer asked for changes.'),
+  "kind": zod.enum(['existing_listing', 'new_business']).optional().describe('Whether a claim targets a current public listing or a new business that is not listed yet.'),
+  "authorityDeclaration": zod.string().nullish().describe('Only returned to the claimant and reviewers; never to other claimants.'),
+  "evidenceReference": zod.string().nullish().describe('Only returned to the claimant and reviewers; never to other claimants.'),
+  "withdrawnAt": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string(),
+  "profile": zod.object({
+  "id": zod.number(),
+  "slug": zod.string(),
+  "cityId": zod.string(),
+  "name": zod.string(),
+  "address": zod.string().nullish(),
+  "neighborhood": zod.string().nullish(),
+  "latitude": zod.number().nullish(),
+  "longitude": zod.number().nullish(),
+  "sourceUrl": zod.string().nullish(),
+  "tagline": zod.string().nullish(),
+  "description": zod.string().nullish(),
+  "websiteUrl": zod.string().nullish(),
+  "phone": zod.string().nullish(),
+  "email": zod.string().nullish(),
+  "openingHours": zod.string().nullish(),
+  "logoUrl": zod.string().nullish(),
+  "coverUrl": zod.string().nullish(),
+  "isClaimed": zod.boolean(),
+  "claimedAt": zod.string().nullish(),
+  "publicationStatus": zod.enum(['draft', 'unpublished', 'published', 'suspended', 'archived']).optional().describe('Business publication lifecycle. Existing profiles are `published`.\ndraft -> published (explicit reviewer publication); published <-> unpublished;\npublished -> suspended (reviewer); any -> archived (terminal). Only `published`\nprofiles and their deals are served on public routes.\n'),
+  "category": zod.string().nullish().describe('Self-reported category of a new-business draft; null for listing-derived profiles.'),
+  "approvedRevisionVersion": zod.number().nullish().describe('Version of the approved revision when publication review is enabled; null when the profile is served from its columns.'),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+})
+
+
+/**
+ * Moves a `draft`, `pending`, `submitted`, `changes_requested`, or `disputed` claim to
+ * `withdrawn`, keeps the audit trail, and frees the business for other claims. A withdrawn
+ * new-business draft profile is archived. `expectedVersion` must match. Approved or
+ * rejected claims cannot be withdrawn (409).
+ * @summary Withdraw a draft or open claim
+ */
+export const WithdrawBusinessClaimParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const WithdrawBusinessClaimBody = zod.object({
+  "expectedVersion": zod.number(),
+  "confirmNoDuplicate": zod.boolean().optional().describe('Only meaningful when submitting a `new_business` draft. Submission re-checks public\nlistings and published profiles for equivalent businesses; when candidates exist and\nthis flag is not `true`, the server answers 409 `DUPLICATE_CANDIDATES` with the\ncandidates so the representative can claim one instead or explicitly confirm.\n')
+})
+
+export const WithdrawBusinessClaimResponse = zod.object({
+  "id": zod.number(),
+  "businessProfileId": zod.number(),
+  "claimantId": zod.string(),
+  "contactName": zod.string(),
+  "contactEmail": zod.string(),
+  "relationship": zod.string(),
+  "evidenceUrl": zod.string().nullish(),
+  "message": zod.string().nullish(),
+  "status": zod.enum(['draft', 'pending', 'submitted', 'changes_requested', 'approved', 'rejected', 'disputed', 'withdrawn']).describe('Claim lifecycle. `pending` is the legacy alias of `submitted` (awaiting review).\nOpen states that hold the one-open-claim-per-listing slot: pending, submitted,\nchanges_requested, disputed. Transitions: pending|submitted -> approved | rejected |\nchanges_requested | withdrawn; changes_requested -> submitted | withdrawn;\napproved -> disputed; disputed -> approved | rejected.\n'),
+  "reviewNote": zod.string().nullish(),
+  "reviewedAt": zod.string().nullish(),
+  "version": zod.number().optional().describe('Optimistic-concurrency version; send it back as expectedVersion on later claim updates.'),
+  "nextAction": zod.enum(['submit', 'wait_for_review', 'provide_changes', 'none']).optional().describe('What the claimant can do next; derived server-side from the claim status. `submit` applies to private drafts, `provide_changes` after a reviewer asked for changes.'),
+  "kind": zod.enum(['existing_listing', 'new_business']).optional().describe('Whether a claim targets a current public listing or a new business that is not listed yet.'),
+  "authorityDeclaration": zod.string().nullish().describe('Only returned to the claimant and reviewers; never to other claimants.'),
+  "evidenceReference": zod.string().nullish().describe('Only returned to the claimant and reviewers; never to other claimants.'),
+  "withdrawnAt": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string(),
+  "profile": zod.object({
+  "id": zod.number(),
+  "slug": zod.string(),
+  "cityId": zod.string(),
+  "name": zod.string(),
+  "address": zod.string().nullish(),
+  "neighborhood": zod.string().nullish(),
+  "latitude": zod.number().nullish(),
+  "longitude": zod.number().nullish(),
+  "sourceUrl": zod.string().nullish(),
+  "tagline": zod.string().nullish(),
+  "description": zod.string().nullish(),
+  "websiteUrl": zod.string().nullish(),
+  "phone": zod.string().nullish(),
+  "email": zod.string().nullish(),
+  "openingHours": zod.string().nullish(),
+  "logoUrl": zod.string().nullish(),
+  "coverUrl": zod.string().nullish(),
+  "isClaimed": zod.boolean(),
+  "claimedAt": zod.string().nullish(),
+  "publicationStatus": zod.enum(['draft', 'unpublished', 'published', 'suspended', 'archived']).optional().describe('Business publication lifecycle. Existing profiles are `published`.\ndraft -> published (explicit reviewer publication); published <-> unpublished;\npublished -> suspended (reviewer); any -> archived (terminal). Only `published`\nprofiles and their deals are served on public routes.\n'),
+  "category": zod.string().nullish().describe('Self-reported category of a new-business draft; null for listing-derived profiles.'),
+  "approvedRevisionVersion": zod.number().nullish().describe('Version of the approved revision when publication review is enabled; null when the profile is served from its columns.'),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
 })
@@ -1166,6 +2234,9 @@ export const GetMyBusinessProfilesResponseItem = zod.object({
   "coverUrl": zod.string().nullish(),
   "isClaimed": zod.boolean(),
   "claimedAt": zod.string().nullish(),
+  "publicationStatus": zod.enum(['draft', 'unpublished', 'published', 'suspended', 'archived']).optional().describe('Business publication lifecycle. Existing profiles are `published`.\ndraft -> published (explicit reviewer publication); published <-> unpublished;\npublished -> suspended (reviewer); any -> archived (terminal). Only `published`\nprofiles and their deals are served on public routes.\n'),
+  "category": zod.string().nullish().describe('Self-reported category of a new-business draft; null for listing-derived profiles.'),
+  "approvedRevisionVersion": zod.number().nullish().describe('Version of the approved revision when publication review is enabled; null when the profile is served from its columns.'),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
 }).and(zod.object({
@@ -1246,6 +2317,9 @@ export const UpdateBusinessProfileResponse = zod.object({
   "coverUrl": zod.string().nullish(),
   "isClaimed": zod.boolean(),
   "claimedAt": zod.string().nullish(),
+  "publicationStatus": zod.enum(['draft', 'unpublished', 'published', 'suspended', 'archived']).optional().describe('Business publication lifecycle. Existing profiles are `published`.\ndraft -> published (explicit reviewer publication); published <-> unpublished;\npublished -> suspended (reviewer); any -> archived (terminal). Only `published`\nprofiles and their deals are served on public routes.\n'),
+  "category": zod.string().nullish().describe('Self-reported category of a new-business draft; null for listing-derived profiles.'),
+  "approvedRevisionVersion": zod.number().nullish().describe('Version of the approved revision when publication review is enabled; null when the profile is served from its columns.'),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
 })
@@ -1396,6 +2470,9 @@ export const GetBusinessProfileResponse = zod.object({
   "coverUrl": zod.string().nullish(),
   "isClaimed": zod.boolean(),
   "claimedAt": zod.string().nullish(),
+  "publicationStatus": zod.enum(['draft', 'unpublished', 'published', 'suspended', 'archived']).optional().describe('Business publication lifecycle. Existing profiles are `published`.\ndraft -> published (explicit reviewer publication); published <-> unpublished;\npublished -> suspended (reviewer); any -> archived (terminal). Only `published`\nprofiles and their deals are served on public routes.\n'),
+  "category": zod.string().nullish().describe('Self-reported category of a new-business draft; null for listing-derived profiles.'),
+  "approvedRevisionVersion": zod.number().nullish().describe('Version of the approved revision when publication review is enabled; null when the profile is served from its columns.'),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
 }).and(zod.object({
@@ -1419,8 +2496,1142 @@ export const GetBusinessProfileResponse = zod.object({
   "reviewedAt": zod.string().nullish(),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
+})),
+  "content": zod.union([zod.object({
+  "nl": zod.object({
+  "tagline": zod.string().nullish(),
+  "description": zod.string().nullish(),
+  "openingHours": zod.string().nullish().describe('Free-text opening hours as stated by the owner; never derived.')
+}).describe('Stored editorial text in one language as it was approved or drafted. Null or missing values mean \"not provided\"; nothing is machine-translated or invented. No length limits apply here: content migrated from the older profile contract is preserved verbatim. New owner input is validated by `BusinessRevisionTextInput`.'),
+  "en": zod.object({
+  "tagline": zod.string().nullish(),
+  "description": zod.string().nullish(),
+  "openingHours": zod.string().nullish().describe('Free-text opening hours as stated by the owner; never derived.')
+}).describe('Stored editorial text in one language as it was approved or drafted. Null or missing values mean \"not provided\"; nothing is machine-translated or invented. No length limits apply here: content migrated from the older profile contract is preserved verbatim. New owner input is validated by `BusinessRevisionTextInput`.'),
+  "facts": zod.object({
+  "websiteUrl": zod.string().nullish(),
+  "phone": zod.string().nullish(),
+  "email": zod.string().nullish(),
+  "address": zod.string().nullish(),
+  "logoUrl": zod.string().nullish(),
+  "coverUrl": zod.string().nullish()
+}).describe('Stored language-neutral facts. Migrated legacy values are preserved verbatim; new owner input is validated by `BusinessRevisionFactsInput`.')
+}),zod.null()]).optional(),
+  "provenance": zod.union([zod.object({
+  "listingSource": zod.string(),
+  "sourceUrl": zod.string().nullable(),
+  "approvedVersion": zod.number(),
+  "approvedAt": zod.string().nullable(),
+  "freshness": zod.object({
+  "status": zod.enum(['unverified', 'fresh', 'stale']),
+  "checkedOn": zod.string().nullable(),
+  "staleAfterDays": zod.number(),
+  "staleOn": zod.string().nullable().describe('ISO date-time when the snapshot turns (or turned) stale; null when unverified.'),
+  "daysUntilStale": zod.number().nullable().describe('Whole days until `staleOn`; negative once stale; null when unverified.'),
+  "recheckWindowDays": zod.number(),
+  "recheckDue": zod.boolean()
+}).describe('Truthful freshness of the approved snapshot. `unverified` when no field was ever confirmed;\n`stale` when the newest confirmation is older than `staleAfterDays`. `recheckDue` flags a\nstill-fresh snapshot that turns stale within `recheckWindowDays`, so owners and reviewers can\nschedule a re-check before it flips. `staleOn` is derived from `checkedOn`, never stored.\nFreshness is independent from publication status.\n'),
+  "checks": zod.array(zod.object({
+  "field": zod.string(),
+  "status": zod.enum(['unchecked', 'confirmed', 'contradicted', 'unavailable']).describe('Reviewer verdict for one approved field. `contradicted` fields are withheld publicly; `unchecked` and `unavailable` are shown with that provenance.'),
+  "sourceUrl": zod.string().nullable(),
+  "checkedOn": zod.string().nullable()
 }))
-}))
+}).describe('Truthful source, check, and freshness metadata for the approved snapshot. Never includes reviewer identities or notes.'),zod.null()]).optional()
+}).describe('When the business has an approved revision, editorial fields (tagline, description,\nopeningHours, websiteUrl, phone, email, address, logoUrl, coverUrl) come only from that\nsnapshot via `content`; fields whose fact check is `contradicted` are null. Profiles\nwithout a revision are served from their columns and carry `content: null`.\n'))
+
+
+/**
+ * Returns the latest revision (draft, submitted, or changes requested), the currently
+ * approved revision, the last safe reviewer decision, fact-check freshness, and the derived
+ * owner state. Requires a membership on the business and the `businessPublication` gate.
+ * @summary Owner view of the profile's editorial state
+ */
+export const GetBusinessRevisionWorkspaceParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GetBusinessRevisionWorkspaceResponse = zod.object({
+  "profile": zod.object({
+  "id": zod.number(),
+  "slug": zod.string(),
+  "cityId": zod.string(),
+  "name": zod.string(),
+  "address": zod.string().nullish(),
+  "neighborhood": zod.string().nullish(),
+  "latitude": zod.number().nullish(),
+  "longitude": zod.number().nullish(),
+  "sourceUrl": zod.string().nullish(),
+  "tagline": zod.string().nullish(),
+  "description": zod.string().nullish(),
+  "websiteUrl": zod.string().nullish(),
+  "phone": zod.string().nullish(),
+  "email": zod.string().nullish(),
+  "openingHours": zod.string().nullish(),
+  "logoUrl": zod.string().nullish(),
+  "coverUrl": zod.string().nullish(),
+  "isClaimed": zod.boolean(),
+  "claimedAt": zod.string().nullish(),
+  "publicationStatus": zod.enum(['draft', 'unpublished', 'published', 'suspended', 'archived']).optional().describe('Business publication lifecycle. Existing profiles are `published`.\ndraft -> published (explicit reviewer publication); published <-> unpublished;\npublished -> suspended (reviewer); any -> archived (terminal). Only `published`\nprofiles and their deals are served on public routes.\n'),
+  "category": zod.string().nullish().describe('Self-reported category of a new-business draft; null for listing-derived profiles.'),
+  "approvedRevisionVersion": zod.number().nullish().describe('Version of the approved revision when publication review is enabled; null when the profile is served from its columns.'),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+}),
+  "role": zod.string(),
+  "state": zod.enum(['unknown', 'draft', 'submitted', 'changes_requested', 'approved', 'published', 'stale', 'suspended', 'unpublished']).describe('Derived owner-facing summary; publication and revision states stay independent underneath.'),
+  "latestRevision": zod.union([zod.object({
+  "id": zod.number(),
+  "businessProfileId": zod.number(),
+  "version": zod.number(),
+  "status": zod.enum(['draft', 'submitted', 'changes_requested', 'approved', 'rejected', 'superseded', 'discarded']).describe('draft -> submitted (owner); submitted -> approved | changes_requested | rejected (reviewer);\nchanges_requested -> submitted (owner, new version); approved -> superseded (later approval);\ndraft -> discarded (owner). A business has at most one approved revision.\n'),
+  "submittedAt": zod.string().nullish(),
+  "decidedAt": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+}).describe('Owner- and reviewer-visible revision metadata. Draft content is never served on public routes.').and(zod.object({
+  "content": zod.object({
+  "nl": zod.object({
+  "tagline": zod.string().nullish(),
+  "description": zod.string().nullish(),
+  "openingHours": zod.string().nullish().describe('Free-text opening hours as stated by the owner; never derived.')
+}).describe('Stored editorial text in one language as it was approved or drafted. Null or missing values mean \"not provided\"; nothing is machine-translated or invented. No length limits apply here: content migrated from the older profile contract is preserved verbatim. New owner input is validated by `BusinessRevisionTextInput`.'),
+  "en": zod.object({
+  "tagline": zod.string().nullish(),
+  "description": zod.string().nullish(),
+  "openingHours": zod.string().nullish().describe('Free-text opening hours as stated by the owner; never derived.')
+}).describe('Stored editorial text in one language as it was approved or drafted. Null or missing values mean \"not provided\"; nothing is machine-translated or invented. No length limits apply here: content migrated from the older profile contract is preserved verbatim. New owner input is validated by `BusinessRevisionTextInput`.'),
+  "facts": zod.object({
+  "websiteUrl": zod.string().nullish(),
+  "phone": zod.string().nullish(),
+  "email": zod.string().nullish(),
+  "address": zod.string().nullish(),
+  "logoUrl": zod.string().nullish(),
+  "coverUrl": zod.string().nullish()
+}).describe('Stored language-neutral facts. Migrated legacy values are preserved verbatim; new owner input is validated by `BusinessRevisionFactsInput`.')
+})
+})),zod.null()]),
+  "approvedRevision": zod.union([zod.object({
+  "id": zod.number(),
+  "businessProfileId": zod.number(),
+  "version": zod.number(),
+  "status": zod.enum(['draft', 'submitted', 'changes_requested', 'approved', 'rejected', 'superseded', 'discarded']).describe('draft -> submitted (owner); submitted -> approved | changes_requested | rejected (reviewer);\nchanges_requested -> submitted (owner, new version); approved -> superseded (later approval);\ndraft -> discarded (owner). A business has at most one approved revision.\n'),
+  "submittedAt": zod.string().nullish(),
+  "decidedAt": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+}).describe('Owner- and reviewer-visible revision metadata. Draft content is never served on public routes.').and(zod.object({
+  "content": zod.object({
+  "nl": zod.object({
+  "tagline": zod.string().nullish(),
+  "description": zod.string().nullish(),
+  "openingHours": zod.string().nullish().describe('Free-text opening hours as stated by the owner; never derived.')
+}).describe('Stored editorial text in one language as it was approved or drafted. Null or missing values mean \"not provided\"; nothing is machine-translated or invented. No length limits apply here: content migrated from the older profile contract is preserved verbatim. New owner input is validated by `BusinessRevisionTextInput`.'),
+  "en": zod.object({
+  "tagline": zod.string().nullish(),
+  "description": zod.string().nullish(),
+  "openingHours": zod.string().nullish().describe('Free-text opening hours as stated by the owner; never derived.')
+}).describe('Stored editorial text in one language as it was approved or drafted. Null or missing values mean \"not provided\"; nothing is machine-translated or invented. No length limits apply here: content migrated from the older profile contract is preserved verbatim. New owner input is validated by `BusinessRevisionTextInput`.'),
+  "facts": zod.object({
+  "websiteUrl": zod.string().nullish(),
+  "phone": zod.string().nullish(),
+  "email": zod.string().nullish(),
+  "address": zod.string().nullish(),
+  "logoUrl": zod.string().nullish(),
+  "coverUrl": zod.string().nullish()
+}).describe('Stored language-neutral facts. Migrated legacy values are preserved verbatim; new owner input is validated by `BusinessRevisionFactsInput`.')
+})
+})),zod.null()]),
+  "latestDecision": zod.union([zod.object({
+  "id": zod.number(),
+  "targetType": zod.enum(['claim', 'revision', 'publication']),
+  "targetId": zod.number(),
+  "targetVersion": zod.number(),
+  "decision": zod.enum(['approve', 'reject', 'request_changes', 'publish', 'unpublish', 'suspend']),
+  "reasonCode": zod.string().nullish(),
+  "reason": zod.string().nullish(),
+  "createdAt": zod.string()
+}).describe('Immutable audit entry for a reviewer decision. The reviewer is derived from the session and must not own the target (self-review is refused with SELF_REVIEW_FORBIDDEN).'),zod.null()]),
+  "factChecks": zod.array(zod.object({
+  "field": zod.string(),
+  "status": zod.enum(['unchecked', 'confirmed', 'contradicted', 'unavailable']).describe('Reviewer verdict for one approved field. `contradicted` fields are withheld publicly; `unchecked` and `unavailable` are shown with that provenance.'),
+  "sourceUrl": zod.string().nullable(),
+  "checkedOn": zod.string().nullable(),
+  "note": zod.string().nullish().describe('Reviewer note; only served to owners and reviewers, never publicly.')
+})).describe('Fact checks recorded for the approved revision.'),
+  "freshness": zod.object({
+  "status": zod.enum(['unverified', 'fresh', 'stale']),
+  "checkedOn": zod.string().nullable(),
+  "staleAfterDays": zod.number(),
+  "staleOn": zod.string().nullable().describe('ISO date-time when the snapshot turns (or turned) stale; null when unverified.'),
+  "daysUntilStale": zod.number().nullable().describe('Whole days until `staleOn`; negative once stale; null when unverified.'),
+  "recheckWindowDays": zod.number(),
+  "recheckDue": zod.boolean()
+}).describe('Truthful freshness of the approved snapshot. `unverified` when no field was ever confirmed;\n`stale` when the newest confirmation is older than `staleAfterDays`. `recheckDue` flags a\nstill-fresh snapshot that turns stale within `recheckWindowDays`, so owners and reviewers can\nschedule a re-check before it flips. `staleOn` is derived from `checkedOn`, never stored.\nFreshness is independent from publication status.\n')
+})
+
+
+/**
+ * Merges the given NL/EN text and language-neutral facts into the owner's draft. When the
+ * latest revision is a `draft` it is edited in place; otherwise a new draft version is created
+ * from the latest revision's content. `expectedVersion` must equal the latest revision's
+ * `version` (0 when the business has no revision yet); a mismatch returns 409
+ * VERSION_CONFLICT. A `submitted` revision cannot be edited (409 with field `status`). The
+ * approved snapshot is never mutated here.
+ * @summary Save bilingual draft changes as a revision
+ */
+export const UpdateBusinessRevisionParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const updateBusinessRevisionBodyNlTaglineMax = 160;
+
+export const updateBusinessRevisionBodyNlDescriptionMax = 2000;
+
+export const updateBusinessRevisionBodyNlOpeningHoursMax = 500;
+
+export const updateBusinessRevisionBodyEnTaglineMax = 160;
+
+export const updateBusinessRevisionBodyEnDescriptionMax = 2000;
+
+export const updateBusinessRevisionBodyEnOpeningHoursMax = 500;
+
+export const updateBusinessRevisionBodyFactsWebsiteUrlMax = 500;
+
+export const updateBusinessRevisionBodyFactsPhoneMax = 40;
+
+export const updateBusinessRevisionBodyFactsEmailMax = 160;
+
+
+export const updateBusinessRevisionBodyFactsEmailRegExp = new RegExp('^$|^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$');
+export const updateBusinessRevisionBodyFactsAddressMax = 240;
+
+export const updateBusinessRevisionBodyFactsLogoUrlMax = 500;
+
+export const updateBusinessRevisionBodyFactsCoverUrlMax = 500;
+
+
+
+export const UpdateBusinessRevisionBody = zod.object({
+  "expectedVersion": zod.number().describe('Version of the latest revision the owner saw; 0 when the business has none yet.'),
+  "nl": zod.object({
+  "tagline": zod.string().max(updateBusinessRevisionBodyNlTaglineMax).nullish(),
+  "description": zod.string().max(updateBusinessRevisionBodyNlDescriptionMax).nullish(),
+  "openingHours": zod.string().max(updateBusinessRevisionBodyNlOpeningHoursMax).nullish()
+}).optional().describe('Owner-supplied editorial text in one language. Omitted fields are left untouched; null clears a field.'),
+  "en": zod.object({
+  "tagline": zod.string().max(updateBusinessRevisionBodyEnTaglineMax).nullish(),
+  "description": zod.string().max(updateBusinessRevisionBodyEnDescriptionMax).nullish(),
+  "openingHours": zod.string().max(updateBusinessRevisionBodyEnOpeningHoursMax).nullish()
+}).optional().describe('Owner-supplied editorial text in one language. Omitted fields are left untouched; null clears a field.'),
+  "facts": zod.object({
+  "websiteUrl": zod.string().max(updateBusinessRevisionBodyFactsWebsiteUrlMax).nullish(),
+  "phone": zod.string().max(updateBusinessRevisionBodyFactsPhoneMax).nullish(),
+  "email": zod.string().max(updateBusinessRevisionBodyFactsEmailMax).regex(updateBusinessRevisionBodyFactsEmailRegExp).nullish(),
+  "address": zod.string().max(updateBusinessRevisionBodyFactsAddressMax).nullish(),
+  "logoUrl": zod.string().max(updateBusinessRevisionBodyFactsLogoUrlMax).nullish(),
+  "coverUrl": zod.string().max(updateBusinessRevisionBodyFactsCoverUrlMax).nullish()
+}).optional().describe('Owner-supplied language-neutral facts. Only http(s) URLs are accepted.')
+})
+
+export const UpdateBusinessRevisionResponse = zod.object({
+  "profile": zod.object({
+  "id": zod.number(),
+  "slug": zod.string(),
+  "cityId": zod.string(),
+  "name": zod.string(),
+  "address": zod.string().nullish(),
+  "neighborhood": zod.string().nullish(),
+  "latitude": zod.number().nullish(),
+  "longitude": zod.number().nullish(),
+  "sourceUrl": zod.string().nullish(),
+  "tagline": zod.string().nullish(),
+  "description": zod.string().nullish(),
+  "websiteUrl": zod.string().nullish(),
+  "phone": zod.string().nullish(),
+  "email": zod.string().nullish(),
+  "openingHours": zod.string().nullish(),
+  "logoUrl": zod.string().nullish(),
+  "coverUrl": zod.string().nullish(),
+  "isClaimed": zod.boolean(),
+  "claimedAt": zod.string().nullish(),
+  "publicationStatus": zod.enum(['draft', 'unpublished', 'published', 'suspended', 'archived']).optional().describe('Business publication lifecycle. Existing profiles are `published`.\ndraft -> published (explicit reviewer publication); published <-> unpublished;\npublished -> suspended (reviewer); any -> archived (terminal). Only `published`\nprofiles and their deals are served on public routes.\n'),
+  "category": zod.string().nullish().describe('Self-reported category of a new-business draft; null for listing-derived profiles.'),
+  "approvedRevisionVersion": zod.number().nullish().describe('Version of the approved revision when publication review is enabled; null when the profile is served from its columns.'),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+}),
+  "role": zod.string(),
+  "state": zod.enum(['unknown', 'draft', 'submitted', 'changes_requested', 'approved', 'published', 'stale', 'suspended', 'unpublished']).describe('Derived owner-facing summary; publication and revision states stay independent underneath.'),
+  "latestRevision": zod.union([zod.object({
+  "id": zod.number(),
+  "businessProfileId": zod.number(),
+  "version": zod.number(),
+  "status": zod.enum(['draft', 'submitted', 'changes_requested', 'approved', 'rejected', 'superseded', 'discarded']).describe('draft -> submitted (owner); submitted -> approved | changes_requested | rejected (reviewer);\nchanges_requested -> submitted (owner, new version); approved -> superseded (later approval);\ndraft -> discarded (owner). A business has at most one approved revision.\n'),
+  "submittedAt": zod.string().nullish(),
+  "decidedAt": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+}).describe('Owner- and reviewer-visible revision metadata. Draft content is never served on public routes.').and(zod.object({
+  "content": zod.object({
+  "nl": zod.object({
+  "tagline": zod.string().nullish(),
+  "description": zod.string().nullish(),
+  "openingHours": zod.string().nullish().describe('Free-text opening hours as stated by the owner; never derived.')
+}).describe('Stored editorial text in one language as it was approved or drafted. Null or missing values mean \"not provided\"; nothing is machine-translated or invented. No length limits apply here: content migrated from the older profile contract is preserved verbatim. New owner input is validated by `BusinessRevisionTextInput`.'),
+  "en": zod.object({
+  "tagline": zod.string().nullish(),
+  "description": zod.string().nullish(),
+  "openingHours": zod.string().nullish().describe('Free-text opening hours as stated by the owner; never derived.')
+}).describe('Stored editorial text in one language as it was approved or drafted. Null or missing values mean \"not provided\"; nothing is machine-translated or invented. No length limits apply here: content migrated from the older profile contract is preserved verbatim. New owner input is validated by `BusinessRevisionTextInput`.'),
+  "facts": zod.object({
+  "websiteUrl": zod.string().nullish(),
+  "phone": zod.string().nullish(),
+  "email": zod.string().nullish(),
+  "address": zod.string().nullish(),
+  "logoUrl": zod.string().nullish(),
+  "coverUrl": zod.string().nullish()
+}).describe('Stored language-neutral facts. Migrated legacy values are preserved verbatim; new owner input is validated by `BusinessRevisionFactsInput`.')
+})
+})),zod.null()]),
+  "approvedRevision": zod.union([zod.object({
+  "id": zod.number(),
+  "businessProfileId": zod.number(),
+  "version": zod.number(),
+  "status": zod.enum(['draft', 'submitted', 'changes_requested', 'approved', 'rejected', 'superseded', 'discarded']).describe('draft -> submitted (owner); submitted -> approved | changes_requested | rejected (reviewer);\nchanges_requested -> submitted (owner, new version); approved -> superseded (later approval);\ndraft -> discarded (owner). A business has at most one approved revision.\n'),
+  "submittedAt": zod.string().nullish(),
+  "decidedAt": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+}).describe('Owner- and reviewer-visible revision metadata. Draft content is never served on public routes.').and(zod.object({
+  "content": zod.object({
+  "nl": zod.object({
+  "tagline": zod.string().nullish(),
+  "description": zod.string().nullish(),
+  "openingHours": zod.string().nullish().describe('Free-text opening hours as stated by the owner; never derived.')
+}).describe('Stored editorial text in one language as it was approved or drafted. Null or missing values mean \"not provided\"; nothing is machine-translated or invented. No length limits apply here: content migrated from the older profile contract is preserved verbatim. New owner input is validated by `BusinessRevisionTextInput`.'),
+  "en": zod.object({
+  "tagline": zod.string().nullish(),
+  "description": zod.string().nullish(),
+  "openingHours": zod.string().nullish().describe('Free-text opening hours as stated by the owner; never derived.')
+}).describe('Stored editorial text in one language as it was approved or drafted. Null or missing values mean \"not provided\"; nothing is machine-translated or invented. No length limits apply here: content migrated from the older profile contract is preserved verbatim. New owner input is validated by `BusinessRevisionTextInput`.'),
+  "facts": zod.object({
+  "websiteUrl": zod.string().nullish(),
+  "phone": zod.string().nullish(),
+  "email": zod.string().nullish(),
+  "address": zod.string().nullish(),
+  "logoUrl": zod.string().nullish(),
+  "coverUrl": zod.string().nullish()
+}).describe('Stored language-neutral facts. Migrated legacy values are preserved verbatim; new owner input is validated by `BusinessRevisionFactsInput`.')
+})
+})),zod.null()]),
+  "latestDecision": zod.union([zod.object({
+  "id": zod.number(),
+  "targetType": zod.enum(['claim', 'revision', 'publication']),
+  "targetId": zod.number(),
+  "targetVersion": zod.number(),
+  "decision": zod.enum(['approve', 'reject', 'request_changes', 'publish', 'unpublish', 'suspend']),
+  "reasonCode": zod.string().nullish(),
+  "reason": zod.string().nullish(),
+  "createdAt": zod.string()
+}).describe('Immutable audit entry for a reviewer decision. The reviewer is derived from the session and must not own the target (self-review is refused with SELF_REVIEW_FORBIDDEN).'),zod.null()]),
+  "factChecks": zod.array(zod.object({
+  "field": zod.string(),
+  "status": zod.enum(['unchecked', 'confirmed', 'contradicted', 'unavailable']).describe('Reviewer verdict for one approved field. `contradicted` fields are withheld publicly; `unchecked` and `unavailable` are shown with that provenance.'),
+  "sourceUrl": zod.string().nullable(),
+  "checkedOn": zod.string().nullable(),
+  "note": zod.string().nullish().describe('Reviewer note; only served to owners and reviewers, never publicly.')
+})).describe('Fact checks recorded for the approved revision.'),
+  "freshness": zod.object({
+  "status": zod.enum(['unverified', 'fresh', 'stale']),
+  "checkedOn": zod.string().nullable(),
+  "staleAfterDays": zod.number(),
+  "staleOn": zod.string().nullable().describe('ISO date-time when the snapshot turns (or turned) stale; null when unverified.'),
+  "daysUntilStale": zod.number().nullable().describe('Whole days until `staleOn`; negative once stale; null when unverified.'),
+  "recheckWindowDays": zod.number(),
+  "recheckDue": zod.boolean()
+}).describe('Truthful freshness of the approved snapshot. `unverified` when no field was ever confirmed;\n`stale` when the newest confirmation is older than `staleAfterDays`. `recheckDue` flags a\nstill-fresh snapshot that turns stale within `recheckWindowDays`, so owners and reviewers can\nschedule a re-check before it flips. `staleOn` is derived from `checkedOn`, never stored.\nFreshness is independent from publication status.\n')
+})
+
+
+/**
+ * Moves the latest `draft` revision to `submitted`. Content becomes immutable from this point;
+ * reviewers decide exactly this version. Requires at least one non-empty Dutch or English
+ * text field. `expectedVersion` must equal the draft's `version`.
+ * @summary Submit the current draft for editorial review
+ */
+export const SubmitBusinessRevisionParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const SubmitBusinessRevisionBody = zod.object({
+  "expectedVersion": zod.number()
+})
+
+export const SubmitBusinessRevisionResponse = zod.object({
+  "profile": zod.object({
+  "id": zod.number(),
+  "slug": zod.string(),
+  "cityId": zod.string(),
+  "name": zod.string(),
+  "address": zod.string().nullish(),
+  "neighborhood": zod.string().nullish(),
+  "latitude": zod.number().nullish(),
+  "longitude": zod.number().nullish(),
+  "sourceUrl": zod.string().nullish(),
+  "tagline": zod.string().nullish(),
+  "description": zod.string().nullish(),
+  "websiteUrl": zod.string().nullish(),
+  "phone": zod.string().nullish(),
+  "email": zod.string().nullish(),
+  "openingHours": zod.string().nullish(),
+  "logoUrl": zod.string().nullish(),
+  "coverUrl": zod.string().nullish(),
+  "isClaimed": zod.boolean(),
+  "claimedAt": zod.string().nullish(),
+  "publicationStatus": zod.enum(['draft', 'unpublished', 'published', 'suspended', 'archived']).optional().describe('Business publication lifecycle. Existing profiles are `published`.\ndraft -> published (explicit reviewer publication); published <-> unpublished;\npublished -> suspended (reviewer); any -> archived (terminal). Only `published`\nprofiles and their deals are served on public routes.\n'),
+  "category": zod.string().nullish().describe('Self-reported category of a new-business draft; null for listing-derived profiles.'),
+  "approvedRevisionVersion": zod.number().nullish().describe('Version of the approved revision when publication review is enabled; null when the profile is served from its columns.'),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+}),
+  "role": zod.string(),
+  "state": zod.enum(['unknown', 'draft', 'submitted', 'changes_requested', 'approved', 'published', 'stale', 'suspended', 'unpublished']).describe('Derived owner-facing summary; publication and revision states stay independent underneath.'),
+  "latestRevision": zod.union([zod.object({
+  "id": zod.number(),
+  "businessProfileId": zod.number(),
+  "version": zod.number(),
+  "status": zod.enum(['draft', 'submitted', 'changes_requested', 'approved', 'rejected', 'superseded', 'discarded']).describe('draft -> submitted (owner); submitted -> approved | changes_requested | rejected (reviewer);\nchanges_requested -> submitted (owner, new version); approved -> superseded (later approval);\ndraft -> discarded (owner). A business has at most one approved revision.\n'),
+  "submittedAt": zod.string().nullish(),
+  "decidedAt": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+}).describe('Owner- and reviewer-visible revision metadata. Draft content is never served on public routes.').and(zod.object({
+  "content": zod.object({
+  "nl": zod.object({
+  "tagline": zod.string().nullish(),
+  "description": zod.string().nullish(),
+  "openingHours": zod.string().nullish().describe('Free-text opening hours as stated by the owner; never derived.')
+}).describe('Stored editorial text in one language as it was approved or drafted. Null or missing values mean \"not provided\"; nothing is machine-translated or invented. No length limits apply here: content migrated from the older profile contract is preserved verbatim. New owner input is validated by `BusinessRevisionTextInput`.'),
+  "en": zod.object({
+  "tagline": zod.string().nullish(),
+  "description": zod.string().nullish(),
+  "openingHours": zod.string().nullish().describe('Free-text opening hours as stated by the owner; never derived.')
+}).describe('Stored editorial text in one language as it was approved or drafted. Null or missing values mean \"not provided\"; nothing is machine-translated or invented. No length limits apply here: content migrated from the older profile contract is preserved verbatim. New owner input is validated by `BusinessRevisionTextInput`.'),
+  "facts": zod.object({
+  "websiteUrl": zod.string().nullish(),
+  "phone": zod.string().nullish(),
+  "email": zod.string().nullish(),
+  "address": zod.string().nullish(),
+  "logoUrl": zod.string().nullish(),
+  "coverUrl": zod.string().nullish()
+}).describe('Stored language-neutral facts. Migrated legacy values are preserved verbatim; new owner input is validated by `BusinessRevisionFactsInput`.')
+})
+})),zod.null()]),
+  "approvedRevision": zod.union([zod.object({
+  "id": zod.number(),
+  "businessProfileId": zod.number(),
+  "version": zod.number(),
+  "status": zod.enum(['draft', 'submitted', 'changes_requested', 'approved', 'rejected', 'superseded', 'discarded']).describe('draft -> submitted (owner); submitted -> approved | changes_requested | rejected (reviewer);\nchanges_requested -> submitted (owner, new version); approved -> superseded (later approval);\ndraft -> discarded (owner). A business has at most one approved revision.\n'),
+  "submittedAt": zod.string().nullish(),
+  "decidedAt": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+}).describe('Owner- and reviewer-visible revision metadata. Draft content is never served on public routes.').and(zod.object({
+  "content": zod.object({
+  "nl": zod.object({
+  "tagline": zod.string().nullish(),
+  "description": zod.string().nullish(),
+  "openingHours": zod.string().nullish().describe('Free-text opening hours as stated by the owner; never derived.')
+}).describe('Stored editorial text in one language as it was approved or drafted. Null or missing values mean \"not provided\"; nothing is machine-translated or invented. No length limits apply here: content migrated from the older profile contract is preserved verbatim. New owner input is validated by `BusinessRevisionTextInput`.'),
+  "en": zod.object({
+  "tagline": zod.string().nullish(),
+  "description": zod.string().nullish(),
+  "openingHours": zod.string().nullish().describe('Free-text opening hours as stated by the owner; never derived.')
+}).describe('Stored editorial text in one language as it was approved or drafted. Null or missing values mean \"not provided\"; nothing is machine-translated or invented. No length limits apply here: content migrated from the older profile contract is preserved verbatim. New owner input is validated by `BusinessRevisionTextInput`.'),
+  "facts": zod.object({
+  "websiteUrl": zod.string().nullish(),
+  "phone": zod.string().nullish(),
+  "email": zod.string().nullish(),
+  "address": zod.string().nullish(),
+  "logoUrl": zod.string().nullish(),
+  "coverUrl": zod.string().nullish()
+}).describe('Stored language-neutral facts. Migrated legacy values are preserved verbatim; new owner input is validated by `BusinessRevisionFactsInput`.')
+})
+})),zod.null()]),
+  "latestDecision": zod.union([zod.object({
+  "id": zod.number(),
+  "targetType": zod.enum(['claim', 'revision', 'publication']),
+  "targetId": zod.number(),
+  "targetVersion": zod.number(),
+  "decision": zod.enum(['approve', 'reject', 'request_changes', 'publish', 'unpublish', 'suspend']),
+  "reasonCode": zod.string().nullish(),
+  "reason": zod.string().nullish(),
+  "createdAt": zod.string()
+}).describe('Immutable audit entry for a reviewer decision. The reviewer is derived from the session and must not own the target (self-review is refused with SELF_REVIEW_FORBIDDEN).'),zod.null()]),
+  "factChecks": zod.array(zod.object({
+  "field": zod.string(),
+  "status": zod.enum(['unchecked', 'confirmed', 'contradicted', 'unavailable']).describe('Reviewer verdict for one approved field. `contradicted` fields are withheld publicly; `unchecked` and `unavailable` are shown with that provenance.'),
+  "sourceUrl": zod.string().nullable(),
+  "checkedOn": zod.string().nullable(),
+  "note": zod.string().nullish().describe('Reviewer note; only served to owners and reviewers, never publicly.')
+})).describe('Fact checks recorded for the approved revision.'),
+  "freshness": zod.object({
+  "status": zod.enum(['unverified', 'fresh', 'stale']),
+  "checkedOn": zod.string().nullable(),
+  "staleAfterDays": zod.number(),
+  "staleOn": zod.string().nullable().describe('ISO date-time when the snapshot turns (or turned) stale; null when unverified.'),
+  "daysUntilStale": zod.number().nullable().describe('Whole days until `staleOn`; negative once stale; null when unverified.'),
+  "recheckWindowDays": zod.number(),
+  "recheckDue": zod.boolean()
+}).describe('Truthful freshness of the approved snapshot. `unverified` when no field was ever confirmed;\n`stale` when the newest confirmation is older than `staleAfterDays`. `recheckDue` flags a\nstill-fresh snapshot that turns stale within `recheckWindowDays`, so owners and reviewers can\nschedule a re-check before it flips. `staleOn` is derived from `checkedOn`, never stored.\nFreshness is independent from publication status.\n')
+})
+
+
+/**
+ * Marks the latest `draft` revision `discarded`. Submitted and decided revisions are kept as history.
+ * @summary Discard the current draft
+ */
+export const DiscardBusinessRevisionParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const DiscardBusinessRevisionBody = zod.object({
+  "expectedVersion": zod.number()
+})
+
+export const DiscardBusinessRevisionResponse = zod.object({
+  "profile": zod.object({
+  "id": zod.number(),
+  "slug": zod.string(),
+  "cityId": zod.string(),
+  "name": zod.string(),
+  "address": zod.string().nullish(),
+  "neighborhood": zod.string().nullish(),
+  "latitude": zod.number().nullish(),
+  "longitude": zod.number().nullish(),
+  "sourceUrl": zod.string().nullish(),
+  "tagline": zod.string().nullish(),
+  "description": zod.string().nullish(),
+  "websiteUrl": zod.string().nullish(),
+  "phone": zod.string().nullish(),
+  "email": zod.string().nullish(),
+  "openingHours": zod.string().nullish(),
+  "logoUrl": zod.string().nullish(),
+  "coverUrl": zod.string().nullish(),
+  "isClaimed": zod.boolean(),
+  "claimedAt": zod.string().nullish(),
+  "publicationStatus": zod.enum(['draft', 'unpublished', 'published', 'suspended', 'archived']).optional().describe('Business publication lifecycle. Existing profiles are `published`.\ndraft -> published (explicit reviewer publication); published <-> unpublished;\npublished -> suspended (reviewer); any -> archived (terminal). Only `published`\nprofiles and their deals are served on public routes.\n'),
+  "category": zod.string().nullish().describe('Self-reported category of a new-business draft; null for listing-derived profiles.'),
+  "approvedRevisionVersion": zod.number().nullish().describe('Version of the approved revision when publication review is enabled; null when the profile is served from its columns.'),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+}),
+  "role": zod.string(),
+  "state": zod.enum(['unknown', 'draft', 'submitted', 'changes_requested', 'approved', 'published', 'stale', 'suspended', 'unpublished']).describe('Derived owner-facing summary; publication and revision states stay independent underneath.'),
+  "latestRevision": zod.union([zod.object({
+  "id": zod.number(),
+  "businessProfileId": zod.number(),
+  "version": zod.number(),
+  "status": zod.enum(['draft', 'submitted', 'changes_requested', 'approved', 'rejected', 'superseded', 'discarded']).describe('draft -> submitted (owner); submitted -> approved | changes_requested | rejected (reviewer);\nchanges_requested -> submitted (owner, new version); approved -> superseded (later approval);\ndraft -> discarded (owner). A business has at most one approved revision.\n'),
+  "submittedAt": zod.string().nullish(),
+  "decidedAt": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+}).describe('Owner- and reviewer-visible revision metadata. Draft content is never served on public routes.').and(zod.object({
+  "content": zod.object({
+  "nl": zod.object({
+  "tagline": zod.string().nullish(),
+  "description": zod.string().nullish(),
+  "openingHours": zod.string().nullish().describe('Free-text opening hours as stated by the owner; never derived.')
+}).describe('Stored editorial text in one language as it was approved or drafted. Null or missing values mean \"not provided\"; nothing is machine-translated or invented. No length limits apply here: content migrated from the older profile contract is preserved verbatim. New owner input is validated by `BusinessRevisionTextInput`.'),
+  "en": zod.object({
+  "tagline": zod.string().nullish(),
+  "description": zod.string().nullish(),
+  "openingHours": zod.string().nullish().describe('Free-text opening hours as stated by the owner; never derived.')
+}).describe('Stored editorial text in one language as it was approved or drafted. Null or missing values mean \"not provided\"; nothing is machine-translated or invented. No length limits apply here: content migrated from the older profile contract is preserved verbatim. New owner input is validated by `BusinessRevisionTextInput`.'),
+  "facts": zod.object({
+  "websiteUrl": zod.string().nullish(),
+  "phone": zod.string().nullish(),
+  "email": zod.string().nullish(),
+  "address": zod.string().nullish(),
+  "logoUrl": zod.string().nullish(),
+  "coverUrl": zod.string().nullish()
+}).describe('Stored language-neutral facts. Migrated legacy values are preserved verbatim; new owner input is validated by `BusinessRevisionFactsInput`.')
+})
+})),zod.null()]),
+  "approvedRevision": zod.union([zod.object({
+  "id": zod.number(),
+  "businessProfileId": zod.number(),
+  "version": zod.number(),
+  "status": zod.enum(['draft', 'submitted', 'changes_requested', 'approved', 'rejected', 'superseded', 'discarded']).describe('draft -> submitted (owner); submitted -> approved | changes_requested | rejected (reviewer);\nchanges_requested -> submitted (owner, new version); approved -> superseded (later approval);\ndraft -> discarded (owner). A business has at most one approved revision.\n'),
+  "submittedAt": zod.string().nullish(),
+  "decidedAt": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+}).describe('Owner- and reviewer-visible revision metadata. Draft content is never served on public routes.').and(zod.object({
+  "content": zod.object({
+  "nl": zod.object({
+  "tagline": zod.string().nullish(),
+  "description": zod.string().nullish(),
+  "openingHours": zod.string().nullish().describe('Free-text opening hours as stated by the owner; never derived.')
+}).describe('Stored editorial text in one language as it was approved or drafted. Null or missing values mean \"not provided\"; nothing is machine-translated or invented. No length limits apply here: content migrated from the older profile contract is preserved verbatim. New owner input is validated by `BusinessRevisionTextInput`.'),
+  "en": zod.object({
+  "tagline": zod.string().nullish(),
+  "description": zod.string().nullish(),
+  "openingHours": zod.string().nullish().describe('Free-text opening hours as stated by the owner; never derived.')
+}).describe('Stored editorial text in one language as it was approved or drafted. Null or missing values mean \"not provided\"; nothing is machine-translated or invented. No length limits apply here: content migrated from the older profile contract is preserved verbatim. New owner input is validated by `BusinessRevisionTextInput`.'),
+  "facts": zod.object({
+  "websiteUrl": zod.string().nullish(),
+  "phone": zod.string().nullish(),
+  "email": zod.string().nullish(),
+  "address": zod.string().nullish(),
+  "logoUrl": zod.string().nullish(),
+  "coverUrl": zod.string().nullish()
+}).describe('Stored language-neutral facts. Migrated legacy values are preserved verbatim; new owner input is validated by `BusinessRevisionFactsInput`.')
+})
+})),zod.null()]),
+  "latestDecision": zod.union([zod.object({
+  "id": zod.number(),
+  "targetType": zod.enum(['claim', 'revision', 'publication']),
+  "targetId": zod.number(),
+  "targetVersion": zod.number(),
+  "decision": zod.enum(['approve', 'reject', 'request_changes', 'publish', 'unpublish', 'suspend']),
+  "reasonCode": zod.string().nullish(),
+  "reason": zod.string().nullish(),
+  "createdAt": zod.string()
+}).describe('Immutable audit entry for a reviewer decision. The reviewer is derived from the session and must not own the target (self-review is refused with SELF_REVIEW_FORBIDDEN).'),zod.null()]),
+  "factChecks": zod.array(zod.object({
+  "field": zod.string(),
+  "status": zod.enum(['unchecked', 'confirmed', 'contradicted', 'unavailable']).describe('Reviewer verdict for one approved field. `contradicted` fields are withheld publicly; `unchecked` and `unavailable` are shown with that provenance.'),
+  "sourceUrl": zod.string().nullable(),
+  "checkedOn": zod.string().nullable(),
+  "note": zod.string().nullish().describe('Reviewer note; only served to owners and reviewers, never publicly.')
+})).describe('Fact checks recorded for the approved revision.'),
+  "freshness": zod.object({
+  "status": zod.enum(['unverified', 'fresh', 'stale']),
+  "checkedOn": zod.string().nullable(),
+  "staleAfterDays": zod.number(),
+  "staleOn": zod.string().nullable().describe('ISO date-time when the snapshot turns (or turned) stale; null when unverified.'),
+  "daysUntilStale": zod.number().nullable().describe('Whole days until `staleOn`; negative once stale; null when unverified.'),
+  "recheckWindowDays": zod.number(),
+  "recheckDue": zod.boolean()
+}).describe('Truthful freshness of the approved snapshot. `unverified` when no field was ever confirmed;\n`stale` when the newest confirmation is older than `staleAfterDays`. `recheckDue` flags a\nstill-fresh snapshot that turns stale within `recheckWindowDays`, so owners and reviewers can\nschedule a re-check before it flips. `staleOn` is derived from `checkedOn`, never stored.\nFreshness is independent from publication status.\n')
+})
+
+
+/**
+ * Claims awaiting an authority decision (`pending`, `submitted`, `disputed`), oldest first.
+ * Items carry the relationship and authority evidence needed to decide, never the
+ * claimant's e-mail address. `canDecide` is false when the reviewer is the claimant, the
+ * creator, or a member of the business.
+ * @summary Paginated authority (ownership) review queue
+ */
+export const getAuthorityQueueQueryCursorMax = 200;
+
+export const getAuthorityQueueQueryLimitDefault = 20;
+export const getAuthorityQueueQueryLimitMax = 50;
+
+
+
+export const GetAuthorityQueueQueryParams = zod.object({
+  "cursor": zod.coerce.string().max(getAuthorityQueueQueryCursorMax).optional().describe('Opaque cursor from a previous PageInfo.nextCursor.'),
+  "limit": zod.coerce.number().min(1).max(getAuthorityQueueQueryLimitMax).default(getAuthorityQueueQueryLimitDefault).describe('Page size for cursor-paginated lists.')
+})
+
+export const GetAuthorityQueueResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.number(),
+  "version": zod.number(),
+  "status": zod.enum(['draft', 'pending', 'submitted', 'changes_requested', 'approved', 'rejected', 'disputed', 'withdrawn']).describe('Claim lifecycle. `pending` is the legacy alias of `submitted` (awaiting review).\nOpen states that hold the one-open-claim-per-listing slot: pending, submitted,\nchanges_requested, disputed. Transitions: pending|submitted -> approved | rejected |\nchanges_requested | withdrawn; changes_requested -> submitted | withdrawn;\napproved -> disputed; disputed -> approved | rejected.\n'),
+  "kind": zod.enum(['existing_listing', 'new_business']).describe('Whether a claim targets a current public listing or a new business that is not listed yet.'),
+  "relationship": zod.string(),
+  "authorityDeclaration": zod.string().nullable(),
+  "evidenceReference": zod.string().nullable(),
+  "message": zod.string().nullable(),
+  "contactName": zod.string(),
+  "submittedAt": zod.string(),
+  "createdAt": zod.string(),
+  "profile": zod.object({
+  "id": zod.number(),
+  "slug": zod.string(),
+  "name": zod.string(),
+  "neighborhood": zod.string().nullable(),
+  "category": zod.string().nullable(),
+  "listingSource": zod.string(),
+  "sourceUrl": zod.string().nullable(),
+  "isClaimed": zod.boolean(),
+  "publicationStatus": zod.enum(['draft', 'unpublished', 'published', 'suspended', 'archived']).describe('Business publication lifecycle. Existing profiles are `published`.\ndraft -> published (explicit reviewer publication); published <-> unpublished;\npublished -> suspended (reviewer); any -> archived (terminal). Only `published`\nprofiles and their deals are served on public routes.\n')
+}).describe('Non-sensitive business context for reviewer queues.'),
+  "canDecide": zod.boolean().describe('False when deciding would be self-review for the signed-in reviewer.')
+})),
+  "pageInfo": zod.object({
+  "nextCursor": zod.string().nullable(),
+  "hasMore": zod.boolean()
+}).describe('Cursor pagination envelope shared by list operations added after this contract version.')
+})
+
+
+/**
+ * Approve grants exactly one owner membership atomically and rejects competing open claims;
+ * `reject` and `request_changes` require a reason that the claimant will see. The decision is
+ * applied only when the claim still has `expectedVersion` and a reviewable status (409
+ * VERSION_CONFLICT otherwise). Self-review returns 403 SELF_REVIEW_FORBIDDEN.
+ * @summary Decide an authority claim at an exact version
+ */
+export const ReviewBusinessClaimParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const reviewBusinessClaimBodyReasonMax = 500;
+
+
+
+export const ReviewBusinessClaimBody = zod.object({
+  "decision": zod.enum(['approve', 'reject', 'request_changes']),
+  "expectedVersion": zod.number(),
+  "reason": zod.string().max(reviewBusinessClaimBodyReasonMax).optional().describe('Shown to the claimant; required for reject and request_changes.')
+})
+
+export const ReviewBusinessClaimResponse = zod.object({
+  "id": zod.number(),
+  "businessProfileId": zod.number(),
+  "claimantId": zod.string(),
+  "contactName": zod.string(),
+  "contactEmail": zod.string(),
+  "relationship": zod.string(),
+  "evidenceUrl": zod.string().nullish(),
+  "message": zod.string().nullish(),
+  "status": zod.enum(['draft', 'pending', 'submitted', 'changes_requested', 'approved', 'rejected', 'disputed', 'withdrawn']).describe('Claim lifecycle. `pending` is the legacy alias of `submitted` (awaiting review).\nOpen states that hold the one-open-claim-per-listing slot: pending, submitted,\nchanges_requested, disputed. Transitions: pending|submitted -> approved | rejected |\nchanges_requested | withdrawn; changes_requested -> submitted | withdrawn;\napproved -> disputed; disputed -> approved | rejected.\n'),
+  "reviewNote": zod.string().nullish(),
+  "reviewedAt": zod.string().nullish(),
+  "version": zod.number().optional().describe('Optimistic-concurrency version; send it back as expectedVersion on later claim updates.'),
+  "nextAction": zod.enum(['submit', 'wait_for_review', 'provide_changes', 'none']).optional().describe('What the claimant can do next; derived server-side from the claim status. `submit` applies to private drafts, `provide_changes` after a reviewer asked for changes.'),
+  "kind": zod.enum(['existing_listing', 'new_business']).optional().describe('Whether a claim targets a current public listing or a new business that is not listed yet.'),
+  "authorityDeclaration": zod.string().nullish().describe('Only returned to the claimant and reviewers; never to other claimants.'),
+  "evidenceReference": zod.string().nullish().describe('Only returned to the claimant and reviewers; never to other claimants.'),
+  "withdrawnAt": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string(),
+  "profile": zod.object({
+  "id": zod.number(),
+  "slug": zod.string(),
+  "cityId": zod.string(),
+  "name": zod.string(),
+  "address": zod.string().nullish(),
+  "neighborhood": zod.string().nullish(),
+  "latitude": zod.number().nullish(),
+  "longitude": zod.number().nullish(),
+  "sourceUrl": zod.string().nullish(),
+  "tagline": zod.string().nullish(),
+  "description": zod.string().nullish(),
+  "websiteUrl": zod.string().nullish(),
+  "phone": zod.string().nullish(),
+  "email": zod.string().nullish(),
+  "openingHours": zod.string().nullish(),
+  "logoUrl": zod.string().nullish(),
+  "coverUrl": zod.string().nullish(),
+  "isClaimed": zod.boolean(),
+  "claimedAt": zod.string().nullish(),
+  "publicationStatus": zod.enum(['draft', 'unpublished', 'published', 'suspended', 'archived']).optional().describe('Business publication lifecycle. Existing profiles are `published`.\ndraft -> published (explicit reviewer publication); published <-> unpublished;\npublished -> suspended (reviewer); any -> archived (terminal). Only `published`\nprofiles and their deals are served on public routes.\n'),
+  "category": zod.string().nullish().describe('Self-reported category of a new-business draft; null for listing-derived profiles.'),
+  "approvedRevisionVersion": zod.number().nullish().describe('Version of the approved revision when publication review is enabled; null when the profile is served from its columns.'),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+})
+
+
+/**
+ * Submitted revisions oldest first, each with the currently approved revision for comparison.
+ * @summary Paginated editorial (profile revision) review queue
+ */
+export const getEditorialQueueQueryCursorMax = 200;
+
+export const getEditorialQueueQueryLimitDefault = 20;
+export const getEditorialQueueQueryLimitMax = 50;
+
+
+
+export const GetEditorialQueueQueryParams = zod.object({
+  "cursor": zod.coerce.string().max(getEditorialQueueQueryCursorMax).optional().describe('Opaque cursor from a previous PageInfo.nextCursor.'),
+  "limit": zod.coerce.number().min(1).max(getEditorialQueueQueryLimitMax).default(getEditorialQueueQueryLimitDefault).describe('Page size for cursor-paginated lists.')
+})
+
+export const GetEditorialQueueResponse = zod.object({
+  "items": zod.array(zod.object({
+  "revision": zod.object({
+  "id": zod.number(),
+  "businessProfileId": zod.number(),
+  "version": zod.number(),
+  "status": zod.enum(['draft', 'submitted', 'changes_requested', 'approved', 'rejected', 'superseded', 'discarded']).describe('draft -> submitted (owner); submitted -> approved | changes_requested | rejected (reviewer);\nchanges_requested -> submitted (owner, new version); approved -> superseded (later approval);\ndraft -> discarded (owner). A business has at most one approved revision.\n'),
+  "submittedAt": zod.string().nullish(),
+  "decidedAt": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+}).describe('Owner- and reviewer-visible revision metadata. Draft content is never served on public routes.').and(zod.object({
+  "content": zod.object({
+  "nl": zod.object({
+  "tagline": zod.string().nullish(),
+  "description": zod.string().nullish(),
+  "openingHours": zod.string().nullish().describe('Free-text opening hours as stated by the owner; never derived.')
+}).describe('Stored editorial text in one language as it was approved or drafted. Null or missing values mean \"not provided\"; nothing is machine-translated or invented. No length limits apply here: content migrated from the older profile contract is preserved verbatim. New owner input is validated by `BusinessRevisionTextInput`.'),
+  "en": zod.object({
+  "tagline": zod.string().nullish(),
+  "description": zod.string().nullish(),
+  "openingHours": zod.string().nullish().describe('Free-text opening hours as stated by the owner; never derived.')
+}).describe('Stored editorial text in one language as it was approved or drafted. Null or missing values mean \"not provided\"; nothing is machine-translated or invented. No length limits apply here: content migrated from the older profile contract is preserved verbatim. New owner input is validated by `BusinessRevisionTextInput`.'),
+  "facts": zod.object({
+  "websiteUrl": zod.string().nullish(),
+  "phone": zod.string().nullish(),
+  "email": zod.string().nullish(),
+  "address": zod.string().nullish(),
+  "logoUrl": zod.string().nullish(),
+  "coverUrl": zod.string().nullish()
+}).describe('Stored language-neutral facts. Migrated legacy values are preserved verbatim; new owner input is validated by `BusinessRevisionFactsInput`.')
+})
+})),
+  "profile": zod.object({
+  "id": zod.number(),
+  "slug": zod.string(),
+  "name": zod.string(),
+  "neighborhood": zod.string().nullable(),
+  "category": zod.string().nullable(),
+  "listingSource": zod.string(),
+  "sourceUrl": zod.string().nullable(),
+  "isClaimed": zod.boolean(),
+  "publicationStatus": zod.enum(['draft', 'unpublished', 'published', 'suspended', 'archived']).describe('Business publication lifecycle. Existing profiles are `published`.\ndraft -> published (explicit reviewer publication); published <-> unpublished;\npublished -> suspended (reviewer); any -> archived (terminal). Only `published`\nprofiles and their deals are served on public routes.\n')
+}).describe('Non-sensitive business context for reviewer queues.'),
+  "approvedRevision": zod.union([zod.object({
+  "id": zod.number(),
+  "businessProfileId": zod.number(),
+  "version": zod.number(),
+  "status": zod.enum(['draft', 'submitted', 'changes_requested', 'approved', 'rejected', 'superseded', 'discarded']).describe('draft -> submitted (owner); submitted -> approved | changes_requested | rejected (reviewer);\nchanges_requested -> submitted (owner, new version); approved -> superseded (later approval);\ndraft -> discarded (owner). A business has at most one approved revision.\n'),
+  "submittedAt": zod.string().nullish(),
+  "decidedAt": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+}).describe('Owner- and reviewer-visible revision metadata. Draft content is never served on public routes.').and(zod.object({
+  "content": zod.object({
+  "nl": zod.object({
+  "tagline": zod.string().nullish(),
+  "description": zod.string().nullish(),
+  "openingHours": zod.string().nullish().describe('Free-text opening hours as stated by the owner; never derived.')
+}).describe('Stored editorial text in one language as it was approved or drafted. Null or missing values mean \"not provided\"; nothing is machine-translated or invented. No length limits apply here: content migrated from the older profile contract is preserved verbatim. New owner input is validated by `BusinessRevisionTextInput`.'),
+  "en": zod.object({
+  "tagline": zod.string().nullish(),
+  "description": zod.string().nullish(),
+  "openingHours": zod.string().nullish().describe('Free-text opening hours as stated by the owner; never derived.')
+}).describe('Stored editorial text in one language as it was approved or drafted. Null or missing values mean \"not provided\"; nothing is machine-translated or invented. No length limits apply here: content migrated from the older profile contract is preserved verbatim. New owner input is validated by `BusinessRevisionTextInput`.'),
+  "facts": zod.object({
+  "websiteUrl": zod.string().nullish(),
+  "phone": zod.string().nullish(),
+  "email": zod.string().nullish(),
+  "address": zod.string().nullish(),
+  "logoUrl": zod.string().nullish(),
+  "coverUrl": zod.string().nullish()
+}).describe('Stored language-neutral facts. Migrated legacy values are preserved verbatim; new owner input is validated by `BusinessRevisionFactsInput`.')
+})
+})),zod.null()]),
+  "canDecide": zod.boolean()
+})),
+  "pageInfo": zod.object({
+  "nextCursor": zod.string().nullable(),
+  "hasMore": zod.boolean()
+}).describe('Cursor pagination envelope shared by list operations added after this contract version.')
+})
+
+
+/**
+ * `approve` atomically makes this revision the business's approved snapshot (the previous
+ * approved revision becomes `superseded`) and records the supplied fact checks; fields marked
+ * `contradicted` are withheld from the public projection. `reject` and `request_changes`
+ * require a reason. Applied only while the revision is `submitted` with exactly
+ * `expectedVersion` (409 otherwise). Approval never publishes by itself.
+ * @summary Decide a submitted revision at an exact version
+ */
+export const ReviewBusinessRevisionParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const reviewBusinessRevisionBodyReasonMax = 500;
+
+export const reviewBusinessRevisionBodyFactChecksItemSourceUrlMax = 500;
+
+export const reviewBusinessRevisionBodyFactChecksItemNoteMax = 500;
+
+export const reviewBusinessRevisionBodyFactChecksMax = 20;
+
+
+
+export const ReviewBusinessRevisionBody = zod.object({
+  "decision": zod.enum(['approve', 'reject', 'request_changes']),
+  "expectedVersion": zod.number(),
+  "reason": zod.string().max(reviewBusinessRevisionBodyReasonMax).optional().describe('Shown to the owner; required for reject and request_changes.'),
+  "factChecks": zod.array(zod.object({
+  "field": zod.enum(['tagline', 'description', 'openingHours', 'websiteUrl', 'phone', 'email', 'address', 'logoUrl', 'coverUrl']),
+  "status": zod.enum(['unchecked', 'confirmed', 'contradicted', 'unavailable']).describe('Reviewer verdict for one approved field. `contradicted` fields are withheld publicly; `unchecked` and `unavailable` are shown with that provenance.'),
+  "sourceUrl": zod.string().max(reviewBusinessRevisionBodyFactChecksItemSourceUrlMax).nullish(),
+  "note": zod.string().max(reviewBusinessRevisionBodyFactChecksItemNoteMax).nullish()
+})).max(reviewBusinessRevisionBodyFactChecksMax).optional().describe('Per-field verdicts recorded with an approval. Omitted fields stay `unchecked`.')
+})
+
+export const ReviewBusinessRevisionResponse = zod.object({
+  "revision": zod.object({
+  "id": zod.number(),
+  "businessProfileId": zod.number(),
+  "version": zod.number(),
+  "status": zod.enum(['draft', 'submitted', 'changes_requested', 'approved', 'rejected', 'superseded', 'discarded']).describe('draft -> submitted (owner); submitted -> approved | changes_requested | rejected (reviewer);\nchanges_requested -> submitted (owner, new version); approved -> superseded (later approval);\ndraft -> discarded (owner). A business has at most one approved revision.\n'),
+  "submittedAt": zod.string().nullish(),
+  "decidedAt": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+}).describe('Owner- and reviewer-visible revision metadata. Draft content is never served on public routes.').and(zod.object({
+  "content": zod.object({
+  "nl": zod.object({
+  "tagline": zod.string().nullish(),
+  "description": zod.string().nullish(),
+  "openingHours": zod.string().nullish().describe('Free-text opening hours as stated by the owner; never derived.')
+}).describe('Stored editorial text in one language as it was approved or drafted. Null or missing values mean \"not provided\"; nothing is machine-translated or invented. No length limits apply here: content migrated from the older profile contract is preserved verbatim. New owner input is validated by `BusinessRevisionTextInput`.'),
+  "en": zod.object({
+  "tagline": zod.string().nullish(),
+  "description": zod.string().nullish(),
+  "openingHours": zod.string().nullish().describe('Free-text opening hours as stated by the owner; never derived.')
+}).describe('Stored editorial text in one language as it was approved or drafted. Null or missing values mean \"not provided\"; nothing is machine-translated or invented. No length limits apply here: content migrated from the older profile contract is preserved verbatim. New owner input is validated by `BusinessRevisionTextInput`.'),
+  "facts": zod.object({
+  "websiteUrl": zod.string().nullish(),
+  "phone": zod.string().nullish(),
+  "email": zod.string().nullish(),
+  "address": zod.string().nullish(),
+  "logoUrl": zod.string().nullish(),
+  "coverUrl": zod.string().nullish()
+}).describe('Stored language-neutral facts. Migrated legacy values are preserved verbatim; new owner input is validated by `BusinessRevisionFactsInput`.')
+})
+})),
+  "profile": zod.object({
+  "id": zod.number(),
+  "slug": zod.string(),
+  "name": zod.string(),
+  "neighborhood": zod.string().nullable(),
+  "category": zod.string().nullable(),
+  "listingSource": zod.string(),
+  "sourceUrl": zod.string().nullable(),
+  "isClaimed": zod.boolean(),
+  "publicationStatus": zod.enum(['draft', 'unpublished', 'published', 'suspended', 'archived']).describe('Business publication lifecycle. Existing profiles are `published`.\ndraft -> published (explicit reviewer publication); published <-> unpublished;\npublished -> suspended (reviewer); any -> archived (terminal). Only `published`\nprofiles and their deals are served on public routes.\n')
+}).describe('Non-sensitive business context for reviewer queues.'),
+  "approvedRevision": zod.union([zod.object({
+  "id": zod.number(),
+  "businessProfileId": zod.number(),
+  "version": zod.number(),
+  "status": zod.enum(['draft', 'submitted', 'changes_requested', 'approved', 'rejected', 'superseded', 'discarded']).describe('draft -> submitted (owner); submitted -> approved | changes_requested | rejected (reviewer);\nchanges_requested -> submitted (owner, new version); approved -> superseded (later approval);\ndraft -> discarded (owner). A business has at most one approved revision.\n'),
+  "submittedAt": zod.string().nullish(),
+  "decidedAt": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+}).describe('Owner- and reviewer-visible revision metadata. Draft content is never served on public routes.').and(zod.object({
+  "content": zod.object({
+  "nl": zod.object({
+  "tagline": zod.string().nullish(),
+  "description": zod.string().nullish(),
+  "openingHours": zod.string().nullish().describe('Free-text opening hours as stated by the owner; never derived.')
+}).describe('Stored editorial text in one language as it was approved or drafted. Null or missing values mean \"not provided\"; nothing is machine-translated or invented. No length limits apply here: content migrated from the older profile contract is preserved verbatim. New owner input is validated by `BusinessRevisionTextInput`.'),
+  "en": zod.object({
+  "tagline": zod.string().nullish(),
+  "description": zod.string().nullish(),
+  "openingHours": zod.string().nullish().describe('Free-text opening hours as stated by the owner; never derived.')
+}).describe('Stored editorial text in one language as it was approved or drafted. Null or missing values mean \"not provided\"; nothing is machine-translated or invented. No length limits apply here: content migrated from the older profile contract is preserved verbatim. New owner input is validated by `BusinessRevisionTextInput`.'),
+  "facts": zod.object({
+  "websiteUrl": zod.string().nullish(),
+  "phone": zod.string().nullish(),
+  "email": zod.string().nullish(),
+  "address": zod.string().nullish(),
+  "logoUrl": zod.string().nullish(),
+  "coverUrl": zod.string().nullish()
+}).describe('Stored language-neutral facts. Migrated legacy values are preserved verbatim; new owner input is validated by `BusinessRevisionFactsInput`.')
+})
+})),zod.null()]),
+  "canDecide": zod.boolean()
+})
+
+
+/**
+ * Businesses that have an approved revision or a non-default publication status, newest change first.
+ * With `recheckDue=true` the page only contains businesses whose confirmed fact checks are inside the
+ * re-check window (`freshness.recheckDue`), ordered by `freshness.staleOn` ascending so the soonest
+ * expiring facts come first. Cursors are specific to the ordering they were issued for.
+ * @summary Paginated publication overview
+ */
+export const getPublicationQueueQueryCursorMax = 200;
+
+export const getPublicationQueueQueryLimitDefault = 20;
+export const getPublicationQueueQueryLimitMax = 50;
+
+
+
+export const GetPublicationQueueQueryParams = zod.object({
+  "cursor": zod.coerce.string().max(getPublicationQueueQueryCursorMax).optional().describe('Opaque cursor from a previous PageInfo.nextCursor.'),
+  "limit": zod.coerce.number().min(1).max(getPublicationQueueQueryLimitMax).default(getPublicationQueueQueryLimitDefault).describe('Page size for cursor-paginated lists.'),
+  "recheckDue": zod.coerce.boolean().optional().describe('When true, restrict to businesses whose fact re-check is due and order by soonest staleOn.')
+})
+
+export const GetPublicationQueueResponse = zod.object({
+  "items": zod.array(zod.object({
+  "profile": zod.object({
+  "id": zod.number(),
+  "slug": zod.string(),
+  "name": zod.string(),
+  "neighborhood": zod.string().nullable(),
+  "category": zod.string().nullable(),
+  "listingSource": zod.string(),
+  "sourceUrl": zod.string().nullable(),
+  "isClaimed": zod.boolean(),
+  "publicationStatus": zod.enum(['draft', 'unpublished', 'published', 'suspended', 'archived']).describe('Business publication lifecycle. Existing profiles are `published`.\ndraft -> published (explicit reviewer publication); published <-> unpublished;\npublished -> suspended (reviewer); any -> archived (terminal). Only `published`\nprofiles and their deals are served on public routes.\n')
+}).describe('Non-sensitive business context for reviewer queues.'),
+  "approvedRevision": zod.union([zod.object({
+  "id": zod.number(),
+  "businessProfileId": zod.number(),
+  "version": zod.number(),
+  "status": zod.enum(['draft', 'submitted', 'changes_requested', 'approved', 'rejected', 'superseded', 'discarded']).describe('draft -> submitted (owner); submitted -> approved | changes_requested | rejected (reviewer);\nchanges_requested -> submitted (owner, new version); approved -> superseded (later approval);\ndraft -> discarded (owner). A business has at most one approved revision.\n'),
+  "submittedAt": zod.string().nullish(),
+  "decidedAt": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+}).describe('Owner- and reviewer-visible revision metadata. Draft content is never served on public routes.').and(zod.object({
+  "content": zod.object({
+  "nl": zod.object({
+  "tagline": zod.string().nullish(),
+  "description": zod.string().nullish(),
+  "openingHours": zod.string().nullish().describe('Free-text opening hours as stated by the owner; never derived.')
+}).describe('Stored editorial text in one language as it was approved or drafted. Null or missing values mean \"not provided\"; nothing is machine-translated or invented. No length limits apply here: content migrated from the older profile contract is preserved verbatim. New owner input is validated by `BusinessRevisionTextInput`.'),
+  "en": zod.object({
+  "tagline": zod.string().nullish(),
+  "description": zod.string().nullish(),
+  "openingHours": zod.string().nullish().describe('Free-text opening hours as stated by the owner; never derived.')
+}).describe('Stored editorial text in one language as it was approved or drafted. Null or missing values mean \"not provided\"; nothing is machine-translated or invented. No length limits apply here: content migrated from the older profile contract is preserved verbatim. New owner input is validated by `BusinessRevisionTextInput`.'),
+  "facts": zod.object({
+  "websiteUrl": zod.string().nullish(),
+  "phone": zod.string().nullish(),
+  "email": zod.string().nullish(),
+  "address": zod.string().nullish(),
+  "logoUrl": zod.string().nullish(),
+  "coverUrl": zod.string().nullish()
+}).describe('Stored language-neutral facts. Migrated legacy values are preserved verbatim; new owner input is validated by `BusinessRevisionFactsInput`.')
+})
+})),zod.null()]),
+  "latestDecision": zod.union([zod.object({
+  "id": zod.number(),
+  "targetType": zod.enum(['claim', 'revision', 'publication']),
+  "targetId": zod.number(),
+  "targetVersion": zod.number(),
+  "decision": zod.enum(['approve', 'reject', 'request_changes', 'publish', 'unpublish', 'suspend']),
+  "reasonCode": zod.string().nullish(),
+  "reason": zod.string().nullish(),
+  "createdAt": zod.string()
+}).describe('Immutable audit entry for a reviewer decision. The reviewer is derived from the session and must not own the target (self-review is refused with SELF_REVIEW_FORBIDDEN).'),zod.null()]),
+  "freshness": zod.object({
+  "status": zod.enum(['unverified', 'fresh', 'stale']),
+  "checkedOn": zod.string().nullable(),
+  "staleAfterDays": zod.number(),
+  "staleOn": zod.string().nullable().describe('ISO date-time when the snapshot turns (or turned) stale; null when unverified.'),
+  "daysUntilStale": zod.number().nullable().describe('Whole days until `staleOn`; negative once stale; null when unverified.'),
+  "recheckWindowDays": zod.number(),
+  "recheckDue": zod.boolean()
+}).describe('Truthful freshness of the approved snapshot. `unverified` when no field was ever confirmed;\n`stale` when the newest confirmation is older than `staleAfterDays`. `recheckDue` flags a\nstill-fresh snapshot that turns stale within `recheckWindowDays`, so owners and reviewers can\nschedule a re-check before it flips. `staleOn` is derived from `checkedOn`, never stored.\nFreshness is independent from publication status.\n'),
+  "canDecide": zod.boolean()
+})),
+  "pageInfo": zod.object({
+  "nextCursor": zod.string().nullable(),
+  "hasMore": zod.boolean()
+}).describe('Cursor pagination envelope shared by list operations added after this contract version.')
+})
+
+
+/**
+ * `publish` requires an approved revision and moves `draft`/`unpublished` to `published`;
+ * `unpublish` and `suspend` require a reason and keep the approved snapshot so a later
+ * `publish` restores exactly it. `expectedRevisionVersion` must equal the approved
+ * revision's version (409 otherwise), so a reviewer never publishes a snapshot they did not
+ * see. Every action is recorded as an immutable review entry.
+ * @summary Publish, unpublish, or suspend a business
+ */
+export const SetBusinessPublicationParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const setBusinessPublicationBodyReasonMax = 500;
+
+
+
+export const SetBusinessPublicationBody = zod.object({
+  "action": zod.enum(['publish', 'unpublish', 'suspend']),
+  "expectedRevisionVersion": zod.number().describe('Version of the approved revision the reviewer saw; 0 when none exists.'),
+  "reason": zod.string().max(setBusinessPublicationBodyReasonMax).optional().describe('Required for unpublish and suspend.')
+})
+
+export const SetBusinessPublicationResponse = zod.object({
+  "profile": zod.object({
+  "id": zod.number(),
+  "slug": zod.string(),
+  "name": zod.string(),
+  "neighborhood": zod.string().nullable(),
+  "category": zod.string().nullable(),
+  "listingSource": zod.string(),
+  "sourceUrl": zod.string().nullable(),
+  "isClaimed": zod.boolean(),
+  "publicationStatus": zod.enum(['draft', 'unpublished', 'published', 'suspended', 'archived']).describe('Business publication lifecycle. Existing profiles are `published`.\ndraft -> published (explicit reviewer publication); published <-> unpublished;\npublished -> suspended (reviewer); any -> archived (terminal). Only `published`\nprofiles and their deals are served on public routes.\n')
+}).describe('Non-sensitive business context for reviewer queues.'),
+  "approvedRevision": zod.union([zod.object({
+  "id": zod.number(),
+  "businessProfileId": zod.number(),
+  "version": zod.number(),
+  "status": zod.enum(['draft', 'submitted', 'changes_requested', 'approved', 'rejected', 'superseded', 'discarded']).describe('draft -> submitted (owner); submitted -> approved | changes_requested | rejected (reviewer);\nchanges_requested -> submitted (owner, new version); approved -> superseded (later approval);\ndraft -> discarded (owner). A business has at most one approved revision.\n'),
+  "submittedAt": zod.string().nullish(),
+  "decidedAt": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+}).describe('Owner- and reviewer-visible revision metadata. Draft content is never served on public routes.').and(zod.object({
+  "content": zod.object({
+  "nl": zod.object({
+  "tagline": zod.string().nullish(),
+  "description": zod.string().nullish(),
+  "openingHours": zod.string().nullish().describe('Free-text opening hours as stated by the owner; never derived.')
+}).describe('Stored editorial text in one language as it was approved or drafted. Null or missing values mean \"not provided\"; nothing is machine-translated or invented. No length limits apply here: content migrated from the older profile contract is preserved verbatim. New owner input is validated by `BusinessRevisionTextInput`.'),
+  "en": zod.object({
+  "tagline": zod.string().nullish(),
+  "description": zod.string().nullish(),
+  "openingHours": zod.string().nullish().describe('Free-text opening hours as stated by the owner; never derived.')
+}).describe('Stored editorial text in one language as it was approved or drafted. Null or missing values mean \"not provided\"; nothing is machine-translated or invented. No length limits apply here: content migrated from the older profile contract is preserved verbatim. New owner input is validated by `BusinessRevisionTextInput`.'),
+  "facts": zod.object({
+  "websiteUrl": zod.string().nullish(),
+  "phone": zod.string().nullish(),
+  "email": zod.string().nullish(),
+  "address": zod.string().nullish(),
+  "logoUrl": zod.string().nullish(),
+  "coverUrl": zod.string().nullish()
+}).describe('Stored language-neutral facts. Migrated legacy values are preserved verbatim; new owner input is validated by `BusinessRevisionFactsInput`.')
+})
+})),zod.null()]),
+  "latestDecision": zod.union([zod.object({
+  "id": zod.number(),
+  "targetType": zod.enum(['claim', 'revision', 'publication']),
+  "targetId": zod.number(),
+  "targetVersion": zod.number(),
+  "decision": zod.enum(['approve', 'reject', 'request_changes', 'publish', 'unpublish', 'suspend']),
+  "reasonCode": zod.string().nullish(),
+  "reason": zod.string().nullish(),
+  "createdAt": zod.string()
+}).describe('Immutable audit entry for a reviewer decision. The reviewer is derived from the session and must not own the target (self-review is refused with SELF_REVIEW_FORBIDDEN).'),zod.null()]),
+  "freshness": zod.object({
+  "status": zod.enum(['unverified', 'fresh', 'stale']),
+  "checkedOn": zod.string().nullable(),
+  "staleAfterDays": zod.number(),
+  "staleOn": zod.string().nullable().describe('ISO date-time when the snapshot turns (or turned) stale; null when unverified.'),
+  "daysUntilStale": zod.number().nullable().describe('Whole days until `staleOn`; negative once stale; null when unverified.'),
+  "recheckWindowDays": zod.number(),
+  "recheckDue": zod.boolean()
+}).describe('Truthful freshness of the approved snapshot. `unverified` when no field was ever confirmed;\n`stale` when the newest confirmation is older than `staleAfterDays`. `recheckDue` flags a\nstill-fresh snapshot that turns stale within `recheckWindowDays`, so owners and reviewers can\nschedule a re-check before it flips. `staleOn` is derived from `checkedOn`, never stored.\nFreshness is independent from publication status.\n'),
+  "canDecide": zod.boolean()
+})
 
 
 /**
@@ -1500,8 +3711,9 @@ export const decideBusinessDealBodyReviewNoteMax = 500;
 
 
 export const DecideBusinessDealBody = zod.object({
-  "decision": zod.enum(['approve', 'reject']),
-  "reviewNote": zod.string().max(decideBusinessDealBodyReviewNoteMax).optional()
+  "decision": zod.enum(['approve', 'reject', 'request_changes']).describe('`request_changes` is only valid for business claims and asks the claimant for more authority evidence.'),
+  "reviewNote": zod.string().max(decideBusinessDealBodyReviewNoteMax).optional(),
+  "expectedVersion": zod.number().optional().describe('Required for business claim decisions: the claim `version` the reviewer saw. The\ndecision is applied only when the claim still has exactly that version and a\nreviewable status; otherwise 409 so a stale moderation tab can never grant\nownership based on evidence the reviewer never saw. Ignored for deals.\n')
 })
 
 export const DecideBusinessDealResponse = zod.object({

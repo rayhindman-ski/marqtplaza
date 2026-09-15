@@ -6,11 +6,23 @@
  * OpenAPI spec version: 0.1.0
  */
 
+/**
+ * Claim lifecycle. `pending` is the legacy alias of `submitted` (awaiting review).
+ * Open states that hold the one-open-claim-per-listing slot: pending, submitted,
+ * changes_requested, disputed. Transitions: pending|submitted -> approved | rejected |
+ * changes_requested | withdrawn; changes_requested -> submitted | withdrawn;
+ * approved -> disputed; disputed -> approved | rejected.
+ */
 export type ClaimStatus = typeof ClaimStatus[keyof typeof ClaimStatus];
 
 
 export const ClaimStatus = {
+  draft: 'draft',
   pending: 'pending',
+  submitted: 'submitted',
+  changes_requested: 'changes_requested',
   approved: 'approved',
   rejected: 'rejected',
+  disputed: 'disputed',
+  withdrawn: 'withdrawn',
 } as const;

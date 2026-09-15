@@ -201,12 +201,21 @@ test('keeps discovery filters, map pins, routes, and translations in sync', asyn
   const listIds = (await eventList.locator('[data-event-id]').evaluateAll(
     (nodes) => nodes.map((node) => node.getAttribute('data-event-id')).sort(),
   ));
-  await expect(page.locator('[data-map-pin]')).toHaveCount(2, { timeout: 10_000 });
-  const pinIds = await page.locator('[data-map-pin]').evaluateAll(
-    (nodes) => nodes.map((node) => node.getAttribute('data-event-id')).sort(),
+  await expect(page.locator('[data-map-cluster]')).toHaveCount(1, { timeout: 10_000 });
+  await expect(page.locator('[data-map-cluster]')).toHaveText('2');
+  await expect(page.locator('[data-map-cluster]')).toHaveAttribute(
+    'aria-label',
+    /^2 listings in this area/,
   );
-  expect(pinIds).toEqual(listIds);
-  await expect(page.locator('[data-map-pin][data-event-id="assigned-elsewhere-event"]')).toHaveCount(0);
+  await expect(page.locator('[data-map-pin]')).toHaveCount(0);
+
+  // Selecting a listing must pull it out of the cluster so it is always visible.
+  await page.locator('#event-qualifying-event').click();
+  await expect(page.locator('[data-map-pin][data-event-id="qualifying-event"]')).toHaveCount(1, { timeout: 10_000 });
+  // The remaining listing is alone, so it is drawn as a normal pin too.
+  await expect(page.locator('[data-map-pin]')).toHaveCount(2);
+  await expect(page.locator('[data-map-cluster]')).toHaveCount(0);
+  expect(listIds).toContain('qualifying-event');
 
   const exactCard = page.locator('#event-qualifying-event');
   const routeLinks = exactCard.locator('a[href*="google.com/maps/dir"]');
@@ -322,24 +331,43 @@ for (const [mapPath, tilesAvailable] of [['tile map', true], ['coordinate fallba
 test('homepage map keeps the user zoom level when hovering neighborhoods', async ({ page }) => {
   await stubBoundaryDiscovery(page, true);
   await page.goto('/');
+  // The map legitimately refits its camera when data arrives or the container
+  // is resized. Under a loaded full run those refits can land after the user
+  // zoom below, so wait for them to finish before touching the zoom.
+  await page.waitForLoadState('networkidle');
 
   const centrumBoundary = page.getByRole('button', { name: 'Select neighborhood: Centrum', exact: true });
   await expect(centrumBoundary).toHaveCount(1);
   const tileZoom = () => page.locator('img[src*="tile.openstreetmap.org"]').first()
     .getAttribute('src').then((src) => Number(new URL(src ?? '').pathname.split('/')[1]));
+  // Flush any pending React commits and layout work before reading the zoom.
+  const flushFrames = () => page.evaluate(
+    () => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))),
+  );
+  const zoomIsSettled = async () => {
+    const before = await tileZoom();
+    await flushFrames();
+    return (await tileZoom()) === before;
+  };
+  await expect.poll(zoomIsSettled, { message: 'homepage map zoom should settle after initial load' }).toBe(true);
 
   const initialZoom = await tileZoom();
   await page.getByRole('button', { name: 'Zoom in', exact: true }).click();
   await page.getByRole('button', { name: 'Zoom in', exact: true }).click();
   await expect.poll(tileZoom).toBe(initialZoom + 2);
+  await expect.poll(zoomIsSettled).toBe(true);
 
   await centrumBoundary.dispatchEvent('mouseover');
   await expect(centrumBoundary).toHaveCSS('stroke-opacity', '1');
+  await flushFrames();
+  expect(await tileZoom(), 'hovering a neighborhood must not refit the camera').toBe(initialZoom + 2);
   await centrumBoundary.dispatchEvent('mouseout');
   await expect(centrumBoundary).toHaveCSS('stroke-opacity', '0.2');
   await page.mouse.move(700, 300);
   await page.mouse.move(720, 320);
-  await page.waitForTimeout(300);
+  await flushFrames();
+  expect(await tileZoom(), 'leaving a neighborhood must not refit the camera').toBe(initialZoom + 2);
+  await expect.poll(zoomIsSettled).toBe(true);
   expect(await tileZoom()).toBe(initialZoom + 2);
 });
 
