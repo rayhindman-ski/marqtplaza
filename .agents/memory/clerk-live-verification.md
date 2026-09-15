@@ -22,3 +22,10 @@ the token stalls on bot protection and looks like "no email arrived".
 (`/sign-up/verify-email-address`) arrive as bare paths through `routerPush`, so any query state the
 app needs after redirect (e.g. `terug`) must be re-attached there — a live run is the only test
 that catches this.
+
+**Expired/consumed links:** this instance verifies e-mail by code only, so the only Clerk-issued
+links are Backend API sign-in tokens (`POST /v1/sign_in_tokens`, `expires_in_seconds` accepts 1).
+Expired → `ticket_expired_code`, reused → `sign_in_token_already_used_code`; Clerk's SignIn card
+shows the message with the normal form as recovery. Clerk's SignUp renders a *blank* card for a
+stale `/sign-up/verify-*` step with no sign-up attempt (also on the hosted Account Portal), so the
+app must redirect that case to `/sign-up` itself. Opt-in spec: `e2e/clerk-verification-recovery.spec.ts`.

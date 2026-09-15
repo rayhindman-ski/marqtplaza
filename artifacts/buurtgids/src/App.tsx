@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Route, Switch, Router as WouterRouter, Link, Redirect, useLocation, useRoute, useSearch } from 'wouter';
 import { QueryClient, QueryClientProvider, keepPreviousData } from '@tanstack/react-query';
-import { ClerkProvider, SignIn, SignUp, useAuth } from '@clerk/react';
+import { ClerkProvider, SignIn, SignUp, useAuth, useClerk } from '@clerk/react';
 import { publishableKeyFromHost } from '@clerk/react/internal';
 import { shadcn } from '@clerk/themes';
 import { 
@@ -3782,8 +3782,28 @@ function useClerkRedirects() {
   };
 }
 
+/**
+ * Clerk renders an empty card for a stale verification step
+ * (`/sign-up/verify-email-address`) when no sign-up is in progress, for example
+ * a bookmarked or history entry reopened after the code was already used.
+ * Send those visitors back to the start of sign-up so the recovery path is visible.
+ */
+function useStaleSignUpStepRecovery() {
+  const [location, navigate] = useLocation();
+  const search = useSearch();
+  const clerk = useClerk();
+  const { isLoaded, isSignedIn } = useAuth();
+  const isVerificationStep = /^\/sign-up\/verify-/.test(location);
+  useEffect(() => {
+    if (!isVerificationStep || !isLoaded || !clerk.loaded || isSignedIn) return;
+    if (clerk.client?.signUp?.id) return;
+    navigate(`/sign-up${search ? `?${search}` : ''}`, { replace: true });
+  }, [isVerificationStep, isLoaded, isSignedIn, clerk, search, navigate]);
+}
+
 function SignUpPage() {
   const redirects = useClerkRedirects();
+  useStaleSignUpStepRecovery();
   return (
     <div className="flex min-h-[100dvh] items-center justify-center bg-background px-4">
       <SignUp
