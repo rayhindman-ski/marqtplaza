@@ -140,11 +140,11 @@ function installServer(page: Page) {
   };
 }
 
-async function signIn(page: Page, auth: { userId: string | null; role?: string | null }) {
-  await page.addInitScript((value) => {
-    window.localStorage.setItem('buurtplaza-language', 'nl');
+async function signIn(page: Page, auth: { userId: string | null; role?: string | null }, language: 'nl' | 'en' = 'nl') {
+  await page.addInitScript(({ value, lang }) => {
+    window.localStorage.setItem('buurtplaza-language', lang);
     (window as Window & { __editorTestAuth?: typeof value }).__editorTestAuth = value;
-  }, auth);
+  }, { value: auth, lang: language });
 }
 
 const MODERATION_URL = '/redactie/bedrijven?e2eEditorAuth=1';
@@ -368,5 +368,113 @@ test.describe('business moderation screen', () => {
     await expect(draft.getByText('geschorst')).toBeVisible();
     await expect(draft.getByText(/laatste toelichting: Klacht ontvangen\./)).toBeVisible();
     await expect(draft.getByRole('button', { name: 'Schorsen' })).toHaveCount(0);
+  });
+
+  // The English copy in businessReviewTranslations.en is never exercised by the
+  // Dutch cases above; these two drive the same flows with the app in English.
+  test('in English, the ownership queue shows English tabs, dialog copy and the version-conflict toast', async ({ page }) => {
+    const server = installServer(page);
+    await server.install();
+    await signIn(page, { userId: 'user-editor', role: 'editor' }, 'en');
+    await page.goto(MODERATION_URL);
+
+    await expect(page.getByTestId('tab-authority')).toHaveText('Ownership');
+    await expect(page.getByTestId('tab-editorial')).toHaveText('Profiles');
+    await expect(page.getByTestId('tab-publication')).toHaveText('Publication');
+    await page.getByTestId('tab-authority').click();
+
+    const queue = page.getByTestId('review-authority');
+    await expect(queue.getByTestId('authority-item-1')).toBeVisible();
+    await expect(queue.getByRole('button', { name: 'Load more' })).toBeVisible();
+    await expect(queue.getByTestId('authority-item-3').getByTestId('self-review-blocked')).toHaveText('You are involved with this business and cannot decide.');
+
+    // Rejecting requires a reason: the label switches between (required) and (optional).
+    await queue.getByTestId('authority-item-1').getByRole('button', { name: 'Reject' }).click();
+    await expect(page.getByRole('dialog').getByRole('heading', { name: 'Confirm decision' })).toBeVisible();
+    await expect(page.getByRole('dialog').getByText('Reject · Claim Bedrijf 1 · v1')).toBeVisible();
+    await expect(page.getByRole('dialog').getByText('Reason (required)')).toBeVisible();
+    await expect(page.getByRole('dialog').getByTestId('confirm-decision')).toBeDisabled();
+    await page.getByRole('dialog').getByRole('button', { name: 'Cancel' }).click();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+
+    // A stale approval surfaces the English VERSION_CONFLICT message and the refreshed status label.
+    const item = queue.getByTestId('authority-item-4');
+    await expect(item.getByText('submitted · v1')).toBeVisible();
+    server.bumpClaimVersion(4);
+    await item.getByRole('button', { name: 'Approve' }).click();
+    const dialog = page.getByRole('dialog');
+    await expect(dialog.getByText('Approve · Claim Bedrijf 4 · v1')).toBeVisible();
+    await expect(dialog.getByText('Reason (optional)')).toBeVisible();
+    await dialog.getByTestId('confirm-decision').click();
+
+    await expect(page.getByText('This version changed in the meantime. The queue has been refreshed.')).toBeVisible();
+    await expect(dialog).toHaveCount(0);
+    await expect(item.getByText('changes requested · v2')).toBeVisible();
+    await expect(page.getByText('Decision saved.')).toHaveCount(0);
+
+    await item.getByRole('button', { name: 'Approve' }).click();
+    await page.getByRole('dialog').getByTestId('confirm-decision').click();
+    await expect(page.getByText('Decision saved.')).toBeVisible();
+    await expect(item).toHaveCount(0);
+  });
+
+  test('in English, fact-check labels and publication statuses use the English copy', async ({ page }) => {
+    const server = installServer(page);
+    await server.install();
+    await signIn(page, { userId: 'user-editor', role: 'editor' }, 'en');
+    await page.goto(MODERATION_URL);
+    await page.getByTestId('tab-editorial').click();
+
+    const item = page.getByTestId('review-editorial').getByTestId('editorial-item-51');
+    await expect(item.getByText('Submitted · v2')).toHaveCount(2);
+    await expect(item.getByText('Currently approved · v1')).toBeVisible();
+
+    await item.getByRole('button', { name: 'Approve' }).click();
+    const dialog = page.getByRole('dialog');
+    await expect(dialog.getByText('Approve · Profiel Bakkerij · v2')).toBeVisible();
+    await expect(dialog.getByText('Fact check (optional)')).toBeVisible();
+    await expect(dialog.getByRole('combobox', { name: /^Status / })).toHaveCount(9);
+    await dialog.getByRole('combobox', { name: 'Status Website' }).selectOption('confirmed');
+    await dialog.getByRole('textbox', { name: 'Source Website' }).fill('https://voorbeeld.nl/contact');
+    await dialog.getByRole('combobox', { name: 'Status Address' }).selectOption('contradicted');
+    await dialog.getByRole('textbox', { name: 'Source Phone' }).fill('https://ergens.nl');
+    await dialog.getByTestId('confirm-decision').click();
+
+    await expect(page.getByText('Decision saved.')).toBeVisible();
+    await expect(item).toHaveCount(0);
+    const decision = server.requests.find((request) => request.method === 'POST' && request.path === '/api/review/revisions/51/decision');
+    expect(decision?.body).toEqual({
+      decision: 'approve',
+      expectedVersion: 2,
+      factChecks: [
+        { field: 'websiteUrl', status: 'confirmed', sourceUrl: 'https://voorbeeld.nl/contact' },
+        { field: 'address', status: 'contradicted' },
+      ],
+    });
+
+    await page.getByTestId('tab-publication').click();
+    const queue = page.getByTestId('review-publication');
+    const draft = queue.getByTestId('publication-item-301');
+    const live = queue.getByTestId('publication-item-302');
+    await expect(draft.getByText('draft')).toBeVisible();
+    await expect(draft.getByText('Approved version v3')).toBeVisible();
+    await expect(live.getByText('published')).toBeVisible();
+    await expect(live.getByTestId('publication-recheck-due-302')).toContainText('Re-check due');
+    await expect(live.getByTestId('publication-recheck-due-302')).toContainText('expires on 21/09/2026');
+    await expect(live.getByText(/latest reason: Alles klopt\./)).toBeVisible();
+    await expect(live.getByRole('button', { name: 'Unpublish' })).toBeVisible();
+
+    await draft.getByRole('button', { name: 'Publish' }).click();
+    await expect(page.getByRole('dialog').getByText('Publish · Klaar Voor Publicatie · snapshot v3')).toBeVisible();
+    await page.getByRole('dialog').getByTestId('confirm-decision').click();
+    await expect(page.getByText('Decision saved.')).toBeVisible();
+    await expect(draft.getByText('published')).toBeVisible();
+
+    await draft.getByRole('button', { name: 'Suspend' }).click();
+    await expect(page.getByRole('dialog').getByTestId('confirm-decision')).toBeDisabled();
+    await page.getByRole('dialog').getByLabel(/Reason/).fill('Complaint received.');
+    await page.getByRole('dialog').getByTestId('confirm-decision').click();
+    await expect(draft.getByText('suspended')).toBeVisible();
+    await expect(draft.getByText(/latest reason: Complaint received\./)).toBeVisible();
   });
 });
