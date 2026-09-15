@@ -53,6 +53,9 @@ function interestOptions(): AccountOption[] {
   }));
 }
 
+/** Anything that yields the current controlled option lists. */
+export type AccountOptionsSource = () => AccountOptions;
+
 let cached: AccountOptions | null = null;
 
 export function getAccountOptions(): AccountOptions {

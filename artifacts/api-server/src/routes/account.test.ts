@@ -19,6 +19,8 @@ import { createAccountRouter } from "./account";
 import { createRegistrationRouter } from "./registration";
 import { createHealthRouter } from "./health";
 import type { Identity } from "../lib/permissions";
+import { getAccountOptions, type AccountOptionsSource } from "../lib/accountOptions";
+import type { AccountOptions } from "@workspace/api-zod";
 
 const runId = `${process.pid}-${Date.now()}`;
 const users = {
@@ -34,10 +36,16 @@ const users = {
   firstwriters: `account-test-${runId}-firstwriters`,
   ledger: `account-test-${runId}-ledger`,
   legacy: `account-test-${runId}-legacy`,
+  rollout: `account-test-${runId}-rollout`,
 };
 const allUserIds = Object.values(users);
 
 let flags = { accounts: true, businessIntake: false, businessPublication: false };
+// The routes read the taxonomy through this source on every request, so a
+// test can roll out a new version exactly the way a deploy would: the served
+// option lists change while stored preference rows are left untouched.
+let activeAccountOptions: AccountOptionsSource = getAccountOptions;
+const accountOptionsSource: AccountOptionsSource = () => activeAccountOptions();
 
 function identityFromHeaders(req: express.Request): Identity | null {
   const userId = req.header("x-test-user-id");
@@ -53,7 +61,14 @@ const app = express();
 app.use(express.json());
 app.use("/api", createHealthRouter(() => flags));
 app.use("/api", createRegistrationRouter((req) => req.header("x-test-user-id")));
-app.use("/api", createAccountRouter({ resolveIdentity: identityFromHeaders, flags: () => flags }));
+app.use(
+  "/api",
+  createAccountRouter({
+    resolveIdentity: identityFromHeaders,
+    flags: () => flags,
+    accountOptions: accountOptionsSource,
+  }),
+);
 
 let server: ReturnType<typeof app.listen>;
 let baseUrl = "";
@@ -363,6 +378,147 @@ describe("account routes", () => {
     assert.deepEqual(removed.body.preferences.interestIds, []);
     assert.deepEqual(removed.body.preferences.unresolvedNeighborhoodIds, []);
     assert.deepEqual(removed.body.preferences.unresolvedInterestIds, []);
+  });
+
+  it("keeps legacy choices visible, editable, and removable across a taxonomy version transition", async () => {
+    const released = getAccountOptions();
+    activeAccountOptions = getAccountOptions;
+    try {
+      // 1. Under the released taxonomy the account picks real options.
+      const options = await request("/api/account/options", { userId: users.rollout });
+      assert.equal(options.body.taxonomyVersion, released.taxonomyVersion);
+      const [keptHood, retiredHood] = options.body.neighborhoods.map((option: any) => option.id) as string[];
+      const [keptInterest, retiredInterest] = options.body.interests.map((option: any) => option.id) as string[];
+
+      const saved = await request("/api/account/preferences", {
+        method: "PATCH",
+        userId: users.rollout,
+        body: JSON.stringify({
+          expectedRevision: 0,
+          neighborhoodIds: [keptHood, retiredHood],
+          interestIds: [keptInterest, retiredInterest],
+        }),
+      });
+      assert.equal(saved.status, 200);
+      assert.equal(saved.body.preferences.revision, 1);
+      assert.deepEqual(saved.body.preferences.unresolvedNeighborhoodIds, []);
+      assert.deepEqual(saved.body.preferences.unresolvedInterestIds, []);
+
+      const [storedBefore] = await db
+        .select()
+        .from(consumerPreferencesTable)
+        .where(eq(consumerPreferencesTable.userId, saved.body.id));
+
+      // 2. A new taxonomy version ships: one neighbourhood and one interest
+      // are retired, a new interest is introduced, nothing touches the DB.
+      const rolledOut: AccountOptions = {
+        taxonomyVersion: `${released.taxonomyVersion}-rollout-test`,
+        neighborhoods: released.neighborhoods.filter((option) => option.id !== retiredHood),
+        interests: [
+          ...released.interests.filter((option) => option.id !== retiredInterest),
+          { id: "category:new-in-rollout", label: { nl: "Nieuw", en: "New" } },
+        ],
+      };
+      activeAccountOptions = () => rolledOut;
+
+      const servedOptions = await request("/api/account/options", { userId: users.rollout });
+      assert.equal(servedOptions.body.taxonomyVersion, rolledOut.taxonomyVersion);
+      assert.ok(!servedOptions.body.neighborhoods.some((option: any) => option.id === retiredHood));
+
+      const [storedAfter] = await db
+        .select()
+        .from(consumerPreferencesTable)
+        .where(eq(consumerPreferencesTable.userId, saved.body.id));
+      assert.deepEqual(storedAfter, storedBefore, "the rollout never rewrites stored preference rows");
+
+      // 3. GET /account/me reports exactly the retired subset as unresolved.
+      const me = await request("/api/account/me", { userId: users.rollout });
+      assert.equal(me.body.preferences.revision, 1);
+      assert.deepEqual(me.body.preferences.neighborhoodIds, [keptHood, retiredHood], "legacy IDs stay visible");
+      assert.deepEqual(me.body.preferences.interestIds, [keptInterest, retiredInterest]);
+      assert.deepEqual(me.body.preferences.unresolvedNeighborhoodIds, [retiredHood]);
+      assert.deepEqual(me.body.preferences.unresolvedInterestIds, [retiredInterest]);
+
+      // 4. Unrelated edits keep the legacy IDs until the user removes them.
+      const localeOnly = await request("/api/account/preferences", {
+        method: "PATCH",
+        userId: users.rollout,
+        body: JSON.stringify({ expectedRevision: 1, locale: "nl" }),
+      });
+      assert.equal(localeOnly.status, 200);
+      assert.equal(localeOnly.body.locale, "nl");
+      assert.equal(localeOnly.body.preferences.revision, 2);
+      assert.deepEqual(localeOnly.body.preferences.neighborhoodIds, [keptHood, retiredHood]);
+      assert.deepEqual(localeOnly.body.preferences.unresolvedNeighborhoodIds, [retiredHood]);
+      assert.deepEqual(localeOnly.body.preferences.unresolvedInterestIds, [retiredInterest]);
+
+      const addNew = await request("/api/account/preferences", {
+        method: "PATCH",
+        userId: users.rollout,
+        body: JSON.stringify({
+          expectedRevision: 2,
+          interestIds: [keptInterest, retiredInterest, "category:new-in-rollout"],
+        }),
+      });
+      assert.equal(addNew.status, 200, "an already-stored legacy ID may be resubmitted alongside new options");
+      assert.equal(addNew.body.preferences.revision, 3);
+      assert.deepEqual(addNew.body.preferences.interestIds, [keptInterest, retiredInterest, "category:new-in-rollout"]);
+      assert.deepEqual(addNew.body.preferences.unresolvedInterestIds, [retiredInterest]);
+      assert.deepEqual(addNew.body.preferences.neighborhoodIds, [keptHood, retiredHood], "omitted list untouched");
+
+      // A retired ID this account never stored is still rejected.
+      const otherRetired = await request("/api/account/preferences", {
+        method: "PATCH",
+        userId: users.other,
+        body: JSON.stringify({ expectedRevision: 0, neighborhoodIds: [retiredHood] }),
+      });
+      assert.equal(otherRetired.status, 400);
+      assert.equal(otherRetired.body.code, "VALIDATION_FAILED");
+      assert.deepEqual(
+        otherRetired.body.fieldErrors.map((error: any) => error.field),
+        [`neighborhoodIds.${retiredHood}`],
+      );
+
+      // 5. Removing a legacy choice clears it and advances the revision.
+      const removedHood = await request("/api/account/preferences", {
+        method: "PATCH",
+        userId: users.rollout,
+        body: JSON.stringify({ expectedRevision: 3, neighborhoodIds: [keptHood] }),
+      });
+      assert.equal(removedHood.status, 200);
+      assert.equal(removedHood.body.preferences.revision, 4);
+      assert.deepEqual(removedHood.body.preferences.neighborhoodIds, [keptHood]);
+      assert.deepEqual(removedHood.body.preferences.unresolvedNeighborhoodIds, []);
+      assert.deepEqual(removedHood.body.preferences.unresolvedInterestIds, [retiredInterest], "other list untouched");
+
+      // Once removed, the retired ID can no longer be reintroduced.
+      const reintroduce = await request("/api/account/preferences", {
+        method: "PATCH",
+        userId: users.rollout,
+        body: JSON.stringify({ expectedRevision: 4, neighborhoodIds: [keptHood, retiredHood] }),
+      });
+      assert.equal(reintroduce.status, 400);
+      assert.equal(reintroduce.body.code, "VALIDATION_FAILED");
+
+      const removedInterest = await request("/api/account/preferences", {
+        method: "PATCH",
+        userId: users.rollout,
+        body: JSON.stringify({ expectedRevision: 4, interestIds: [keptInterest, "category:new-in-rollout"] }),
+      });
+      assert.equal(removedInterest.status, 200);
+      assert.equal(removedInterest.body.preferences.revision, 5);
+      assert.deepEqual(removedInterest.body.preferences.unresolvedInterestIds, []);
+
+      const [storedFinal] = await db
+        .select()
+        .from(consumerPreferencesTable)
+        .where(eq(consumerPreferencesTable.userId, saved.body.id));
+      assert.equal(storedFinal.revision, 5);
+      assert.deepEqual(storedFinal.neighborhoodIds, [keptHood]);
+      assert.deepEqual(storedFinal.interestIds, [keptInterest, "category:new-in-rollout"]);
+    } finally {
+      activeAccountOptions = getAccountOptions;
+    }
   });
 
   it("refuses preference and consent writes from unverified identities", async () => {

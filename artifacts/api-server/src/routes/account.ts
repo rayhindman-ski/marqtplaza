@@ -23,7 +23,7 @@ import {
   type ConsentPurpose,
 } from "@workspace/api-zod";
 
-import { getAccountOptions, isKnownInterestId, isKnownNeighborhoodId } from "../lib/accountOptions";
+import { getAccountOptions, type AccountOptionsSource } from "../lib/accountOptions";
 import { sendApiError, unknownFieldErrors } from "../lib/apiError";
 import { getFeatureFlags, type FeatureFlagSource } from "../lib/featureFlags";
 import {
@@ -39,6 +39,11 @@ import { hasUserRegistration } from "./registration";
 export type AccountRouterOptions = {
   resolveIdentity?: IdentityResolver;
   flags?: FeatureFlagSource;
+  /**
+   * Source of the controlled option lists. Defaults to the released taxonomy;
+   * tests inject a replacement to exercise a taxonomy version transition.
+   */
+  accountOptions?: AccountOptionsSource;
 };
 
 /** Read-only operations accept no body or query fields at all. */
@@ -152,9 +157,12 @@ async function buildAccountConsents(userId: number) {
   };
 }
 
-function serialisePreferences(preferences: ConsumerPreferences | undefined) {
+function serialisePreferences(
+  preferences: ConsumerPreferences | undefined,
+  accountOptions: AccountOptionsSource,
+) {
   if (!preferences) return null;
-  const options = getAccountOptions();
+  const options = accountOptions();
   const neighborhoodIds = new Set(options.neighborhoods.map((option) => option.id));
   const interestIds = new Set(options.interests.map((option) => option.id));
   return {
@@ -170,6 +178,7 @@ function serialisePreferences(preferences: ConsumerPreferences | undefined) {
 export async function buildAccountMe(
   account: AccountContext,
   flags: FeatureFlagSource,
+  accountOptions: AccountOptionsSource = getAccountOptions,
 ) {
   const user: AppUser = account.user;
   const [businessMembershipCount, hasResearchRegistration, [preferences]] = await Promise.all([
@@ -197,13 +206,18 @@ export async function buildAccountMe(
     capabilities: deriveCapabilities(capabilityInput),
     hasResearchRegistration,
     businessMembershipCount,
-    preferences: serialisePreferences(preferences),
+    preferences: serialisePreferences(preferences, accountOptions),
     createdAt: user.createdAt.toISOString(),
   };
 }
 
 export function createAccountRouter(options: AccountRouterOptions = {}): IRouter {
   const flags = options.flags ?? getFeatureFlags;
+  const accountOptions = options.accountOptions ?? getAccountOptions;
+  const isKnownNeighborhoodId = (id: string): boolean =>
+    accountOptions().neighborhoods.some((option) => option.id === id);
+  const isKnownInterestId = (id: string): boolean =>
+    accountOptions().interests.some((option) => option.id === id);
   const router: IRouter = Router();
 
   router.use("/account", requireFlag("accounts", flags));
@@ -212,14 +226,14 @@ export function createAccountRouter(options: AccountRouterOptions = {}): IRouter
   router.get("/account/me", async (req, res): Promise<void> => {
     if (rejectClientFields(req, res)) return;
     const account = req.account!;
-    const me = await buildAccountMe(account, flags);
+    const me = await buildAccountMe(account, flags, accountOptions);
     req.log?.info?.({ event: "account.me", accountId: account.user.id }, "Account summary served");
     res.json(GetAccountMeResponse.parse(me));
   });
 
   router.get("/account/options", (req, res): void => {
     if (rejectClientFields(req, res)) return;
-    res.json(GetAccountOptionsResponse.parse(getAccountOptions()));
+    res.json(GetAccountOptionsResponse.parse(accountOptions()));
   });
 
   router.patch("/account/preferences", async (req, res): Promise<void> => {
@@ -325,7 +339,7 @@ export function createAccountRouter(options: AccountRouterOptions = {}): IRouter
       return;
     }
     const [user] = await db.select().from(appUsersTable).where(eq(appUsersTable.id, account.user.id)).limit(1);
-    const me = await buildAccountMe({ identity: account.identity, user: user ?? account.user }, flags);
+    const me = await buildAccountMe({ identity: account.identity, user: user ?? account.user }, flags, accountOptions);
     req.log?.info?.({ event: "account.preferences.saved", accountId: account.user.id }, "Preferences saved");
     res.json(UpdateAccountPreferencesResponse.parse(me));
   });
@@ -339,7 +353,7 @@ export function createAccountRouter(options: AccountRouterOptions = {}): IRouter
       .set({ onboardingCompletedAt: sql`COALESCE(${appUsersTable.onboardingCompletedAt}, NOW())`, updatedAt: new Date() })
       .where(eq(appUsersTable.id, account.user.id));
     const [user] = await db.select().from(appUsersTable).where(eq(appUsersTable.id, account.user.id)).limit(1);
-    const me = await buildAccountMe({ identity: account.identity, user: user ?? account.user }, flags);
+    const me = await buildAccountMe({ identity: account.identity, user: user ?? account.user }, flags, accountOptions);
     req.log?.info?.({ event: "account.onboarding.completed", accountId: account.user.id }, "Onboarding completed");
     res.json(CompleteAccountOnboardingResponse.parse(me));
   });
