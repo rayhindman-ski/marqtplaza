@@ -884,6 +884,95 @@ describe("business publication routes", () => {
     clock = new Date("2026-09-14T10:00:00.000Z");
   });
 
+  it("lets reviewers list soon-expiring fact checks first without touching the default order", async () => {
+    // Two extra approved businesses whose newest confirmed check is older than the main profile's
+    // (2026-09-14): one due sooner, one already stale. Only confirmed checks may contribute a date,
+    // so the "sooner" business also carries a much older *unchecked* row that must be ignored.
+    const extra: number[] = [];
+    const seedApproved = async (suffix: string, checks: Array<{ status: string; checkedOn: Date | null }>) => {
+      const [profile] = await db
+        .insert(businessProfilesTable)
+        .values({
+          slug: `${slug}-${suffix}`,
+          cityId: "dhg",
+          listingSource: "openstreetmap",
+          listingId: `${listingId}-${suffix}`,
+          name: `Recheck ${suffix} ${runId}`,
+          isClaimed: true,
+          claimedAt: new Date(),
+          publicationStatus: "published",
+          createdByUserId: users.owner,
+        })
+        .returning();
+      const [revision] = await db
+        .insert(businessProfileRevisionsTable)
+        .values({ businessProfileId: profile.id, version: 1, status: "approved", authorUserId: users.owner, content: {} })
+        .returning();
+      await db.update(businessProfilesTable).set({ approvedRevisionId: revision.id }).where(eq(businessProfilesTable.id, profile.id));
+      await db.insert(factChecksTable).values(
+        checks.map((check, index) => ({ revisionId: revision.id, field: index === 0 ? "phone" : "websiteUrl", ...check })),
+      );
+      extra.push(profile.id);
+      return profile.id;
+    };
+    const soonerId = await seedApproved("sooner", [
+      { status: "confirmed", checkedOn: new Date("2026-09-01T10:00:00.000Z") },
+      { status: "unchecked", checkedOn: new Date("2025-01-01T10:00:00.000Z") },
+    ]);
+    const staleId = await seedApproved("stale", [{ status: "confirmed", checkedOn: new Date("2026-06-01T10:00:00.000Z") }]);
+
+    try {
+      clock = new Date("2027-02-20T10:00:00.000Z");
+      const due = await request("/api/review/businesses?recheckDue=true&limit=50", asReviewer);
+      assert.equal(due.status, 200);
+      const dueIds = due.body.items.map((entry: any) => entry.profile.id);
+      assert.ok(dueIds.includes(soonerId) && dueIds.includes(profileId), "both due businesses are listed");
+      assert.ok(!dueIds.includes(staleId), "already-stale snapshots are not 'due', their stale status speaks for itself");
+      assert.ok(dueIds.indexOf(soonerId) < dueIds.indexOf(profileId), "soonest staleOn comes first");
+      for (const entry of due.body.items) {
+        assert.equal(entry.freshness.recheckDue, true, "every item in the due view is actually due");
+        assert.equal(entry.freshness.status, "fresh");
+      }
+      const staleOns = due.body.items.map((entry: any) => new Date(entry.freshness.staleOn).getTime());
+      assert.deepEqual(staleOns, [...staleOns].sort((a, b) => a - b), "ordered by staleOn ascending");
+
+      // The cursor is specific to this ordering and never repeats or skips an item.
+      const firstPage = await request("/api/review/businesses?recheckDue=true&limit=1", asReviewer);
+      assert.equal(firstPage.body.items.length, 1);
+      assert.equal(firstPage.body.items[0].profile.id, soonerId);
+      assert.equal(firstPage.body.pageInfo.hasMore, true);
+      const secondPage = await request(
+        `/api/review/businesses?recheckDue=true&limit=50&cursor=${encodeURIComponent(firstPage.body.pageInfo.nextCursor)}`,
+        asReviewer,
+      );
+      assert.equal(secondPage.status, 200);
+      assert.deepEqual(secondPage.body.items.map((entry: any) => entry.profile.id), dueIds.slice(1));
+
+      // Explicit false and the default keep the newest-first id ordering and include everything.
+      const all = await request("/api/review/businesses?limit=50", asReviewer);
+      const allIds = all.body.items.map((entry: any) => entry.profile.id);
+      assert.deepEqual(allIds, [...allIds].sort((a, b) => b - a), "default order is unchanged (id descending)");
+      assert.ok(allIds.includes(staleId));
+      const explicitFalse = await request("/api/review/businesses?recheckDue=false&limit=50", asReviewer);
+      assert.deepEqual(explicitFalse.body.items.map((entry: any) => entry.profile.id), allIds);
+
+      const invalid = await request("/api/review/businesses?recheckDue=maybe", asReviewer);
+      assert.equal(invalid.status, 400);
+      assert.equal(invalid.body.fieldErrors[0].field, "recheckDue");
+    } finally {
+      clock = new Date("2026-09-14T10:00:00.000Z");
+      const revisions = await db
+        .select({ id: businessProfileRevisionsTable.id })
+        .from(businessProfileRevisionsTable)
+        .where(inArray(businessProfileRevisionsTable.businessProfileId, extra));
+      if (revisions.length > 0) {
+        await db.delete(businessReviewsTable).where(inArray(businessReviewsTable.targetId, revisions.map((r) => r.id)));
+      }
+      await db.delete(businessReviewsTable).where(inArray(businessReviewsTable.targetId, extra));
+      await db.delete(businessProfilesTable).where(inArray(businessProfilesTable.id, extra));
+    }
+  });
+
   it("marks freshness as stale honestly after 180 days", async () => {
     clock = new Date("2027-06-01T00:00:00.000Z");
     const owner = await request(`/api/business-profiles/${profileId}/revision`);

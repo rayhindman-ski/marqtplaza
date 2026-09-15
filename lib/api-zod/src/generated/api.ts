@@ -3456,6 +3456,9 @@ export const ReviewBusinessRevisionResponse = zod.object({
 
 /**
  * Businesses that have an approved revision or a non-default publication status, newest change first.
+ * With `recheckDue=true` the page only contains businesses whose confirmed fact checks are inside the
+ * re-check window (`freshness.recheckDue`), ordered by `freshness.staleOn` ascending so the soonest
+ * expiring facts come first. Cursors are specific to the ordering they were issued for.
  * @summary Paginated publication overview
  */
 export const getPublicationQueueQueryCursorMax = 200;
@@ -3467,7 +3470,8 @@ export const getPublicationQueueQueryLimitMax = 50;
 
 export const GetPublicationQueueQueryParams = zod.object({
   "cursor": zod.coerce.string().max(getPublicationQueueQueryCursorMax).optional().describe('Opaque cursor from a previous PageInfo.nextCursor.'),
-  "limit": zod.coerce.number().min(1).max(getPublicationQueueQueryLimitMax).default(getPublicationQueueQueryLimitDefault).describe('Page size for cursor-paginated lists.')
+  "limit": zod.coerce.number().min(1).max(getPublicationQueueQueryLimitMax).default(getPublicationQueueQueryLimitDefault).describe('Page size for cursor-paginated lists.'),
+  "recheckDue": zod.coerce.boolean().optional().describe('When true, restrict to businesses whose fact re-check is due and order by soonest staleOn.')
 })
 
 export const GetPublicationQueueResponse = zod.object({

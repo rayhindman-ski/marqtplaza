@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gt, inArray, lt, ne, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, gte, inArray, lt, ne, or, sql } from "drizzle-orm";
 import { Router, type IRouter, type NextFunction, type Request, type RequestHandler, type Response } from "express";
 
 import {
@@ -48,6 +48,8 @@ import { applyClaimDecision } from "../lib/claimDecisions";
 import { notifyBusinessOwners } from "../lib/lifecycleNotifications";
 import {
   CHECKABLE_FIELDS,
+  FRESHNESS_RECHECK_WINDOW_DAYS,
+  FRESHNESS_STALE_AFTER_DAYS,
   approvedRevisionFor,
   contentFromProfileColumns,
   deriveOwnerState,
@@ -88,6 +90,7 @@ export type BusinessPublicationRouterOptions = {
 
 const NO_FIELDS: ReadonlySet<string> = new Set();
 const PAGE_QUERY_FIELDS: ReadonlySet<string> = new Set(["cursor", "limit"]);
+const PUBLICATION_QUEUE_QUERY_FIELDS: ReadonlySet<string> = new Set(["cursor", "limit", "recheckDue"]);
 const REVISION_UPDATE_FIELDS: ReadonlySet<string> = new Set(["expectedVersion", "nl", "en", "facts"]);
 const TEXT_BLOCK_FIELDS: ReadonlySet<string> = new Set(["tagline", "description", "openingHours"]);
 const FACT_BLOCK_FIELDS: ReadonlySet<string> = new Set(["websiteUrl", "phone", "email", "address", "logoUrl", "coverUrl"]);
@@ -160,6 +163,32 @@ function decodeCursor(value: string | undefined): number | null {
   if (!value) return null;
   const parsed = Number.parseInt(value, 10);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
+/** Boolean query flag: absent/false/0 → false, true/1 → true, anything else → null (invalid). */
+function queryFlag(value: unknown): boolean | null {
+  if (value === undefined) return false;
+  if (value === "true" || value === "1") return true;
+  if (value === "false" || value === "0") return false;
+  return null;
+}
+
+/**
+ * Keyset cursor for the due-first ordering: `<newest confirmed check ms>:<profile id>`.
+ * Malformed cursors start from the beginning, like the numeric cursor.
+ */
+function encodeDueCursor(newest: Date, id: number): string {
+  return `${newest.getTime()}:${id}`;
+}
+
+function decodeDueCursor(value: string | undefined): { newest: Date; id: number } | null {
+  if (!value) return null;
+  const [newestPart, idPart, ...rest] = value.split(":");
+  if (rest.length > 0 || newestPart === undefined || idPart === undefined) return null;
+  const newestMs = Number.parseInt(newestPart, 10);
+  const id = Number.parseInt(idPart, 10);
+  if (!Number.isInteger(newestMs) || newestMs <= 0 || !Number.isInteger(id) || id <= 0) return null;
+  return { newest: new Date(newestMs), id };
 }
 
 function summariseProfile(profile: BusinessProfile) {
@@ -888,30 +917,80 @@ export function createBusinessPublicationRouter(options: BusinessPublicationRout
   });
 
   router.get("/review/businesses", reviewerGuarded, async (req: Request, res: Response): Promise<void> => {
-    if (rejectClientFields(req, res, NO_FIELDS, PAGE_QUERY_FIELDS)) return;
+    if (rejectClientFields(req, res, NO_FIELDS, PUBLICATION_QUEUE_QUERY_FIELDS)) return;
     const query = GetPublicationQueueQueryParams.safeParse(req.query);
     if (!query.success) {
       sendApiError(req, res, "VALIDATION_FAILED", { fieldErrors: zodFieldErrors(query.error.issues) });
       return;
     }
+    // zod's coerce.boolean() treats "false" as true, so the flag is read from the raw query string.
+    const recheckDue = queryFlag(req.query.recheckDue);
+    if (recheckDue === null) {
+      sendApiError(req, res, "VALIDATION_FAILED", { fieldErrors: [{ field: "recheckDue", code: "invalid_type" }] });
+      return;
+    }
     const limit = Math.floor(query.data.limit);
-    const before = decodeCursor(query.data.cursor);
     const reviewerId = req.account!.identity.userId;
-    const rows = await db
-      .select()
-      .from(businessProfilesTable)
-      .where(
-        and(
-          or(
-            sql`${businessProfilesTable.approvedRevisionId} is not null`,
-            inArray(businessProfilesTable.publicationStatus, ["draft", "unpublished", "suspended"]),
+    const baseFilter = and(
+      or(
+        sql`${businessProfilesTable.approvedRevisionId} is not null`,
+        inArray(businessProfilesTable.publicationStatus, ["draft", "unpublished", "suspended"]),
+      ),
+      ne(businessProfilesTable.publicationStatus, "archived"),
+    );
+    let rows: BusinessProfile[];
+    let nextCursor: string | null = null;
+    if (recheckDue) {
+      // Soonest-expiring first. The window mirrors freshnessFor exactly: a snapshot is due when its
+      // newest *confirmed* check is at most 180 days old (still fresh) and staleOn is under 31 days
+      // away (floor(daysUntilStale) <= 30). Unchecked or contradicted checks never contribute a date.
+      const current = now();
+      const staleBoundary = new Date(current.getTime() - FRESHNESS_STALE_AFTER_DAYS * 86_400_000);
+      const dueBoundary = new Date(current.getTime() - (FRESHNESS_STALE_AFTER_DAYS - FRESHNESS_RECHECK_WINDOW_DAYS - 1) * 86_400_000);
+      const newestConfirmed = db
+        .select({
+          revisionId: factChecksTable.revisionId,
+          newest: sql<Date>`max(${factChecksTable.checkedOn})`.as("newest"),
+        })
+        .from(factChecksTable)
+        .where(and(eq(factChecksTable.status, "confirmed"), sql`${factChecksTable.checkedOn} is not null`))
+        .groupBy(factChecksTable.revisionId)
+        .as("newest_confirmed");
+      const after = decodeDueCursor(query.data.cursor);
+      const joined = await db
+        .select({ profile: businessProfilesTable, newest: newestConfirmed.newest })
+        .from(businessProfilesTable)
+        .innerJoin(newestConfirmed, eq(businessProfilesTable.approvedRevisionId, newestConfirmed.revisionId))
+        .where(
+          and(
+            baseFilter,
+            gte(newestConfirmed.newest, staleBoundary),
+            lt(newestConfirmed.newest, dueBoundary),
+            after
+              ? or(
+                  gt(newestConfirmed.newest, after.newest),
+                  and(eq(newestConfirmed.newest, after.newest), lt(businessProfilesTable.id, after.id)),
+                )
+              : undefined,
           ),
-          ne(businessProfilesTable.publicationStatus, "archived"),
-          before !== null ? lt(businessProfilesTable.id, before) : undefined,
-        ),
-      )
-      .orderBy(desc(businessProfilesTable.id))
-      .limit(limit + 1);
+        )
+        .orderBy(asc(newestConfirmed.newest), desc(businessProfilesTable.id))
+        .limit(limit + 1);
+      rows = joined.map((row) => row.profile);
+      if (joined.length > limit) {
+        const last = joined[limit - 1]!;
+        nextCursor = encodeDueCursor(new Date(last.newest), last.profile.id);
+      }
+    } else {
+      const before = decodeCursor(query.data.cursor);
+      rows = await db
+        .select()
+        .from(businessProfilesTable)
+        .where(and(baseFilter, before !== null ? lt(businessProfilesTable.id, before) : undefined))
+        .orderBy(desc(businessProfilesTable.id))
+        .limit(limit + 1);
+      if (rows.length > limit) nextCursor = String(rows[limit - 1]!.id);
+    }
     const page = rows.slice(0, limit);
     const items = [];
     for (const profile of page) {
@@ -932,7 +1011,7 @@ export function createBusinessPublicationRouter(options: BusinessPublicationRout
         items,
         pageInfo: {
           hasMore: rows.length > limit,
-          nextCursor: rows.length > limit ? String(page[page.length - 1]!.id) : null,
+          nextCursor,
         },
       }),
     );

@@ -20,4 +20,8 @@ cursor?: PageCursorParameter;
  * @maximum 50
  */
 limit?: PageLimitParameter;
+/**
+ * When true, restrict to businesses whose fact re-check is due and order by soonest staleOn.
+ */
+recheckDue?: boolean;
 };

@@ -5093,6 +5093,9 @@ export const getGetPublicationQueueUrl = (params?: GetPublicationQueueParams,) =
 
 /**
  * Businesses that have an approved revision or a non-default publication status, newest change first.
+ * With `recheckDue=true` the page only contains businesses whose confirmed fact checks are inside the
+ * re-check window (`freshness.recheckDue`), ordered by `freshness.staleOn` ascending so the soonest
+ * expiring facts come first. Cursors are specific to the ordering they were issued for.
  * @summary Paginated publication overview
  */
 export const getPublicationQueue = async (params?: GetPublicationQueueParams, options?: Parameters<typeof customFetch>[1]): Promise<PublicationQueuePage> => {

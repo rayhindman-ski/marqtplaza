@@ -52,6 +52,7 @@ function installServer(page: Page) {
 
   const publications = [
     { profile: profile(301, 'Klaar Voor Publicatie', 'draft'), approvedRevision: revision(70, 301, 3, 'approved', 'Goedgekeurd'), latestDecision: null, freshness: { status: 'unverified', checkedOn: null, staleAfterDays: 180, staleOn: null, daysUntilStale: null, recheckWindowDays: 30, recheckDue: false }, canDecide: true },
+    { profile: profile(303, 'Bijna Verlopen', 'published'), approvedRevision: revision(72, 303, 2, 'approved', 'Live'), latestDecision: null, freshness: { status: 'fresh', checkedOn: '2026-03-18T00:00:00.000Z', staleAfterDays: 180, staleOn: '2026-09-14T00:00:00.000Z', daysUntilStale: 0, recheckWindowDays: 30, recheckDue: true }, canDecide: true },
     { profile: profile(302, 'Al Online', 'published'), approvedRevision: revision(71, 302, 1, 'approved', 'Live'), latestDecision: { id: 9, targetType: 'publication', targetId: 302, targetVersion: 1, decision: 'publish', reason: 'Alles klopt.', createdAt: NOW }, freshness: { status: 'fresh', checkedOn: '2026-03-25T00:00:00.000Z', staleAfterDays: 180, staleOn: '2026-09-21T00:00:00.000Z', daysUntilStale: 7, recheckWindowDays: 30, recheckDue: true }, canDecide: true },
   ];
 
@@ -110,7 +111,16 @@ function installServer(page: Page) {
 
     await page.route(/\/api\/review\/businesses(\/\d+\/publication)?(\?.*)?$/, (route) => {
       const { url, body, method } = record(route);
-      if (method === 'GET') return json(route, paginate(publications, url));
+      if (method === 'GET') {
+        // Mirrors the API: recheckDue=true narrows to due items ordered by soonest staleOn.
+        const due = url.searchParams.get('recheckDue') === 'true';
+        const visible = due
+          ? publications
+              .filter((entry) => entry.freshness.recheckDue && entry.freshness.staleOn)
+              .sort((a, b) => new Date(a.freshness.staleOn!).getTime() - new Date(b.freshness.staleOn!).getTime())
+          : publications;
+        return json(route, paginate(visible, url));
+      }
       const id = Number(url.pathname.match(/\/review\/businesses\/(\d+)\/publication$/)?.[1]);
       const item = publications.find((entry) => entry.profile.id === id);
       if (!item) return error(route, 'NOT_FOUND', 404);
@@ -368,6 +378,35 @@ test.describe('business moderation screen', () => {
     await expect(draft.getByText('geschorst')).toBeVisible();
     await expect(draft.getByText(/laatste toelichting: Klacht ontvangen\./)).toBeVisible();
     await expect(draft.getByRole('button', { name: 'Schorsen' })).toHaveCount(0);
+  });
+
+  test('editors switch the publication queue to soon-expiring fact checks first and back', async ({ page }) => {
+    const server = installServer(page);
+    await server.install();
+    await signIn(page, { userId: 'user-editor', role: 'editor' });
+    await page.goto(MODERATION_URL);
+    await page.getByTestId('tab-publication').click();
+
+    const queue = page.getByTestId('review-publication');
+    await expect(queue.getByTestId('publication-item-301')).toBeVisible();
+    await expect(queue.getByTestId('publication-filter-all')).toHaveAttribute('aria-pressed', 'true');
+    const order = async () => queue.locator('[data-testid^="publication-item-"]').evaluateAll((cards) => cards.map((card) => card.getAttribute('data-testid')));
+    expect(await order()).toEqual(['publication-item-301', 'publication-item-303', 'publication-item-302']);
+
+    await queue.getByTestId('publication-filter-recheck-due').click();
+    await expect(queue.getByTestId('publication-filter-recheck-due')).toHaveAttribute('aria-pressed', 'true');
+    await expect(queue.getByTestId('publication-item-303')).toBeVisible();
+    await expect(queue.getByTestId('publication-item-301')).toHaveCount(0);
+    expect(await order()).toEqual(['publication-item-303', 'publication-item-302']);
+    const dueRequest = server.requests.find((request) => request.method === 'GET' && request.path.includes('/api/review/businesses?') && request.path.includes('recheckDue=true'));
+    expect(dueRequest, 'the due-first view is asked from the server, not sorted client-side').toBeTruthy();
+    const defaultRequests = server.requests.filter((request) => request.method === 'GET' && request.path.startsWith('/api/review/businesses?') && !request.path.includes('recheckDue'));
+    expect(defaultRequests.length).toBeGreaterThan(0);
+
+    await queue.getByTestId('publication-filter-all').click();
+    await expect(queue.getByTestId('publication-item-301')).toBeVisible();
+    await expect(queue.locator('[data-testid^="publication-item-"]')).toHaveCount(3);
+    expect(await order()).toEqual(['publication-item-301', 'publication-item-303', 'publication-item-302']);
   });
 
   // The English copy in businessReviewTranslations.en is never exercised by the

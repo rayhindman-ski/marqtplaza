@@ -126,7 +126,13 @@ export function BusinessReviewPanel({ section, enabled }: { section: 'authority'
   const fields = businessPublicationTranslations[language];
   const authority = useQueue('authority', (cursor) => getAuthorityQueue({ limit: PAGE_SIZE, cursor }), enabled && section === 'authority');
   const editorial = useQueue('editorial', (cursor) => getEditorialQueue({ limit: PAGE_SIZE, cursor }), enabled && section === 'editorial');
-  const publication = useQueue('publication', (cursor) => getPublicationQueue({ limit: PAGE_SIZE, cursor }), enabled && section === 'publication');
+  // The due-first view is a separate server ordering (and cursor space), so it gets its own query key.
+  const [publicationFilter, setPublicationFilter] = useState<'all' | 'recheckDue'>('all');
+  const publication = useQueue(
+    publicationFilter === 'recheckDue' ? 'publication-recheck-due' : 'publication',
+    (cursor) => getPublicationQueue({ limit: PAGE_SIZE, cursor, ...(publicationFilter === 'recheckDue' ? { recheckDue: true } : {}) }),
+    enabled && section === 'publication',
+  );
   const reviewClaim = useReviewBusinessClaim();
   const reviewRevision = useReviewBusinessRevision();
   const setPublication = useSetBusinessPublication();
@@ -277,7 +283,31 @@ export function BusinessReviewPanel({ section, enabled }: { section: 'authority'
       )}
 
       {section === 'publication' && (
-        publication.isLoading ? <QueueSkeleton /> : publicationItems.length === 0 ? <EmptyState title={copy.emptyPublication} /> : (
+        <div className="flex flex-wrap items-center gap-2" role="group" aria-label={copy.publicationFilterLabel} data-testid="publication-filter">
+          <span className="text-xs font-bold uppercase tracking-wide text-muted-foreground">{copy.publicationFilterLabel}</span>
+          <Button
+            variant={publicationFilter === 'all' ? 'secondary' : 'outline'}
+            size="sm"
+            aria-pressed={publicationFilter === 'all'}
+            onClick={() => setPublicationFilter('all')}
+            data-testid="publication-filter-all"
+          >
+            {copy.publicationFilterAll}
+          </Button>
+          <Button
+            variant={publicationFilter === 'recheckDue' ? 'secondary' : 'outline'}
+            size="sm"
+            aria-pressed={publicationFilter === 'recheckDue'}
+            onClick={() => setPublicationFilter('recheckDue')}
+            data-testid="publication-filter-recheck-due"
+          >
+            {copy.publicationFilterRecheckDue}
+          </Button>
+        </div>
+      )}
+
+      {section === 'publication' && (
+        publication.isLoading ? <QueueSkeleton /> : publicationItems.length === 0 ? <EmptyState title={publicationFilter === 'recheckDue' ? copy.emptyRecheckDue : copy.emptyPublication} /> : (
           <>
             {publicationItems.map((item) => (
               <Card key={item.profile.id} className="border-border/60 shadow-sm" data-testid={`publication-item-${item.profile.id}`}>
