@@ -8,6 +8,7 @@ import {
   type LifecycleOutboxRow,
 } from "@workspace/db";
 
+import { createEmailDeliveryLoader, createResendTransport } from "./lifecycleEmailProvider";
 import { logger } from "./logger";
 
 /**
@@ -181,7 +182,19 @@ export type OutboundLifecycleMessage = {
   recipientClerkUserId: string | null;
   payload: Record<string, unknown>;
   attempt: number;
+  /**
+   * Provider idempotency key. Stable across every automatic retry of this row
+   * so an ambiguous send (accepted remotely, response lost locally) is
+   * deduplicated by the provider; it only changes when support explicitly
+   * re-queues a failed message, which is the one action meant to send again.
+   */
+  dedupeKey: string;
 };
+
+/** The retry budget only grows through a support resend, so it doubles as the send generation. */
+export function lifecycleDedupeKey(row: Pick<LifecycleOutboxRow, "id" | "maxAttempts">): string {
+  return `lifecycle-${row.id}-g${row.maxAttempts}`;
+}
 
 export type DeliveryResult =
   | { kind: "accepted"; providerMessageId?: string }
@@ -215,13 +228,20 @@ export const logOnlyLoader: LifecycleDeliveryLoader = async (message) => {
   return { kind: "accepted", providerMessageId: `log-${message.id}-${message.attempt}` };
 };
 
+export type LoaderFactories = {
+  /** Builds the e-mail loader for a named provider; injected so tests never touch the network. */
+  email?: (config: { provider: "resend"; apiKey: string; senderAddress: string }) => LifecycleDeliveryLoader;
+};
+
 /**
- * Pick the delivery loader from release configuration. Only the log-only
- * provider exists today; a real provider is release gate Q5 and must be added
- * here explicitly, never inferred from an API key being present.
+ * Pick the delivery loader from release configuration. A provider is only
+ * ever selected by an explicit `LIFECYCLE_DELIVERY_PROVIDER` value (release
+ * gate Q5), never inferred from an API key being present. Missing provider
+ * configuration is a startup error, not a silent fallback.
  */
 export function resolveLifecycleDeliveryLoader(
   env: Record<string, string | undefined> = process.env,
+  factories: LoaderFactories = {},
 ): { loader: LifecycleDeliveryLoader; configured: boolean; name: string } {
   const provider = env.LIFECYCLE_DELIVERY_PROVIDER?.trim().toLowerCase();
   if (!provider) return { loader: notConfiguredLoader, configured: false, name: "not_configured" };
@@ -231,8 +251,25 @@ export function resolveLifecycleDeliveryLoader(
     }
     return { loader: logOnlyLoader, configured: true, name: "log" };
   }
+  if (provider === "resend") {
+    const apiKey = env.RESEND_API_KEY?.trim();
+    const senderAddress = env.LIFECYCLE_SENDER_ADDRESS?.trim();
+    if (!apiKey) throw new Error("LIFECYCLE_DELIVERY_PROVIDER=resend requires RESEND_API_KEY.");
+    if (!senderAddress) throw new Error("LIFECYCLE_DELIVERY_PROVIDER=resend requires LIFECYCLE_SENDER_ADDRESS (the approved sender identity).");
+    if (!env.LIFECYCLE_RECEIPT_WEBHOOK_SECRET?.trim()) {
+      throw new Error("LIFECYCLE_DELIVERY_PROVIDER=resend requires LIFECYCLE_RECEIPT_WEBHOOK_SECRET so delivery receipts can be verified.");
+    }
+    const build = factories.email ?? defaultEmailLoaderFactory;
+    return { loader: build({ provider: "resend", apiKey, senderAddress }), configured: true, name: "resend" };
+  }
   throw new Error(`Unknown LIFECYCLE_DELIVERY_PROVIDER "${provider}".`);
 }
+
+const defaultEmailLoaderFactory: NonNullable<LoaderFactories["email"]> = (config) =>
+  createEmailDeliveryLoader({
+    senderAddress: config.senderAddress,
+    transport: createResendTransport({ apiKey: config.apiKey }),
+  });
 
 export type BackoffPolicy = (attempt: number) => number;
 
@@ -348,6 +385,7 @@ export async function dispatchLifecycleOutbox(options: DispatchOptions = {}): Pr
         recipientClerkUserId: row.recipientUserId ? (clerkIdByRecipient.get(row.recipientUserId) ?? null) : null,
         payload: row.payload,
         attempt,
+        dedupeKey: lifecycleDedupeKey(row),
       });
     } catch (error) {
       // A throwing provider is a transient failure; the reason stays in the log, never in the row.

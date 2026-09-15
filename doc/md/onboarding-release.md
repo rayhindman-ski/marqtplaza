@@ -19,7 +19,7 @@ depend on any flag.
 | Consumer accounts | `ACCOUNTS_ENABLED` | `VITE_ACCOUNTS_ENABLED` | `/api/account/*`, `/account/voorkeuren`, `/account/privacy`, account summary on `/account` | Q1, Q6, Q7 |
 | Business intake | `BUSINESS_INTAKE_ENABLED` | `VITE_BUSINESS_INTAKE_ENABLED` | `GET /api/businesses/lookup`, `POST /api/businesses`, claim edit/submit/withdraw, `/bedrijf-zoeken`, `/bedrijf-nieuw` | Q2, Q3 |
 | Business publication | `BUSINESS_PUBLICATION_ENABLED` | `VITE_BUSINESS_PUBLICATION_ENABLED` | revision editor `/mijn-bedrijf/:id/profiel`, reviewer queues under `/api/review/*`, publication transitions, snapshot-only public projection | Q4 |
-| Lifecycle delivery | `LIFECYCLE_DELIVERY_PROVIDER` | — | real message sending from `lifecycle_outbox`; unset keeps rows `queued` and consumes no attempts; `log` is refused in production | Q5, Q6, Q8 |
+| Lifecycle delivery | `LIFECYCLE_DELIVERY_PROVIDER` | — | real message sending from `lifecycle_outbox`; unset keeps rows `queued` and consumes no attempts; `log` is refused in production; `resend` sends e-mail and additionally requires `RESEND_API_KEY`, `LIFECYCLE_SENDER_ADDRESS` (approved sender identity) and `LIFECYCLE_RECEIPT_WEBHOOK_SECRET` (startup fails without them) | Q5, Q6, Q8 |
 
 `GET /api/readiness` reports the three feature flags for the running process.
 
@@ -32,7 +32,16 @@ depend on any flag.
   `/api/review/lifecycle-messages` (failed messages, resend) — reviewer role
   required, flag `ACCOUNTS_ENABLED`.
 - Logs carry event codes and row IDs only (`lifecycle_dispatch.*`,
-  `lifecycle_message.*`); no e-mail addresses or message bodies are logged.
+  `lifecycle_message.*`, `lifecycle_receipt.*`); no e-mail addresses or
+  message bodies are logged.
+- E-mail delivery (`resend`): the recipient's verified primary address is
+  looked up at Clerk when a row is dispatched and is never stored. Point the
+  provider's `email.delivered` webhook at
+  `POST <base>/api/lifecycle/delivery-receipts/resend` using the signing
+  secret from `LIFECYCLE_RECEIPT_WEBHOOK_SECRET`; the endpoint answers 404
+  until that secret is set, 401 for a bad or stale signature, and is
+  idempotent (a replayed receipt reports `already_delivered`). Rows only move
+  from `accepted` to `delivered` through this endpoint.
 
 ## Rollback
 

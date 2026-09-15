@@ -3,6 +3,7 @@ import { clerkMiddleware } from "@clerk/express";
 import { publishableKeyFromHost } from "@clerk/shared/keys";
 import pinoHttp from "pino-http";
 import router from "./routes";
+import { createLifecycleReceiptsRouter } from "./routes/lifecycle-receipts";
 import { logger } from "./lib/logger";
 import {
   CLERK_PROXY_PATH,
@@ -32,6 +33,8 @@ app.use(
   }),
 );
 app.use(CLERK_PROXY_PATH, clerkProxyMiddleware());
+// Provider receipts verify the raw body, so they are mounted ahead of the JSON parser.
+app.use("/api", createLifecycleReceiptsRouter());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(

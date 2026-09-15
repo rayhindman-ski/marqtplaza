@@ -25,12 +25,26 @@ import {
   dispatchLifecycleOutbox,
   enqueueLifecycleMessage,
   recordDeliveryReceipt,
+  LIFECYCLE_EVENT_CODES,
+  requeueFailedLifecycleMessage,
+  resolveLifecycleDeliveryLoader,
   restrictPayload,
   UnsafePayloadError,
   type DeliveryResult,
   type OutboundLifecycleMessage,
 } from "../lib/lifecycleOutbox";
 import { applyClaimDecision } from "../lib/claimDecisions";
+import {
+  createEmailDeliveryLoader,
+  createResendTransport,
+  parseResendReceipt,
+  signWebhookPayload,
+  verifyWebhookSignature,
+  type OutboundEmail,
+  type RecipientResolution,
+} from "../lib/lifecycleEmailProvider";
+import { renderLifecycleEmail } from "../lib/lifecycleTemplates";
+import { createLifecycleReceiptsRouter } from "./lifecycle-receipts";
 import { businessClaimsTable } from "@workspace/db";
 import type { Identity } from "../lib/permissions";
 
@@ -58,7 +72,9 @@ function identityFromHeaders(req: express.Request): Identity | null {
   };
 }
 
+const RECEIPT_SECRET = "whsec_" + Buffer.from(`lifecycle-receipt-secret-${runId}`).toString("base64");
 const app = express();
+app.use("/api", createLifecycleReceiptsRouter({ env: { LIFECYCLE_RECEIPT_WEBHOOK_SECRET: RECEIPT_SECRET } }));
 app.use(express.json());
 app.use("/api", createAccountLifecycleRouter({ resolveIdentity: identityFromHeaders, flags: () => flags }));
 // Legacy account-owned routes share the same subject resolution; the listing
@@ -302,7 +318,7 @@ describe("lifecycle outbox", () => {
     );
     // The provider only ever sees internal references, never an address or evidence.
     for (const message of seen) {
-      assert.deepEqual(Object.keys(message).sort(), ["attempt", "eventCode", "id", "locale", "payload", "recipientClerkUserId", "recipientUserId", "template"]);
+      assert.deepEqual(Object.keys(message).sort(), ["attempt", "dedupeKey", "eventCode", "id", "locale", "payload", "recipientClerkUserId", "recipientUserId", "template"]);
     }
 
     // Support can re-queue a failed message; a second resend of a queued message is refused.
@@ -742,5 +758,260 @@ describe("lifecycle outbox", () => {
     assert.equal(profile!.publicationStatus, "archived");
     const messages = await outboxRows(users.coOwner);
     assert.ok(messages.some((row) => row.eventCode === "business.closed"));
+  });
+
+  // --- e-mail delivery -----------------------------------------------------
+  const FORBIDDEN = ["reviewer", "token", "@", "http://", "https://"];
+
+  it("renders NL and EN copy for every event from the allow-listed payload only", () => {
+    const payload = { businessName: `Bakkerij ${runId}`, requestId: 42, claimId: 7, status: "approved", blockerCode: "sole_owner" };
+    for (const eventCode of LIFECYCLE_EVENT_CODES) {
+      const nl = renderLifecycleEmail(eventCode, "nl", payload);
+      const en = renderLifecycleEmail(eventCode, "en-GB", payload);
+      assert.equal(nl.locale, "nl");
+      assert.equal(en.locale, "en");
+      assert.notEqual(nl.subject, en.subject, eventCode);
+      assert.ok(nl.subject.length > 0 && nl.text.length > 0, eventCode);
+      for (const rendered of [nl, en]) {
+        for (const word of FORBIDDEN) {
+          assert.ok(!rendered.subject.toLowerCase().includes(word), `${eventCode} subject contains ${word}`);
+          assert.ok(!rendered.text.toLowerCase().includes(word), `${eventCode} body contains ${word}`);
+        }
+      }
+      if (eventCode.startsWith("account.")) {
+        assert.ok(nl.text.includes("42") && en.text.includes("42"), eventCode);
+      } else {
+        assert.ok(nl.subject.includes(payload.businessName) && en.subject.includes(payload.businessName), eventCode);
+      }
+    }
+    // Unknown locales fall back to Dutch; injected control characters never reach a header.
+    const fallback = renderLifecycleEmail("business.published", "de", { businessName: "Evil\r\nBcc: x" });
+    assert.equal(fallback.locale, "nl");
+    assert.ok(!fallback.subject.includes("\n"));
+    assert.throws(() => renderLifecycleEmail("nope.event", "nl", {}), /No lifecycle template/);
+  });
+
+  it("resolves the address at dispatch time and never stores it in the outbox", async () => {
+    const sent: OutboundEmail[] = [];
+    const lookups: string[] = [];
+    const address = `${runId}@example.test`;
+    const deliver = createEmailDeliveryLoader({
+      senderAddress: "noreply@buurtplaza.nl",
+      resolveRecipient: async (clerkUserId) => {
+        lookups.push(clerkUserId);
+        return { kind: "found", recipient: { email: address } };
+      },
+      transport: async (email) => {
+        sent.push(email);
+        return { kind: "accepted", providerMessageId: `${keyPrefix}:email:${email.idempotencyKey}` };
+      },
+    });
+    const { id } = await db.transaction((tx) =>
+      enqueueLifecycleMessage(tx, {
+        eventCode: "claim.approved",
+        recipientClerkUserId: users.outbox,
+        idempotencyKey: `${keyPrefix}:email-dispatch`,
+        payload: { businessName: `Slagerij ${runId}` },
+        locale: "en",
+      }),
+    );
+    await dispatchLifecycleOutbox({
+      deliver: async (message) => (message.id === id ? deliver(message) : { kind: "not_configured" }),
+      limit: 100,
+    });
+    assert.deepEqual(lookups, [users.outbox]);
+    assert.equal(sent.length, 1);
+    assert.equal(sent[0]!.to, address);
+    assert.equal(sent[0]!.from, "noreply@buurtplaza.nl");
+    assert.equal(sent[0]!.subject, `Your claim for Slagerij ${runId} has been approved`);
+    const [row] = await db.select().from(lifecycleOutboxTable).where(eq(lifecycleOutboxTable.id, id));
+    assert.equal(row!.status, "accepted");
+    assert.equal(row!.providerMessageId, `${keyPrefix}:email:lifecycle-${id}-g${DEFAULT_MAX_ATTEMPTS}`);
+    assert.ok(!JSON.stringify(row).includes(address), "outbox row must not contain the address");
+    const attempts = await db.select().from(lifecycleDeliveryAttemptsTable).where(eq(lifecycleDeliveryAttemptsTable.outboxId, id));
+    assert.ok(!JSON.stringify(attempts).includes(address));
+  });
+
+  it("keeps the provider idempotency key stable across automatic retries so an ambiguous send is never duplicated", async () => {
+    // Attempt 1: the provider accepts remotely, but the response is lost locally (transient network failure).
+    // Attempt 2 must present the same idempotency key so the provider can deduplicate.
+    let clock = new Date("2026-09-14T14:00:00.000Z");
+    const now = () => clock;
+    const keys: string[] = [];
+    let call = 0;
+    const deliver = createEmailDeliveryLoader({
+      senderAddress: "noreply@buurtplaza.nl",
+      resolveRecipient: async () => ({ kind: "found", recipient: { email: `${runId}-retry@example.test` } }),
+      transport: async (email) => {
+        keys.push(email.idempotencyKey);
+        call += 1;
+        return call === 1
+          ? { kind: "transient_failure", errorCode: "provider_unreachable" }
+          : { kind: "accepted", providerMessageId: `${keyPrefix}:email:stable` };
+      },
+    });
+    const { id } = await db.transaction((tx) =>
+      enqueueLifecycleMessage(tx, {
+        eventCode: "account.deletion_received",
+        recipientClerkUserId: users.outbox,
+        idempotencyKey: `${keyPrefix}:email-stable-key`,
+        payload: { requestId: 9 },
+      }),
+    );
+    const only = async (message: OutboundLifecycleMessage): Promise<DeliveryResult> =>
+      message.id === id ? deliver(message) : { kind: "not_configured" };
+    await dispatchLifecycleOutbox({ deliver: only, now, limit: 100 });
+    clock = new Date(clock.getTime() + 2 * 60_000);
+    await dispatchLifecycleOutbox({ deliver: only, now, limit: 100 });
+    assert.equal(keys.length, 2);
+    assert.equal(keys[0], keys[1]);
+    assert.equal(keys[0], `lifecycle-${id}-g${DEFAULT_MAX_ATTEMPTS}`);
+    let [row] = await db.select().from(lifecycleOutboxTable).where(eq(lifecycleOutboxTable.id, id));
+    assert.equal(row!.status, "accepted");
+    assert.equal(row!.attempts, 2);
+
+    // Only an explicit support resend of a failed row rotates the key, because that action is meant to send again.
+    const { id: failedId } = await db.transaction((tx) =>
+      enqueueLifecycleMessage(tx, {
+        eventCode: "account.deletion_received",
+        recipientClerkUserId: users.outbox,
+        idempotencyKey: `${keyPrefix}:email-resend-key`,
+        payload: { requestId: 10 },
+        maxAttempts: 1,
+      }),
+    );
+    const failedKeys: string[] = [];
+    const failing = async (message: OutboundLifecycleMessage): Promise<DeliveryResult> => {
+      if (message.id !== failedId) return { kind: "not_configured" };
+      failedKeys.push(message.dedupeKey);
+      return { kind: "permanent_failure", errorCode: "provider_http_422" };
+    };
+    await dispatchLifecycleOutbox({ deliver: failing, now, limit: 100 });
+    [row] = await db.select().from(lifecycleOutboxTable).where(eq(lifecycleOutboxTable.id, failedId));
+    assert.equal(row!.status, "failed");
+    assert.equal(await requeueFailedLifecycleMessage(failedId), "queued");
+    await dispatchLifecycleOutbox({ deliver: failing, now, limit: 100 });
+    assert.equal(failedKeys.length, 2);
+    assert.notEqual(failedKeys[0], failedKeys[1]);
+    assert.equal(failedKeys[0], `lifecycle-${failedId}-g1`);
+    assert.equal(failedKeys[1], `lifecycle-${failedId}-g${1 + DEFAULT_MAX_ATTEMPTS}`);
+  });
+
+  it("maps recipient and provider outcomes onto the delivery contract", async () => {
+    const message: OutboundLifecycleMessage = {
+      id: 1, eventCode: "claim.approved", template: "claim.approved", locale: "nl",
+      recipientUserId: 1, recipientClerkUserId: "user_x", payload: {}, attempt: 1, dedupeKey: "lifecycle-1-g5",
+    };
+    const withRecipient = (resolution: RecipientResolution, transportResult: DeliveryResult = { kind: "accepted" }) =>
+      createEmailDeliveryLoader({
+        senderAddress: "noreply@buurtplaza.nl",
+        resolveRecipient: async () => resolution,
+        transport: async () => transportResult,
+      })(message);
+    assert.deepEqual(await withRecipient({ kind: "not_found" }), { kind: "permanent_failure", errorCode: "recipient_gone" });
+    assert.deepEqual(await withRecipient({ kind: "no_address" }), { kind: "permanent_failure", errorCode: "recipient_no_address" });
+    assert.deepEqual(await withRecipient({ kind: "unavailable" }), { kind: "transient_failure", errorCode: "identity_provider_unavailable" });
+    assert.deepEqual(
+      await withRecipient({ kind: "found", recipient: { email: "a@example.test" } }, { kind: "transient_failure", errorCode: "provider_http_503" }),
+      { kind: "transient_failure", errorCode: "provider_http_503" },
+    );
+    assert.deepEqual(
+      await createEmailDeliveryLoader({ senderAddress: "x@y", resolveRecipient: async () => ({ kind: "found", recipient: { email: "a@b" } }), transport: async () => ({ kind: "accepted" }) })({ ...message, template: "unknown.template" }),
+      { kind: "permanent_failure", errorCode: "template_unknown" },
+    );
+
+    // Resend transport: 2xx → accepted with id; 429/5xx → transient; other 4xx → permanent; network → transient.
+    const calls: { url: string; init: RequestInit }[] = [];
+    const respond = (status: number, body: unknown) => async (url: string, init: RequestInit) => {
+      calls.push({ url, init });
+      return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
+    };
+    const email: OutboundEmail = { to: "a@example.test", from: "noreply@buurtplaza.nl", subject: "S", text: "T", idempotencyKey: "lifecycle-1-1" };
+    assert.deepEqual(await createResendTransport({ apiKey: "re_test", fetch: respond(200, { id: "msg_1" }) })(email), { kind: "accepted", providerMessageId: "msg_1" });
+    assert.equal(calls[0]!.url, "https://api.resend.com/emails");
+    const headers = calls[0]!.init.headers as Record<string, string>;
+    assert.equal(headers["idempotency-key"], "lifecycle-1-1");
+    assert.deepEqual(JSON.parse(calls[0]!.init.body as string), { from: email.from, to: [email.to], subject: "S", text: "T" });
+    assert.deepEqual(await createResendTransport({ apiKey: "re_test", fetch: respond(429, {}) })(email), { kind: "transient_failure", errorCode: "provider_http_429" });
+    assert.deepEqual(await createResendTransport({ apiKey: "re_test", fetch: respond(500, {}) })(email), { kind: "transient_failure", errorCode: "provider_http_500" });
+    assert.deepEqual(await createResendTransport({ apiKey: "re_test", fetch: respond(422, {}) })(email), { kind: "permanent_failure", errorCode: "provider_http_422" });
+    assert.deepEqual(
+      await createResendTransport({ apiKey: "re_test", fetch: async () => { throw new Error("ECONNRESET"); } })(email),
+      { kind: "transient_failure", errorCode: "provider_unreachable" },
+    );
+  });
+
+  it("selects a real provider only by explicit configuration and refuses incomplete configuration", () => {
+    assert.equal(resolveLifecycleDeliveryLoader({}).configured, false);
+    assert.equal(resolveLifecycleDeliveryLoader({ RESEND_API_KEY: "re_test" }).configured, false);
+    assert.throws(() => resolveLifecycleDeliveryLoader({ LIFECYCLE_DELIVERY_PROVIDER: "resend" }), /RESEND_API_KEY/);
+    assert.throws(() => resolveLifecycleDeliveryLoader({ LIFECYCLE_DELIVERY_PROVIDER: "resend", RESEND_API_KEY: "re_test" }), /LIFECYCLE_SENDER_ADDRESS/);
+    assert.throws(
+      () => resolveLifecycleDeliveryLoader({ LIFECYCLE_DELIVERY_PROVIDER: "resend", RESEND_API_KEY: "re_test", LIFECYCLE_SENDER_ADDRESS: "noreply@buurtplaza.nl" }),
+      /LIFECYCLE_RECEIPT_WEBHOOK_SECRET/,
+    );
+    const fake = async (): Promise<DeliveryResult> => ({ kind: "accepted" });
+    const resolved = resolveLifecycleDeliveryLoader(
+      { LIFECYCLE_DELIVERY_PROVIDER: "resend", RESEND_API_KEY: "re_test", LIFECYCLE_SENDER_ADDRESS: "noreply@buurtplaza.nl", LIFECYCLE_RECEIPT_WEBHOOK_SECRET: RECEIPT_SECRET, NODE_ENV: "production" },
+      { email: (config) => { assert.equal(config.senderAddress, "noreply@buurtplaza.nl"); return fake; } },
+    );
+    assert.equal(resolved.name, "resend");
+    assert.equal(resolved.loader, fake);
+  });
+
+  it("marks messages delivered from a signed receipt exactly once and rejects unsigned or stale callbacks", async () => {
+    const { id } = await db.transaction((tx) =>
+      enqueueLifecycleMessage(tx, { eventCode: "revision.approved", recipientClerkUserId: users.outbox, idempotencyKey: `${keyPrefix}:webhook` }),
+    );
+    const providerMessageId = `${keyPrefix}:provider:webhook`;
+    await dispatchLifecycleOutbox({
+      deliver: async (message) => (message.id === id ? { kind: "accepted", providerMessageId } : { kind: "not_configured" }),
+      limit: 100,
+    });
+    const body = JSON.stringify({ type: "email.delivered", created_at: "2026-09-14T12:00:00.000Z", data: { email_id: providerMessageId } });
+    const post = async (payload: string, headers: Record<string, string | undefined>) => {
+      const cleaned = Object.fromEntries(Object.entries(headers).filter(([, v]) => v !== undefined)) as Record<string, string>;
+      const result = await fetch(`${baseUrl}/api/lifecycle/delivery-receipts/resend`, { method: "POST", headers: { "content-type": "application/json", ...cleaned }, body: payload });
+      return { status: result.status, body: await result.json() };
+    };
+    const nowSeconds = Math.floor(Date.now() / 1000);
+    const sign = (payload: string, id = `msg_${runId}`, ts = nowSeconds) => {
+      const h = signWebhookPayload(RECEIPT_SECRET, id, ts, payload);
+      return { "svix-id": h.id, "svix-timestamp": h.timestamp, "svix-signature": h.signature };
+    };
+
+    assert.equal((await post(body, {})).status, 401);
+    assert.equal((await post(body, sign(body, "other", nowSeconds - 3600))).status, 401);
+    const tampered = sign(body);
+    assert.equal((await post(body.replace(providerMessageId, "msg_other"), tampered)).status, 401);
+    assert.equal((await post(body, { ...sign(body), "svix-signature": "v1,AAAA" })).status, 401);
+
+    const first = await post(body, sign(body));
+    assert.deepEqual(first, { status: 200, body: { outcome: "delivered" } });
+    const [row] = await db.select().from(lifecycleOutboxTable).where(eq(lifecycleOutboxTable.id, id));
+    assert.equal(row!.status, "delivered");
+    assert.equal(row!.deliveredAt?.toISOString(), "2026-09-14T12:00:00.000Z");
+
+    const replay = await post(body, sign(body));
+    assert.deepEqual(replay, { status: 200, body: { outcome: "already_delivered" } });
+    const unknown = JSON.stringify({ type: "email.delivered", data: { email_id: `${keyPrefix}:provider:none` } });
+    assert.deepEqual(await post(unknown, sign(unknown)), { status: 200, body: { outcome: "unknown" } });
+    const bounced = JSON.stringify({ type: "email.bounced", data: { email_id: providerMessageId } });
+    assert.deepEqual(await post(bounced, sign(bounced)), { status: 200, body: { outcome: "ignored", eventType: "email.bounced" } });
+    assert.equal((await post("not json", sign("not json"))).status, 400);
+    assert.equal(parseResendReceipt("{}").kind, "ignored");
+    assert.equal(verifyWebhookSignature("whsec_" + Buffer.from("x").toString("base64"), { id: "a", timestamp: "b", signature: "v1,x" }, "").ok, false);
+
+    // Without a configured secret the endpoint does not exist.
+    const dark = express();
+    dark.use("/api", createLifecycleReceiptsRouter({ env: {} }));
+    const darkServer = dark.listen(0);
+    try {
+      const port = (darkServer.address() as AddressInfo).port;
+      const result = await fetch(`http://127.0.0.1:${port}/api/lifecycle/delivery-receipts/resend`, { method: "POST", headers: sign(body), body });
+      assert.equal(result.status, 404);
+    } finally {
+      darkServer.close();
+    }
   });
 });

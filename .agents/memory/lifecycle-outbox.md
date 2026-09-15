@@ -14,3 +14,7 @@ description: Durable decisions for application-owned notifications and account d
 - Suspended/deleted application accounts must be refused on every authenticated account-owned route (saved events, business memberships, claims), not only under `/account`.
   **Why:** the Clerk session stays valid after a support-completed deletion and retained data would otherwise remain reachable.
 - Messages whose recipient account row no longer exists are cancelled (`recipient_gone`) rather than dispatched.
+- Real delivery is chosen only by an explicit provider name plus complete config (key, approved sender, receipt secret); startup must fail on partial config rather than fall back.
+  **Why:** gate Q5 requires an operator-approved sender identity; an API key lying around must never start sending.
+- The provider idempotency key must stay identical across automatic retries of one row and change only on an explicit support resend.
+  **Why:** a send can be accepted remotely while the response is lost locally; a per-attempt key would make the retry a duplicate e-mail for sensitive claim/deletion notices.
