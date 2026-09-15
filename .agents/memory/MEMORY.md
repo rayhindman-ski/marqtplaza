@@ -35,3 +35,4 @@
 - [Clerk live verification](clerk-live-verification.md) — real sign-up needs a testing token plus a blocked Turnstile script; sign-in tokens are the only expirable links; stale sign-up verify steps render blank unless the app redirects.
 - [Playwright route globs](playwright-route-globs.md) — trailing `**` globs miss nested `/:id/action` paths here; use regex routes and an editor test-auth opt-in for reviewer screens.
 - [Boolean query params](boolean-query-params.md) — Orval coerce.boolean() turns "false" into true; parse flags from the raw query. Route suites need a fresh disposable DB.
+- [Clerk offline stub](clerk-offline-stub.md) — real Clerk screens in the default e2e suite: stub environment (POST), client, dev_browser; only CDN bundles need network.
