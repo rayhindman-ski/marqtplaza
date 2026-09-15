@@ -910,26 +910,30 @@ function SearchState({
   savedCount: number;
   onViewSaved: () => void;
 }) {
-  const popularNeighborhoods: Record<string, string[]> = {
-    dhg: [
-      'Centrum',
-      'Scheveningen',
-      'Zeeheldenkwartier',
-      'Duinoord',
-      'Statenkwartier',
-      'Benoordenhout',
-      'Bezuidenhout',
-      'Regentessekwartier',
-    ],
-  };
+  const majorDutchCities = [
+    'Amsterdam',
+    'Rotterdam',
+    'Den Haag',
+    'Utrecht',
+    'Eindhoven',
+    'Groningen',
+    'Tilburg',
+    'Almere',
+    'Breda',
+    'Nijmegen',
+    'Apeldoorn',
+    'Haarlem',
+    'Arnhem',
+    'Enschede',
+    'Amersfoort',
+  ];
   const [query, setQuery] = useState('');
   const [error, setError] = useState('');
-  const [selectedCityId, setSelectedCityId] = useState<string | null>(null);
   const [selectedMapNeighborhood, setSelectedMapNeighborhood] = useState<string | null>(null);
   const [hoveredMapNeighborhood, setHoveredMapNeighborhood] = useState<string | null>(null);
   const [includeExternalSources, setIncludeExternalSources] = useState(readIncludeExternalSources);
   const t = translations[language];
-  const mapLocation = LOCATIONS.find((location) => location.id === selectedCityId) ?? LOCATIONS[0];
+  const mapLocation = LOCATIONS.find((location) => location.id === 'dhg') ?? LOCATIONS[0];
 
   useEffect(() => {
     if (!mapLocation.neighborhoods.includes(selectedMapNeighborhood ?? '')) {
@@ -999,36 +1003,17 @@ function SearchState({
         </button>
       )}
 
-      <div className="z-10 w-full max-w-6xl text-center space-y-10 animate-in fade-in slide-in-from-bottom-8 duration-700 ease-out">
-        <div className="space-y-5">
+      <div className="z-10 w-full max-w-7xl space-y-6 text-center animate-in fade-in slide-in-from-bottom-8 duration-700 ease-out">
+        <div className="space-y-2">
           <img
             src="/marqtplaza-logo.png"
             alt="marqtplaza.com — The Digital Village Square"
-            className="h-[100px] md:h-[140px] w-auto mx-auto"
+            className="mx-auto h-[78px] w-auto md:h-[96px]"
           />
-          <p className="text-xl text-muted-foreground font-medium max-w-md mx-auto leading-relaxed">
+          <p className="mx-auto max-w-lg text-base font-medium leading-relaxed text-muted-foreground md:text-lg">
             {t.searchDescription}
           </p>
         </div>
-
-        <label className="mx-auto flex w-full max-w-lg cursor-pointer items-start gap-3 rounded-2xl border border-border/70 bg-card/90 px-4 py-3 text-left shadow-sm backdrop-blur-sm transition-colors hover:border-primary/40">
-          <input
-            type="checkbox"
-            checked={includeExternalSources}
-            onChange={(event) => setIncludeExternalSources(event.target.checked)}
-            className="mt-0.5 h-4 w-4 shrink-0 accent-primary"
-          />
-          <span>
-            <span className="block text-sm font-extrabold text-foreground">
-              {language === 'nl' ? 'Externe bronnen meenemen' : 'Include external sources'}
-            </span>
-            <span className="mt-0.5 block text-xs leading-relaxed text-muted-foreground">
-              {language === 'nl'
-                ? 'Uitgeschakeld gebruikt alleen eerder opgeslagen resultaten. Deze keuze wordt onthouden.'
-                : 'When off, searches use only previously stored results. This choice is remembered.'}
-            </span>
-          </span>
-        </label>
 
         <form onSubmit={handleSubmit} className="relative group w-full max-w-lg mx-auto">
           <div className={cn(
@@ -1061,9 +1046,21 @@ function SearchState({
           )}
         </form>
 
-        <div className="w-full pt-6">
-          <div className="grid gap-6 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1.35fr)] lg:items-start">
-            <div className="relative h-[25rem] overflow-hidden rounded-3xl border border-border/70 bg-card/80 text-left shadow-xl backdrop-blur-sm sm:h-[30rem]">
+        <label className="mx-auto flex w-fit max-w-full cursor-pointer items-center gap-2 rounded-full border border-border/70 bg-card/85 px-3 py-1.5 text-left shadow-sm backdrop-blur-sm transition-colors hover:border-primary/40">
+          <input
+            type="checkbox"
+            checked={includeExternalSources}
+            onChange={(event) => setIncludeExternalSources(event.target.checked)}
+            className="h-3.5 w-3.5 shrink-0 accent-primary"
+          />
+          <span className="text-xs font-bold text-foreground">
+            {language === 'nl' ? 'Ook online zoeken' : 'Also search online'}
+          </span>
+        </label>
+
+        <div className="w-full pt-2">
+          <div className="grid gap-5 lg:grid-cols-[minmax(0,2.4fr)_minmax(15rem,0.8fr)] lg:items-stretch">
+            <div className="relative h-[31rem] overflow-hidden rounded-3xl border border-border/70 bg-card/80 text-left shadow-xl backdrop-blur-sm sm:h-[38rem]">
               <GoogleMapView
                 language={language}
                 locationId={mapLocation.id}
@@ -1085,8 +1082,8 @@ function SearchState({
                   {getLocationName(mapLocation, language)}
                   {' · '}
                   {language === 'nl'
-                    ? 'Elke buurt is omlijnd; de namen staan ernaast.'
-                    : 'Each neighborhood is outlined; names are listed alongside.'}
+                    ? 'Selecteer een buurt direct op de kaart.'
+                    : 'Select a neighborhood directly on the map.'}
                 </p>
               </div>
               {selectedMapNeighborhood && (
@@ -1108,83 +1105,37 @@ function SearchState({
               )}
             </div>
 
-            <div>
-              <p className="mb-4 text-xs font-bold uppercase tracking-widest text-muted-foreground">{t.popularDestinations}</p>
-              <div className="flex flex-wrap justify-center gap-2.5">
-                {LOCATIONS.map(loc => {
-                  const neighborhoodOptions = selectedCityId === loc.id
-                    ? loc.neighborhoods
-                    : (popularNeighborhoods[loc.id] ?? loc.neighborhoods.slice(0, 8));
-
+            <aside className="rounded-3xl border border-border/70 bg-card/75 p-4 text-left shadow-lg backdrop-blur-sm sm:p-5">
+              <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
+                {language === 'nl' ? 'Grote steden in Nederland' : 'Major cities in the Netherlands'}
+              </p>
+              <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+                {language === 'nl'
+                  ? 'Den Haag is nu beschikbaar. Meer steden volgen.'
+                  : 'The Hague is available now. More cities are coming.'}
+              </p>
+              <div className="mt-4 grid grid-cols-2 gap-2 lg:grid-cols-1 xl:grid-cols-2">
+                {majorDutchCities.map((city) => {
+                  const isTheHague = city === 'Den Haag';
+                  const label = language === 'en' && isTheHague ? 'The Hague' : city;
                   return (
-                  <div
-                    key={loc.id}
-                    className={cn(
-                      "flex w-full max-w-5xl flex-col items-center gap-2 rounded-2xl p-1.5 transition-colors",
-                      selectedCityId === loc.id && "bg-primary/5 p-3 ring-1 ring-primary/20",
-                    )}
-                  >
-                    <button
-                      type="button"
-                      aria-pressed={selectedCityId === loc.id}
-                      onClick={() => {
-                        setSelectedCityId(loc.id);
-                        setSelectedMapNeighborhood(null);
-                        setHoveredMapNeighborhood(null);
-                      }}
+                    <div
+                      key={city}
+                      aria-current={isTheHague ? 'location' : undefined}
                       className={cn(
-                        "px-4 py-2 backdrop-blur-sm border rounded-full text-sm font-semibold transition-all shadow-sm hover:shadow-md",
-                        selectedCityId === loc.id
-                          ? "bg-foreground text-background border-foreground"
-                          : "bg-card/80 border-border/60 text-foreground hover:border-primary/50 hover:text-primary",
+                        'flex min-h-9 items-center rounded-xl border px-3 py-2 text-xs font-semibold',
+                        isTheHague
+                          ? 'border-primary bg-primary text-primary-foreground shadow-sm'
+                          : 'border-border/60 bg-background/60 text-muted-foreground',
                       )}
                     >
-                      {getLocationName(loc, language)}
-                    </button>
-                    <div className="w-full text-left">
-                      <p className="mb-2 text-center text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
-                        {selectedCityId === loc.id
-                          ? t.chooseNeighborhood(getLocationName(loc, language))
-                          : t.popularNeighborhoods}
-                      </p>
-                      <div className="mb-3 flex flex-wrap justify-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => onSearch(loc.id, undefined, DEFAULT_START_SECTION)}
-                          className="rounded-full border border-primary/40 bg-primary/10 px-3 py-1.5 text-[11px] font-extrabold text-primary transition-colors hover:bg-primary/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                        >
-                          {t.selectAllNeighborhoods}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setSelectedCityId(null)}
-                          className="rounded-full border border-border/70 bg-card/80 px-3 py-1.5 text-[11px] font-extrabold text-muted-foreground transition-colors hover:border-primary/40 hover:bg-primary/5 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                        >
-                          {t.clearNeighborhoodSelection}
-                        </button>
-                      </div>
-                      <div className="grid w-full grid-cols-2 gap-2 animate-in fade-in slide-in-from-top-1 duration-300 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-2 xl:grid-cols-3">
-                        {neighborhoodOptions.map((neighborhood) => (
-                          <button
-                            key={neighborhood}
-                            type="button"
-                            onClick={() => onSearch(loc.id, neighborhood, DEFAULT_START_SECTION)}
-                            onMouseEnter={() => selectedCityId === loc.id && setHoveredMapNeighborhood(neighborhood)}
-                            onMouseLeave={() => setHoveredMapNeighborhood(null)}
-                            onFocus={() => selectedCityId === loc.id && setHoveredMapNeighborhood(neighborhood)}
-                            onBlur={() => setHoveredMapNeighborhood(null)}
-                            className="min-h-10 rounded-xl border border-border/50 bg-card/80 px-3 py-2 text-left text-xs font-semibold text-muted-foreground transition-all hover:border-primary/50 hover:bg-primary/5 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                          >
-                            {neighborhood}
-                          </button>
-                        ))}
-                      </div>
+                      <MapPinned className={cn('mr-2 h-3.5 w-3.5 shrink-0', !isTheHague && 'opacity-40')} aria-hidden="true" />
+                      {label}
                     </div>
-                  </div>
                   );
                 })}
               </div>
-            </div>
+            </aside>
           </div>
         </div>
       </div>
