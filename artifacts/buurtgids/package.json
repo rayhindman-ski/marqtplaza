@@ -7,7 +7,7 @@
     "dev": "vite --config vite.config.ts --host 0.0.0.0",
     "build": "vite build --config vite.config.ts",
     "serve": "vite preview --config vite.config.ts --host 0.0.0.0",
-    "test": "tsx --test src/lib/listingPresentation.test.ts src/lib/returnPath.test.ts src/lib/claimPresentation.test.ts src/lib/i18n.test.ts && PLAYWRIGHT_CHROMIUM_EXECUTABLE=$(command -v chromium) playwright test --config playwright.config.ts",
+    "test": "tsx --test src/lib/listingPresentation.test.ts src/lib/returnPath.test.ts src/lib/claimPresentation.test.ts src/lib/i18n.test.ts src/lib/clerkLocalization.test.ts && PLAYWRIGHT_CHROMIUM_EXECUTABLE=$(command -v chromium) playwright test --config playwright.config.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "devDependencies": {
