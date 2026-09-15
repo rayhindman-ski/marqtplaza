@@ -9,6 +9,8 @@ import {
   matchesDiscoveryQuickFilters,
   routeUrl,
 } from './listingPresentation';
+import { formatNewsPublishedAt } from './newsDate';
+import { enUS, nl } from 'date-fns/locale';
 
 const marker: Marker = {
   id: 'event-1',
@@ -29,6 +31,12 @@ const marker: Marker = {
 };
 
 describe('listing presentation', () => {
+  it('labels missing or malformed news dates honestly in both languages', () => {
+    assert.equal(formatNewsPublishedAt(undefined, 'en', 'd MMM yyyy', enUS), 'Date unknown');
+    assert.equal(formatNewsPublishedAt('not-a-date', 'nl', 'd MMM yyyy', nl), 'Datum onbekend');
+    assert.equal(formatNewsPublishedAt('2026-09-15T10:00:00.000Z', 'en', 'd MMM yyyy', enUS), '15 Sep 2026');
+  });
+
   it('formats deterministic relative event timing in both languages', () => {
     const now = new Date('2026-08-27T12:00:00Z');
     assert.equal(formatEventTiming(marker.startsAt, 'en', now), 'Starts in 2 hours');

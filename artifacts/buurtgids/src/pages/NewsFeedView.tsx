@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useLocation, Link } from 'wouter';
 import { useGetNews, type NewsSubcategory } from '@workspace/api-client-react';
-import { format, parseISO } from 'date-fns';
+import { format } from 'date-fns';
 import { enUS, nl } from 'date-fns/locale';
 import {
   ArrowLeft, Clock, Newspaper, MapPin, ShieldAlert, Briefcase, Landmark,
@@ -15,6 +15,7 @@ import {
   newsTranslations,
   type Language,
 } from '../lib/i18n';
+import { formatNewsPublishedAt } from '../lib/newsDate';
 
 const SUBCATEGORY_ICONS: Record<NewsSubcategory, React.ElementType> = {
   city: MapPin,
@@ -275,9 +276,7 @@ export default function NewsFeedView() {
                     <div className="flex items-center gap-2 text-xs md:text-sm font-semibold text-[#072C1E]/50">
                       <Clock className="w-4 h-4" />
                       <time dateTime={articles[0].publishedAt || ''}>
-                        {articles[0].publishedAt
-                          ? format(parseISO(articles[0].publishedAt), 'd MMM yyyy', { locale: dateLocale })
-                          : copy.recent}
+                        {formatNewsPublishedAt(articles[0].publishedAt, language, 'd MMM yyyy', dateLocale)}
                       </time>
                     </div>
                     <span className="text-xs md:text-sm font-bold text-[#072C1E] flex items-center gap-2 uppercase tracking-wider group-hover:text-[#F36C21] transition-colors">
@@ -322,9 +321,7 @@ export default function NewsFeedView() {
                       <div className="flex items-center gap-2 text-xs font-semibold text-[#072C1E]/40">
                         <Clock className="w-3.5 h-3.5" />
                         <time dateTime={article.publishedAt || ''}>
-                          {article.publishedAt
-                            ? format(parseISO(article.publishedAt), 'd MMM yyyy', { locale: dateLocale })
-                            : copy.recent}
+                          {formatNewsPublishedAt(article.publishedAt, language, 'd MMM yyyy', dateLocale)}
                         </time>
                       </div>
                       <span className="text-xs font-bold text-[#F36C21] flex items-center gap-1 uppercase tracking-wider group-hover:translate-x-1 transition-transform">

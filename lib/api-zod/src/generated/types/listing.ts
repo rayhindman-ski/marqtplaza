@@ -8,6 +8,7 @@
 import type { BusinessCategory } from './businessCategory';
 import type { ListingActivityKind } from './listingActivityKind';
 import type { ListingCategory } from './listingCategory';
+import type { ListingFoodType } from './listingFoodType';
 import type { ListingMealType } from './listingMealType';
 import type { ListingPriceType } from './listingPriceType';
 import type { ListingSource } from './listingSource';
@@ -41,6 +42,8 @@ export interface Listing {
   /** Link to the website where this activity was listed. */
   sourceUrl?: string;
   businessCategory?: BusinessCategory;
+  /** Source-derived Food & Drink venue type. Absent for non-food listings. */
+  foodType?: ListingFoodType;
   source?: ListingSource;
   /** Human-readable publisher or provider that listed this item, distinct from its destination URL. */
   sourceName?: string;

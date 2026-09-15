@@ -144,6 +144,7 @@ export * from './lifecycleMessageStatus';
 export * from './listing';
 export * from './listingActivityKind';
 export * from './listingCategory';
+export * from './listingFoodType';
 export * from './listingMealType';
 export * from './listingPriceType';
 export * from './listingSource';

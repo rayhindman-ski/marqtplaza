@@ -6,6 +6,8 @@ import {
   fetchOpenStreetMapBusinesses,
   filterEventsByNeighborhoods,
   filterListingsByBusinessCategories,
+  foodTypeForGooglePrimaryType,
+  foodTypeForOsmTags,
   normalizeNeighborhoods,
   normalizedListingsKey,
   parseAnonymousId,
@@ -16,6 +18,28 @@ import {
 } from "./listings";
 
 describe("listings query persistence inputs", () => {
+  it("classifies Google Food & Drink types without guessing cuisine", () => {
+    assert.equal(foodTypeForGooglePrimaryType("italian_restaurant"), "restaurant");
+    assert.equal(foodTypeForGooglePrimaryType("coffee_shop"), "cafe");
+    assert.equal(foodTypeForGooglePrimaryType("wine_bar"), "bar");
+    assert.equal(foodTypeForGooglePrimaryType("bakery"), "bakery");
+    assert.equal(foodTypeForGooglePrimaryType("meal_takeaway"), "takeaway");
+    assert.equal(foodTypeForGooglePrimaryType("food"), "other");
+    assert.equal(foodTypeForGooglePrimaryType(undefined), "other");
+  });
+
+  it("classifies OSM Food & Drink tags with a stable fallback", () => {
+    assert.equal(foodTypeForOsmTags({ amenity: "restaurant", cuisine: "thai" }), "restaurant");
+    assert.equal(foodTypeForOsmTags({ amenity: "cafe" }), "cafe");
+    assert.equal(foodTypeForOsmTags({ amenity: "pub" }), "bar");
+    assert.equal(foodTypeForOsmTags({ amenity: "cafe;bar" }), "cafe");
+    assert.equal(foodTypeForOsmTags({ shop: "bakery" }), "bakery");
+    assert.equal(foodTypeForOsmTags({ shop: "pastry" }), "bakery");
+    assert.equal(foodTypeForOsmTags({ shop: "ice_cream" }), "bakery");
+    assert.equal(foodTypeForOsmTags({ amenity: "fast_food" }), "takeaway");
+    assert.equal(foodTypeForOsmTags({ shop: "deli" }), "other");
+  });
+
   it("marks approved upcoming events as verified evidence", () => {
     const evidence = summarizeEventEvidence({
       language: "en",

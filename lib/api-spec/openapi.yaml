@@ -4713,6 +4713,10 @@ components:
           description: Link to the website where this activity was listed.
         businessCategory:
           $ref: "#/components/schemas/BusinessCategory"
+        foodType:
+          type: string
+          enum: [restaurant, cafe, bar, bakery, takeaway, other]
+          description: Source-derived Food & Drink venue type. Absent for non-food listings.
         source:
           $ref: "#/components/schemas/ListingSource"
         sourceName:
