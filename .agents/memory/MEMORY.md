@@ -36,3 +36,4 @@
 - [Playwright route globs](playwright-route-globs.md) — trailing `**` globs miss nested `/:id/action` paths here; use regex routes and an editor test-auth opt-in for reviewer screens.
 - [Boolean query params](boolean-query-params.md) — Orval coerce.boolean() turns "false" into true; parse flags from the raw query. Route suites need a fresh disposable DB.
 - [Clerk offline stub](clerk-offline-stub.md) — real Clerk screens in the default e2e suite: stub environment (POST), client, dev_browser; only CDN bundles need network.
+- [v0.41 discovery safeguards](v041-discovery-safeguards.md) — fresh sessions are local-only and maps must stay unloaded until the user explicitly opens them.

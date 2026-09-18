@@ -888,9 +888,9 @@ function SaveButton({ saved, onToggle }: { saved: boolean; onToggle: (e: React.M
 const DISCOVERY_EXTERNAL_SOURCES_STORAGE_KEY = 'buurtplaza-discovery-live-mode';
 
 function readIncludeExternalSources(): boolean {
-  if (typeof window === 'undefined') return true;
+  if (typeof window === 'undefined') return false;
   const saved = window.localStorage.getItem(DISCOVERY_EXTERNAL_SOURCES_STORAGE_KEY);
-  return saved === null ? true : saved === 'true';
+  return saved === 'true';
 }
 
 function SearchState({
@@ -931,6 +931,7 @@ function SearchState({
   const [error, setError] = useState('');
   const [selectedMapNeighborhood, setSelectedMapNeighborhood] = useState<string | null>(null);
   const [hoveredMapNeighborhood, setHoveredMapNeighborhood] = useState<string | null>(null);
+  const [showHomepageMap, setShowHomepageMap] = useState(false);
   const [includeExternalSources, setIncludeExternalSources] = useState(readIncludeExternalSources);
   const t = translations[language];
   const mapLocation = LOCATIONS.find((location) => location.id === 'dhg') ?? LOCATIONS[0];
@@ -1061,45 +1062,69 @@ function SearchState({
         <div className="w-full pt-2">
           <div className="grid gap-5 lg:grid-cols-[minmax(0,2.4fr)_minmax(15rem,0.8fr)] lg:items-stretch">
             <div className="relative h-[31rem] overflow-hidden rounded-3xl border border-border/70 bg-card/80 text-left shadow-xl backdrop-blur-sm sm:h-[38rem]">
-              <GoogleMapView
-                language={language}
-                locationId={mapLocation.id}
-                selectedNeighborhoods={mapLocation.neighborhoods}
-                showNeighborhoodLabels={false}
-                highlightedNeighborhood={hoveredMapNeighborhood ?? selectedMapNeighborhood}
-                onNeighborhoodClick={setSelectedMapNeighborhood}
-                onNeighborhoodHover={setHoveredMapNeighborhood}
-                markers={[]}
-                selectedMarkerId={null}
-                savedIds={new Set()}
-                onMarkerClick={() => undefined}
-              />
-              <div className="pointer-events-none absolute left-4 top-4 z-10 max-w-[calc(100%-2rem)] rounded-2xl border border-border/70 bg-card/90 px-4 py-3 shadow-lg backdrop-blur-sm">
-                <p className="text-sm font-extrabold text-foreground">
-                  {language === 'nl' ? 'Buurten op de kaart' : 'Neighborhoods on the map'}
-                </p>
-                <p className="mt-1 text-xs font-semibold text-muted-foreground">
-                  {getLocationName(mapLocation, language)}
-                  {' · '}
-                  {language === 'nl'
-                    ? 'Selecteer een buurt direct op de kaart.'
-                    : 'Select a neighborhood directly on the map.'}
-                </p>
-              </div>
-              {selectedMapNeighborhood && (
-                <div className="absolute bottom-4 left-4 right-4 z-10 flex items-center justify-between gap-3 rounded-2xl border border-primary/30 bg-card/95 px-4 py-3 text-left shadow-lg backdrop-blur-sm">
-                  <div className="min-w-0">
-                    <p className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-muted-foreground">
-                      {language === 'nl' ? 'Geselecteerde buurt' : 'Selected neighborhood'}
+              {showHomepageMap ? (
+                <>
+                  <GoogleMapView
+                    language={language}
+                    locationId={mapLocation.id}
+                    selectedNeighborhoods={mapLocation.neighborhoods}
+                    showNeighborhoodLabels={false}
+                    highlightedNeighborhood={hoveredMapNeighborhood ?? selectedMapNeighborhood}
+                    onNeighborhoodClick={setSelectedMapNeighborhood}
+                    onNeighborhoodHover={setHoveredMapNeighborhood}
+                    markers={[]}
+                    selectedMarkerId={null}
+                    savedIds={new Set()}
+                    onMarkerClick={() => undefined}
+                  />
+                  <div className="pointer-events-none absolute left-4 top-4 z-10 max-w-[calc(100%-2rem)] rounded-2xl border border-border/70 bg-card/90 px-4 py-3 shadow-lg backdrop-blur-sm">
+                    <p className="text-sm font-extrabold text-foreground">
+                      {language === 'nl' ? 'Buurten op de kaart' : 'Neighborhoods on the map'}
                     </p>
-                    <p className="truncate text-sm font-extrabold text-foreground">{selectedMapNeighborhood}</p>
+                    <p className="mt-1 text-xs font-semibold text-muted-foreground">
+                      {getLocationName(mapLocation, language)}
+                      {' · '}
+                      {language === 'nl'
+                        ? 'Selecteer een buurt direct op de kaart.'
+                        : 'Select a neighborhood directly on the map.'}
+                    </p>
                   </div>
+                  {selectedMapNeighborhood && (
+                    <div className="absolute bottom-4 left-4 right-4 z-10 flex items-center justify-between gap-3 rounded-2xl border border-primary/30 bg-card/95 px-4 py-3 text-left shadow-lg backdrop-blur-sm">
+                      <div className="min-w-0">
+                        <p className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-muted-foreground">
+                          {language === 'nl' ? 'Geselecteerde buurt' : 'Selected neighborhood'}
+                        </p>
+                        <p className="truncate text-sm font-extrabold text-foreground">{selectedMapNeighborhood}</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => onSearch(mapLocation.id, selectedMapNeighborhood, DEFAULT_START_SECTION)}
+                        className="shrink-0 rounded-xl bg-primary px-3 py-2 text-xs font-extrabold text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                      >
+                        {language === 'nl' ? 'Selecteer buurt' : 'Select neighborhood'}
+                      </button>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="flex h-full flex-col items-center justify-center px-6 text-center">
+                  <MapIcon className="h-10 w-10 text-primary" aria-hidden="true" />
+                  <h2 className="mt-4 text-lg font-extrabold text-foreground">
+                    {language === 'nl' ? 'De kaart staat uit' : 'The map is off'}
+                  </h2>
+                  <p className="mt-2 max-w-sm text-sm leading-relaxed text-muted-foreground">
+                    {language === 'nl'
+                      ? 'Zoek zonder kaart of open de kaart om een buurt visueel te kiezen.'
+                      : 'Search without a map, or open it to choose a neighborhood visually.'}
+                  </p>
                   <button
                     type="button"
-                    onClick={() => onSearch(mapLocation.id, selectedMapNeighborhood, DEFAULT_START_SECTION)}
-                    className="shrink-0 rounded-xl bg-primary px-3 py-2 text-xs font-extrabold text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                    onClick={() => setShowHomepageMap(true)}
+                    className="mt-5 inline-flex min-h-11 items-center gap-2 rounded-full bg-primary px-5 py-3 text-sm font-bold text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
                   >
-                    {language === 'nl' ? 'Selecteer buurt' : 'Select neighborhood'}
+                    <MapIcon className="h-4 w-4" aria-hidden="true" />
+                    {t.showMap}
                   </button>
                 </div>
               )}
@@ -1691,7 +1716,7 @@ function DiscoveryState({
   const [postcodeFilter, setPostcodeFilter] = useState(initialPostcode ?? '');
   const [neighborhoodSearch, setNeighborhoodSearch] = useState('');
   const [selectedMarker, setSelectedMarker] = useState<string | null>(null);
-  const [view, setView] = useState<'map' | 'list'>('map');
+  const [view, setView] = useState<'map' | 'list'>('list');
   const [agendaTime, setAgendaTime] = useState<AgendaTimeFilter>('all');
   const [agendaPrice, setAgendaPrice] = useState<AgendaPriceFilter>('all');
   const [mealOnly, setMealOnly] = useState(false);
@@ -2700,20 +2725,42 @@ function DiscoveryState({
         />
         <WeatherCard cityId={locationId} language={language} />
         <div className="relative min-h-0 flex-1">
-          <GoogleMapView
-            language={language}
-            locationId={location.id}
-            selectedNeighborhoods={selectedNeighborhoods}
-            showAllNeighborhoods
-            highlightedNeighborhood={selectedNeighborhoods.length === 1 ? selectedNeighborhoods[0] : null}
-            isDataLoading={topLevelCategories.businesses && businessesQuery.isFetching}
-            onNeighborhoodClick={toggleNeighborhood}
-            markers={filteredMarkers}
-            selectedMarkerId={selectedMarker}
-            savedIds={savedIds}
-            onMarkerClick={handleMarkerClick}
-            onClusterMarkerClick={handleClusterMarkerClick}
-          />
+          {view === 'map' ? (
+            <GoogleMapView
+              language={language}
+              locationId={location.id}
+              selectedNeighborhoods={selectedNeighborhoods}
+              showAllNeighborhoods
+              highlightedNeighborhood={selectedNeighborhoods.length === 1 ? selectedNeighborhoods[0] : null}
+              isDataLoading={topLevelCategories.businesses && businessesQuery.isFetching}
+              onNeighborhoodClick={toggleNeighborhood}
+              markers={filteredMarkers}
+              selectedMarkerId={selectedMarker}
+              savedIds={savedIds}
+              onMarkerClick={handleMarkerClick}
+              onClusterMarkerClick={handleClusterMarkerClick}
+            />
+          ) : (
+            <div className="hidden h-full flex-col items-center justify-center bg-muted/20 px-8 text-center md:flex">
+              <MapIcon className="h-10 w-10 text-primary" aria-hidden="true" />
+              <h2 className="mt-4 text-lg font-extrabold text-foreground">
+                {language === 'nl' ? 'Bekijk resultaten zonder kaart' : 'Browse results without the map'}
+              </h2>
+              <p className="mt-2 max-w-md text-sm leading-relaxed text-muted-foreground">
+                {language === 'nl'
+                  ? 'De kaart en kaartprovider worden pas geladen wanneer je hiervoor kiest.'
+                  : 'The map and map provider load only after you choose to open them.'}
+              </p>
+              <button
+                type="button"
+                onClick={() => setView('map')}
+                className="mt-5 inline-flex min-h-11 items-center gap-2 rounded-full bg-primary px-5 py-3 text-sm font-bold text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+              >
+                <MapIcon className="h-4 w-4" aria-hidden="true" />
+                {t.showMap}
+              </button>
+            </div>
+          )}
 
           {/* Mobile Toggle Overlay */}
           <div className="md:hidden absolute bottom-8 left-1/2 -translate-x-1/2 z-30">

@@ -342,6 +342,9 @@ for (const [mapPath, tilesAvailable] of [['tile map', true], ['coordinate fallba
 test('homepage map keeps the user zoom level when hovering neighborhoods', async ({ page }) => {
   await stubBoundaryDiscovery(page, true);
   await page.goto('/');
+  await expect(page.getByRole('button', { name: 'Show Map' })).toBeVisible();
+  await expect(page.getByLabel('Interactive activity map')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Show Map' }).click();
   // The map legitimately refits its camera when data arrives or the container
   // is resized. Under a loaded full run those refits can land after the user
   // zoom below, so wait for them to finish before touching the zoom.
@@ -429,10 +432,9 @@ test('main search external-source setting controls discovery mode and persists',
 
   await page.goto('/');
 
-  // default mode=live
-  const toggle = page.getByRole('checkbox', { name: 'Include external sources' });
-  await expect(toggle).toBeChecked();
-  await toggle.uncheck();
+  // Fresh sessions default to stored/local data until the user opts in.
+  const toggle = page.getByRole('checkbox', { name: 'Also search online' });
+  await expect(toggle).not.toBeChecked();
   await page.getByRole('textbox').fill('2511');
   await page.getByRole('button', { name: 'Explore' }).click();
 
@@ -448,14 +450,14 @@ test('main search external-source setting controls discovery mode and persists',
   await expect(page.getByText('No saved results exist for this search.')).toBeVisible();
   const liveSearchButton = page.getByRole('button', { name: 'Switch to live mode to search external sources' });
   await expect(liveSearchButton).toBeVisible();
-  await expect(page.getByRole('checkbox', { name: 'Include external sources' })).toHaveCount(0);
+  await expect(page.getByRole('checkbox', { name: 'Also search online' })).toHaveCount(0);
   await liveSearchButton.click();
   await expect.poll(() => listingsRequests.at(-1)?.searchParams.get('mode')).toBe('live');
   await expect.poll(() => page.evaluate(() => localStorage.getItem('buurtplaza-discovery-live-mode'))).toBe('true');
 
   // The single top-level setting persists when returning to the main search page.
   await page.goto('/');
-  await expect(page.getByRole('checkbox', { name: 'Include external sources' })).toBeChecked();
+  await expect(page.getByRole('checkbox', { name: 'Also search online' })).toBeChecked();
 });
 
 test('keeps every selected neighborhood free of out-of-boundary listings', async ({ page }) => {
