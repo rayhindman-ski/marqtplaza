@@ -433,8 +433,10 @@ test('main search external-source setting controls discovery mode and persists',
   await page.goto('/');
 
   // Fresh sessions default to stored/local data until the user opts in.
-  const toggle = page.getByRole('checkbox', { name: 'Also search online' });
+  const toggle = page.getByRole('checkbox', { name: 'Include web results' });
   await expect(toggle).not.toBeChecked();
+  await page.getByText('What changes?').click();
+  await expect(page.getByText(/not endorsed or verified by MarqtPlaza/)).toBeVisible();
   await page.getByRole('textbox').fill('2511');
   await page.getByRole('button', { name: 'Explore' }).click();
 
@@ -450,14 +452,25 @@ test('main search external-source setting controls discovery mode and persists',
   await expect(page.getByText('No saved results exist for this search.')).toBeVisible();
   const liveSearchButton = page.getByRole('button', { name: 'Switch to live mode to search external sources' });
   await expect(liveSearchButton).toBeVisible();
-  await expect(page.getByRole('checkbox', { name: 'Also search online' })).toHaveCount(0);
+  const resultsScopeToggle = page.getByRole('checkbox', { name: 'Include web results' });
+  await expect(resultsScopeToggle).not.toBeChecked();
   await liveSearchButton.click();
+  await expect(resultsScopeToggle).toBeChecked();
   await expect.poll(() => listingsRequests.at(-1)?.searchParams.get('mode')).toBe('live');
   await expect.poll(() => page.evaluate(() => localStorage.getItem('buurtplaza-discovery-live-mode'))).toBe('true');
+  const requestCountBeforeDisable = listingsRequests.length;
+  await resultsScopeToggle.uncheck();
+  await expect.poll(() => page.evaluate(() => localStorage.getItem('buurtplaza-discovery-live-mode'))).toBe('false');
+  await expect(page.getByText('Local-only search.')).toBeVisible();
+  expect(listingsRequests.slice(requestCountBeforeDisable).some((url) => url.searchParams.get('mode') === 'live')).toBe(false);
+  await expect(page.getByText('Stored postcode result').first()).toBeVisible();
+  await resultsScopeToggle.check();
+  await expect.poll(() => page.evaluate(() => localStorage.getItem('buurtplaza-discovery-live-mode'))).toBe('true');
+  await expect(page.getByText('Local search with additional web results.')).toBeVisible();
 
   // The single top-level setting persists when returning to the main search page.
   await page.goto('/');
-  await expect(page.getByRole('checkbox', { name: 'Also search online' })).toBeChecked();
+  await expect(page.getByRole('checkbox', { name: 'Include web results' })).toBeChecked();
 });
 
 test('keeps every selected neighborhood free of out-of-boundary listings', async ({ page }) => {

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, Redirect } from 'wouter';
+import { Link } from 'wouter';
 import { useQueryClient } from '@tanstack/react-query';
 import { Inbox, ShieldAlert, Trash2 } from 'lucide-react';
 
@@ -24,6 +24,7 @@ import { useAccountAuth } from '@/lib/accountAuth';
 import { featureFlags } from '@/lib/featureFlags';
 import { accountErrorMessage, accountTranslations, formatCopy, type Language } from '@/lib/i18n';
 import { useAppLanguage } from '@/lib/useAppLanguage';
+import { clearBrowserData, type BrowserDataCategory } from '@/lib/browserData';
 import { ConsentPanel } from './AccountPage';
 
 const DELETION_SCOPES: AccountDeletionScope[] = [
@@ -61,8 +62,6 @@ export default function AccountPrivacyPage() {
   const meQuery = useGetAccountMe({ query: { enabled: accountsOn, queryKey: getGetAccountMeQueryKey(), retry: false } });
 
   if (!auth.isLoaded) return <AccountLoading label={copy.account.loading} />;
-  if (!auth.isSignedIn) return <Redirect to="/sign-in" />;
-
   const me = meQuery.data;
   const meError = apiErrorFrom(meQuery.error);
   const featureDisabled = !featureFlags.accounts || meError?.code === 'FEATURE_DISABLED';
@@ -78,7 +77,22 @@ export default function AccountPrivacyPage() {
       testId="page-account-privacy"
       headingTestId="heading-account-privacy"
     >
-      {featureDisabled ? (
+      <BrowserDataPanel language={language} />
+      {!auth.isSignedIn ? (
+        <section className="mb-6 rounded-3xl border border-border/80 bg-card p-6 shadow-sm sm:p-8">
+          <h2 className="font-serif text-xl font-semibold text-foreground">
+            {language === 'nl' ? 'Gegevens in je account' : 'Data in your account'}
+          </h2>
+          <p className="mt-2 text-sm leading-6 text-muted-foreground">
+            {language === 'nl'
+              ? 'Browsergegevens wissen verwijdert geen account- of servergegevens. Log in om toestemmingen, verzoeken en accountverwijdering te beheren.'
+              : 'Clearing browser data does not delete account or server data. Sign in to manage consent, requests, and account deletion.'}
+          </p>
+          <Link href="/sign-in" className="mt-4 inline-flex min-h-11 items-center rounded-xl bg-primary px-4 py-2 text-sm font-bold text-primary-foreground">
+            {language === 'nl' ? 'Inloggen voor accountprivacy' : 'Sign in for account privacy'}
+          </Link>
+        </section>
+      ) : featureDisabled ? (
         <div className="mb-6"><AccountUnavailable language={language} /></div>
       ) : meQuery.isError ? (
         <div role="alert" data-testid="status-privacy-error" className="mb-6 rounded-3xl border border-red-200 bg-red-50 p-5">
@@ -99,6 +113,129 @@ export default function AccountPrivacyPage() {
         </Link>
       </div>
     </AccountShell>
+  );
+}
+
+const BROWSER_DATA_CATEGORIES: BrowserDataCategory[] = ['discovery', 'saved', 'language', 'drafts'];
+
+function BrowserDataPanel({ language }: { language: Language }) {
+  const [selected, setSelected] = useState<Set<BrowserDataCategory>>(new Set());
+  const [confirming, setConfirming] = useState(false);
+  const [cleared, setCleared] = useState<BrowserDataCategory[]>([]);
+  const labels: Record<BrowserDataCategory, string> = language === 'nl'
+    ? {
+      discovery: 'Zoekbereik, anonieme browser-ID en lokale weergavekeuzes',
+      saved: 'Lokaal opgeslagen plaatsen en gebeurtenismeldingen',
+      language: 'Taalvoorkeur op dit apparaat',
+      drafts: 'Tijdelijke accountvoorkeuren in deze browsersessie',
+    }
+    : {
+      discovery: 'Search scope, anonymous browser ID, and local display choices',
+      saved: 'Locally saved places and event alerts',
+      language: 'Language preference on this device',
+      drafts: 'Temporary account-preference drafts in this browser session',
+    };
+
+  const toggle = (category: BrowserDataCategory) => {
+    setCleared([]);
+    setConfirming(false);
+    setSelected((previous) => {
+      const next = new Set(previous);
+      if (next.has(category)) next.delete(category);
+      else next.add(category);
+      return next;
+    });
+  };
+
+  const confirmClear = () => {
+    const categories = [...selected];
+    setCleared(clearBrowserData(categories));
+    setSelected(new Set());
+    setConfirming(false);
+  };
+
+  return (
+    <section data-testid="browser-data-panel" className="mb-6 rounded-3xl border border-border/80 bg-card p-6 shadow-sm sm:p-8">
+      <p className="flex items-center gap-2 text-xs font-extrabold uppercase tracking-[0.16em] text-primary">
+        <Trash2 className="h-4 w-4" aria-hidden="true" />
+        {language === 'nl' ? 'Gegevens in deze browser' : 'Data in this browser'}
+      </p>
+      <h2 className="mt-2 font-serif text-xl font-semibold text-foreground">
+        {language === 'nl' ? 'Kies wat je wilt wissen' : 'Choose what to clear'}
+      </h2>
+      <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
+        {language === 'nl'
+          ? 'Dit wist alleen de gekozen gegevens uit deze browser. Het verwijdert geen account, bijdragen of gegevens op onze servers.'
+          : 'This clears only the selected data from this browser. It does not delete your account, contributions, or data on our servers.'}
+      </p>
+      <fieldset className="mt-5">
+        <legend className="sr-only">{language === 'nl' ? 'Browsergegevens kiezen' : 'Select browser data'}</legend>
+        <ul className="grid gap-2">
+          {BROWSER_DATA_CATEGORIES.map((category) => (
+            <li key={category}>
+              <label className="flex min-h-11 cursor-pointer items-start gap-3 rounded-2xl border border-border/60 bg-background/60 p-3 text-sm">
+                <input
+                  type="checkbox"
+                  checked={selected.has(category)}
+                  onChange={() => toggle(category)}
+                  className="mt-1 h-4 w-4 accent-primary"
+                />
+                <span className="font-medium text-foreground">{labels[category]}</span>
+              </label>
+            </li>
+          ))}
+        </ul>
+      </fieldset>
+
+      {!confirming ? (
+        <Button
+          type="button"
+          variant="destructive"
+          className="mt-5"
+          disabled={selected.size === 0}
+          onClick={() => setConfirming(true)}
+        >
+          {language === 'nl' ? 'Keuze controleren' : 'Review selection'}
+        </Button>
+      ) : (
+        <div role="alert" className="mt-5 rounded-2xl border border-amber-300 bg-amber-50 p-4 text-amber-950">
+          <p className="text-sm font-bold">
+            {language === 'nl'
+              ? `Je wist ${selected.size} gekozen categorie${selected.size === 1 ? '' : 'ën'} uit deze browser.`
+              : `You are clearing ${selected.size} selected browser-data ${selected.size === 1 ? 'category' : 'categories'}.`}
+          </p>
+          <p className="mt-1 text-xs leading-5">
+            {language === 'nl'
+              ? 'Account- en servergegevens blijven ongewijzigd.'
+              : 'Account and server data will remain unchanged.'}
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Button type="button" variant="destructive" onClick={confirmClear}>
+              {language === 'nl' ? 'Browsergegevens wissen' : 'Clear browser data'}
+            </Button>
+            <Button type="button" variant="outline" onClick={() => setConfirming(false)}>
+              {language === 'nl' ? 'Annuleren' : 'Cancel'}
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {cleared.length > 0 ? (
+        <div role="status" aria-live="polite" data-testid="browser-data-cleared" className="mt-5 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-950">
+          <p className="text-sm font-bold">
+            {language === 'nl' ? 'Gewist uit deze browser:' : 'Cleared from this browser:'}
+          </p>
+          <ul className="mt-2 list-disc space-y-1 pl-5 text-sm">
+            {cleared.map((category) => <li key={category}>{labels[category]}</li>)}
+          </ul>
+          <p className="mt-2 text-xs">
+            {language === 'nl'
+              ? 'Er zijn geen account- of servergegevens verwijderd.'
+              : 'No account or server data was deleted.'}
+          </p>
+        </div>
+      ) : null}
+    </section>
   );
 }
 

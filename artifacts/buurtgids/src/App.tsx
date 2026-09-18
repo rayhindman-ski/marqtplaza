@@ -1047,17 +1047,52 @@ function SearchState({
           )}
         </form>
 
-        <label className="mx-auto flex w-fit max-w-full cursor-pointer items-center gap-2 rounded-full border border-border/70 bg-card/85 px-3 py-1.5 text-left shadow-sm backdrop-blur-sm transition-colors hover:border-primary/40">
-          <input
-            type="checkbox"
-            checked={includeExternalSources}
-            onChange={(event) => setIncludeExternalSources(event.target.checked)}
-            className="h-3.5 w-3.5 shrink-0 accent-primary"
-          />
-          <span className="text-xs font-bold text-foreground">
-            {language === 'nl' ? 'Ook online zoeken' : 'Also search online'}
-          </span>
-        </label>
+        <fieldset className="mx-auto w-full max-w-lg rounded-2xl border border-border/70 bg-card/85 px-4 py-3 text-left shadow-sm backdrop-blur-sm">
+          <legend className="px-1 text-xs font-extrabold text-foreground">
+            {language === 'nl' ? 'Zoekbereik' : 'Search scope'}
+          </legend>
+          <p className="text-xs font-semibold text-muted-foreground">
+            {language === 'nl'
+              ? 'Lokaal zoeken is geselecteerd.'
+              : 'Local-only search is selected.'}
+          </p>
+          <label className="mt-2 flex min-h-11 cursor-pointer items-center gap-2 rounded-xl border border-border/70 bg-background px-3 py-2 transition-colors hover:border-primary/40">
+            <input
+              type="checkbox"
+              checked={includeExternalSources}
+              onChange={(event) => setIncludeExternalSources(event.target.checked)}
+              className="h-4 w-4 shrink-0 accent-primary"
+            />
+            <span className="text-sm font-bold text-foreground">
+              {language === 'nl' ? 'Webresultaten opnemen' : 'Include web results'}
+            </span>
+          </label>
+          <details className="mt-2 rounded-xl bg-muted/40 px-3 py-2 text-xs">
+            <summary className="cursor-pointer font-bold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
+              {language === 'nl' ? 'Wat verandert er?' : 'What changes?'}
+            </summary>
+            <div className="mt-2 space-y-2 leading-relaxed text-muted-foreground">
+              <p>
+                {language === 'nl'
+                  ? 'Lokaal zoeken gebruikt de bestaande lokale catalogus en geïntegreerde bronnen. De dekking is niet volledig en resultaten zijn niet gegarandeerd actueel.'
+                  : 'Local-only search uses the established local catalogue and integrated sources. Coverage is not exhaustive and results are not guaranteed to be current.'}
+              </p>
+              <p>
+                {language === 'nl'
+                  ? 'Webresultaten voegen na jouw keuze externe bronnen toe. Deze resultaten zijn geen aanbeveling of verificatie door MarqtPlaza en je zoekgebied wordt met die aanbieders gedeeld.'
+                  : 'Web results add external sources after you choose them. They are not endorsed or verified by MarqtPlaza, and your search area is shared with those providers.'}
+              </p>
+              <Link to="/account/privacy" className="inline-flex font-bold text-primary underline-offset-2 hover:underline">
+                {language === 'nl' ? 'Lees hoe we gegevens gebruiken' : 'Read how we use data'}
+              </Link>
+            </div>
+          </details>
+          <p className="sr-only" role="status" aria-live="polite">
+            {includeExternalSources
+              ? (language === 'nl' ? 'Webresultaten zijn opgenomen.' : 'Web results are included.')
+              : (language === 'nl' ? 'Alleen lokaal zoeken is actief.' : 'Local-only search is active.')}
+          </p>
+        </fieldset>
 
         <div className="w-full pt-2">
           <div className="grid gap-5 lg:grid-cols-[minmax(0,2.4fr)_minmax(15rem,0.8fr)] lg:items-stretch">
@@ -1746,10 +1781,11 @@ function DiscoveryState({
     : undefined;
 
   const [liveMode, setLiveMode] = useState(readIncludeExternalSources);
-  const enableLiveMode = useCallback(() => {
-    localStorage.setItem('buurtplaza-discovery-live-mode', 'true');
-    setLiveMode(true);
+  const setDiscoveryScope = useCallback((includeWebResults: boolean) => {
+    localStorage.setItem(DISCOVERY_EXTERNAL_SOURCES_STORAGE_KEY, String(includeWebResults));
+    setLiveMode(includeWebResults);
   }, []);
+  const enableLiveMode = useCallback(() => setDiscoveryScope(true), [setDiscoveryScope]);
 
   const mode = liveMode ? 'live' : 'stored_only';
   const anonymousId = useMemo(() => {
@@ -2177,6 +2213,44 @@ function DiscoveryState({
             </button>
           </div>
           <div className="mt-3 space-y-2">
+            <FilterFrame title={language === 'nl' ? 'Zoekbereik' : 'Search scope'}>
+              <p className="text-xs font-semibold text-muted-foreground" role="status" aria-live="polite">
+                {liveMode
+                  ? (language === 'nl' ? 'Lokaal zoeken met aanvullende webresultaten.' : 'Local search with additional web results.')
+                  : (language === 'nl' ? 'Alleen lokaal zoeken.' : 'Local-only search.')}
+              </p>
+              <label className="mt-2 flex min-h-11 cursor-pointer items-center gap-2 rounded-xl border border-border/70 bg-card px-3 py-2 transition-colors hover:border-primary/40">
+                <input
+                  type="checkbox"
+                  checked={liveMode}
+                  onChange={(event) => setDiscoveryScope(event.target.checked)}
+                  className="h-4 w-4 shrink-0 accent-primary"
+                />
+                <span className="text-xs font-bold text-foreground">
+                  {language === 'nl' ? 'Webresultaten opnemen' : 'Include web results'}
+                </span>
+              </label>
+              <details className="mt-2 rounded-lg bg-muted/40 px-2.5 py-2 text-[11px]">
+                <summary className="cursor-pointer font-bold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
+                  {language === 'nl' ? 'Uitleg over bronnen en privacy' : 'Source and privacy details'}
+                </summary>
+                <div className="mt-2 space-y-2 leading-relaxed text-muted-foreground">
+                  <p>
+                    {language === 'nl'
+                      ? 'Lokaal gebruikt de bestaande catalogus en geïntegreerde bronnen. Webresultaten voegen externe bronnen toe en delen je gekozen zoekgebied met die aanbieders.'
+                      : 'Local-only uses the established catalogue and integrated sources. Web results add external sources and share your selected search area with those providers.'}
+                  </p>
+                  <p>
+                    {language === 'nl'
+                      ? 'Webresultaten zijn geen aanbeveling of verificatie door MarqtPlaza.'
+                      : 'Web results are not endorsed or verified by MarqtPlaza.'}
+                  </p>
+                  <Link to="/account/privacy" className="inline-flex font-bold text-primary underline-offset-2 hover:underline">
+                    {language === 'nl' ? 'Privacyinformatie' : 'Privacy information'}
+                  </Link>
+                </div>
+              </details>
+            </FilterFrame>
             <FilterFrame title={language === 'nl' ? 'Snel kiezen' : 'Quick choices'}>
               <div className="flex flex-wrap gap-1.5" role="group" aria-label={language === 'nl' ? 'Snelle filters' : 'Quick filters'}>
                 {([
