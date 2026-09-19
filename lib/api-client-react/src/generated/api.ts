@@ -78,6 +78,7 @@ import type {
   GooglePlacesUsage,
   HealthStatus,
   LifecycleMessages,
+  ListingCorrectionReceipt,
   ListingsResponse,
   LookupBusinessesParams,
   ModerationDecision,
@@ -104,6 +105,7 @@ import type {
   SocialMapReviewResponse,
   SourceScanRequest,
   SourceScanResponse,
+  SubmitListingCorrectionInput,
   SupportAccountRequest,
   SupportAccountRequestDecisionInput,
   SupportAccountRequests,
@@ -2150,6 +2152,83 @@ export function useGetListings<TData = Awaited<ReturnType<typeof getListings>>, 
 
 
 
+
+export const getSubmitListingCorrectionUrl = (cityId: string,
+    listingSource: 'google_maps' | 'openstreetmap' | 'curated' | 'source_scan',) => {
+
+
+
+
+  return `/api/places/${cityId}/${listingSource}/corrections`
+}
+
+/**
+ * Resolves the listing server-side and records a correction for review. The
+ * submission never changes the public listing. A required Idempotency-Key
+ * makes retries safe; reusing a key with different input returns 409.
+ * @summary Submit a guest correction for a public listing
+ */
+export const submitListingCorrection = async (cityId: string,
+    listingSource: 'google_maps' | 'openstreetmap' | 'curated' | 'source_scan',
+    submitListingCorrectionInput: SubmitListingCorrectionInput, options?: Parameters<typeof customFetch>[1]): Promise<ListingCorrectionReceipt> => {
+
+  return customFetch<ListingCorrectionReceipt>(getSubmitListingCorrectionUrl(cityId,listingSource),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(submitListingCorrectionInput)
+  }
+);}
+
+
+
+
+
+export const getSubmitListingCorrectionMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitListingCorrection>>, TError,{cityId: string;listingSource: 'google_maps' | 'openstreetmap' | 'curated' | 'source_scan';data: BodyType<SubmitListingCorrectionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof submitListingCorrection>>, TError,{cityId: string;listingSource: 'google_maps' | 'openstreetmap' | 'curated' | 'source_scan';data: BodyType<SubmitListingCorrectionInput>}, TContext> => {
+
+const mutationKey = ['submitListingCorrection'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof submitListingCorrection>>, {cityId: string;listingSource: 'google_maps' | 'openstreetmap' | 'curated' | 'source_scan';data: BodyType<SubmitListingCorrectionInput>}> = (props) => {
+          const {cityId,listingSource,data} = props ?? {};
+
+          return  submitListingCorrection(cityId,listingSource,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SubmitListingCorrectionMutationResult = NonNullable<Awaited<ReturnType<typeof submitListingCorrection>>>
+    export type SubmitListingCorrectionMutationBody = BodyType<SubmitListingCorrectionInput>
+    export type SubmitListingCorrectionMutationError = ErrorType<ApiError>
+
+    /**
+ * @summary Submit a guest correction for a public listing
+ */
+export const useSubmitListingCorrection = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitListingCorrection>>, TError,{cityId: string;listingSource: 'google_maps' | 'openstreetmap' | 'curated' | 'source_scan';data: BodyType<SubmitListingCorrectionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof submitListingCorrection>>,
+        TError,
+        {cityId: string;listingSource: 'google_maps' | 'openstreetmap' | 'curated' | 'source_scan';data: BodyType<SubmitListingCorrectionInput>},
+        TContext
+      > => {
+      return useMutation(getSubmitListingCorrectionMutationOptions(options));
+    }
 
 export const getGetSavedEventsUrl = () => {
 

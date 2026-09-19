@@ -482,6 +482,65 @@ test('main search external-source setting controls discovery mode and persists',
   await expect(page.getByRole('checkbox', { name: 'Include web results' })).toBeChecked();
 });
 
+test('guest correction retry preserves the draft and idempotency key', async ({ page }) => {
+  const submissions: Array<{ idempotencyKey: string | undefined; body: Record<string, unknown> }> = [];
+  await page.route(/\/api\/places\/dhg\/openstreetmap\/corrections$/, async (route) => {
+    const request = route.request();
+    submissions.push({
+      idempotencyKey: request.headers()['idempotency-key'],
+      body: request.postDataJSON() as Record<string, unknown>,
+    });
+    if (submissions.length === 1) {
+      await route.fulfill({
+        status: 503,
+        contentType: 'application/json',
+        body: JSON.stringify({ code: 'DEPENDENCY_UNAVAILABLE', message: 'Temporarily unavailable' }),
+      });
+      return;
+    }
+    await route.fulfill({
+      status: 201,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        receipt: 'correction-public-receipt',
+        status: 'pending_review',
+        cityId: 'dhg',
+        listingSource: 'openstreetmap',
+        listingId: 'node/1',
+        fieldKey: 'address',
+        submittedAt: new Date().toISOString(),
+      }),
+    });
+  });
+
+  await page.goto('/correctie?cityId=dhg&listingSource=openstreetmap&listingId=node%2F1&name=Testplaats&locale=en');
+  await expect(page.getByRole('heading', { name: 'Report a correction' })).toBeVisible();
+  await page.getByLabel('Which field is incorrect?').click();
+  await page.getByRole('option', { name: 'Address' }).click();
+  await page.getByLabel('Proposed correct value').fill('Correct street 12');
+  await page.getByLabel('Explanation (optional)').fill('The public address has changed.');
+  await page.getByLabel(/I understand that my correction/).check();
+  await page.getByRole('button', { name: 'Submit correction' }).click();
+
+  await expect(page.getByRole('alert')).toContainText('Your input is preserved');
+  await expect(page.getByLabel('Proposed correct value')).toHaveValue('Correct street 12');
+  await page.getByRole('button', { name: 'Submit correction' }).click();
+
+  await expect(page.getByRole('heading', { name: 'Correction received' })).toBeVisible();
+  await expect(page.getByText(/correction-public-receipt/)).toBeVisible();
+  expect(submissions).toHaveLength(2);
+  expect(submissions[0].idempotencyKey).toBeTruthy();
+  expect(submissions[1].idempotencyKey).toBe(submissions[0].idempotencyKey);
+  expect(submissions[1].body).toEqual(submissions[0].body);
+  expect(submissions[0].body).toMatchObject({
+    listingId: 'node/1',
+    fieldKey: 'address',
+    proposedValue: 'Correct street 12',
+    locale: 'en',
+    consentNoticeVersion: '2026-09-18',
+  });
+});
+
 test('keeps every selected neighborhood free of out-of-boundary listings', async ({ page }) => {
   await page.route('**/api/listings*', async (route) => {
     const url = new URL(route.request().url());

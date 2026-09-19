@@ -2414,6 +2414,74 @@ export interface SocialMapReviewResponse {
   message: string;
 }
 
+export type SubmitListingCorrectionInputFieldKey = typeof SubmitListingCorrectionInputFieldKey[keyof typeof SubmitListingCorrectionInputFieldKey];
+
+
+export const SubmitListingCorrectionInputFieldKey = {
+  name: 'name',
+  address: 'address',
+  neighborhood: 'neighborhood',
+  website_url: 'website_url',
+  opening_hours: 'opening_hours',
+  category: 'category',
+  accessibility: 'accessibility',
+  dietary: 'dietary',
+  price: 'price',
+} as const;
+
+export type SubmitListingCorrectionInputLocale = typeof SubmitListingCorrectionInputLocale[keyof typeof SubmitListingCorrectionInputLocale];
+
+
+export const SubmitListingCorrectionInputLocale = {
+  nl: 'nl',
+  en: 'en',
+} as const;
+
+export interface SubmitListingCorrectionInput {
+  /**
+     * @minLength 1
+     * @maxLength 240
+     */
+  listingId: string;
+  fieldKey: SubmitListingCorrectionInputFieldKey;
+  /**
+     * @minLength 1
+     * @maxLength 2000
+     */
+  proposedValue: string;
+  /** @maxLength 4000 */
+  explanation?: string;
+  /**
+     * @maxLength 2048
+     * @pattern ^https?://.+
+     */
+  evidenceUrl?: string;
+  locale: SubmitListingCorrectionInputLocale;
+  /**
+     * @minLength 1
+     * @maxLength 64
+     */
+  consentNoticeVersion: string;
+}
+
+export type ListingCorrectionReceiptStatus = typeof ListingCorrectionReceiptStatus[keyof typeof ListingCorrectionReceiptStatus];
+
+
+export const ListingCorrectionReceiptStatus = {
+  pending_review: 'pending_review',
+} as const;
+
+export interface ListingCorrectionReceipt {
+  /** Opaque public receipt; it is not a database identifier. */
+  receipt: string;
+  status: ListingCorrectionReceiptStatus;
+  cityId: string;
+  listingSource: string;
+  listingId: string;
+  fieldKey: string;
+  submittedAt: string;
+}
+
 export type ListingsResponseSource = typeof ListingsResponseSource[keyof typeof ListingsResponseSource];
 
 

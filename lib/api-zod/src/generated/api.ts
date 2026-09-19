@@ -1049,6 +1049,66 @@ export const GetListingsResponse = zod.object({
 
 
 /**
+ * Resolves the listing server-side and records a correction for review. The
+ * submission never changes the public listing. A required Idempotency-Key
+ * makes retries safe; reusing a key with different input returns 409.
+ * @summary Submit a guest correction for a public listing
+ */
+export const submitListingCorrectionPathCityIdMin = 2;
+export const submitListingCorrectionPathCityIdMax = 20;
+
+
+
+export const SubmitListingCorrectionParams = zod.object({
+  "cityId": zod.coerce.string().min(submitListingCorrectionPathCityIdMin).max(submitListingCorrectionPathCityIdMax),
+  "listingSource": zod.enum(['google_maps', 'openstreetmap', 'curated', 'source_scan'])
+})
+
+export const submitListingCorrectionHeaderIdempotencyKeyMin = 8;
+export const submitListingCorrectionHeaderIdempotencyKeyMax = 128;
+
+
+
+export const SubmitListingCorrectionHeader = zod.object({
+  "Idempotency-Key": zod.string().min(submitListingCorrectionHeaderIdempotencyKeyMin).max(submitListingCorrectionHeaderIdempotencyKeyMax)
+})
+
+export const submitListingCorrectionBodyListingIdMax = 240;
+
+export const submitListingCorrectionBodyProposedValueMax = 2000;
+
+export const submitListingCorrectionBodyExplanationMax = 4000;
+
+export const submitListingCorrectionBodyEvidenceUrlMax = 2048;
+
+
+export const submitListingCorrectionBodyEvidenceUrlRegExp = new RegExp('^https?://.+');
+export const submitListingCorrectionBodyConsentNoticeVersionMax = 64;
+
+
+
+export const SubmitListingCorrectionBody = zod.object({
+  "listingId": zod.string().min(1).max(submitListingCorrectionBodyListingIdMax),
+  "fieldKey": zod.enum(['name', 'address', 'neighborhood', 'website_url', 'opening_hours', 'category', 'accessibility', 'dietary', 'price']),
+  "proposedValue": zod.string().min(1).max(submitListingCorrectionBodyProposedValueMax),
+  "explanation": zod.string().max(submitListingCorrectionBodyExplanationMax).optional(),
+  "evidenceUrl": zod.string().max(submitListingCorrectionBodyEvidenceUrlMax).regex(submitListingCorrectionBodyEvidenceUrlRegExp).optional(),
+  "locale": zod.enum(['nl', 'en']),
+  "consentNoticeVersion": zod.string().min(1).max(submitListingCorrectionBodyConsentNoticeVersionMax)
+})
+
+export const SubmitListingCorrectionResponse = zod.object({
+  "receipt": zod.string().describe('Opaque public receipt; it is not a database identifier.'),
+  "status": zod.enum(['pending_review']),
+  "cityId": zod.string(),
+  "listingSource": zod.string(),
+  "listingId": zod.string(),
+  "fieldKey": zod.string(),
+  "submittedAt": zod.coerce.date()
+})
+
+
+/**
  * @summary Get the signed-in resident's saved events and alerts
  */
 export const getSavedEventsResponseEventsItemEventIdMax = 240;

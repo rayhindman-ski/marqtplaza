@@ -26,3 +26,9 @@ Field trust must be evidence-backed per displayed field. A known provider withou
 **Why:** BR-07 requires explicit source, checked date, and status and prohibits silently presenting missing trust metadata as confirmed.
 
 **How to apply:** Derive only from persisted source/review timestamps. Use explicit current, stale, conflicting, unknown, and unavailable states; preserve unknown when proof is absent.
+
+Guest corrections are pending-review records, never direct listing edits. Exact retries reuse one idempotency key; public listing output remains unchanged until a separate reviewed publication operation.
+
+**Why:** BR-07 requires correction access without allowing unreviewed consumer input to become public fact.
+
+**How to apply:** Resolve the target listing server-side, retain the draft on retry, disclose retention before submit, and return an opaque receipt. Keep provider listing IDs in validated request bodies because IDs may contain `/`.

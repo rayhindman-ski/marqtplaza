@@ -871,6 +871,73 @@ paths:
               schema:
                 $ref: "#/components/schemas/ListingsResponse"
 
+  /places/{cityId}/{listingSource}/corrections:
+    post:
+      operationId: submitListingCorrection
+      tags: [listings]
+      summary: Submit a guest correction for a public listing
+      description: |
+        Resolves the listing server-side and records a correction for review. The
+        submission never changes the public listing. A required Idempotency-Key
+        makes retries safe; reusing a key with different input returns 409.
+      parameters:
+        - name: cityId
+          in: path
+          required: true
+          schema: { type: string, minLength: 2, maxLength: 20 }
+        - name: listingSource
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [google_maps, openstreetmap, curated, source_scan]
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema: { type: string, minLength: 8, maxLength: 128 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SubmitListingCorrectionInput"
+      responses:
+        "201":
+          description: Correction accepted for review
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListingCorrectionReceipt"
+        "200":
+          description: Exact replay of an earlier submission
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListingCorrectionReceipt"
+        "400":
+          description: Invalid input or unknown listing
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+        "404":
+          description: Listing was not found in the server-side catalogue
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+        "409":
+          description: Idempotency key was reused with different input
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+        "429":
+          description: Guest submission rate limit exceeded
+          headers:
+            Retry-After:
+              schema: { type: integer }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+
   /saved-events:
     get:
       operationId: getSavedEvents
@@ -4961,6 +5028,59 @@ components:
         message:
           type: string
       required: [snapshotDate, lastRunAt, successful, intervalDays, items, checks, message]
+
+    SubmitListingCorrectionInput:
+      type: object
+      additionalProperties: false
+      properties:
+        listingId:
+          type: string
+          minLength: 1
+          maxLength: 240
+        fieldKey:
+          type: string
+          enum: [name, address, neighborhood, website_url, opening_hours, category, accessibility, dietary, price]
+        proposedValue:
+          type: string
+          minLength: 1
+          maxLength: 2000
+        explanation:
+          type: string
+          maxLength: 4000
+        evidenceUrl:
+          type: string
+          pattern: '^https?://.+'
+          maxLength: 2048
+        locale:
+          type: string
+          enum: [nl, en]
+        consentNoticeVersion:
+          type: string
+          minLength: 1
+          maxLength: 64
+      required: [listingId, fieldKey, proposedValue, locale, consentNoticeVersion]
+
+    ListingCorrectionReceipt:
+      type: object
+      properties:
+        receipt:
+          type: string
+          description: Opaque public receipt; it is not a database identifier.
+        status:
+          type: string
+          enum: [pending_review]
+        cityId:
+          type: string
+        listingSource:
+          type: string
+        listingId:
+          type: string
+        fieldKey:
+          type: string
+        submittedAt:
+          type: string
+          format: date-time
+      required: [receipt, status, cityId, listingSource, listingId, fieldKey, submittedAt]
 
     ListingsResponse:
       type: object

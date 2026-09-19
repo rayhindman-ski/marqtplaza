@@ -56,6 +56,7 @@ import CommunityModerationView from './pages/CommunityModerationView';
 import DealsView from './pages/DealsView';
 import BusinessProfileView from './pages/BusinessProfileView';
 import BusinessClaimView from './pages/BusinessClaimView';
+import ListingCorrectionView from './pages/ListingCorrectionView';
 import MyBusinessWorkspace from './pages/MyBusinessWorkspace';
 import BusinessRevisionPage from './pages/BusinessRevisionPage';
 import BusinessModerationView from './pages/BusinessModerationView';
@@ -1644,6 +1645,16 @@ function MarkerCard({
                 >
                   {marker.officialUrl ? t.officialWebsite : (language === 'nl' ? 'Bron' : 'Source')} <ExternalLink className="h-2.5 w-2.5" />
                 </a>
+              )}
+              {marker.source && (
+                <Link
+                  href={`/correctie?cityId=${encodeURIComponent(marker.locationId)}&listingSource=${encodeURIComponent(marker.source)}&listingId=${encodeURIComponent(marker.id)}&name=${encodeURIComponent(marker.name)}&locale=${language}`}
+                  className="inline-flex items-center gap-1 text-[11px] font-bold text-primary hover:underline"
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  <AlertCircle className="h-3 w-3" aria-hidden="true" />
+                  {language === 'nl' ? 'Meld een correctie' : 'Report an issue'}
+                </Link>
               )}
             </div>
           </div>
@@ -3402,6 +3413,7 @@ export default function App() {
           <Route path="/deals" component={DealsView} />
           <Route path="/bedrijf/:slug" component={BusinessProfileView} />
           <Route path="/bedrijf-claim" component={BusinessClaimView} />
+          <Route path="/correctie" component={ListingCorrectionView} />
           <Route path="/mijn-bedrijf" component={MyBusinessWorkspace} />
           <Route path="/mijn-bedrijf/:id/profiel" component={BusinessRevisionPage} />
           <Route path="/redactie/bedrijven" component={BusinessModerationView} />
