@@ -178,7 +178,7 @@ export default function BusinessModerationView() {
             <TabsTrigger value="deals" className="flex-1 basis-[calc(50%-0.25rem)] sm:basis-auto min-w-fit whitespace-nowrap px-4 py-2.5 font-bold data-[state=active]:bg-primary/10 data-[state=active]:text-primary rounded-lg flex gap-2">
               {legacyCopy.dealsTab} {deals && deals.length > 0 && <Badge variant="secondary" className="bg-primary text-primary-foreground text-[10px] py-0 px-1.5 h-4 min-w-4">{deals.length}</Badge>}
             </TabsTrigger>
-            <TabsTrigger value="corrections" className="flex-1 basis-[calc(50%-0.25rem)] sm:basis-auto min-w-fit whitespace-nowrap px-4 py-2.5 font-bold data-[state=active]:bg-primary/10 data-[state=active]:text-primary rounded-lg">
+            <TabsTrigger value="corrections" className="flex-1 basis-[calc(50%-0.25rem)] sm:basis-auto min-w-fit whitespace-nowrap px-4 py-2.5 font-bold data-[state=active]:bg-primary/10 data-[state=active]:text-primary rounded-lg" data-testid="tab-corrections">
               {reviewLanguage === 'nl' ? 'Correcties' : 'Corrections'}
             </TabsTrigger>
             {featureFlags.businessPublication && (

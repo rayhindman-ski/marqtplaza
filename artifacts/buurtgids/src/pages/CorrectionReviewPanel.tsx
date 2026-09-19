@@ -6,6 +6,7 @@ import {
   useGetListingCorrectionQueue,
 } from '@workspace/api-client-react';
 import { useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
@@ -31,6 +32,15 @@ export function CorrectionReviewPanel({ enabled }: { enabled: boolean }) {
       },
     }, {
       onSuccess: () => {
+        toast.success(nl ? 'Beslissing opgeslagen.' : 'Decision saved.');
+        void queryClient.invalidateQueries({ queryKey: getGetListingCorrectionQueueQueryKey() });
+      },
+      onError: (error: unknown) => {
+        const status = (error as { response?: { status?: number }; status?: number })?.response?.status
+          ?? (error as { status?: number })?.status;
+        toast.error(status === 409
+          ? (nl ? 'Deze versie is intussen gewijzigd. De wachtrij is ververst.' : 'This version changed in the meantime. The queue has been refreshed.')
+          : (nl ? 'De beslissing kon niet worden opgeslagen.' : 'The decision could not be saved.'));
         void queryClient.invalidateQueries({ queryKey: getGetListingCorrectionQueueQueryKey() });
       },
     });
@@ -54,7 +64,7 @@ export function CorrectionReviewPanel({ enabled }: { enabled: boolean }) {
   return (
     <div className="grid gap-5 lg:grid-cols-2" data-testid="correction-review-queue">
       {queue.data.map((item) => (
-        <Card key={item.id}>
+        <Card key={item.id} data-testid={`correction-item-${item.id}`}>
           <CardHeader>
             <CardTitle className="text-lg">{item.fieldKey.replaceAll('_', ' ')}</CardTitle>
             <p className="text-xs text-muted-foreground">

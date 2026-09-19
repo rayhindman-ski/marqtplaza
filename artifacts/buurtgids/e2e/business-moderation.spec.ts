@@ -14,6 +14,24 @@ const PAGE_SIZE = 20;
 
 type Recorded = { method: string; path: string; body: any };
 
+const correction = (id: number, version: number, proposedValue: string) => ({
+  id,
+  cityId: 'den-haag',
+  listingSource: 'openstreetmap',
+  listingId: 'node-900',
+  fieldKey: 'name',
+  proposedValue,
+  explanation: `Toelichting ${id}`,
+  evidenceUrl: null,
+  status: 'pending_review',
+  version,
+  reviewedBy: null,
+  reviewedAt: null,
+  reviewReason: null,
+  createdAt: NOW,
+  updatedAt: NOW,
+});
+
 const profile = (id: number, name: string, publicationStatus = 'draft') => ({
   id, slug: `bedrijf-${id}`, name, neighborhood: 'Bezuidenhout', category: 'Bakkerij', listingSource: 'openstreetmap',
   sourceUrl: `https://www.openstreetmap.org/node/${id}`, isClaimed: false, publicationStatus,
@@ -55,6 +73,13 @@ function installServer(page: Page) {
     { profile: profile(303, 'Bijna Verlopen', 'published'), approvedRevision: revision(72, 303, 2, 'approved', 'Live'), latestDecision: null, freshness: { status: 'fresh', checkedOn: '2026-03-18T00:00:00.000Z', staleAfterDays: 180, staleOn: '2026-09-14T00:00:00.000Z', daysUntilStale: 0, recheckWindowDays: 30, recheckDue: true }, canDecide: true },
     { profile: profile(302, 'Al Online', 'published'), approvedRevision: revision(71, 302, 1, 'approved', 'Live'), latestDecision: { id: 9, targetType: 'publication', targetId: 302, targetVersion: 1, decision: 'publish', reason: 'Alles klopt.', createdAt: NOW }, freshness: { status: 'fresh', checkedOn: '2026-03-25T00:00:00.000Z', staleAfterDays: 180, staleOn: '2026-09-21T00:00:00.000Z', daysUntilStale: 7, recheckWindowDays: 30, recheckDue: true }, canDecide: true },
   ];
+  const corrections = [
+    correction(81, 3, 'Nieuwe openbare naam'),
+    correction(82, 5, 'Onjuiste naam'),
+    correction(83, 2, 'Verouderde naam'),
+  ];
+  const correctionReviews: Array<{ correctionId: number; correctionVersion: number; decision: string; reason: string | null }> = [];
+  const publicListing = { id: 'node-900', name: 'Bestaande openbare naam' };
 
   const json = (route: Route, body: unknown, status = 200) =>
     route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
@@ -80,6 +105,28 @@ function installServer(page: Page) {
   const install = async () => {
     await page.route('**/api/business-claims/moderation**', (route) => json(route, []));
     await page.route('**/api/deals/moderation**', (route) => json(route, []));
+    await page.route('**/api/e2e/public-listing/node-900', (route) => json(route, publicListing));
+    await page.route(/\/api\/listing-corrections(\/\d+\/decision|\/moderation)(\?.*)?$/, (route) => {
+      const { url, body, method } = record(route);
+      if (method === 'GET' && url.pathname.endsWith('/moderation')) {
+        return json(route, corrections.filter((item) => item.status === 'pending_review'));
+      }
+      const id = Number(url.pathname.match(/\/listing-corrections\/(\d+)\/decision$/)?.[1]);
+      const item = corrections.find((entry) => entry.id === id);
+      if (!item) return error(route, 'NOT_FOUND', 404);
+      if (body.expectedVersion !== item.version || item.status !== 'pending_review') {
+        return error(route, 'VERSION_CONFLICT', 409, { expectedVersion: item.version });
+      }
+      correctionReviews.push({
+        correctionId: id,
+        correctionVersion: item.version,
+        decision: body.decision,
+        reason: body.reason ?? null,
+      });
+      item.status = body.decision === 'approve' ? 'approved' : 'rejected';
+      item.version += 1;
+      return json(route, item);
+    });
 
     await page.route(/\/api\/review\/claims(\/\d+\/decision)?(\?.*)?$/, (route) => {
       const { url, body, method } = record(route);
@@ -140,12 +187,20 @@ function installServer(page: Page) {
     claims,
     revisions,
     publications,
+    corrections,
+    correctionReviews,
+    publicListing,
     /** Simulate another reviewer or the owner changing a claim after the queue was loaded. */
     bumpClaimVersion(id: number) {
       const claim = claims.find((entry) => entry.id === id);
       if (!claim) throw new Error(`no claim ${id}`);
       claim.version += 1;
       claim.status = 'changes_requested';
+    },
+    bumpCorrectionVersion(id: number) {
+      const item = corrections.find((entry) => entry.id === id);
+      if (!item) throw new Error(`no correction ${id}`);
+      item.version += 1;
     },
   };
 }
@@ -168,11 +223,13 @@ test.describe('business moderation screen', () => {
     await page.goto(MODERATION_URL);
     await expect(page.getByRole('heading', { name: 'Geen toegang' })).toBeVisible();
     await expect(page.getByTestId('tab-authority')).toHaveCount(0);
+    await expect(page.getByTestId('tab-corrections')).toHaveCount(0);
 
     await signIn(page, { userId: 'user-member', role: 'member' });
     await page.goto(MODERATION_URL);
     await expect(page.getByRole('heading', { name: 'Redactietoegang vereist' })).toBeVisible();
     await expect(page.getByTestId('tab-authority')).toHaveCount(0);
+    await expect(page.getByTestId('tab-corrections')).toHaveCount(0);
 
     // The same gates read in English when the app language is English.
     await signIn(page, { userId: null }, 'en');
@@ -185,6 +242,64 @@ test.describe('business moderation screen', () => {
     await expect(page.getByRole('heading', { name: 'Editorial access required' })).toBeVisible();
     await expect(page.getByTestId('tab-authority')).toHaveCount(0);
     expect(server.requests.filter((request) => request.path.startsWith('/api/review/'))).toEqual([]);
+    expect(server.requests.filter((request) => request.path.startsWith('/api/listing-corrections/'))).toEqual([]);
+  });
+
+  test('correction decisions use the displayed version, refresh the queue, and never change the public listing', async ({ page }) => {
+    const server = installServer(page);
+    await server.install();
+    await signIn(page, { userId: 'user-editor', role: 'editor' });
+    await page.goto(MODERATION_URL);
+    await page.getByTestId('tab-corrections').click();
+
+    const queue = page.getByTestId('correction-review-queue');
+    const approved = queue.getByTestId('correction-item-81');
+    await expect(approved.getByText('den-haag · openstreetmap · node-900 · v3')).toBeVisible();
+    await expect(approved.getByText('Goedkeuren wijzigt de openbare vermelding niet automatisch.')).toBeVisible();
+    await approved.getByRole('button', { name: 'Goedkeuren' }).click();
+    await expect(page.getByText('Beslissing opgeslagen.')).toBeVisible();
+    await expect(approved).toHaveCount(0);
+
+    const rejected = queue.getByTestId('correction-item-82');
+    await rejected.getByLabel('Redactionele reden (optioneel)').fill('Bron spreekt dit tegen.');
+    await rejected.getByRole('button', { name: 'Afwijzen' }).click();
+    await expect(rejected).toHaveCount(0);
+
+    const posts = server.requests.filter((request) => request.method === 'POST' && request.path.includes('/api/listing-corrections/'));
+    expect(posts.map((request) => ({ path: request.path, body: request.body }))).toEqual([
+      { path: '/api/listing-corrections/81/decision', body: { decision: 'approve', expectedVersion: 3 } },
+      { path: '/api/listing-corrections/82/decision', body: { decision: 'reject', expectedVersion: 5, reason: 'Bron spreekt dit tegen.' } },
+    ]);
+    expect(server.correctionReviews).toEqual([
+      { correctionId: 81, correctionVersion: 3, decision: 'approve', reason: null },
+      { correctionId: 82, correctionVersion: 5, decision: 'reject', reason: 'Bron spreekt dit tegen.' },
+    ]);
+
+    const publicListing = await page.evaluate(async () => {
+      const response = await fetch('/api/e2e/public-listing/node-900');
+      return response.json();
+    });
+    expect(publicListing).toEqual({ id: 'node-900', name: 'Bestaande openbare naam' });
+    expect(server.publicListing.name).toBe('Bestaande openbare naam');
+  });
+
+  test('a stale correction decision reports a conflict and refreshes to the current version', async ({ page }) => {
+    const server = installServer(page);
+    await server.install();
+    await signIn(page, { userId: 'user-editor', role: 'editor' });
+    await page.goto(MODERATION_URL);
+    await page.getByTestId('tab-corrections').click();
+
+    const item = page.getByTestId('correction-item-83');
+    await expect(item.getByText('den-haag · openstreetmap · node-900 · v2')).toBeVisible();
+    server.bumpCorrectionVersion(83);
+    await item.getByRole('button', { name: 'Goedkeuren' }).click();
+
+    await expect(page.getByText('Deze versie is intussen gewijzigd. De wachtrij is ververst.')).toBeVisible();
+    await expect(item.getByText('den-haag · openstreetmap · node-900 · v3')).toBeVisible();
+    expect(server.correctionReviews).toEqual([]);
+    const posts = server.requests.filter((request) => request.method === 'POST' && request.path === '/api/listing-corrections/83/decision');
+    expect(posts.map((request) => request.body.expectedVersion)).toEqual([2]);
   });
 
   test('editors page through the ownership queue and approve a claim bound to its version', async ({ page }) => {
