@@ -341,6 +341,9 @@ for (const [mapPath, tilesAvailable] of [['tile map', true], ['coordinate fallba
 
 test('homepage map keeps the user zoom level when hovering neighborhoods', async ({ page }) => {
   await stubBoundaryDiscovery(page, true);
+  await page.addInitScript(() => {
+    localStorage.setItem('buurtplaza-discovery-live-mode', 'true');
+  });
   await page.goto('/');
   await expect(page.getByRole('button', { name: 'Show Map' })).toBeVisible();
   await expect(page.getByLabel('Interactive activity map')).toHaveCount(0);
@@ -465,16 +468,16 @@ test('main search external-source setting controls discovery mode and persists',
   await expect.poll(() => listingsRequests.at(-1)?.searchParams.get('mode')).toBe('live');
   await expect(page.getByTestId('results-group-local')).toContainText('Stored postcode result');
   await expect(page.getByTestId('results-group-web')).toContainText('Additional web results');
-  await expect.poll(() => page.evaluate(() => localStorage.getItem('buurtplaza-discovery-live-mode'))).toBe('true');
+  await expect.poll(() => page.evaluate(() => sessionStorage.getItem('buurtplaza-discovery-live-mode'))).toBe('true');
   const requestCountBeforeDisable = listingsRequests.length;
   await resultsScopeToggle.uncheck();
-  await expect.poll(() => page.evaluate(() => localStorage.getItem('buurtplaza-discovery-live-mode'))).toBe('false');
+  await expect.poll(() => page.evaluate(() => sessionStorage.getItem('buurtplaza-discovery-live-mode'))).toBe('false');
   await expect(page.getByText('Local-only search.')).toBeVisible();
   await expect(page.getByTestId('results-group-web')).toHaveCount(0);
   expect(listingsRequests.slice(requestCountBeforeDisable).some((url) => url.searchParams.get('mode') === 'live')).toBe(false);
   await expect(page.getByText('Stored postcode result').first()).toBeVisible();
   await resultsScopeToggle.check();
-  await expect.poll(() => page.evaluate(() => localStorage.getItem('buurtplaza-discovery-live-mode'))).toBe('true');
+  await expect.poll(() => page.evaluate(() => sessionStorage.getItem('buurtplaza-discovery-live-mode'))).toBe('true');
   await expect(page.getByText('Local search with additional web results.')).toBeVisible();
 
   // The single top-level setting persists when returning to the main search page.

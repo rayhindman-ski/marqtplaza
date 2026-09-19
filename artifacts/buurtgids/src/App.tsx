@@ -888,7 +888,7 @@ const DISCOVERY_EXTERNAL_SOURCES_STORAGE_KEY = 'buurtplaza-discovery-live-mode';
 
 function readIncludeExternalSources(): boolean {
   if (typeof window === 'undefined') return false;
-  const saved = window.localStorage.getItem(DISCOVERY_EXTERNAL_SOURCES_STORAGE_KEY);
+  const saved = window.sessionStorage.getItem(DISCOVERY_EXTERNAL_SOURCES_STORAGE_KEY);
   return saved === 'true';
 }
 
@@ -945,7 +945,7 @@ function SearchState({
   }, [hoveredMapNeighborhood, mapLocation, selectedMapNeighborhood]);
 
   useEffect(() => {
-    window.localStorage.setItem(
+    window.sessionStorage.setItem(
       DISCOVERY_EXTERNAL_SOURCES_STORAGE_KEY,
       String(includeExternalSources),
     );
@@ -1823,7 +1823,7 @@ function DiscoveryState({
 
   const [liveMode, setLiveMode] = useState(readIncludeExternalSources);
   const setDiscoveryScope = useCallback((includeWebResults: boolean) => {
-    localStorage.setItem(DISCOVERY_EXTERNAL_SOURCES_STORAGE_KEY, String(includeWebResults));
+    sessionStorage.setItem(DISCOVERY_EXTERNAL_SOURCES_STORAGE_KEY, String(includeWebResults));
     setLiveMode(includeWebResults);
   }, []);
   const enableLiveMode = useCallback(() => setDiscoveryScope(true), [setDiscoveryScope]);
