@@ -29,6 +29,7 @@ import { useEditorAccess } from '@/lib/editorAccess';
 import { featureFlags } from '@/lib/featureFlags';
 import { BusinessReviewPanel } from './BusinessReviewPanel';
 import { AccountSupportPanel } from './AccountSupportPanel';
+import { CorrectionReviewPanel } from './CorrectionReviewPanel';
 import { accountSupportTranslations, businessReviewTranslations, reviewWorkspaceTranslations } from '@/lib/i18n';
 import { useAppLanguage } from '@/lib/useAppLanguage';
 
@@ -49,7 +50,7 @@ export default function BusinessModerationView() {
   const tabCopy = reviewCopy.tabs;
   const legacyCopy = reviewCopy.legacy;
   const dateLocale = reviewLanguage === 'en' ? enUS : nl;
-  const tabCount = 2 + (featureFlags.businessPublication ? 3 : 0) + (featureFlags.accounts ? 2 : 0);
+  const tabCount = 3 + (featureFlags.businessPublication ? 3 : 0) + (featureFlags.accounts ? 2 : 0);
   
   // Claim Queries & Mutations
   const { data: claims, isLoading: claimsLoading } = useGetBusinessClaimModeration(
@@ -177,6 +178,9 @@ export default function BusinessModerationView() {
             <TabsTrigger value="deals" className="flex-1 basis-[calc(50%-0.25rem)] sm:basis-auto min-w-fit whitespace-nowrap px-4 py-2.5 font-bold data-[state=active]:bg-primary/10 data-[state=active]:text-primary rounded-lg flex gap-2">
               {legacyCopy.dealsTab} {deals && deals.length > 0 && <Badge variant="secondary" className="bg-primary text-primary-foreground text-[10px] py-0 px-1.5 h-4 min-w-4">{deals.length}</Badge>}
             </TabsTrigger>
+            <TabsTrigger value="corrections" className="flex-1 basis-[calc(50%-0.25rem)] sm:basis-auto min-w-fit whitespace-nowrap px-4 py-2.5 font-bold data-[state=active]:bg-primary/10 data-[state=active]:text-primary rounded-lg">
+              {reviewLanguage === 'nl' ? 'Correcties' : 'Corrections'}
+            </TabsTrigger>
             {featureFlags.businessPublication && (
               <>
                 <TabsTrigger value="authority" className="flex-1 basis-[calc(50%-0.25rem)] sm:basis-auto min-w-fit whitespace-nowrap px-4 py-2.5 font-bold data-[state=active]:bg-primary/10 data-[state=active]:text-primary rounded-lg" data-testid="tab-authority">{tabCopy.authority}</TabsTrigger>
@@ -206,6 +210,9 @@ export default function BusinessModerationView() {
               <TabsContent value="publication" className="mt-0"><BusinessReviewPanel section="publication" enabled={activeTab === 'publication'} /></TabsContent>
             </>
           )}
+          <TabsContent value="corrections" className="mt-0">
+            <CorrectionReviewPanel enabled={activeTab === 'corrections'} />
+          </TabsContent>
           
           <TabsContent value="claims" className="space-y-6 mt-0">
             {claimsLoading ? (

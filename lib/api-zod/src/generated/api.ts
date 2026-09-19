@@ -1109,6 +1109,71 @@ export const SubmitListingCorrectionResponse = zod.object({
 
 
 /**
+ * @summary List pending guest listing corrections
+ */
+export const GetListingCorrectionQueueResponseItem = zod.object({
+  "id": zod.number(),
+  "receipt": zod.string(),
+  "cityId": zod.string(),
+  "listingSource": zod.string(),
+  "listingId": zod.string(),
+  "fieldKey": zod.string(),
+  "proposedValue": zod.string(),
+  "explanation": zod.string().nullable(),
+  "evidenceUrl": zod.string().nullable(),
+  "locale": zod.string(),
+  "status": zod.enum(['pending_review', 'approved', 'rejected']),
+  "version": zod.number(),
+  "reason": zod.string().nullable(),
+  "reviewedBy": zod.string().nullable(),
+  "createdAt": zod.coerce.date(),
+  "reviewedAt": zod.coerce.date().nullable()
+})
+export const GetListingCorrectionQueueResponse = zod.array(GetListingCorrectionQueueResponseItem)
+
+
+/**
+ * @summary Approve or reject a guest listing correction
+ */
+
+
+
+export const DecideListingCorrectionParams = zod.object({
+  "correctionId": zod.coerce.number().min(1)
+})
+
+
+export const decideListingCorrectionBodyReasonMax = 2000;
+
+
+
+export const DecideListingCorrectionBody = zod.object({
+  "decision": zod.enum(['approve', 'reject']),
+  "expectedVersion": zod.number().min(1),
+  "reason": zod.string().max(decideListingCorrectionBodyReasonMax).optional()
+})
+
+export const DecideListingCorrectionResponse = zod.object({
+  "id": zod.number(),
+  "receipt": zod.string(),
+  "cityId": zod.string(),
+  "listingSource": zod.string(),
+  "listingId": zod.string(),
+  "fieldKey": zod.string(),
+  "proposedValue": zod.string(),
+  "explanation": zod.string().nullable(),
+  "evidenceUrl": zod.string().nullable(),
+  "locale": zod.string(),
+  "status": zod.enum(['pending_review', 'approved', 'rejected']),
+  "version": zod.number(),
+  "reason": zod.string().nullable(),
+  "reviewedBy": zod.string().nullable(),
+  "createdAt": zod.coerce.date(),
+  "reviewedAt": zod.coerce.date().nullable()
+})
+
+
+/**
  * @summary Get the signed-in resident's saved events and alerts
  */
 export const getSavedEventsResponseEventsItemEventIdMax = 240;

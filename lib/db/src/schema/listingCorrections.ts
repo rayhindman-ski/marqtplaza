@@ -1,5 +1,7 @@
 import {
   index,
+  integer,
+  foreignKey,
   pgTable,
   serial,
   text,
@@ -45,6 +47,7 @@ export const listingCorrectionsTable = pgTable(
     locale: text("locale").notNull(),
     consentNoticeVersion: text("consent_notice_version").notNull(),
     status: text("status").notNull().default("pending_review"),
+    version: integer("version").notNull().default(1),
     idempotencyKey: text("idempotency_key").notNull(),
     idempotencyDigest: text("idempotency_digest").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -68,11 +71,42 @@ export const listingCorrectionsTable = pgTable(
   ],
 );
 
+export const listingCorrectionReviewsTable = pgTable(
+  "listing_correction_reviews",
+  {
+    id: serial("id").primaryKey(),
+    correctionId: integer("correction_id").notNull(),
+    correctionVersion: integer("correction_version").notNull(),
+    reviewerUserId: text("reviewer_user_id").notNull(),
+    decision: text("decision").notNull(),
+    reason: text("reason"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    foreignKey({
+      name: "listing_correction_reviews_correction_fk",
+      columns: [table.correctionId],
+      foreignColumns: [listingCorrectionsTable.id],
+    }).onDelete("cascade"),
+    uniqueIndex("listing_correction_reviews_version_unique").on(
+      table.correctionId,
+      table.correctionVersion,
+    ),
+    index("listing_correction_reviews_created_idx").on(table.createdAt),
+  ],
+);
+
 export const insertListingCorrectionSchema = createInsertSchema(listingCorrectionsTable).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
 });
+export const insertListingCorrectionReviewSchema = createInsertSchema(listingCorrectionReviewsTable).omit({
+  id: true,
+  createdAt: true,
+});
 
 export type ListingCorrection = typeof listingCorrectionsTable.$inferSelect;
+export type ListingCorrectionReview = typeof listingCorrectionReviewsTable.$inferSelect;
 export type InsertListingCorrection = z.infer<typeof insertListingCorrectionSchema>;
+export type InsertListingCorrectionReview = z.infer<typeof insertListingCorrectionReviewSchema>;

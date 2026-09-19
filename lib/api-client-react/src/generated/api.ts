@@ -54,6 +54,7 @@ import type {
   Deal,
   DealInput,
   DealUpdate,
+  DecideListingCorrectionInput,
   EditorialQueueItem,
   EditorialQueuePage,
   EventReviewDecision,
@@ -79,6 +80,7 @@ import type {
   HealthStatus,
   LifecycleMessages,
   ListingCorrectionReceipt,
+  ListingCorrectionReviewItem,
   ListingsResponse,
   LookupBusinessesParams,
   ModerationDecision,
@@ -2228,6 +2230,155 @@ export const useSubmitListingCorrection = <TError = ErrorType<ApiError>,
         TContext
       > => {
       return useMutation(getSubmitListingCorrectionMutationOptions(options));
+    }
+
+export const getGetListingCorrectionQueueUrl = () => {
+
+
+
+
+  return `/api/listing-corrections/moderation`
+}
+
+/**
+ * @summary List pending guest listing corrections
+ */
+export const getListingCorrectionQueue = async ( options?: Parameters<typeof customFetch>[1]): Promise<ListingCorrectionReviewItem[]> => {
+
+  return customFetch<ListingCorrectionReviewItem[]>(getGetListingCorrectionQueueUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetListingCorrectionQueueQueryKey = () => {
+    return [
+    `/api/listing-corrections/moderation`
+    ] as const;
+    }
+
+
+export const getGetListingCorrectionQueueQueryOptions = <TData = Awaited<ReturnType<typeof getListingCorrectionQueue>>, TError = ErrorType<ApiError>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getListingCorrectionQueue>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetListingCorrectionQueueQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getListingCorrectionQueue>>> = ({ signal }) => getListingCorrectionQueue({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getListingCorrectionQueue>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetListingCorrectionQueueQueryResult = NonNullable<Awaited<ReturnType<typeof getListingCorrectionQueue>>>
+export type GetListingCorrectionQueueQueryError = ErrorType<ApiError>
+
+
+/**
+ * @summary List pending guest listing corrections
+ */
+
+export function useGetListingCorrectionQueue<TData = Awaited<ReturnType<typeof getListingCorrectionQueue>>, TError = ErrorType<ApiError>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getListingCorrectionQueue>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetListingCorrectionQueueQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getDecideListingCorrectionUrl = (correctionId: number,) => {
+
+
+
+
+  return `/api/listing-corrections/${correctionId}/decision`
+}
+
+/**
+ * @summary Approve or reject a guest listing correction
+ */
+export const decideListingCorrection = async (correctionId: number,
+    decideListingCorrectionInput: DecideListingCorrectionInput, options?: Parameters<typeof customFetch>[1]): Promise<ListingCorrectionReviewItem> => {
+
+  return customFetch<ListingCorrectionReviewItem>(getDecideListingCorrectionUrl(correctionId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(decideListingCorrectionInput)
+  }
+);}
+
+
+
+
+
+export const getDecideListingCorrectionMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof decideListingCorrection>>, TError,{correctionId: number;data: BodyType<DecideListingCorrectionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof decideListingCorrection>>, TError,{correctionId: number;data: BodyType<DecideListingCorrectionInput>}, TContext> => {
+
+const mutationKey = ['decideListingCorrection'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof decideListingCorrection>>, {correctionId: number;data: BodyType<DecideListingCorrectionInput>}> = (props) => {
+          const {correctionId,data} = props ?? {};
+
+          return  decideListingCorrection(correctionId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DecideListingCorrectionMutationResult = NonNullable<Awaited<ReturnType<typeof decideListingCorrection>>>
+    export type DecideListingCorrectionMutationBody = BodyType<DecideListingCorrectionInput>
+    export type DecideListingCorrectionMutationError = ErrorType<ApiError>
+
+    /**
+ * @summary Approve or reject a guest listing correction
+ */
+export const useDecideListingCorrection = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof decideListingCorrection>>, TError,{correctionId: number;data: BodyType<DecideListingCorrectionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof decideListingCorrection>>,
+        TError,
+        {correctionId: number;data: BodyType<DecideListingCorrectionInput>},
+        TContext
+      > => {
+      return useMutation(getDecideListingCorrectionMutationOptions(options));
     }
 
 export const getGetSavedEventsUrl = () => {

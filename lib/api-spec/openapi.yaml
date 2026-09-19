@@ -938,6 +938,60 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/ApiError" }
 
+  /listing-corrections/moderation:
+    get:
+      operationId: getListingCorrectionQueue
+      tags: [moderation]
+      summary: List pending guest listing corrections
+      responses:
+        "200":
+          description: Pending corrections ordered oldest first
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ListingCorrectionReviewItem"
+        "403":
+          description: Reviewer authorization required
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+
+  /listing-corrections/{correctionId}/decision:
+    post:
+      operationId: decideListingCorrection
+      tags: [moderation]
+      summary: Approve or reject a guest listing correction
+      parameters:
+        - name: correctionId
+          in: path
+          required: true
+          schema: { type: number, minimum: 1 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DecideListingCorrectionInput"
+      responses:
+        "200":
+          description: Correction decision recorded; public listing is unchanged
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListingCorrectionReviewItem"
+        "403":
+          description: Reviewer authorization required
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+        "409":
+          description: Stale version or correction is no longer pending
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+
   /saved-events:
     get:
       operationId: getSavedEvents
@@ -5081,6 +5135,42 @@ components:
           type: string
           format: date-time
       required: [receipt, status, cityId, listingSource, listingId, fieldKey, submittedAt]
+
+    DecideListingCorrectionInput:
+      type: object
+      additionalProperties: false
+      properties:
+        decision:
+          type: string
+          enum: [approve, reject]
+        expectedVersion:
+          type: number
+          minimum: 1
+        reason:
+          type: string
+          maxLength: 2000
+      required: [decision, expectedVersion]
+
+    ListingCorrectionReviewItem:
+      type: object
+      properties:
+        id: { type: number }
+        receipt: { type: string }
+        cityId: { type: string }
+        listingSource: { type: string }
+        listingId: { type: string }
+        fieldKey: { type: string }
+        proposedValue: { type: string }
+        explanation: { type: string, nullable: true }
+        evidenceUrl: { type: string, nullable: true }
+        locale: { type: string }
+        status: { type: string, enum: [pending_review, approved, rejected] }
+        version: { type: number }
+        reason: { type: string, nullable: true }
+        reviewedBy: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+        reviewedAt: { type: string, format: date-time, nullable: true }
+      required: [id, receipt, cityId, listingSource, listingId, fieldKey, proposedValue, explanation, evidenceUrl, locale, status, version, reason, reviewedBy, createdAt, reviewedAt]
 
     ListingsResponse:
       type: object

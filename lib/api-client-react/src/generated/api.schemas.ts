@@ -2482,6 +2482,50 @@ export interface ListingCorrectionReceipt {
   submittedAt: string;
 }
 
+export type DecideListingCorrectionInputDecision = typeof DecideListingCorrectionInputDecision[keyof typeof DecideListingCorrectionInputDecision];
+
+
+export const DecideListingCorrectionInputDecision = {
+  approve: 'approve',
+  reject: 'reject',
+} as const;
+
+export interface DecideListingCorrectionInput {
+  decision: DecideListingCorrectionInputDecision;
+  /** @minimum 1 */
+  expectedVersion: number;
+  /** @maxLength 2000 */
+  reason?: string;
+}
+
+export type ListingCorrectionReviewItemStatus = typeof ListingCorrectionReviewItemStatus[keyof typeof ListingCorrectionReviewItemStatus];
+
+
+export const ListingCorrectionReviewItemStatus = {
+  pending_review: 'pending_review',
+  approved: 'approved',
+  rejected: 'rejected',
+} as const;
+
+export interface ListingCorrectionReviewItem {
+  id: number;
+  receipt: string;
+  cityId: string;
+  listingSource: string;
+  listingId: string;
+  fieldKey: string;
+  proposedValue: string;
+  explanation: string | null;
+  evidenceUrl: string | null;
+  locale: string;
+  status: ListingCorrectionReviewItemStatus;
+  version: number;
+  reason: string | null;
+  reviewedBy: string | null;
+  createdAt: string;
+  reviewedAt: string | null;
+}
+
 export type ListingsResponseSource = typeof ListingsResponseSource[keyof typeof ListingsResponseSource];
 
 
