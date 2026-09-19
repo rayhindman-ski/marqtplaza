@@ -8,6 +8,7 @@
 import type { BusinessCategory } from './businessCategory';
 import type { ListingActivityKind } from './listingActivityKind';
 import type { ListingCategory } from './listingCategory';
+import type { ListingFieldEvidence } from './listingFieldEvidence';
 import type { ListingFoodType } from './listingFoodType';
 import type { ListingMealType } from './listingMealType';
 import type { ListingPriceType } from './listingPriceType';
@@ -83,4 +84,6 @@ export interface Listing {
   lastCheckedAt?: string;
   /** Scheduled date for the next source review. */
   nextReviewAt?: string;
+  /** Field-level public evidence. Missing proof is represented explicitly as unknown. */
+  evidence?: ListingFieldEvidence[];
 }

@@ -448,6 +448,12 @@ test('main search external-source setting controls discovery mode and persists',
   expect(anonId).toBeTruthy();
   expect(anonId).toMatch(/^anon_|^[0-9a-f-]{36}$/i);
   await expect(page.getByText('Stored postcode result').first()).toBeVisible();
+  await expect(page.getByTestId('results-group-local')).toContainText('Stored postcode result');
+  await expect(page.getByTestId('results-group-web')).toHaveCount(0);
+  await page.getByRole('button', { name: /Stored postcode result/ }).click();
+  await page.getByText('Source and check by field').click();
+  await expect(page.getByTestId('listing-evidence-postcode-result')).toContainText('Source, checked date, and status are unknown.');
+  await expect(page.getByTestId('trust-badge-postcode-result')).toHaveCount(0);
   await expect(page.getByText('Stored data')).toBeVisible();
   await expect(page.getByText('No saved results exist for this search.')).toBeVisible();
   const liveSearchButton = page.getByRole('button', { name: 'Switch to live mode to search external sources' });
@@ -457,11 +463,14 @@ test('main search external-source setting controls discovery mode and persists',
   await liveSearchButton.click();
   await expect(resultsScopeToggle).toBeChecked();
   await expect.poll(() => listingsRequests.at(-1)?.searchParams.get('mode')).toBe('live');
+  await expect(page.getByTestId('results-group-local')).toContainText('Stored postcode result');
+  await expect(page.getByTestId('results-group-web')).toContainText('Additional web results');
   await expect.poll(() => page.evaluate(() => localStorage.getItem('buurtplaza-discovery-live-mode'))).toBe('true');
   const requestCountBeforeDisable = listingsRequests.length;
   await resultsScopeToggle.uncheck();
   await expect.poll(() => page.evaluate(() => localStorage.getItem('buurtplaza-discovery-live-mode'))).toBe('false');
   await expect(page.getByText('Local-only search.')).toBeVisible();
+  await expect(page.getByTestId('results-group-web')).toHaveCount(0);
   expect(listingsRequests.slice(requestCountBeforeDisable).some((url) => url.searchParams.get('mode') === 'live')).toBe(false);
   await expect(page.getByText('Stored postcode result').first()).toBeVisible();
   await resultsScopeToggle.check();

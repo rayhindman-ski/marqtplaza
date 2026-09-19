@@ -4791,6 +4791,11 @@ components:
         nextReviewAt:
           type: string
           description: Scheduled date for the next source review.
+        evidence:
+          type: array
+          description: Field-level public evidence. Missing proof is represented explicitly as unknown.
+          items:
+            $ref: "#/components/schemas/ListingFieldEvidence"
       required:
         - id
         - locationId
@@ -4824,6 +4829,31 @@ components:
       type: string
       description: Provider or editorial source for an individual listing.
       enum: [google_maps, openstreetmap, curated, source_scan]
+
+    ListingEvidenceStatus:
+      type: string
+      enum: [current, stale, conflicting, unknown, unavailable]
+
+    ListingEvidenceField:
+      type: string
+      enum: [name, description, address, event_date, opening_times, price]
+
+    ListingFieldEvidence:
+      type: object
+      properties:
+        field:
+          $ref: "#/components/schemas/ListingEvidenceField"
+        sourceLabel:
+          type: ["string", "null"]
+        sourceUrl:
+          type: ["string", "null"]
+        checkedAt:
+          type: ["string", "null"]
+        status:
+          $ref: "#/components/schemas/ListingEvidenceStatus"
+        caveat:
+          type: ["string", "null"]
+      required: [field, sourceLabel, sourceUrl, checkedAt, status, caveat]
 
     SocialMapCategory:
       type: string
@@ -4950,6 +4980,14 @@ components:
         mode:
           type: string
           enum: [live, stored_only]
+        scopeGroup:
+          type: string
+          enum: [local, web]
+          description: The independently rendered search-scope group represented by this response.
+        groupStatus:
+          type: string
+          enum: [success, empty, partial, error]
+          description: Terminal status for this source group. Client-side loading remains a query state.
         cacheHit:
           type: boolean
         cacheMiss:
@@ -4966,6 +5004,8 @@ components:
       required:
         - listings
         - source
+        - scopeGroup
+        - groupStatus
 
     EventEvidence:
       type: object

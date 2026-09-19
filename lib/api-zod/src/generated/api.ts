@@ -1014,12 +1014,22 @@ export const GetListingsResponse = zod.object({
   "reviewStatus": zod.enum(['verified', 'review_due', 'changed', 'unavailable']).optional().describe('Public-safe status of a curated social-map record.'),
   "reviewReason": zod.string().nullish().describe('Why this social-map record needs editorial attention, when applicable.'),
   "lastCheckedAt": zod.string().optional().describe('Date or timestamp of the latest source review for this record.'),
-  "nextReviewAt": zod.string().optional().describe('Scheduled date for the next source review.')
+  "nextReviewAt": zod.string().optional().describe('Scheduled date for the next source review.'),
+  "evidence": zod.array(zod.object({
+  "field": zod.enum(['name', 'description', 'address', 'event_date', 'opening_times', 'price']),
+  "sourceLabel": zod.string().nullable(),
+  "sourceUrl": zod.string().nullable(),
+  "checkedAt": zod.string().nullable(),
+  "status": zod.enum(['current', 'stale', 'conflicting', 'unknown', 'unavailable']),
+  "caveat": zod.string().nullable()
+})).optional().describe('Field-level public evidence. Missing proof is represented explicitly as unknown.')
 })),
   "source": zod.enum(['live', 'google_places', 'fallback', 'curated', 'stored']),
   "message": zod.string().optional(),
   "queryId": zod.number().optional().describe('Identifier of the persisted user query.'),
   "mode": zod.enum(['live', 'stored_only']).optional(),
+  "scopeGroup": zod.enum(['local', 'web']).describe('The independently rendered search-scope group represented by this response.'),
+  "groupStatus": zod.enum(['success', 'empty', 'partial', 'error']).describe('Terminal status for this source group. Client-side loading remains a query state.'),
   "cacheHit": zod.boolean().optional(),
   "cacheMiss": zod.boolean().optional(),
   "partial": zod.boolean().optional(),

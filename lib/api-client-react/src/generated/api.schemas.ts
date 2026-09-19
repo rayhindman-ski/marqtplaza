@@ -2250,6 +2250,42 @@ export const SocialMapReviewStatus = {
   unavailable: 'unavailable',
 } as const;
 
+export type ListingEvidenceField = typeof ListingEvidenceField[keyof typeof ListingEvidenceField];
+
+
+export const ListingEvidenceField = {
+  name: 'name',
+  description: 'description',
+  address: 'address',
+  event_date: 'event_date',
+  opening_times: 'opening_times',
+  price: 'price',
+} as const;
+
+export type ListingEvidenceStatus = typeof ListingEvidenceStatus[keyof typeof ListingEvidenceStatus];
+
+
+export const ListingEvidenceStatus = {
+  current: 'current',
+  stale: 'stale',
+  conflicting: 'conflicting',
+  unknown: 'unknown',
+  unavailable: 'unavailable',
+} as const;
+
+export interface ListingFieldEvidence {
+  field: ListingEvidenceField;
+  /** @nullable */
+  sourceLabel: string | null;
+  /** @nullable */
+  sourceUrl: string | null;
+  /** @nullable */
+  checkedAt: string | null;
+  status: ListingEvidenceStatus;
+  /** @nullable */
+  caveat: string | null;
+}
+
 export interface Listing {
   id: string;
   locationId: string;
@@ -2317,6 +2353,8 @@ export interface Listing {
   lastCheckedAt?: string;
   /** Scheduled date for the next source review. */
   nextReviewAt?: string;
+  /** Field-level public evidence. Missing proof is represented explicitly as unknown. */
+  evidence?: ListingFieldEvidence[];
 }
 
 /**
@@ -2395,6 +2433,30 @@ export const ListingsResponseMode = {
   stored_only: 'stored_only',
 } as const;
 
+/**
+ * The independently rendered search-scope group represented by this response.
+ */
+export type ListingsResponseScopeGroup = typeof ListingsResponseScopeGroup[keyof typeof ListingsResponseScopeGroup];
+
+
+export const ListingsResponseScopeGroup = {
+  local: 'local',
+  web: 'web',
+} as const;
+
+/**
+ * Terminal status for this source group. Client-side loading remains a query state.
+ */
+export type ListingsResponseGroupStatus = typeof ListingsResponseGroupStatus[keyof typeof ListingsResponseGroupStatus];
+
+
+export const ListingsResponseGroupStatus = {
+  success: 'success',
+  empty: 'empty',
+  partial: 'partial',
+  error: 'error',
+} as const;
+
 export type ListingsResponseProvidersItem = typeof ListingsResponseProvidersItem[keyof typeof ListingsResponseProvidersItem];
 
 
@@ -2448,6 +2510,10 @@ export interface ListingsResponse {
   /** Identifier of the persisted user query. */
   queryId?: number;
   mode?: ListingsResponseMode;
+  /** The independently rendered search-scope group represented by this response. */
+  scopeGroup: ListingsResponseScopeGroup;
+  /** Terminal status for this source group. Client-side loading remains a query state. */
+  groupStatus: ListingsResponseGroupStatus;
   cacheHit?: boolean;
   cacheMiss?: boolean;
   partial?: boolean;

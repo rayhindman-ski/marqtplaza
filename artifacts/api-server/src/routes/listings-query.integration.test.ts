@@ -167,10 +167,16 @@ describe("listings route integration (isolated database integration)", () => {
   it("returns successful provider listings and finalizes the parent query as partial", async () => {
     const result = await requestListings(anonymousIds[0], "live");
     assert.equal(result.status, 200);
+    assert.equal(result.body.scopeGroup, "web");
+    assert.equal(result.body.groupStatus, "partial");
     assert.equal(result.body.partial, true);
     assert.deepEqual(result.body.providers, ["openstreetmap"]);
     assert.equal(result.body.listings.some((listing: { name?: string }) =>
       listing.name === "Reliable Local Shop"), true);
+    const reliableShop = result.body.listings.find((listing: { name?: string }) =>
+      listing.name === "Reliable Local Shop");
+    assert.equal(reliableShop.evidence.some((item: { field?: string; status?: string }) =>
+      item.field === "name" && item.status === "unknown"), true);
     assert.equal(googleLoaderCalls, 0);
     assert.equal(osmLoaderCalls, 1);
 
@@ -238,6 +244,8 @@ describe("listings route integration (isolated database integration)", () => {
     const osmCallsBefore = osmLoaderCalls;
     const result = await requestListings(anonymousIds[2], "stored_only");
     assert.equal(result.status, 200);
+    assert.equal(result.body.scopeGroup, "local");
+    assert.equal(result.body.groupStatus, "empty");
     assert.equal(result.body.cacheMiss, true);
     assert.equal(result.body.cacheHit, false);
     assert.deepEqual(result.body.listings, []);

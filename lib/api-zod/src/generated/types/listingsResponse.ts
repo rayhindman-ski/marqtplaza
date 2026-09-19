@@ -7,8 +7,10 @@
  */
 import type { EventEvidence } from './eventEvidence';
 import type { Listing } from './listing';
+import type { ListingsResponseGroupStatus } from './listingsResponseGroupStatus';
 import type { ListingsResponseMode } from './listingsResponseMode';
 import type { ListingsResponseProvidersItem } from './listingsResponseProvidersItem';
+import type { ListingsResponseScopeGroup } from './listingsResponseScopeGroup';
 import type { ListingsResponseSource } from './listingsResponseSource';
 
 export interface ListingsResponse {
@@ -18,6 +20,10 @@ export interface ListingsResponse {
   /** Identifier of the persisted user query. */
   queryId?: number;
   mode?: ListingsResponseMode;
+  /** The independently rendered search-scope group represented by this response. */
+  scopeGroup: ListingsResponseScopeGroup;
+  /** Terminal status for this source group. Client-side loading remains a query state. */
+  groupStatus: ListingsResponseGroupStatus;
   cacheHit?: boolean;
   cacheMiss?: boolean;
   partial?: boolean;

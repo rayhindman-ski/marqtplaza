@@ -63,6 +63,16 @@ const BUSINESS_CATEGORIES: readonly BusinessCategory[] = [
 ];
 const BUSINESS_CATEGORY_SET = new Set<string>(BUSINESS_CATEGORIES);
 type ListingSource = "google_maps" | "openstreetmap" | "curated" | "source_scan";
+type ListingEvidenceStatus = "current" | "stale" | "conflicting" | "unknown" | "unavailable";
+type ListingEvidenceField = "name" | "description" | "address" | "event_date" | "opening_times" | "price";
+type ListingFieldEvidence = {
+  field: ListingEvidenceField;
+  sourceLabel: string | null;
+  sourceUrl: string | null;
+  checkedAt: string | null;
+  status: ListingEvidenceStatus;
+  caveat: string | null;
+};
 export type FoodType = "restaurant" | "cafe" | "bar" | "bakery" | "takeaway" | "other";
 export type Listing = {
   id: string;
@@ -108,7 +118,47 @@ export type Listing = {
   firstSeenAt?: string;
   lastSeenAt?: string;
   updatedAt?: string;
+  evidence?: ListingFieldEvidence[];
 };
+
+function listingEvidence(listing: Listing): ListingFieldEvidence[] {
+  const checkedAt = listing.lastCheckedAt
+    ?? listing.snapshotDate
+    ?? listing.lastSeenAt
+    ?? listing.updatedAt
+    ?? null;
+  const status: ListingEvidenceStatus = listing.reviewStatus === "changed"
+    ? "conflicting"
+    : listing.reviewStatus === "review_due"
+      ? "stale"
+      : listing.reviewStatus === "unavailable"
+        ? "unavailable"
+        : listing.reviewStatus === "verified" && checkedAt
+          ? "current"
+          : listing.source === "source_scan" && checkedAt
+            ? "current"
+            : "unknown";
+  const sourceLabel = listing.sourceName
+    ?? (listing.source === "google_maps"
+      ? "Google Maps"
+      : listing.source === "openstreetmap"
+        ? "OpenStreetMap"
+        : null);
+  const sourceUrl = listing.sourcePageUrl ?? listing.sourceUrl ?? listing.officialUrl ?? null;
+  const fields: ListingEvidenceField[] = ["name", "description"];
+  if (listing.address || listing.details) fields.push("address");
+  if (listing.startsAt) fields.push("event_date");
+  if (listing.openingTimes) fields.push("opening_times");
+  if (listing.priceText || listing.priceType) fields.push("price");
+  return fields.map((field) => ({
+    field,
+    sourceLabel,
+    sourceUrl,
+    checkedAt,
+    status,
+    caveat: null,
+  }));
+}
 
 export type EventEvidenceStatus = "verified" | "empty" | "stale" | "blocked" | "unavailable";
 
@@ -1863,6 +1913,38 @@ export function createListingsRouter(
   const requestedSearchLng = Number(req.query["searchLng"]);
   const mode = parseListingsMode(req.query["mode"]);
   const anonymousId = parseAnonymousId(req.query["anonymousId"]);
+  const originalJson = res.json.bind(res);
+  res.json = ((body: unknown) => {
+    if (!body || typeof body !== "object" || !("listings" in body)) {
+      return originalJson(body);
+    }
+    const response = body as {
+      listings?: unknown;
+      partial?: unknown;
+      [key: string]: unknown;
+    };
+    const listings = Array.isArray(response.listings) ? response.listings : [];
+    const groupStatus = res.statusCode >= 400
+      ? "error"
+      : response.partial === true
+        ? "partial"
+        : listings.length > 0
+          ? "success"
+          : "empty";
+    return originalJson({
+      ...response,
+      listings: listings.map((listing) => {
+        if (!listing || typeof listing !== "object") return listing;
+        const typedListing = listing as Listing;
+        return {
+          ...typedListing,
+          evidence: typedListing.evidence ?? listingEvidence(typedListing),
+        };
+      }),
+      scopeGroup: mode === "stored_only" ? "local" : "web",
+      groupStatus,
+    });
+  }) as typeof res.json;
 
   if (!cityId || !language) {
     res.status(400).json({
