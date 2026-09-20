@@ -24,24 +24,44 @@ async function stubBoundaryDiscovery(page: Page, tilesAvailable: boolean) {
       contentType: 'application/json',
       body: JSON.stringify({
         source: 'curated',
-        listings: [{
-          id: 'boundary-event',
-          locationId: 'dhg',
-          category: 'Family',
-          name: 'Boundary test event',
-          description: 'Event used to keep neighborhood map coverage stable.',
-          details: 'Today',
-          startsAt: todayAt(14),
-          x: 50,
-          y: 50,
-          lat: 52.071,
-          lng: 4.301,
-           neighborhood: 'Centrum',
-          activityKind: 'family',
-          priceType: 'free',
-          isIndoor: true,
-          openNow: true,
-        }],
+        listings: [
+          {
+            id: 'boundary-event',
+            locationId: 'dhg',
+            category: 'Family',
+            name: 'Centrum boundary test event',
+            description: 'Event used to keep neighborhood map coverage stable.',
+            details: 'Today',
+            startsAt: todayAt(14),
+            x: 50,
+            y: 50,
+            lat: 52.075,
+            lng: 4.312,
+            neighborhood: 'Centrum',
+            activityKind: 'family',
+            priceType: 'free',
+            isIndoor: true,
+            openNow: true,
+          },
+          {
+            id: 'scheveningen-boundary-event',
+            locationId: 'dhg',
+            category: 'Family',
+            name: 'Scheveningen boundary test event',
+            description: 'Second event used to verify multi-neighborhood map coverage.',
+            details: 'Today',
+            startsAt: todayAt(15),
+            x: 55,
+            y: 45,
+            lat: 52.1059,
+            lng: 4.2742,
+            neighborhood: 'Scheveningen',
+            activityKind: 'family',
+            priceType: 'free',
+            isIndoor: false,
+            openNow: true,
+          },
+        ],
       }),
     });
   });
@@ -361,6 +381,8 @@ for (const [mapPath, tilesAvailable] of [['tile map', true], ['coordinate fallba
     await neighborhoodControl.check();
     await expect(neighborhoodControl).toBeChecked();
     await expect(page.getByRole('button', { name: 'Select neighborhood: Centrum', exact: true })).toHaveCount(1);
+    await expect(page.locator('[data-map-pin][data-event-id="boundary-event"]')).toHaveCount(1);
+    await expect(page.locator('[data-map-pin][data-event-id="scheveningen-boundary-event"]')).toHaveCount(0);
 
     const scheveningenControl = page.getByRole('checkbox', { name: 'Scheveningen', exact: true });
     const scheveningenBoundary = page.getByRole('button', { name: 'Select neighborhood: Scheveningen', exact: true });
@@ -369,6 +391,10 @@ for (const [mapPath, tilesAvailable] of [['tile map', true], ['coordinate fallba
     });
     await expect(neighborhoodControl).toBeChecked();
     await expect(scheveningenControl).toBeChecked();
+    await expect(page.locator('[data-map-pin][data-event-id="boundary-event"]')).toHaveCount(1);
+    await expect(page.locator('[data-map-pin][data-event-id="scheveningen-boundary-event"]')).toHaveCount(1);
+    await expect(boundary).toHaveCSS('stroke-opacity', '1');
+    await expect(scheveningenBoundary).toHaveCSS('stroke-opacity', '1');
 
     await scheveningenBoundary.dispatchEvent('click');
     await expect(neighborhoodControl).not.toBeChecked();

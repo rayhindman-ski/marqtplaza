@@ -866,6 +866,14 @@ function shouldShowNeighborhoodLabel(
   return !options.showAllNeighborhoods || options.selectedNeighborhoods.includes(name);
 }
 
+function isNeighborhoodSelected(
+  name: string,
+  selectedNeighborhoods: string[],
+  highlightedNeighborhood: string | null,
+): boolean {
+  return highlightedNeighborhood === name || selectedNeighborhoods.includes(name);
+}
+
 function handleNeighborhoodKeyDown(
   event: React.KeyboardEvent<SVGPolygonElement>,
   name: string,
@@ -983,6 +991,7 @@ function CoordinateMapFallback({
       </div>
       {neighborhoodAreas.map((area) => {
         const center = projectCoordinatePoint([area.lat, area.lng], bounds);
+        const isSelected = isNeighborhoodSelected(area.name, selectedNeighborhoods, highlightedNeighborhood);
         return (
           <div key={`neighborhood-${area.name}`} className="absolute inset-0">
             <svg
@@ -1010,21 +1019,21 @@ function CoordinateMapFallback({
                   onKeyDown={(event) => handleNeighborhoodKeyDown(event, area.name, onNeighborhoodClick)}
                   className={mapClassNames(
                     (onNeighborhoodClick || onNeighborhoodHover) && "pointer-events-auto cursor-pointer focus-visible:outline-none",
-                    highlightedNeighborhood === area.name
+                    isSelected
                       ? "fill-primary/20 stroke-primary"
                       : "fill-teal-400/10 stroke-teal-700/20",
                   )}
                   style={{
-                    strokeWidth: highlightedNeighborhood === area.name ? 0.8 : 0.35,
-                    strokeOpacity: highlightedNeighborhood === area.name ? 1 : 0.2,
-                     fillOpacity: highlightedNeighborhood === area.name ? 0.2 : 0.1,
-                     animation: isDataLoading && highlightedNeighborhood === area.name
+                    strokeWidth: isSelected ? 0.8 : 0.35,
+                    strokeOpacity: isSelected ? 1 : 0.2,
+                     fillOpacity: isSelected ? 0.2 : 0.1,
+                     animation: isDataLoading && isSelected
                        ? `buurtplaza-neighborhood-pulse ${NEIGHBORHOOD_PULSE_DURATION_MS}ms ease-in-out infinite`
                        : undefined,
                      transition: 'stroke 180ms ease, stroke-opacity 180ms ease, fill-opacity 180ms ease',
                     vectorEffect: 'non-scaling-stroke',
                   }}
-                   data-neighborhood-loading={isDataLoading && highlightedNeighborhood === area.name ? 'true' : undefined}
+                    data-neighborhood-loading={isDataLoading && isSelected ? 'true' : undefined}
                 />
               ))}
             </svg>
@@ -1382,7 +1391,9 @@ function TileMapView({
           preserveAspectRatio="none"
            aria-hidden={!onNeighborhoodClick && !onNeighborhoodHover}
         >
-          {neighborhoodAreas.flatMap((area) => area.boundary.map((ring, ringIndex) => (
+          {neighborhoodAreas.flatMap((area) => {
+            const isSelected = isNeighborhoodSelected(area.name, selectedNeighborhoods, highlightedNeighborhood);
+            return area.boundary.map((ring, ringIndex) => (
             <polygon
               key={`${area.name}-${ringIndex}`}
               data-neighborhood-boundary
@@ -1402,23 +1413,24 @@ function TileMapView({
               onKeyDown={(event) => handleNeighborhoodKeyDown(event, area.name, onNeighborhoodClick)}
               className={mapClassNames(
                 (onNeighborhoodClick || onNeighborhoodHover) && "pointer-events-auto cursor-pointer focus-visible:outline-none",
-                highlightedNeighborhood === area.name
+                isSelected
                   ? "fill-primary/20 stroke-primary"
                   : "fill-teal-400/10 stroke-teal-700/20",
               )}
               style={{
-                strokeWidth: highlightedNeighborhood === area.name ? 5 : 2.5,
-                strokeOpacity: highlightedNeighborhood === area.name ? 1 : 0.2,
-                 fillOpacity: highlightedNeighborhood === area.name ? 0.2 : 0.1,
-                 animation: isDataLoading && highlightedNeighborhood === area.name
+                strokeWidth: isSelected ? 5 : 2.5,
+                strokeOpacity: isSelected ? 1 : 0.2,
+                 fillOpacity: isSelected ? 0.2 : 0.1,
+                 animation: isDataLoading && isSelected
                  ? `buurtplaza-neighborhood-pulse ${NEIGHBORHOOD_PULSE_DURATION_MS}ms ease-in-out infinite`
                    : undefined,
                  transition: 'stroke 180ms ease, stroke-opacity 180ms ease, fill-opacity 180ms ease',
                 vectorEffect: 'non-scaling-stroke',
               }}
-               data-neighborhood-loading={isDataLoading && highlightedNeighborhood === area.name ? 'true' : undefined}
+               data-neighborhood-loading={isDataLoading && isSelected ? 'true' : undefined}
             />
-          )))}
+            ));
+          })}
         </svg>
       )}
       <DataLoadingNotice isDataLoading={isDataLoading} />
@@ -1876,16 +1888,17 @@ function GoogleMapCanvas({
     }
 
     for (const area of areas) {
+      const isSelected = isNeighborhoodSelected(area.name, selectedNeighborhoods, highlightedNeighborhood);
       const existing = neighborhoodOverlaysRef.current.get(area.name);
       if (existing) {
         const paths = area.boundary.map((ring) => ring.map(([lat, lng]) => ({ lat, lng })));
         existing.polygon.setPaths(paths);
         existing.polygon.setOptions({
-          strokeColor: highlightedNeighborhood === area.name ? '#f36c21' : '#0f766e',
-          strokeOpacity: highlightedNeighborhood === area.name ? 1 : 0.2,
-          strokeWeight: highlightedNeighborhood === area.name ? 5 : 3,
-          fillColor: highlightedNeighborhood === area.name ? '#f36c21' : '#2dd4bf',
-          fillOpacity: highlightedNeighborhood === area.name ? 0.2 : 0.1,
+          strokeColor: isSelected ? '#f36c21' : '#0f766e',
+          strokeOpacity: isSelected ? 1 : 0.2,
+          strokeWeight: isSelected ? 5 : 3,
+          fillColor: isSelected ? '#f36c21' : '#2dd4bf',
+          fillOpacity: isSelected ? 0.2 : 0.1,
         });
         const labelVisible = shouldShowNeighborhoodLabel(area.name, { showNeighborhoodLabels, showAllNeighborhoods, selectedNeighborhoods, highlightedNeighborhood });
         if (labelVisible && existing.label) {
@@ -1908,11 +1921,11 @@ function GoogleMapCanvas({
       const polygon = new google.maps.Polygon({
         map: mapRef.current,
         paths: area.boundary.map((ring) => ring.map(([lat, lng]) => ({ lat, lng }))),
-        strokeColor: highlightedNeighborhood === area.name ? '#f36c21' : '#0f766e',
-        strokeOpacity: highlightedNeighborhood === area.name ? 1 : 0.2,
-        strokeWeight: highlightedNeighborhood === area.name ? 5 : 3,
-        fillColor: highlightedNeighborhood === area.name ? '#f36c21' : '#2dd4bf',
-        fillOpacity: highlightedNeighborhood === area.name ? 0.2 : 0.1,
+        strokeColor: isSelected ? '#f36c21' : '#0f766e',
+        strokeOpacity: isSelected ? 1 : 0.2,
+        strokeWeight: isSelected ? 5 : 3,
+        fillColor: isSelected ? '#f36c21' : '#2dd4bf',
+        fillOpacity: isSelected ? 0.2 : 0.1,
          clickable: Boolean(onNeighborhoodClick || onNeighborhoodHover),
         zIndex: 1,
       });
