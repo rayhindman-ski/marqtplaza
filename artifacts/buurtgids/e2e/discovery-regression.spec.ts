@@ -451,6 +451,7 @@ test('main search external-source setting controls discovery mode and persists',
           lat: 52.071,
           lng: 4.301,
           source: 'google_places',
+           officialUrl: 'https://example.com/stored-postcode-result',
         }],
       }),
     });
@@ -490,7 +491,13 @@ test('main search external-source setting controls discovery mode and persists',
   await expect(page.getByText('Stored postcode result').first()).toBeVisible();
   await expect(page.getByTestId('results-group-local')).toContainText('Stored postcode result');
   await expect(page.getByTestId('results-group-web')).toHaveCount(0);
+  await expect(page.getByTestId('listing-website-postcode-result')).toHaveAttribute(
+    'href',
+    'https://example.com/stored-postcode-result',
+  );
   await page.getByRole('button', { name: /Stored postcode result/ }).click();
+  await expect(page.getByTestId('listing-evidence-postcode-result')).toHaveCount(0);
+  await page.getByLabel('UserRole').selectOption('designer');
   await page.getByText('Source and check by field').click();
   await expect(page.getByTestId('listing-evidence-postcode-result')).toContainText('Source, checked date, and status are unknown.');
   await expect(page.getByTestId('trust-badge-postcode-result')).toHaveCount(0);

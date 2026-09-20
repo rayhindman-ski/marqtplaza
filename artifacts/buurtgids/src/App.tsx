@@ -1412,6 +1412,7 @@ function MarkerCard({
   marker,
   isSelected,
   isSaved,
+  showAdminEvidence,
   onClick,
   onSave,
 }: {
@@ -1419,6 +1420,7 @@ function MarkerCard({
   marker: Marker;
   isSelected: boolean;
   isSaved: boolean;
+  showAdminEvidence: boolean;
   onClick: () => void;
   onSave: (e: React.MouseEvent) => void;
 }) {
@@ -1430,6 +1432,7 @@ function MarkerCard({
   const sourceLabel = marker.sourceName
     ?? (marker.source ? getListingSourceName(marker.source, language) : undefined);
   const isEvent = topLevelForMarker(marker) === 'events';
+  const websiteUrl = marker.officialUrl ?? marker.sourcePageUrl ?? marker.sourceUrl;
   const timing = isEvent ? formatEventTiming(marker.startsAt, language) : null;
   const evidence = marker.evidence ?? [];
   const evidenceStatusLabel = {
@@ -1524,9 +1527,9 @@ function MarkerCard({
                 <span data-testid={`event-price-${marker.id}`} className="rounded-md bg-emerald-700/10 px-2 py-1 text-emerald-800">
                   {language === 'nl' ? 'Prijs' : 'Price'}: {eventPrice}
                 </span>
-                {marker.sourceUrl && (
+                {websiteUrl && (
                   <a
-                    href={marker.sourceUrl}
+                    href={websiteUrl}
                     target="_blank"
                     rel="noopener noreferrer"
                     onClick={(event) => event.stopPropagation()}
@@ -1548,6 +1551,21 @@ function MarkerCard({
           >
             {copy.description}
           </p>
+          {!isEvent && websiteUrl && (
+            <a
+              data-testid={`listing-website-${marker.id}`}
+              href={websiteUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(event) => event.stopPropagation()}
+              className="mb-3 inline-flex items-center gap-1.5 rounded-lg border border-primary/25 bg-primary/5 px-2.5 py-1.5 text-xs font-bold text-primary transition-colors hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            >
+              <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
+              {marker.officialUrl
+                ? t.officialWebsite
+                : (language === 'nl' ? 'Bekijk website' : 'View website')}
+            </a>
+          )}
           {isExpanded && <div id={`marker-details-${marker.id}`}>
            {isEvent && (
              <EventCalendarActions
@@ -1594,7 +1612,7 @@ function MarkerCard({
                 ))}
              </div>
            )}
-           <details data-testid={`listing-evidence-${marker.id}`} className="mb-3 rounded-xl border border-border/70 bg-muted/20 px-3 py-2 text-xs">
+           {showAdminEvidence && <details data-testid={`listing-evidence-${marker.id}`} className="mb-3 rounded-xl border border-border/70 bg-muted/20 px-3 py-2 text-xs">
              <summary className="cursor-pointer font-bold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
                {language === 'nl' ? 'Bron en controle per veld' : 'Source and check by field'}
              </summary>
@@ -1623,7 +1641,7 @@ function MarkerCard({
                  ))}
                </ul>
              )}
-           </details>
+           </details>}
           <div className="flex items-center gap-1.5 text-xs font-semibold text-secondary bg-secondary/5 w-fit px-2.5 py-1 rounded-md">
             <DetailIcon className="w-3.5 h-3.5 opacity-70" />
             {copy.details}
@@ -1645,17 +1663,6 @@ function MarkerCard({
                   <Store className="h-3 w-3 shrink-0" />
                   {language === 'nl' ? 'Dit bedrijf claimen' : 'Claim this business'}
                 </Link>
-              )}
-              {marker.sourceUrl && !isEvent && (
-                <a
-                  href={marker.sourceUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={e => e.stopPropagation()}
-                  className="flex items-center gap-0.5 text-[11px] font-semibold text-secondary hover:underline"
-                >
-                  {marker.officialUrl ? t.officialWebsite : (language === 'nl' ? 'Bron' : 'Source')} <ExternalLink className="h-2.5 w-2.5" />
-                </a>
               )}
               {marker.source && (
                 <Link
@@ -2851,6 +2858,7 @@ function DiscoveryState({
                       marker={m}
                       isSelected={selectedMarker === m.id}
                       isSaved={savedIds.has(m.id)}
+                      showAdminEvidence={userRole === 'designer'}
                       onClick={() => setSelectedMarker(m.id)}
                       onSave={(e) => { e.stopPropagation(); onToggle(m); }}
                     />
@@ -2927,6 +2935,7 @@ function DiscoveryState({
                         marker={m}
                         isSelected={selectedMarker === m.id}
                         isSaved={savedIds.has(m.id)}
+                        showAdminEvidence={userRole === 'designer'}
                         onClick={() => setSelectedMarker(m.id)}
                         onSave={(e) => { e.stopPropagation(); onToggle(m); }}
                       />
