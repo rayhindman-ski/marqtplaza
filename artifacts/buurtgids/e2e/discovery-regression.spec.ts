@@ -431,7 +431,7 @@ test('main search external-source setting controls discovery mode and persists',
   await expect(carRoute).toBeVisible();
   await expect(carRoute).toHaveText('');
   await expect(carRoute).toHaveAttribute('title', 'Car');
-  await expect(page.getByTestId('listing-evidence-postcode-result')).toHaveCount(0);
+  await expect(page.getByTestId('listing-evidence-postcode-result')).toHaveCount(1);
   await expect(page.getByTestId('trust-badge-postcode-result')).toHaveCount(0);
   await expect(page.getByText('Stored data')).toBeVisible();
   await expect(page.getByText('No saved results exist for this search.')).toBeVisible();

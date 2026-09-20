@@ -93,6 +93,7 @@ import {
   type RouteMode,
 } from './lib/listingPresentation';
 import { isPointInsideNeighborhoods } from '@workspace/geo';
+import { parseDiscoveryUrlState, serializeDiscoveryUrlState } from './lib/discoveryUrlState';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -673,7 +674,7 @@ function LanguageSelector({
   const t = translations[language];
 
   return (
-    <label className="absolute right-20 top-3 z-40 inline-flex items-center gap-2 rounded-full border border-border/70 bg-card/90 px-3 py-2 text-sm font-semibold text-foreground shadow-sm backdrop-blur-md lg:right-7 lg:top-7">
+    <label className="absolute right-3 top-16 z-40 inline-flex items-center gap-2 rounded-full border border-border/70 bg-card/90 px-3 py-2 text-sm font-semibold text-foreground shadow-sm backdrop-blur-md lg:right-7 lg:top-20">
       <Globe2 className="h-4 w-4 text-primary" aria-hidden="true" />
       <span className="sr-only">{t.languageLabel}</span>
       <select
@@ -974,11 +975,13 @@ function ReferenceCategoryNav({
   );
 }
 
-function SaveButton({ saved, onToggle }: { saved: boolean; onToggle: (e: React.MouseEvent) => void }) {
+function SaveButton({ language, saved, onToggle }: { language: Language; saved: boolean; onToggle: (e: React.MouseEvent) => void }) {
   return (
     <button
       onClick={(e) => { e.stopPropagation(); onToggle(e); }}
-      aria-label={saved ? 'Remove from saved' : 'Save this place'}
+      aria-label={saved
+        ? (language === 'nl' ? 'Verwijder uit bewaard' : 'Remove from saved')
+        : (language === 'nl' ? 'Bewaar deze plek' : 'Save this place')}
       className={cn(
         "p-1.5 rounded-lg transition-all duration-200 shrink-0",
         saved
@@ -1504,12 +1507,28 @@ function MapPin({
   );
 }
 
+const getEvidenceStatusLabel = (language: Language) => ({
+  current: language === 'nl' ? 'Actueel gecontroleerd' : 'Currently checked',
+  stale: language === 'nl' ? 'Controle verlopen' : 'Check overdue',
+  conflicting: language === 'nl' ? 'Bronnen spreken elkaar tegen' : 'Sources conflict',
+  unknown: language === 'nl' ? 'Onbekend' : 'Unknown',
+  unavailable: language === 'nl' ? 'Bron niet beschikbaar' : 'Source unavailable',
+} as const);
+
+const getEvidenceFieldLabel = (language: Language) => ({
+  name: language === 'nl' ? 'Naam' : 'Name',
+  description: language === 'nl' ? 'Beschrijving' : 'Description',
+  address: language === 'nl' ? 'Adres' : 'Address',
+  event_date: language === 'nl' ? 'Evenementdatum' : 'Event date',
+  opening_times: language === 'nl' ? 'Openingstijden' : 'Opening times',
+  price: language === 'nl' ? 'Prijs' : 'Price',
+} as const);
+
 function MarkerCard({
   language,
   marker,
   isSelected,
   isSaved,
-  showAdminEvidence,
   onClick,
   onSave,
 }: {
@@ -1517,7 +1536,6 @@ function MarkerCard({
   marker: Marker;
   isSelected: boolean;
   isSaved: boolean;
-  showAdminEvidence: boolean;
   onClick: () => void;
   onSave: (e: React.MouseEvent) => void;
 }) {
@@ -1533,21 +1551,8 @@ function MarkerCard({
   const hasWebLinks = Boolean(websiteUrl || marker.facebookUrl || marker.instagramUrl);
   const timing = isEvent ? formatEventTiming(marker.startsAt, language) : null;
   const evidence = marker.evidence ?? [];
-  const evidenceStatusLabel = {
-    current: language === 'nl' ? 'Actueel gecontroleerd' : 'Currently checked',
-    stale: language === 'nl' ? 'Controle verlopen' : 'Check overdue',
-    conflicting: language === 'nl' ? 'Bronnen spreken elkaar tegen' : 'Sources conflict',
-    unknown: language === 'nl' ? 'Onbekend' : 'Unknown',
-    unavailable: language === 'nl' ? 'Bron niet beschikbaar' : 'Source unavailable',
-  } as const;
-  const evidenceFieldLabel = {
-    name: language === 'nl' ? 'Naam' : 'Name',
-    description: language === 'nl' ? 'Beschrijving' : 'Description',
-    address: language === 'nl' ? 'Adres' : 'Address',
-    event_date: language === 'nl' ? 'Evenementdatum' : 'Event date',
-    opening_times: language === 'nl' ? 'Openingstijden' : 'Opening times',
-    price: language === 'nl' ? 'Prijs' : 'Price',
-  } as const;
+  const evidenceStatusLabel = getEvidenceStatusLabel(language);
+  const evidenceFieldLabel = getEvidenceFieldLabel(language);
   const eventPrice = marker.priceText?.trim()
     || (marker.priceType === 'free'
       ? (language === 'nl' ? 'Gratis' : 'Free')
@@ -1610,7 +1615,7 @@ function MarkerCard({
             </span>
           </span>
         </button>
-        <SaveButton saved={isSaved} onToggle={onSave} />
+        <SaveButton language={language} saved={isSaved} onToggle={onSave} />
       </div>
       <div className="ml-16 min-w-0 py-0.5">
           {isEvent && (
@@ -1745,7 +1750,7 @@ function MarkerCard({
                 ))}
              </div>
            )}
-           {showAdminEvidence && <details data-testid={`listing-evidence-${marker.id}`} className="mb-3 rounded-xl border border-border/70 bg-muted/20 px-3 py-2 text-xs">
+           <details data-testid={`listing-evidence-${marker.id}`} className="mb-3 rounded-xl border border-border/70 bg-muted/20 px-3 py-2 text-xs">
              <summary className="cursor-pointer font-bold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
                {language === 'nl' ? 'Bron en controle per veld' : 'Source and check by field'}
              </summary>
@@ -1774,7 +1779,7 @@ function MarkerCard({
                  ))}
                </ul>
              )}
-           </details>}
+           </details>
           <div className="flex items-center gap-1.5 text-xs font-semibold text-secondary bg-secondary/5 w-fit px-2.5 py-1 rounded-md">
             <DetailIcon className="w-3.5 h-3.5 opacity-70" />
             {copy.details}
@@ -1905,6 +1910,8 @@ function DiscoveryState({
   listingSection,
   initialNeighborhood,
   initialPostcode,
+  initialScope = 'local',
+  urlErrors = [],
   restorePrevious,
   onBack,
   onLanguageChange,
@@ -1920,6 +1927,8 @@ function DiscoveryState({
   listingSection: ListingSection;
   initialNeighborhood?: string;
   initialPostcode?: string;
+  initialScope?: 'local' | 'web';
+  urlErrors?: readonly { code: string; parameter: string }[];
   restorePrevious?: boolean;
   onBack: () => void;
   onLanguageChange: (language: Language) => void;
@@ -1983,7 +1992,7 @@ function DiscoveryState({
     ? location?.neighborhoodCoords[selectedNeighborhoods[0]]
     : undefined;
 
-  const [liveMode, setLiveMode] = useState(readIncludeExternalSources);
+  const [liveMode, setLiveMode] = useState(() => initialScope === 'web' || readIncludeExternalSources());
   const setDiscoveryScope = useCallback((includeWebResults: boolean) => {
     sessionStorage.setItem(DISCOVERY_EXTERNAL_SOURCES_STORAGE_KEY, String(includeWebResults));
     setLiveMode(includeWebResults);
@@ -2856,6 +2865,28 @@ function DiscoveryState({
         </div>
 
         {/* Data source badge */}
+        {urlErrors && urlErrors.length > 0 && (
+          <div role="alert" className="mx-4 mt-4 mb-2 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-amber-900 dark:border-amber-500/20 dark:bg-amber-500/5 dark:text-amber-200">
+            <div className="flex items-start gap-3">
+              <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
+              <div>
+                <h3 className="font-extrabold text-sm mb-1">
+                  {language === 'nl' ? 'Sommige zoektermen zijn niet (meer) geldig' : 'Some search criteria are not (or no longer) valid'}
+                </h3>
+                <p className="text-xs leading-relaxed opacity-90 mb-2">
+                  {language === 'nl'
+                    ? 'We hebben je zoekopdracht aangepast naar beschikbare opties voor Den Haag, zodat je gewoon verder kunt.'
+                    : 'We updated your search to available options for The Hague, so you can continue browsing.'}
+                </p>
+                <ul className="text-[11px] list-disc list-inside ml-2 opacity-80 font-medium space-y-0.5">
+                  {urlErrors.map((err, i) => (
+                    <li key={i}>{err.parameter}: {err.code.replace(/-/g, ' ')}</li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          </div>
+        )}
         {!isLoading && (
           <div className="flex flex-wrap items-center gap-2 px-4 py-3">
             {isLive ? (
@@ -3035,7 +3066,6 @@ function DiscoveryState({
                   marker={m}
                   isSelected={selectedMarker === m.id}
                   isSaved={savedIds.has(m.id)}
-                  showAdminEvidence={userRole === 'designer'}
                   onClick={() => setSelectedMarker(m.id)}
                   onSave={(e) => { e.stopPropagation(); onToggle(m); }}
                 />
@@ -3130,9 +3160,8 @@ function EventDetailView({ eventId, listingSection = 'events' }: {
   listingSection?: Exclude<ListingSection, 'social-map'>;
 }) {
   const [, navigate] = useLocation();
-  const language: Language = typeof window !== 'undefined' && window.localStorage.getItem('buurtplaza-language') === 'nl'
-    ? 'nl'
-    : 'en';
+  const parsedUrlState = parseDiscoveryUrlState(window.location.search).state;
+  const language: Language = parsedUrlState.locale;
   const { savedMarkers, savedStateStatus } = useSavedPlaces();
   const decodedEventId = decodeURIComponent(eventId);
   const cachedListing = useMemo(() => readDetailListing(decodedEventId), [decodedEventId]);
@@ -3298,6 +3327,39 @@ function EventDetailView({ eventId, listingSection = 'events' }: {
             />
           )}
 
+          <div className="mt-8">
+            <details data-testid={`listing-evidence-${listing.id}`} className="rounded-xl border border-border/70 bg-muted/20 px-4 py-3 text-sm">
+              <summary className="cursor-pointer font-bold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
+                {language === 'nl' ? 'Bron en controle per veld' : 'Source and check by field'}
+              </summary>
+              {!listing.evidence || listing.evidence.length === 0 ? (
+                <p className="mt-3 font-semibold text-muted-foreground">
+                  {language === 'nl'
+                    ? 'Bron, controledatum en status zijn onbekend.'
+                    : 'Source, checked date, and status are unknown.'}
+                </p>
+              ) : (
+                <ul className="mt-3 space-y-3">
+                  {listing.evidence.map((item) => (
+                    <li key={item.field} className="rounded-lg bg-card px-3 py-2.5">
+                      <p className="font-bold text-foreground">{getEvidenceFieldLabel(language)[item.field]}</p>
+                      <p className="mt-1 text-muted-foreground">
+                        {(language === 'nl' ? 'Bron' : 'Source')}: {item.sourceLabel ?? (language === 'nl' ? 'Onbekend' : 'Unknown')}
+                        {' · '}
+                        {(language === 'nl' ? 'Gecontroleerd' : 'Checked')}: {item.checkedAt
+                          ? formatEvidenceCheckedAt(item.checkedAt, language)
+                          : (language === 'nl' ? 'Onbekend' : 'Unknown')}
+                        {' · '}
+                        {getEvidenceStatusLabel(language)[item.status]}
+                      </p>
+                      {item.caveat ? <p className="mt-1.5 font-semibold text-amber-800">{item.caveat}</p> : null}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </details>
+          </div>
+
           <RouteLinks
             language={language}
             marker={{
@@ -3343,12 +3405,52 @@ function EventDetailView({ eventId, listingSection = 'events' }: {
 
 function EventDetailRoute() {
   const [, params] = useRoute('/activiteiten/den-haag/:eventId');
-  const requestedSection = new URLSearchParams(window.location.search).get('section');
+  const requestedSection = parseDiscoveryUrlState(window.location.search).state.section;
   const listingSection: Exclude<ListingSection, 'social-map'> = requestedSection === 'businesses'
     || requestedSection === 'food-drink'
     ? requestedSection
     : DEFAULT_START_SECTION;
   return <EventDetailView eventId={params?.eventId ?? ''} listingSection={listingSection} />;
+}
+
+function UnsupportedCityRoute() {
+  const [, params] = useRoute('/activiteiten/:citySlug');
+  const language = parseDiscoveryUrlState(window.location.search).state.locale;
+  return (
+    <main className="flex min-h-screen items-center justify-center bg-background px-5 py-12">
+      <section className="w-full max-w-xl rounded-3xl border border-border bg-card p-8 text-center shadow-xl">
+        <MapPinOff className="mx-auto h-10 w-10 text-primary" aria-hidden="true" />
+        <h1 className="mt-5 text-3xl font-extrabold text-foreground">
+          {language === 'nl' ? 'Deze stad wordt nog niet ondersteund' : 'This city is not supported yet'}
+        </h1>
+        <p className="mt-3 leading-7 text-muted-foreground">
+          {language === 'nl'
+            ? `De huidige gecontroleerde dekking is beperkt tot Den Haag. “${params?.citySlug ?? ''}” is niet stilzwijgend vervangen.`
+            : `Current checked coverage is limited to The Hague. “${params?.citySlug ?? ''}” was not silently substituted.`}
+        </p>
+        <Link
+          href={`/activiteiten/den-haag${language === 'nl' ? '?locale=nl' : ''}`}
+          className="mt-6 inline-flex min-h-11 items-center rounded-full bg-primary px-5 py-3 font-bold text-primary-foreground"
+        >
+          {language === 'nl' ? 'Ontdek Den Haag' : 'Discover The Hague'}
+        </Link>
+      </section>
+    </main>
+  );
+}
+
+function NotFoundRoute() {
+  const language = useStoredLanguage();
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-background text-foreground">
+      <div className="text-center">
+        <h1 className="text-4xl font-bold mb-2">404</h1>
+        <p className="text-muted-foreground">
+          {language === 'nl' ? 'Pagina niet gevonden' : 'Page not found'}
+        </p>
+      </div>
+    </div>
+  );
 }
 
 type AppScreen =
@@ -3367,21 +3469,35 @@ function getInitialListingSection(): ListingSection {
 
 function MainApp({ initialLocationId }: { initialLocationId?: string } = {}) {
   const [, navigate] = useLocation();
+  const searchString = useSearch();
+  const parsedUrl = useMemo(() => parseDiscoveryUrlState(searchString), [searchString]);
+  const parsedUrlState = parsedUrl.state;
+  const initialUrlErrors = useRef(parsedUrl.errors);
+  const storedLanguage = useStoredLanguage();
+  const requestedLocale = new URLSearchParams(searchString).get('locale');
+
   const [screen, setScreen] = useState<AppScreen>(() =>
     initialLocationId
       ? {
           kind: 'discovery',
           locationId: initialLocationId,
-          neighborhood: new URLSearchParams(window.location.search).get('neighborhood') || undefined,
-          postcode: new URLSearchParams(window.location.search).get('postcode') || undefined,
+          neighborhood: parsedUrlState.neighborhood,
+          postcode: parsedUrlState.postcode,
           listingSection: getInitialListingSection(),
         }
       : { kind: 'search' },
   );
-  const [language, setLanguage] = useState<Language>(() => {
-    if (typeof window === 'undefined') return 'en';
-    return window.localStorage.getItem('buurtplaza-language') === 'nl' ? 'nl' : 'en';
-  });
+
+  const language: Language = requestedLocale === 'nl' || requestedLocale === 'en'
+    ? parsedUrlState.locale
+    : storedLanguage;
+
+  const setLanguage = useCallback((newLang: Language) => {
+    const search = serializeDiscoveryUrlState({ ...parsedUrlState, locale: newLang });
+    persistLanguage(newLang);
+    navigate(window.location.pathname + (search ? `?${search}` : ''), { replace: true });
+  }, [navigate, parsedUrlState]);
+
   const [userRole, setUserRole] = useState<UserRole>(() => {
     if (typeof window === 'undefined') return 'user';
     return window.localStorage.getItem(USER_ROLE_STORAGE_KEY) === 'designer' ? 'designer' : 'user';
@@ -3395,9 +3511,31 @@ function MainApp({ initialLocationId }: { initialLocationId?: string } = {}) {
     savedCount,
   } = useSavedPlaces();
 
+  const clerkAuth = useAuth();
+
+  const handleToggle = useCallback((marker: Marker) => {
+    if (!clerkAuth.isSignedIn) {
+      const currentPath = window.location.pathname + window.location.search;
+      navigate(withReturnPath('/sign-in', currentPath));
+      return;
+    }
+    toggle(marker);
+  }, [clerkAuth.isSignedIn, navigate, toggle]);
+
   useEffect(() => {
     persistLanguage(language);
+    if (typeof document !== 'undefined') {
+      document.documentElement.lang = language;
+    }
   }, [language]);
+
+  useEffect(() => {
+    if (!initialLocationId || parsedUrl.valid) return;
+    navigate(
+      window.location.pathname + (parsedUrl.canonical ? `?${parsedUrl.canonical}` : ''),
+      { replace: true },
+    );
+  }, [initialLocationId, navigate, parsedUrl.canonical, parsedUrl.valid]);
 
   useEffect(() => {
     window.localStorage.setItem(USER_ROLE_STORAGE_KEY, userRole);
@@ -3410,7 +3548,7 @@ function MainApp({ initialLocationId }: { initialLocationId?: string } = {}) {
         savedMarkers={savedMarkers}
         eventAlerts={savedEventAlerts}
         onEventRefresh={recordEventRefresh}
-        onToggle={toggle}
+        onToggle={handleToggle}
         onBack={() => setScreen({ kind: 'search' })}
       />
     );
@@ -3424,6 +3562,8 @@ function MainApp({ initialLocationId }: { initialLocationId?: string } = {}) {
         listingSection={screen.listingSection}
         initialNeighborhood={screen.neighborhood}
         initialPostcode={screen.postcode}
+        initialScope={parsedUrlState.scope}
+        urlErrors={initialUrlErrors.current}
         restorePrevious={new URLSearchParams(window.location.search).get('restore') === '1'}
         onBack={() => {
           setScreen({ kind: 'search' });
@@ -3433,7 +3573,7 @@ function MainApp({ initialLocationId }: { initialLocationId?: string } = {}) {
         userRole={userRole}
         onUserRoleChange={setUserRole}
         savedIds={savedIds}
-        onToggle={toggle}
+        onToggle={handleToggle}
         onEventRefresh={recordEventRefresh}
         onViewSaved={() => setScreen({ kind: 'saved' })}
       />
@@ -3456,11 +3596,14 @@ function MainApp({ initialLocationId }: { initialLocationId?: string } = {}) {
         });
 
         if (locId === 'dhg') {
-          const params = new URLSearchParams();
-          if (neighborhood) params.set('neighborhood', neighborhood);
-          if (postcode) params.set('postcode', postcode);
-          if (listingSection !== 'events') params.set('section', listingSection);
-          const query = params.toString();
+          const query = serializeDiscoveryUrlState({
+            locale: language,
+            city: 'den-haag',
+            section: listingSection,
+            neighborhood,
+            postcode,
+            scope: readIncludeExternalSources() ? 'web' : 'local',
+          });
           navigate(`/activiteiten/den-haag${query ? `?${query}` : ''}`);
         }
       }}
@@ -3491,6 +3634,7 @@ export default function App() {
           <Route path="/activiteiten/den-haag">
             <MainApp initialLocationId="dhg" />
           </Route>
+          <Route path="/activiteiten/:citySlug" component={UnsupportedCityRoute} />
           <Route path="/capture" component={CaptureRoute} />
           <Route path="/bronnen" component={SourceDirectoryView} />
           <Route path="/buurt" component={CommunityFeedView} />
@@ -3515,14 +3659,7 @@ export default function App() {
           <Route path="/mijn-bedrijf" component={MyBusinessWorkspace} />
           <Route path="/mijn-bedrijf/:id/profiel" component={BusinessRevisionPage} />
           <Route path="/redactie/bedrijven" component={BusinessModerationView} />
-          <Route>
-            <div className="min-h-screen flex items-center justify-center bg-background text-foreground">
-              <div className="text-center">
-                <h1 className="text-4xl font-bold mb-2">404</h1>
-                <p className="text-muted-foreground">Page not found</p>
-              </div>
-            </div>
-          </Route>
+          <Route component={NotFoundRoute} />
         </Switch>
           <Toaster />
         </QueryClientProvider>
