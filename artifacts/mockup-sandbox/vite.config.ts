@@ -3,32 +3,32 @@ import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import path from "path";
 import runtimeErrorOverlay from "@replit/vite-plugin-runtime-error-modal";
+import { cartographer } from "@replit/vite-plugin-cartographer";
 import { mockupPreviewPlugin } from "./mockupPreviewPlugin";
 
-const rawPort = process.env.PORT;
+export default defineConfig(({ command }) => {
+  const rawPort = process.env.PORT;
+  const rawBasePath = process.env.BASE_PATH;
 
-if (!rawPort) {
-  throw new Error(
-    "PORT environment variable is required but was not provided.",
-  );
-}
+  if (command === "serve" && !rawPort) {
+    throw new Error(
+      "PORT environment variable is required when serving the mockup sandbox.",
+    );
+  }
 
-const port = Number(rawPort);
+  if (command === "serve" && !rawBasePath) {
+    throw new Error(
+      "BASE_PATH environment variable is required when serving the mockup sandbox.",
+    );
+  }
 
-if (Number.isNaN(port) || port <= 0) {
-  throw new Error(`Invalid PORT value: "${rawPort}"`);
-}
+  const port = rawPort ? Number(rawPort) : 5173;
+  if (Number.isNaN(port) || port <= 0) {
+    throw new Error(`Invalid PORT value: "${rawPort}"`);
+  }
 
-const basePath = process.env.BASE_PATH;
-
-if (!basePath) {
-  throw new Error(
-    "BASE_PATH environment variable is required but was not provided.",
-  );
-}
-
-export default defineConfig({
-  base: basePath,
+  return {
+  base: rawBasePath ?? "/",
   plugins: [
     mockupPreviewPlugin(),
     react(),
@@ -37,11 +37,9 @@ export default defineConfig({
     ...(process.env.NODE_ENV !== "production" &&
     process.env.REPL_ID !== undefined
       ? [
-          await import("@replit/vite-plugin-cartographer").then((m) =>
-            m.cartographer({
-              root: path.resolve(import.meta.dirname, ".."),
-            }),
-          ),
+          cartographer({
+            root: path.resolve(import.meta.dirname, ".."),
+          }),
         ]
       : []),
   ],
@@ -68,4 +66,5 @@ export default defineConfig({
     host: "0.0.0.0",
     allowedHosts: true,
   },
+  };
 });

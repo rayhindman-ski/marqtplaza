@@ -19,6 +19,7 @@ export default function DealsView() {
     { cityId: 'dhg' },
     { query: { queryKey: getGetDealsQueryKey({ cityId: 'dhg' }) } }
   );
+  const dealItems = Array.isArray(deals) ? deals : [];
 
   useEffect(() => {
     document.title = 'Lokale Deals | Buurtplaza';
@@ -33,15 +34,15 @@ export default function DealsView() {
     metaDesc.setAttribute('content', 'Ontdek de beste lokale acties en deals van ondernemers in Den Haag op Buurtplaza.');
   }, []);
 
-  const categories = Array.from(new Set(deals?.map(d => d.category) || []));
+  const categories = Array.from(new Set(dealItems.map(deal => deal.category)));
 
-  const filteredDeals = deals?.filter(deal => {
+  const filteredDeals = dealItems.filter(deal => {
     const matchesSearch = search === '' || 
       deal.title.toLowerCase().includes(search.toLowerCase()) || 
       deal.businessName?.toLowerCase().includes(search.toLowerCase());
     const matchesCategory = !selectedCategory || deal.category === selectedCategory;
     return matchesSearch && matchesCategory;
-  }) || [];
+  });
 
   return (
     <div className="min-h-screen bg-accent/20">
