@@ -131,48 +131,6 @@ async function signIn(page: Page, userId = 'user-e2e') {
 
 const SCOPES = ['account_profile', 'preferences', 'consents', 'saved_events', 'business_memberships'];
 
-test('guests can cancel or clear selected browser-data categories without a server-deletion claim', async ({ page }) => {
-  await page.addInitScript(() => {
-    localStorage.setItem('buurtplaza-discovery-live-mode', 'true');
-    localStorage.setItem('buurtplaza-anonymous-id', 'anon-browser-test');
-    localStorage.setItem('buurtgids_saved_places', '[]');
-    localStorage.setItem('buurtplaza-language', 'en');
-    localStorage.setItem('unrelated-key', 'keep');
-    sessionStorage.setItem('buurtplaza-preferences-draft:user-e2e', '{}');
-  });
-
-  await page.goto('/account/privacy?e2eAccountAuth=1');
-  await expect(page.getByTestId('browser-data-panel')).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Sign in for account privacy' })).toBeVisible();
-  await page.getByRole('checkbox', { name: /Search scope, anonymous browser ID/ }).check();
-  await page.getByRole('checkbox', { name: /Locally saved places and event alerts/ }).check();
-
-  await page.getByRole('button', { name: 'Review selection' }).click();
-  await page.getByRole('button', { name: 'Cancel' }).click();
-  await expect.poll(() => page.evaluate(() => localStorage.getItem('buurtplaza-discovery-live-mode'))).toBe('true');
-  await expect(page.getByTestId('browser-data-cleared')).toHaveCount(0);
-
-  await page.getByRole('button', { name: 'Review selection' }).click();
-  await page.getByRole('button', { name: 'Clear browser data' }).click();
-  await expect(page.getByTestId('browser-data-cleared')).toContainText('No account or server data was deleted.');
-  const stored = await page.evaluate(() => ({
-    scope: localStorage.getItem('buurtplaza-discovery-live-mode'),
-    anonymousId: localStorage.getItem('buurtplaza-anonymous-id'),
-    saved: localStorage.getItem('buurtgids_saved_places'),
-    language: localStorage.getItem('buurtplaza-language'),
-    unrelated: localStorage.getItem('unrelated-key'),
-    draft: sessionStorage.getItem('buurtplaza-preferences-draft:user-e2e'),
-  }));
-  expect(stored).toEqual({
-    scope: null,
-    anonymousId: null,
-    saved: null,
-    language: 'en',
-    unrelated: 'keep',
-    draft: '{}',
-  });
-});
-
 test.describe('account privacy and deletion', () => {
   test('requires every scope acknowledgement, files the request, and tracks it truthfully', async ({ page }) => {
     await signIn(page);

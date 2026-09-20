@@ -12,7 +12,7 @@ import {
   Landmark, Route as RouteIcon, Baby, Building2, Coffee, Gamepad2, HandHeart, Waves, ShoppingBag, ExternalLink, AlertCircle, CalendarPlus,
   CalendarDays, UsersRound, Utensils,
   CloudSun, Cloud, CloudFog, CloudRain, CloudSnow, Sun, Wind, Droplets, Tag, Store,
-  Bike, Car, Footprints, TrainFront, ShieldCheck, Sparkles, Navigation, UserRound, Loader2, Facebook, Instagram
+  Bike, Car, Footprints, TrainFront, ShieldCheck, Sparkles, Navigation, UserRound, Loader2
 } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -1001,11 +1001,21 @@ function SearchState({
   ];
   const [query, setQuery] = useState('');
   const [error, setError] = useState('');
+  const [selectedCityId, setSelectedCityId] = useState<string | null>(null);
   const [selectedMapNeighborhood, setSelectedMapNeighborhood] = useState<string | null>(null);
   const [hoveredMapNeighborhood, setHoveredMapNeighborhood] = useState<string | null>(null);
   const [includeExternalSources, setIncludeExternalSources] = useState(readIncludeExternalSources);
   const t = translations[language];
-  const mapLocation = LOCATIONS.find((location) => location.id === 'dhg') ?? LOCATIONS[0];
+  const mapLocation = LOCATIONS.find((location) => location.id === selectedCityId) ?? LOCATIONS[0];
+
+  useEffect(() => {
+    if (!mapLocation.neighborhoods.includes(selectedMapNeighborhood ?? '')) {
+      setSelectedMapNeighborhood(null);
+    }
+    if (!mapLocation.neighborhoods.includes(hoveredMapNeighborhood ?? '')) {
+      setHoveredMapNeighborhood(null);
+    }
+  }, [hoveredMapNeighborhood, mapLocation, selectedMapNeighborhood]);
 
   useEffect(() => {
     if (!mapLocation.neighborhoods.includes(selectedMapNeighborhood ?? '')) {
@@ -1124,56 +1134,9 @@ function SearchState({
           )}
         </form>
 
-        <fieldset className="mx-auto w-full max-w-lg rounded-2xl border border-border/70 bg-card/85 px-4 py-3 text-left shadow-sm backdrop-blur-sm">
-          <legend className="px-1 text-xs font-extrabold text-foreground">
-            {language === 'nl' ? 'Zoekbereik' : 'Search scope'}
-          </legend>
-          <p className="text-xs font-semibold text-muted-foreground">
-            {language === 'nl'
-              ? 'Lokaal zoeken is geselecteerd.'
-              : 'Local-only search is selected.'}
-          </p>
-          <label className="mt-2 flex min-h-11 cursor-pointer items-center gap-2 rounded-xl border border-border/70 bg-background px-3 py-2 transition-colors hover:border-primary/40">
-            <input
-              type="checkbox"
-              checked={includeExternalSources}
-              onChange={(event) => setIncludeExternalSources(event.target.checked)}
-              className="h-4 w-4 shrink-0 accent-primary"
-            />
-            <span className="text-sm font-bold text-foreground">
-              {language === 'nl' ? 'Webresultaten opnemen' : 'Include web results'}
-            </span>
-          </label>
-          <details className="mt-2 rounded-xl bg-muted/40 px-3 py-2 text-xs">
-            <summary className="cursor-pointer font-bold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
-              {language === 'nl' ? 'Wat verandert er?' : 'What changes?'}
-            </summary>
-            <div className="mt-2 space-y-2 leading-relaxed text-muted-foreground">
-              <p>
-                {language === 'nl'
-                  ? 'Lokaal zoeken gebruikt de bestaande lokale catalogus en geïntegreerde bronnen. De dekking is niet volledig en resultaten zijn niet gegarandeerd actueel.'
-                  : 'Local-only search uses the established local catalogue and integrated sources. Coverage is not exhaustive and results are not guaranteed to be current.'}
-              </p>
-              <p>
-                {language === 'nl'
-                  ? 'Webresultaten voegen na jouw keuze externe bronnen toe. Deze resultaten zijn geen aanbeveling of verificatie door MarqtPlaza en je zoekgebied wordt met die aanbieders gedeeld.'
-                  : 'Web results add external sources after you choose them. They are not endorsed or verified by MarqtPlaza, and your search area is shared with those providers.'}
-              </p>
-              <Link to="/account/privacy" className="inline-flex font-bold text-primary underline-offset-2 hover:underline">
-                {language === 'nl' ? 'Lees hoe we gegevens gebruiken' : 'Read how we use data'}
-              </Link>
-            </div>
-          </details>
-          <p className="sr-only" role="status" aria-live="polite">
-            {includeExternalSources
-              ? (language === 'nl' ? 'Webresultaten zijn opgenomen.' : 'Web results are included.')
-              : (language === 'nl' ? 'Alleen lokaal zoeken is actief.' : 'Local-only search is active.')}
-          </p>
-        </fieldset>
-
-        <div className="w-full pt-2">
-          <div className="grid gap-5 lg:grid-cols-[minmax(0,2.4fr)_minmax(15rem,0.8fr)] lg:items-stretch">
-            <div className="relative h-[31rem] overflow-hidden rounded-3xl border border-border/70 bg-card/80 text-left shadow-xl backdrop-blur-sm sm:h-[38rem]">
+        <div className="w-full pt-6">
+          <div className="grid gap-6 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1.35fr)] lg:items-start">
+            <div className="relative h-[25rem] overflow-hidden rounded-3xl border border-border/70 bg-card/80 text-left shadow-xl backdrop-blur-sm sm:h-[30rem]">
               <GoogleMapView
                 language={language}
                 locationId={mapLocation.id}
@@ -1195,8 +1158,8 @@ function SearchState({
                   {getLocationName(mapLocation, language)}
                   {' · '}
                   {language === 'nl'
-                    ? 'Selecteer een buurt op de kaart of typ de naam hierboven.'
-                    : 'Select a neighborhood on the map or type its name above.'}
+                    ? 'Elke buurt is omlijnd; de namen staan ernaast.'
+                    : 'Each neighborhood is outlined; names are listed alongside.'}
                 </p>
               </div>
               {selectedMapNeighborhood && (
@@ -1218,37 +1181,83 @@ function SearchState({
               )}
             </div>
 
-            <aside className="rounded-3xl border border-border/70 bg-card/75 p-4 text-left shadow-lg backdrop-blur-sm sm:p-5">
-              <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
-                {language === 'nl' ? 'Grote steden in Nederland' : 'Major cities in the Netherlands'}
-              </p>
-              <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-                {language === 'nl'
-                  ? 'Den Haag is nu beschikbaar. Meer steden volgen.'
-                  : 'The Hague is available now. More cities are coming.'}
-              </p>
-              <div className="mt-4 grid grid-cols-2 gap-2 lg:grid-cols-1 xl:grid-cols-2">
-                {majorDutchCities.map((city) => {
-                  const isTheHague = city === 'Den Haag';
-                  const label = language === 'en' && isTheHague ? 'The Hague' : city;
+            <div>
+              <p className="mb-4 text-xs font-bold uppercase tracking-widest text-muted-foreground">{t.popularDestinations}</p>
+              <div className="flex flex-wrap justify-center gap-2.5">
+                {LOCATIONS.map(loc => {
+                  const neighborhoodOptions = selectedCityId === loc.id
+                    ? loc.neighborhoods
+                    : (popularNeighborhoods[loc.id] ?? loc.neighborhoods.slice(0, 8));
+
                   return (
-                    <div
-                      key={city}
-                      aria-current={isTheHague ? 'location' : undefined}
+                  <div
+                    key={loc.id}
+                    className={cn(
+                      "flex w-full max-w-5xl flex-col items-center gap-2 rounded-2xl p-1.5 transition-colors",
+                      selectedCityId === loc.id && "bg-primary/5 p-3 ring-1 ring-primary/20",
+                    )}
+                  >
+                    <button
+                      type="button"
+                      aria-pressed={selectedCityId === loc.id}
+                      onClick={() => {
+                        setSelectedCityId(loc.id);
+                        setSelectedMapNeighborhood(null);
+                        setHoveredMapNeighborhood(null);
+                      }}
                       className={cn(
-                        'flex min-h-9 items-center rounded-xl border px-3 py-2 text-xs font-semibold',
-                        isTheHague
-                          ? 'border-primary bg-primary text-primary-foreground shadow-sm'
-                          : 'border-border/60 bg-background/60 text-muted-foreground',
+                        "px-4 py-2 backdrop-blur-sm border rounded-full text-sm font-semibold transition-all shadow-sm hover:shadow-md",
+                        selectedCityId === loc.id
+                          ? "bg-foreground text-background border-foreground"
+                          : "bg-card/80 border-border/60 text-foreground hover:border-primary/50 hover:text-primary",
                       )}
                     >
-                      <MapPinned className={cn('mr-2 h-3.5 w-3.5 shrink-0', !isTheHague && 'opacity-40')} aria-hidden="true" />
-                      {label}
+                      {getLocationName(loc, language)}
+                    </button>
+                    <div className="w-full text-left">
+                      <p className="mb-2 text-center text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
+                        {selectedCityId === loc.id
+                          ? t.chooseNeighborhood(getLocationName(loc, language))
+                          : t.popularNeighborhoods}
+                      </p>
+                      <div className="mb-3 flex flex-wrap justify-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => onSearch(loc.id, undefined, DEFAULT_START_SECTION)}
+                          className="rounded-full border border-primary/40 bg-primary/10 px-3 py-1.5 text-[11px] font-extrabold text-primary transition-colors hover:bg-primary/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                        >
+                          {t.selectAllNeighborhoods}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedCityId(null)}
+                          className="rounded-full border border-border/70 bg-card/80 px-3 py-1.5 text-[11px] font-extrabold text-muted-foreground transition-colors hover:border-primary/40 hover:bg-primary/5 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                        >
+                          {t.clearNeighborhoodSelection}
+                        </button>
+                      </div>
+                      <div className="grid w-full grid-cols-2 gap-2 animate-in fade-in slide-in-from-top-1 duration-300 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-2 xl:grid-cols-3">
+                        {neighborhoodOptions.map((neighborhood) => (
+                          <button
+                            key={neighborhood}
+                            type="button"
+                            onClick={() => onSearch(loc.id, neighborhood, DEFAULT_START_SECTION)}
+                            onMouseEnter={() => selectedCityId === loc.id && setHoveredMapNeighborhood(neighborhood)}
+                            onMouseLeave={() => setHoveredMapNeighborhood(null)}
+                            onFocus={() => selectedCityId === loc.id && setHoveredMapNeighborhood(neighborhood)}
+                            onBlur={() => setHoveredMapNeighborhood(null)}
+                            className="min-h-10 rounded-xl border border-border/50 bg-card/80 px-3 py-2 text-left text-xs font-semibold text-muted-foreground transition-all hover:border-primary/50 hover:bg-primary/5 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                          >
+                            {neighborhood}
+                          </button>
+                        ))}
+                      </div>
                     </div>
+                  </div>
                   );
                 })}
               </div>
-            </aside>
+            </div>
           </div>
         </div>
       </div>
@@ -1747,7 +1756,7 @@ function MarkerCard({
                   href={featureFlags.businessIntake
                     ? `/bedrijf-nieuw?kind=existing_listing&cityId=dhg&listingSource=${encodeURIComponent(marker.source || 'google_maps')}&listingId=${encodeURIComponent(String(marker.id))}`
                     : `/bedrijf-claim?listingId=${marker.id}&cityId=dhg&listingSource=${marker.source || 'google_maps'}&name=${encodeURIComponent(marker.name)}&address=${encodeURIComponent(marker.address || '')}`}
-                  className="inline-flex max-w-full items-center gap-1 whitespace-normal text-right text-[11px] font-bold leading-tight text-primary transition-colors hover:text-primary/80"
+                  className="flex items-center gap-1 text-[11px] font-bold text-primary hover:text-primary/80 transition-colors"
                   onClick={e => e.stopPropagation()}
                 >
                   <Store className="h-3 w-3 shrink-0" />
@@ -1965,15 +1974,15 @@ function DiscoveryState({
   // the new one loads: the client-side polygon and subcategory filters already
   // narrow it correctly, so the user never sees a false "0 results" state.
   const businessesQuery = useGetListings(
-    { cityId: locationId, section: 'businesses', language, neighborhoods: requestedNeighborhoods, businessCategories: requestedBusinessCategories, searchLat: requestedSearchCenter?.lat, searchLng: requestedSearchCenter?.lng, mode: 'stored_only', anonymousId },
+    { cityId: locationId, section: 'businesses', language, neighborhoods: requestedNeighborhoods, businessCategories: requestedBusinessCategories, searchLat: requestedSearchCenter?.lat, searchLng: requestedSearchCenter?.lng, mode, anonymousId },
     // Keep the query enabled even when the final subcategory is unchecked.
     // The empty category value is a real request for the current area; the
     // client-side filter keeps the map empty until the response settles.
-    { query: { enabled: topLevelCategories.businesses && hasSearchArea, placeholderData: keepPreviousData, queryKey: getGetListingsQueryKey({ cityId: locationId, section: 'businesses', language, neighborhoods: requestedNeighborhoods, businessCategories: requestedBusinessCategories, searchLat: requestedSearchCenter?.lat, searchLng: requestedSearchCenter?.lng, mode: 'stored_only', anonymousId }) } },
+    { query: { enabled: topLevelCategories.businesses && hasSearchArea, placeholderData: keepPreviousData, queryKey: getGetListingsQueryKey({ cityId: locationId, section: 'businesses', language, neighborhoods: requestedNeighborhoods, businessCategories: requestedBusinessCategories, searchLat: requestedSearchCenter?.lat, searchLng: requestedSearchCenter?.lng, mode, anonymousId }) } },
   );
   const foodDrinkQuery = useGetListings(
-    { cityId: locationId, section: 'food-drink', language, neighborhoods: requestedNeighborhoods, searchLat: requestedSearchCenter?.lat, searchLng: requestedSearchCenter?.lng, mode: 'stored_only', anonymousId },
-    { query: { enabled: topLevelCategories['food-drink'] && hasSearchArea, placeholderData: keepPreviousData, queryKey: getGetListingsQueryKey({ cityId: locationId, section: 'food-drink', language, neighborhoods: requestedNeighborhoods, searchLat: requestedSearchCenter?.lat, searchLng: requestedSearchCenter?.lng, mode: 'stored_only', anonymousId }) } },
+    { cityId: locationId, section: 'food-drink', language, neighborhoods: requestedNeighborhoods, searchLat: requestedSearchCenter?.lat, searchLng: requestedSearchCenter?.lng, mode, anonymousId },
+    { query: { enabled: topLevelCategories['food-drink'] && hasSearchArea, placeholderData: keepPreviousData, queryKey: getGetListingsQueryKey({ cityId: locationId, section: 'food-drink', language, neighborhoods: requestedNeighborhoods, searchLat: requestedSearchCenter?.lat, searchLng: requestedSearchCenter?.lng, mode, anonymousId }) } },
   );
   const socialMapQuery = useGetListings(
     { cityId: locationId, section: 'social-map', language, neighborhoods: requestedNeighborhoods, mode: 'stored_only', anonymousId },
@@ -2076,24 +2085,14 @@ function DiscoveryState({
     }
   };
 
-  const handleClusterMarkerClick = (id: string) => {
-    setViewportPreservingSelection(id);
-    setSelectedMarker(id);
-  };
-
-  const toggleNeighborhood = (neighborhood: string, options?: { additive?: boolean }) => {
-    const additive = options?.additive === true;
-    setSelectedNeighborhoods((previous) => {
-      const next = additive
-        ? previous.includes(neighborhood)
-          ? previous.filter((name) => name !== neighborhood)
-          : [...previous, neighborhood]
-        : previous.length === 1 && previous[0] === neighborhood
-          ? []
-          : [neighborhood];
-      setNeighborhoodSelection(next.length > 0 ? 'some' : 'none');
-      return next;
-    });
+  const toggleNeighborhood = (neighborhood: string) => {
+    if (selectedNeighborhoods.includes(neighborhood)) {
+      setSelectedNeighborhoods([]);
+      setNeighborhoodSelection('none');
+    } else {
+      setSelectedNeighborhoods([neighborhood]);
+      setNeighborhoodSelection('some');
+    }
     setSelectedMarker(null);
   };
 
@@ -2353,11 +2352,7 @@ function DiscoveryState({
     }
     return isPointInsideNeighborhoods(marker.lat, marker.lng, activeNeighborhoodNames);
   });
-  const filteredLocalMarkers = filteredMarkers.filter((marker) => marker.scopeGroup === 'local');
-  const filteredWebMarkers = filteredMarkers.filter((marker) => marker.scopeGroup === 'web');
-  const localIsLoading = selectedLocalQueries.some((query) => query.isLoading);
-  const webIsLoading = selectedWebQueries.some((query) => query.isLoading);
-  const isLoading = localIsLoading;
+  const isLoading = selectedQueries.some((query) => query.isLoading);
   // A background refetch after a filter change shows the previous response
   // (placeholder data) until the narrowed result arrives; surface that state.
   const isRefreshing = !isLoading && selectedQueries.some((query) => query.isFetching);
@@ -2373,10 +2368,8 @@ function DiscoveryState({
       {refreshingLabel}
     </span>
   ) : null;
-  const isError = selectedLocalQueries.some((query) => query.isError) && localSelectedListings.length === 0;
-  const webIsError = selectedWebQueries.some((query) => query.isError);
-  const refetch = () => Promise.all(selectedLocalQueries.map((query) => query.refetch()));
-  const refetchWeb = () => Promise.all(selectedWebQueries.map((query) => query.refetch()));
+  const isError = selectedQueries.some((query) => query.isError) && selectedListings.length === 0;
+  const refetch = () => Promise.all(selectedQueries.map((query) => query.refetch()));
   const isLive = selectedData.some((result) => result.source === 'live');
   const isGooglePlaces = selectedData.some((result) => result.source === 'google_places');
   const hasOpenStreetMap = selectedListings.some((listing) => listing.source === 'openstreetmap');
@@ -2957,127 +2950,26 @@ function DiscoveryState({
               </div>
             )}
 
-            {/* Independently labelled source groups */}
-            {!isLoading && (
-              <section aria-labelledby="local-results-heading" data-testid="results-group-local" className="space-y-3">
-                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/70 pb-2">
-                  <div>
-                    <h3 id="local-results-heading" className="text-sm font-extrabold text-foreground">
-                      {language === 'nl' ? 'Lokale resultaten' : 'Local results'}
-                    </h3>
-                    <p className="mt-0.5 text-[11px] text-muted-foreground">
-                      {language === 'nl'
-                        ? 'Uit de lokale catalogus en geïntegreerde bronnen.'
-                        : 'From the local catalogue and integrated sources.'}
-                    </p>
-                  </div>
-                  <span role="status" aria-live="polite" className="rounded-full bg-muted px-2.5 py-1 text-[11px] font-bold text-foreground">
-                    {filteredLocalMarkers.length} {language === 'nl' ? 'gevonden' : 'found'}
-                  </span>
-                </div>
-                {filteredLocalMarkers.map((m, i) => (
-                  <div
-                    key={`local-${m.id}`}
-                    id={`event-${m.id}`}
-                    data-event-id={m.id}
-                    data-selected={selectedMarker === m.id || undefined}
-                    className="animate-in fade-in slide-in-from-bottom-4 duration-500 fill-mode-both"
-                    style={{ animationDelay: `${i * 50}ms` }}
-                  >
-                    <MarkerCard
-                      language={language}
-                      marker={m}
-                      isSelected={selectedMarker === m.id}
-                      isSaved={savedIds.has(m.id)}
-                      showAdminEvidence={userRole === 'designer'}
-                      onClick={() => setSelectedMarker(m.id)}
-                      onSave={(e) => { e.stopPropagation(); onToggle(m); }}
-                    />
-                  </div>
-                ))}
-              </section>
-            )}
-
-            {liveMode && (
-              <section aria-labelledby="web-results-heading" data-testid="results-group-web" className="space-y-3 border-t border-border/70 pt-4">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div>
-                    <h3 id="web-results-heading" className="text-sm font-extrabold text-foreground">
-                      {language === 'nl' ? 'Aanvullende webresultaten' : 'Additional web results'}
-                    </h3>
-                    <p className="mt-0.5 text-[11px] text-muted-foreground">
-                      {language === 'nl'
-                        ? 'Externe bronnen; geen aanbeveling of verificatie door MarqtPlaza.'
-                        : 'External sources; not endorsed or verified by MarqtPlaza.'}
-                    </p>
-                  </div>
-                  {!webIsLoading && !webIsError && (
-                    <span role="status" aria-live="polite" className="rounded-full bg-muted px-2.5 py-1 text-[11px] font-bold text-foreground">
-                      {filteredWebMarkers.length} {language === 'nl' ? 'gevonden' : 'found'}
-                    </span>
-                  )}
-                </div>
-                {webIsLoading ? (
-                  <div role="status" aria-live="polite" className="flex items-center gap-2 rounded-xl border border-border bg-muted/30 px-3 py-3 text-xs font-semibold text-muted-foreground">
-                    <Loader2 className="h-4 w-4 animate-spin text-primary" aria-hidden="true" />
-                    {language === 'nl' ? 'Webbronnen worden doorzocht…' : 'Searching web sources…'}
-                  </div>
-                ) : webIsError ? (
-                  <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-3 text-rose-900">
-                    <p className="text-xs font-bold">
-                      {language === 'nl'
-                        ? 'Webresultaten konden niet worden geladen. Lokale resultaten blijven beschikbaar.'
-                        : 'Web results could not be loaded. Local results remain available.'}
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => void refetchWeb()}
-                      className="mt-2 inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-rose-300 bg-white px-3 py-1.5 text-xs font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-700"
-                    >
-                      <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
-                      {language === 'nl' ? 'Webresultaten opnieuw proberen' : 'Retry web results'}
-                    </button>
-                  </div>
-                ) : filteredWebMarkers.length === 0 ? (
-                  <div className="rounded-xl border border-border bg-muted/20 px-3 py-3 text-xs text-muted-foreground">
-                    <p className="font-semibold text-foreground">
-                      {language === 'nl'
-                        ? 'Geen aanvullende webresultaten gevonden.'
-                        : 'No additional web results found.'}
-                    </p>
-                    <p className="mt-1">
-                      {language === 'nl'
-                        ? 'Je lokale resultaten en zoekcriteria blijven ongewijzigd.'
-                        : 'Your local results and search criteria remain unchanged.'}
-                    </p>
-                  </div>
-                ) : (
-                  filteredWebMarkers.map((m, i) => (
-                    <div
-                      key={`web-${m.id}`}
-                      id={`event-${m.id}`}
-                      data-event-id={m.id}
-                      data-selected={selectedMarker === m.id || undefined}
-                      className="animate-in fade-in slide-in-from-bottom-4 duration-500 fill-mode-both"
-                      style={{ animationDelay: `${i * 50}ms` }}
-                    >
-                      <MarkerCard
-                        language={language}
-                        marker={m}
-                        isSelected={selectedMarker === m.id}
-                        isSaved={savedIds.has(m.id)}
-                        showAdminEvidence={userRole === 'designer'}
-                        onClick={() => {
-                          setViewportPreservingSelection(null);
-                          setSelectedMarker(m.id);
-                        }}
-                        onSave={(e) => { e.stopPropagation(); onToggle(m); }}
-                      />
-                    </div>
-                  ))
-                )}
-              </section>
-            )}
+            {/* Listings */}
+            {!isLoading && filteredMarkers.map((m, i) => (
+              <div 
+                key={m.id} 
+                id={`event-${m.id}`}
+                data-event-id={m.id}
+                data-selected={selectedMarker === m.id || undefined}
+                className="animate-in fade-in slide-in-from-bottom-4 duration-500 fill-mode-both"
+                style={{ animationDelay: `${i * 50}ms` }}
+              >
+                <MarkerCard
+                  language={language}
+                  marker={m}
+                  isSelected={selectedMarker === m.id}
+                  isSaved={savedIds.has(m.id)}
+                  onClick={() => setSelectedMarker(m.id)}
+                  onSave={(e) => { e.stopPropagation(); onToggle(m); }}
+                />
+              </div>
+            ))}
             
             {!isLoading && !webIsLoading && filteredMarkers.length === 0 && !isError && !webIsError && (
               <div className="flex flex-col items-center justify-center py-20 px-4 text-center animate-in fade-in zoom-in-95 duration-500">

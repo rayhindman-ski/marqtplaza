@@ -172,6 +172,15 @@ export type EventEvidenceSource = {
   lastCheckedAt?: string | null;
 };
 
+export type EventEvidenceStatus = "verified" | "empty" | "stale" | "blocked" | "unavailable";
+
+export type EventEvidenceSource = {
+  id: string;
+  name: string;
+  status: EventEvidenceStatus;
+  lastCheckedAt?: string | null;
+};
+
 export type EventEvidence = {
   status: EventEvidenceStatus;
   lastCheckedAt?: string | null;
@@ -1987,7 +1996,7 @@ export function filterListingsByBusinessCategories(
 // Stored results are keyed by the exact category set. A subcategory selection
 // rarely matches a stored scope of its own, so fall back to the broader
 // all-categories scope for the same area and narrow it by listing category.
-export async function loadStoredBusinessResults(
+async function loadStoredBusinessResults(
   normalizedKey: string,
   providers: ExternalProvider[],
   scope: {
@@ -1997,59 +2006,15 @@ export async function loadStoredBusinessResults(
     neighborhoods: string[];
     businessCategories: BusinessCategory[];
   },
-  loadResults: typeof loadStoredProviderResults = loadStoredProviderResults,
 ): Promise<Map<ExternalProvider, Listing[]>> {
-  const exact = await loadResults(normalizedKey, providers);
-  let missing = providers.filter((provider) => !exact.has(provider));
+  const exact = await loadStoredProviderResults(normalizedKey, providers);
+  if (scope.section !== "businesses" || scope.businessCategories.length === 0) return exact;
+  const missing = providers.filter((provider) => !exact.has(provider));
   if (missing.length === 0) return exact;
-
-  if (scope.section === "businesses" && scope.businessCategories.length > 0) {
-    const broadKey = normalizedListingsKey(scope.cityId, scope.section, scope.language, scope.neighborhoods, []);
-    const broad = await loadResults(broadKey, missing);
-    for (const [provider, listings] of broad) {
-      exact.set(provider, filterListingsByBusinessCategories(listings, scope.businessCategories));
-    }
-    missing = providers.filter((provider) => !exact.has(provider));
-  }
-
-  // A multi-neighborhood selection often combines areas that were discovered
-  // independently. If no combined cache entry exists, merge the latest stored
-  // result for each member area rather than presenting an empty map.
-  if (missing.length > 0 && scope.neighborhoods.length > 1) {
-    const mergedByProvider = new Map<ExternalProvider, Map<string, Listing>>();
-    for (const neighborhood of scope.neighborhoods) {
-      let neighborhoodResults = await loadResults(
-        normalizedListingsKey(
-          scope.cityId,
-          scope.section,
-          scope.language,
-          [neighborhood],
-          scope.businessCategories,
-        ),
-        missing,
-      );
-      const stillMissing = missing.filter((provider) => !neighborhoodResults.has(provider));
-      if (scope.section === "businesses" && scope.businessCategories.length > 0 && stillMissing.length > 0) {
-        const broadResults = await loadResults(
-          normalizedListingsKey(scope.cityId, scope.section, scope.language, [neighborhood], []),
-          stillMissing,
-        );
-        for (const [provider, listings] of broadResults) {
-          neighborhoodResults.set(
-            provider,
-            filterListingsByBusinessCategories(listings, scope.businessCategories),
-          );
-        }
-      }
-      for (const [provider, listings] of neighborhoodResults) {
-        const merged = mergedByProvider.get(provider) ?? new Map<string, Listing>();
-        for (const listing of listings) merged.set(listing.id, listing);
-        mergedByProvider.set(provider, merged);
-      }
-    }
-    for (const [provider, listings] of mergedByProvider) {
-      exact.set(provider, [...listings.values()]);
-    }
+  const broadKey = normalizedListingsKey(scope.cityId, scope.section, scope.language, scope.neighborhoods, []);
+  const broad = await loadStoredProviderResults(broadKey, missing);
+  for (const [provider, listings] of broad) {
+    exact.set(provider, filterListingsByBusinessCategories(listings, scope.businessCategories));
   }
   return exact;
 }
@@ -2423,7 +2388,42 @@ export function createListingsRouter(
         language,
         mode,
       );
-      const discoveredListings = localizedEvents.map((event) => discoveredEventToListing(event, language));
+      const discoveredListings = localizedEvents
+        .map((event) => {
+        const copy = eventCopyForLanguage(event, language);
+        return {
+        id: `source-${event.id}`,
+        locationId: event.locationId,
+        category: event.category,
+        name: copy.title,
+        description: copy.description,
+        startsAt: event.startsAt,
+        isCancelled: event.isCancelled,
+        x: event.x,
+        y: event.y,
+        details: localizedEventDetails(event, language),
+        lat: event.lat,
+        lng: event.lng,
+        sourceUrl: event.canonicalUrl,
+         source: "source_scan" as const,
+         sourceName: event.sourceName,
+          isApproximateLocation: event.isApproximateLocation,
+          sourceGroup: event.sourceGroup === "agenda" ? "city-agenda" : event.sourceGroup,
+          organizer: event.organizer,
+          activityKind: event.activityKind,
+          priceType: event.priceType,
+          priceText: event.priceText,
+          mealType: event.mealType,
+          audience: event.audience,
+          neighborhood: event.neighborhood,
+          recurrenceText: event.recurrenceText,
+          openingTimes: event.openingTimes,
+          venue: event.venue,
+          isIndoor: event.isIndoor,
+          firstSeenAt: event.firstSeenAt?.toISOString(),
+          lastSeenAt: event.lastSeenAt?.toISOString(),
+          updatedAt: event.updatedAt?.toISOString(),
+      }});
       let sourceStatuses: EventSourceStatusSnapshot[] = [];
       try {
         const persistedStatuses = await db

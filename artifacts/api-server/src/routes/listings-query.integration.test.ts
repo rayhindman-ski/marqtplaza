@@ -23,10 +23,6 @@ const anonymousIds = [
   `${runId}-result-failure`,
   `${runId}-stored`,
   `${runId}-scan-to-listing`,
-  `${runId}-direct-old-google`,
-  `${runId}-direct-new-google`,
-  `${runId}-direct-old-osm`,
-  `${runId}-direct-new-osm`,
 ];
 const scanEventUrls = [
   "https://www.getyourguide.com/en-gb/the-hague-l1267/test-community-event",
@@ -125,66 +121,6 @@ async function requestEventListings(neighborhood = "Scheveningen") {
     `${baseUrl}/api/listings?cityId=dhg&section=events&language=en&mode=live&neighborhoods=${encodeURIComponent(neighborhood)}&anonymousId=${anonymousIds[3]}`,
   );
   return { status: response.status, body: await response.json() as Record<string, any> };
-}
-
-async function storeListingSnapshot({
-  anonymousId,
-  provider,
-  section,
-  listing,
-  fetchedAt,
-}: {
-  anonymousId: string;
-  provider: "google_places" | "openstreetmap";
-  section: "businesses" | "food-drink";
-  listing: Listing;
-  fetchedAt: Date;
-}): Promise<void> {
-  const normalizedKey = JSON.stringify({
-    cityId: "dhg",
-    section,
-    language: "en",
-    neighborhoods: [],
-    businessCategories: [],
-  });
-  const [userQuery] = await db.insert(userQueriesTable).values({
-    cityId: "dhg",
-    section,
-    language: "en",
-    anonymousId,
-    normalizedKey,
-    status: "succeeded",
-    completedAt: fetchedAt,
-  }).returning({ id: userQueriesTable.id });
-  assert.ok(userQuery);
-  const [externalQuery] = await db.insert(externalQueriesTable).values({
-    userQueryId: userQuery.id,
-    provider,
-    normalizedKey,
-    requestPayload: {},
-    status: "succeeded",
-    startedAt: fetchedAt,
-    completedAt: fetchedAt,
-  }).returning({ id: externalQueriesTable.id });
-  assert.ok(externalQuery);
-  const [externalResult] = await db.insert(externalResultsTable).values({
-    externalQueryId: externalQuery.id,
-    userQueryId: userQuery.id,
-    provider,
-    normalizedKey,
-    payload: [listing],
-    resultCount: 1,
-    fetchedAt,
-  }).returning({ id: externalResultsTable.id });
-  assert.ok(externalResult);
-  await db.insert(externalResultListingsTable).values({
-    externalResultId: externalResult.id,
-    cityId: "dhg",
-    section,
-    listingId: listing.id,
-    listing,
-    fetchedAt,
-  });
 }
 
 describe("listings route integration (isolated database integration)", () => {

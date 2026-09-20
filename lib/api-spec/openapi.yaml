@@ -5319,6 +5319,38 @@ components:
           format: date-time
       required: [id, name, status, lastCheckedAt]
 
+    EventEvidence:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [verified, empty, stale, blocked, unavailable]
+        lastCheckedAt:
+          type: ["string", "null"]
+          format: date-time
+        message:
+          type: string
+        sources:
+          type: array
+          items:
+            $ref: "#/components/schemas/EventEvidenceSource"
+      required: [status, lastCheckedAt, message, sources]
+
+    EventEvidenceSource:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        status:
+          type: string
+          enum: [verified, empty, stale, blocked, unavailable]
+        lastCheckedAt:
+          type: ["string", "null"]
+          format: date-time
+      required: [id, name, status, lastCheckedAt]
+
     GooglePlacesUsage:
       type: object
       properties:

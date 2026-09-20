@@ -24,62 +24,141 @@ async function stubBoundaryDiscovery(page: Page, tilesAvailable: boolean) {
       contentType: 'application/json',
       body: JSON.stringify({
         source: 'curated',
-        listings: [
-          {
-            id: 'boundary-event',
-            locationId: 'dhg',
-            category: 'Family',
-            name: 'Boundary test event',
-            description: 'Event used to keep neighborhood map coverage stable.',
-            details: 'Today',
-            startsAt: todayAt(14),
-            x: 50,
-            y: 50,
-            lat: 52.075,
-            lng: 4.312,
-            neighborhood: 'Centrum',
-            activityKind: 'family',
-            priceType: 'free',
-            isIndoor: true,
-            openNow: true,
-          },
-          {
-            id: 'stationsbuurt-boundary-event',
-            locationId: 'dhg',
-            category: 'Family',
-            name: 'Stationsbuurt boundary test event',
-            description: 'Second event used to verify multi-neighborhood map coverage.',
-            details: 'Today',
-            startsAt: todayAt(15),
-            x: 55,
-            y: 45,
-            lat: 52.071,
-            lng: 4.322,
-            neighborhood: 'Stationsbuurt',
-            activityKind: 'family',
-            priceType: 'free',
-            isIndoor: false,
-            openNow: true,
-          },
-          {
-            id: 'bezuidenhout-boundary-event',
-            locationId: 'dhg',
-            category: 'Family',
-            name: 'Bezuidenhout boundary test event',
-            description: 'Third event used to verify multi-neighborhood map coverage.',
-            details: 'Today',
-            startsAt: todayAt(16),
-            x: 60,
-            y: 40,
-            lat: 52.085,
-            lng: 4.34,
-            neighborhood: 'Bezuidenhout',
-            activityKind: 'family',
-            priceType: 'free',
-            isIndoor: false,
-            openNow: true,
-          },
-        ],
+        listings: [{
+          id: 'boundary-event',
+          locationId: 'dhg',
+          category: 'Family',
+          name: 'Boundary test event',
+          description: 'Event used to keep neighborhood map coverage stable.',
+          details: 'Today',
+          startsAt: todayAt(14),
+          x: 50,
+          y: 50,
+          lat: 52.071,
+          lng: 4.301,
+          activityKind: 'family',
+          priceType: 'free',
+          isIndoor: true,
+          openNow: true,
+        }],
+      }),
+    });
+  });
+  await page.route('**/api/weather*', async (route) => {
+    await route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({
+        cityId: 'dhg',
+        locationName: 'Den Haag',
+        fetchedAt: new Date().toISOString(),
+        current: {
+          temperature: 18,
+          apparentTemperature: 18,
+          precipitation: 0,
+          windSpeed: 5,
+          weatherCode: 0,
+          condition: 'clear',
+          isDay: true,
+        },
+        forecast: [],
+        provider: 'open-meteo',
+      }),
+    });
+  });
+  await page.route('https://tile.openstreetmap.org/**', async (route) => {
+    if (!tilesAvailable) {
+      await route.abort('failed');
+      return;
+    }
+    await route.fulfill({ contentType: 'image/png', body: transparentPng });
+  });
+  await page.goto('/activiteiten/den-haag?neighborhood=Centrum');
+}
+
+function pointOutsideNeighborhood(name: string) {
+  const boundary = NEIGHBORHOOD_BOUNDARIES[name];
+  if (!boundary) return { lat: 53, lng: 3 };
+  const points = boundary.flat();
+  const minLat = Math.min(...points.map(([lat]) => lat));
+  const minLng = Math.min(...points.map(([, lng]) => lng));
+  const maxLng = Math.max(...points.map(([, lng]) => lng));
+  return {
+    lat: minLat - 0.002,
+    lng: (minLng + maxLng) / 2,
+  };
+}
+
+test('keeps discovery filters, map pins, routes, and translations in sync', async ({ page }) => {
+  const listingsRequests: URL[] = [];
+  await page.addInitScript(() => {
+    navigator.geolocation.getCurrentPosition = () => undefined;
+  });
+  await page.route('**/api/listings*', async (route) => {
+    const requestUrl = new URL(route.request().url());
+    listingsRequests.push(requestUrl);
+    const requestedNeighborhoods = requestUrl.searchParams.get('neighborhoods');
+    const listings = [
+      {
+        id: 'qualifying-event', locationId: 'dhg', category: 'Family',
+        name: 'Qualifying family workshop', description: 'Indoor family workshop',
+        details: 'Today', startsAt: todayAt(14), x: 50, y: 50,
+        lat: 52.075, lng: 4.31, address: '2511 AB Den Haag',
+        activityKind: 'family', priceType: 'free', isIndoor: true, openNow: true,
+      },
+      {
+        id: 'assigned-elsewhere-event', locationId: 'dhg', category: 'Family',
+        name: 'Scheveningen family workshop', description: 'Assigned to another neighborhood',
+        details: 'Today', startsAt: todayAt(14), x: 51, y: 51,
+        lat: 52.075, lng: 4.31, address: '2511 AB Den Haag',
+        neighborhood: 'Scheveningen',
+        activityKind: 'family', priceType: 'free', isIndoor: true, openNow: true,
+      },
+      {
+        id: 'paid-event', locationId: 'dhg', category: 'Family',
+        name: 'Paid family workshop', description: 'Paid event',
+        details: 'Today', startsAt: todayAt(14), x: 52, y: 52,
+        lat: 52.075, lng: 4.31, address: '2511 AB Den Haag',
+        activityKind: 'family', priceType: 'paid', isIndoor: true, openNow: true,
+      },
+      {
+        id: 'outdoor-event', locationId: 'dhg', category: 'Outdoors',
+        name: 'Outdoor event', description: 'Outdoor event',
+        details: 'Today', startsAt: todayAt(14), x: 55, y: 55,
+        lat: 52.075, lng: 4.31, address: '2511 AB Den Haag',
+        activityKind: 'outdoor', priceType: 'free', isIndoor: false, openNow: true,
+      },
+      {
+        id: 'far-event', locationId: 'dhg', category: 'Family',
+        name: 'Far family workshop', description: 'Far event',
+        details: 'Today', startsAt: todayAt(14), x: 70, y: 70,
+        lat: 52.11, lng: 4.35, address: '2511 AB Den Haag',
+        activityKind: 'family', priceType: 'free', isIndoor: true, openNow: true,
+      },
+      {
+        id: 'approximate-event', locationId: 'dhg', category: 'Family',
+        name: 'Approximate family workshop', description: 'Approximate event',
+        details: 'Today', startsAt: todayAt(14), x: 48, y: 48,
+        lat: 52.075, lng: 4.31, address: '2511 AB Den Haag',
+        activityKind: 'family', priceType: 'free', isIndoor: true, openNow: true,
+        isApproximateLocation: true,
+      },
+      {
+        id: 'outside-boundary-event', locationId: 'dhg', category: 'Family',
+        name: 'Outside Centrum boundary', description: 'Outside the official boundary',
+        details: 'Today', startsAt: todayAt(14), x: 49, y: 49,
+        lat: 52.076, lng: 4.29, address: '2511 AB Den Haag',
+        activityKind: 'family', priceType: 'free', isIndoor: true, openNow: true,
+      },
+    ];
+    await route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({
+        source: 'curated',
+        // Model the API contract: an explicitly assigned event from another
+        // neighborhood is removed before coordinate filtering reaches the UI.
+        listings: requestedNeighborhoods === 'Centrum'
+          ? listings.filter((listing) => listing.id !== 'assigned-elsewhere-event')
+          : listings,
       }),
     });
   });
@@ -240,9 +319,6 @@ test('keeps discovery filters, map pins, routes, and translations in sync', asyn
   const listIds = (await eventList.locator('[data-event-id]').evaluateAll(
     (nodes) => nodes.map((node) => node.getAttribute('data-event-id')).sort(),
   ));
-  const showMap = page.getByRole('button', { name: 'Show Map', exact: true }).first();
-  if (await showMap.isVisible()) await showMap.click();
-  await page.mouse.move(5, 5);
   await expect(page.locator('[data-map-cluster]')).toHaveCount(1, { timeout: 10_000 });
   await expect(page.locator('[data-map-cluster]')).toHaveText('2');
   await expect(page.locator('[data-map-cluster]')).toHaveAttribute(
@@ -251,18 +327,8 @@ test('keeps discovery filters, map pins, routes, and translations in sync', asyn
   );
   await expect(page.locator('[data-map-pin]')).toHaveCount(0);
 
-  // Hovering the cluster reveals its contents without changing the map camera.
-  await page.locator('[data-map-cluster]').hover();
-  await expect(page.getByText('2 results here')).toBeVisible();
-  await page.locator('[data-cluster-result-id="approximate-event"]').click();
-  await expect(page.locator('[data-map-pin][data-event-id="approximate-event"]')).toHaveCount(1, { timeout: 10_000 });
-
-  // Selecting a listing from the list pulls it out of the cluster so it is always visible.
-  const qualifyingDisclosure = page.locator('#event-qualifying-event')
-    .getByRole('button', { name: 'Qualifying family workshop', exact: true });
-  await qualifyingDisclosure.focus();
-  await page.keyboard.press('Enter');
-  await expect(qualifyingDisclosure).toHaveAttribute('aria-expanded', 'true');
+  // Selecting a listing must pull it out of the cluster so it is always visible.
+  await page.locator('#event-qualifying-event').click();
   await expect(page.locator('[data-map-pin][data-event-id="qualifying-event"]')).toHaveCount(1, { timeout: 10_000 });
   // The remaining listing is alone, so it is drawn as a normal pin too.
   await expect(page.locator('[data-map-pin]')).toHaveCount(2);
@@ -286,242 +352,6 @@ test('keeps discovery filters, map pins, routes, and translations in sync', asyn
     await expect(page.getByText(label, { exact: true }).first()).toBeVisible();
   }
   await expect(page.getByText('Route niet beschikbaar: dit kaartpunt is een benadering.')).toBeVisible();
-});
-
-test('uses subcategory colors for individual pins and mixed clusters', async ({ page }) => {
-  await page.route('https://maps.googleapis.com/**', async (route) => {
-    await route.abort('failed');
-  });
-  await page.route('**/api/listings*', async (route) => {
-    await route.fulfill({
-      contentType: 'application/json',
-      body: JSON.stringify({
-        source: 'curated',
-        listings: [
-          {
-            id: 'retail-color',
-            locationId: 'dhg',
-            category: 'Businesses',
-            businessCategory: 'Retail & Shopping',
-            name: 'Retail color test',
-            description: 'Retail listing used to verify map colors.',
-            details: 'Open',
-            lat: 52.075,
-            lng: 4.312,
-            x: 50,
-            y: 50,
-          },
-          {
-            id: 'health-color',
-            locationId: 'dhg',
-            category: 'Businesses',
-            businessCategory: 'Health & Wellness',
-            name: 'Health color test',
-            description: 'Health listing used to verify map colors.',
-            details: 'Open',
-            lat: 52.075,
-            lng: 4.312,
-            x: 50,
-            y: 50,
-          },
-        ],
-      }),
-    });
-  });
-  await page.route('**/api/weather*', async (route) => {
-    await route.fulfill({
-      contentType: 'application/json',
-      body: JSON.stringify({
-        cityId: 'dhg',
-        locationName: 'Den Haag',
-        fetchedAt: new Date().toISOString(),
-        current: {
-          temperature: 18,
-          apparentTemperature: 18,
-          precipitation: 0,
-          windSpeed: 5,
-          weatherCode: 0,
-          condition: 'clear',
-          isDay: true,
-        },
-        forecast: [],
-        provider: 'open-meteo',
-      }),
-    });
-  });
-  await page.route('https://tile.openstreetmap.org/**', async (route) => {
-    await route.fulfill({ contentType: 'image/png', body: transparentPng });
-  });
-
-  await page.goto('/activiteiten/den-haag?neighborhood=Centrum&section=businesses');
-  const showMap = page.getByRole('button', { name: 'Show Map', exact: true }).first();
-  if (await showMap.isVisible()) await showMap.click();
-  await page.mouse.move(5, 5);
-  const closeCluster = page.getByRole('button', { name: 'Close', exact: true });
-  if (await closeCluster.isVisible()) {
-    await closeCluster.click();
-    await page.mouse.move(5, 5);
-  }
-
-  const cluster = page.locator('[data-map-cluster]');
-  await expect(cluster).toHaveCount(1, { timeout: 10_000 });
-  await expect(cluster).toHaveText('2');
-  await expect(cluster).toHaveAttribute('data-cluster-colors', '#2563eb,#dc2626');
-  await expect(cluster.locator(':scope > span').first()).toHaveCSS('background-image', /conic-gradient/);
-  await expect(
-    page.getByRole('checkbox', { name: 'Retail & shopping', exact: true })
-      .locator('xpath=..')
-      .locator('[data-subcategory-color]'),
-  ).toHaveAttribute('data-subcategory-color', '#2563eb');
-
-  const tileViewportSignature = () => page.locator('img[src*="tile.openstreetmap.org"]').evaluateAll(
-    (tiles) => tiles.map((tile) => ({
-      src: (tile as HTMLImageElement).src,
-      left: (tile as HTMLElement).style.left,
-      top: (tile as HTMLElement).style.top,
-    })),
-  );
-  const viewportBeforeSelection = await tileViewportSignature();
-  await cluster.hover();
-  const retailResult = page.locator('[data-cluster-result-id="retail-color"]');
-  await expect(retailResult).toBeVisible();
-  await retailResult.hover();
-  await page.waitForTimeout(250);
-  await expect(retailResult).toBeVisible();
-  await retailResult.click();
-  await expect(page.locator('[data-cluster-result-id="retail-color"]')).toHaveCount(0);
-  await expect(page.locator('[data-map-pin][data-event-id="retail-color"]')).toBeVisible();
-  expect(await tileViewportSignature()).toEqual(viewportBeforeSelection);
-
-  const retailFilter = page.getByRole('checkbox', { name: 'Retail & shopping', exact: true });
-  const healthFilter = page.getByRole('checkbox', { name: 'Health & wellness', exact: true });
-  await healthFilter.uncheck();
-  await expect(page.locator('[data-map-pin][data-event-id="retail-color"]')).toHaveAttribute(
-    'data-marker-color',
-    '#2563eb',
-  );
-  await expect(page.locator('[data-map-pin][data-event-id="health-color"]')).toHaveCount(0);
-
-  await healthFilter.check();
-  await retailFilter.uncheck();
-  await expect(page.locator('[data-map-pin][data-event-id="health-color"]')).toHaveAttribute(
-    'data-marker-color',
-    '#dc2626',
-  );
-  await expect(page.locator('[data-map-pin][data-event-id="retail-color"]')).toHaveCount(0);
-});
-
-test('restores discovery filters and map after returning from listing details', async ({ page }) => {
-  await page.context().route('https://maps.googleapis.com/**', async (route) => {
-    await route.abort('failed');
-  });
-  await page.context().route('**/api/listings*', async (route) => {
-    await route.fulfill({
-      contentType: 'application/json',
-      body: JSON.stringify({
-        source: 'curated',
-        listings: [
-          {
-            id: 'return-state-retail',
-            locationId: 'dhg',
-            category: 'Businesses',
-            businessCategory: 'Retail & Shopping',
-            name: 'Return state shop',
-            description: 'A listing used to verify discovery return state.',
-            details: 'Open',
-            neighborhood: 'Centrum',
-            lat: 52.075,
-            lng: 4.312,
-            x: 50,
-            y: 50,
-          },
-          {
-            id: 'return-state-health',
-            locationId: 'dhg',
-            category: 'Businesses',
-            businessCategory: 'Health & Wellness',
-            name: 'Filtered health listing',
-            description: 'This listing should remain filtered after returning.',
-            details: 'Open',
-            neighborhood: 'Centrum',
-            lat: 52.078,
-            lng: 4.315,
-            x: 55,
-            y: 45,
-          },
-        ],
-      }),
-    });
-  });
-  await page.context().route('**/api/weather*', async (route) => {
-    await route.fulfill({
-      contentType: 'application/json',
-      body: JSON.stringify({
-        cityId: 'dhg',
-        locationName: 'Den Haag',
-        fetchedAt: new Date().toISOString(),
-        current: {
-          temperature: 18,
-          apparentTemperature: 18,
-          precipitation: 0,
-          windSpeed: 5,
-          weatherCode: 0,
-          condition: 'clear',
-          isDay: true,
-        },
-        forecast: [],
-        provider: 'open-meteo',
-      }),
-    });
-  });
-  await page.context().route('https://tile.openstreetmap.org/**', async (route) => {
-    await route.fulfill({ contentType: 'image/png', body: transparentPng });
-  });
-
-  await page.goto('/activiteiten/den-haag?neighborhood=Centrum&section=businesses');
-  await page.getByRole('checkbox', { name: 'Health & wellness', exact: true }).uncheck();
-  const showMap = page.getByRole('button', { name: 'Show Map', exact: true }).first();
-  if (await showMap.isVisible()) await showMap.click();
-
-  const retailPin = page.locator('[data-map-pin][data-event-id="return-state-retail"]');
-  await expect(retailPin).toBeVisible({ timeout: 10_000 });
-  await expect(page.locator('[data-map-pin][data-event-id="return-state-health"]')).toHaveCount(0);
-
-  const detailPagePromise = page.waitForEvent('popup');
-  await retailPin.click();
-  const detailPage = await detailPagePromise;
-  await expect(detailPage.getByRole('heading', { name: 'Return state shop' })).toBeVisible();
-  await detailPage.getByRole('button', { name: 'Back to discoveries' }).click();
-
-  await expect(detailPage.getByRole('checkbox', { name: 'Centrum', exact: true })).toBeChecked();
-  await expect(detailPage.getByRole('checkbox', { name: 'Businesses', exact: true })).toBeChecked();
-  await expect(detailPage.getByRole('checkbox', { name: 'Retail & shopping', exact: true })).toBeChecked();
-  await expect(detailPage.getByRole('checkbox', { name: 'Health & wellness', exact: true })).not.toBeChecked();
-  await expect(detailPage.locator('[data-map-pin][data-event-id="return-state-retail"]')).toBeVisible({ timeout: 10_000 });
-  await expect(detailPage.getByRole('button', { name: 'Show Map', exact: true })).toHaveCount(0);
-});
-
-test('shows meaningful event context before opening the card', async ({ page }) => {
-  await stubBoundaryDiscovery(page, true);
-  await page.goto('/activiteiten/den-haag');
-
-  const card = page.locator('#event-boundary-event');
-  const disclosure = card.getByRole('button', { name: 'Boundary test event', exact: true });
-  const title = page.getByTestId('listing-title-boundary-event');
-  const summary = page.getByTestId('listing-summary-boundary-event');
-
-  await expect(disclosure).toHaveAttribute('aria-expanded', 'false');
-  await expect(title).toHaveClass(/line-clamp-2/);
-  await expect(title).not.toHaveClass(/\btruncate\b/);
-  await expect(summary).toBeVisible();
-  await expect(summary).toHaveText('Event used to keep neighborhood map coverage stable.');
-  await expect(summary).toHaveClass(/line-clamp-2/);
-  await expect(card.getByText('Add to your calendar')).toHaveCount(0);
-
-  await disclosure.click();
-  await expect(disclosure).toHaveAttribute('aria-expanded', 'true');
-  await expect(summary).not.toHaveClass(/line-clamp-2/);
-  await expect(card.getByText('Add to your calendar')).toBeVisible();
 });
 
 for (const [mapPath, tilesAvailable] of [['tile map', true], ['coordinate fallback', false]] as const) {
@@ -573,7 +403,6 @@ for (const [mapPath, tilesAvailable] of [['tile map', true], ['coordinate fallba
 
   test(`keeps neighborhood polygon selection aligned in the ${mapPath}`, async ({ page }) => {
     await stubBoundaryDiscovery(page, tilesAvailable);
-    await page.getByRole('button', { name: 'Show Map', exact: true }).first().click();
 
     const neighborhoodControl = page.getByRole('checkbox', { name: 'Centrum', exact: true });
     await expect(neighborhoodControl).toBeChecked();
@@ -615,54 +444,12 @@ for (const [mapPath, tilesAvailable] of [['tile map', true], ['coordinate fallba
     await neighborhoodControl.check();
     await expect(neighborhoodControl).toBeChecked();
     await expect(page.getByRole('button', { name: 'Select neighborhood: Centrum', exact: true })).toHaveCount(1);
-    await expect(page.locator('[data-map-pin][data-event-id="boundary-event"]')).toHaveCount(1);
-    await expect(page.locator('[data-map-pin][data-event-id="stationsbuurt-boundary-event"]')).toHaveCount(0);
-    await expect(page.locator('[data-map-pin][data-event-id="bezuidenhout-boundary-event"]')).toHaveCount(0);
-
-    const stationsbuurtControl = page.getByRole('checkbox', { name: 'Stationsbuurt', exact: true });
-    const stationsbuurtBoundary = page.getByRole('button', { name: 'Select neighborhood: Stationsbuurt', exact: true });
-    await stationsbuurtBoundary.evaluate((node) => {
-      node.dispatchEvent(new MouseEvent('click', { bubbles: true, shiftKey: true }));
-    });
-    await expect(neighborhoodControl).toBeChecked();
-    await expect(stationsbuurtControl).toBeChecked();
-    await expect(page.getByRole('button', { name: 'Show Map', exact: true })).toHaveCount(0);
-    await expect(page.locator('[data-map-pin][data-event-id="boundary-event"]')).toHaveCount(1);
-    await expect(page.locator('[data-map-pin][data-event-id="stationsbuurt-boundary-event"]')).toHaveCount(1);
-    await expect(boundary).toHaveCSS('stroke-opacity', '1');
-    await expect(stationsbuurtBoundary).toHaveCSS('stroke-opacity', '1');
-
-    const bezuidenhoutControl = page.getByRole('checkbox', { name: 'Bezuidenhout', exact: true });
-    const bezuidenhoutBoundary = page.getByRole('button', { name: 'Select neighborhood: Bezuidenhout', exact: true });
-    await bezuidenhoutBoundary.evaluate((node) => {
-      node.dispatchEvent(new MouseEvent('click', { bubbles: true, shiftKey: true }));
-    });
-    await expect(neighborhoodControl).toBeChecked();
-    await expect(stationsbuurtControl).toBeChecked();
-    await expect(bezuidenhoutControl).toBeChecked();
-    await expect(page.getByRole('button', { name: 'Show Map', exact: true })).toHaveCount(0);
-    await expect(page.locator('[data-map-pin][data-event-id="boundary-event"]')).toHaveCount(1);
-    await expect(page.locator('[data-map-pin][data-event-id="stationsbuurt-boundary-event"]')).toHaveCount(1);
-    await expect(page.locator('[data-map-pin][data-event-id="bezuidenhout-boundary-event"]')).toHaveCount(1);
-    await expect(bezuidenhoutBoundary).toHaveCSS('stroke-opacity', '1');
-
-    await stationsbuurtBoundary.dispatchEvent('click');
-    await expect(neighborhoodControl).not.toBeChecked();
-    await expect(stationsbuurtControl).toBeChecked();
-    await expect(bezuidenhoutControl).not.toBeChecked();
-    await expect(page.getByRole('button', { name: 'Show Map', exact: true })).toHaveCount(0);
   });
 }
 
 test('homepage map keeps the user zoom level when hovering neighborhoods', async ({ page }) => {
   await stubBoundaryDiscovery(page, true);
-  await page.addInitScript(() => {
-    localStorage.setItem('buurtplaza-discovery-live-mode', 'true');
-  });
   await page.goto('/');
-  await expect(page.getByRole('button', { name: 'Show Map' })).toBeVisible();
-  await expect(page.getByLabel('Interactive activity map')).toHaveCount(0);
-  await page.getByRole('button', { name: 'Show Map' }).click();
   // The map legitimately refits its camera when data arrives or the container
   // is resized. Under a loaded full run those refits can land after the user
   // zoom below, so wait for them to finish before touching the zoom.
@@ -818,66 +605,7 @@ test('main search external-source setting controls discovery mode and persists',
 
   // The single top-level setting persists when returning to the main search page.
   await page.goto('/');
-  await expect(page.getByRole('checkbox', { name: 'Include web results' })).toBeChecked();
-});
-
-test('guest correction retry preserves the draft and idempotency key', async ({ page }) => {
-  const submissions: Array<{ idempotencyKey: string | undefined; body: Record<string, unknown> }> = [];
-  await page.route(/\/api\/places\/dhg\/openstreetmap\/corrections$/, async (route) => {
-    const request = route.request();
-    submissions.push({
-      idempotencyKey: request.headers()['idempotency-key'],
-      body: request.postDataJSON() as Record<string, unknown>,
-    });
-    if (submissions.length === 1) {
-      await route.fulfill({
-        status: 503,
-        contentType: 'application/json',
-        body: JSON.stringify({ code: 'DEPENDENCY_UNAVAILABLE', message: 'Temporarily unavailable' }),
-      });
-      return;
-    }
-    await route.fulfill({
-      status: 201,
-      contentType: 'application/json',
-      body: JSON.stringify({
-        receipt: 'correction-public-receipt',
-        status: 'pending_review',
-        cityId: 'dhg',
-        listingSource: 'openstreetmap',
-        listingId: 'node/1',
-        fieldKey: 'address',
-        submittedAt: new Date().toISOString(),
-      }),
-    });
-  });
-
-  await page.goto('/correctie?cityId=dhg&listingSource=openstreetmap&listingId=node%2F1&name=Testplaats&locale=en');
-  await expect(page.getByRole('heading', { name: 'Report a correction' })).toBeVisible();
-  await page.getByLabel('Which field is incorrect?').click();
-  await page.getByRole('option', { name: 'Address' }).click();
-  await page.getByLabel('Proposed correct value').fill('Correct street 12');
-  await page.getByLabel('Explanation (optional)').fill('The public address has changed.');
-  await page.getByLabel(/I understand that my correction/).check();
-  await page.getByRole('button', { name: 'Submit correction' }).click();
-
-  await expect(page.getByRole('alert')).toContainText('Your input is preserved');
-  await expect(page.getByLabel('Proposed correct value')).toHaveValue('Correct street 12');
-  await page.getByRole('button', { name: 'Submit correction' }).click();
-
-  await expect(page.getByRole('heading', { name: 'Correction received' })).toBeVisible();
-  await expect(page.getByText(/correction-public-receipt/)).toBeVisible();
-  expect(submissions).toHaveLength(2);
-  expect(submissions[0].idempotencyKey).toBeTruthy();
-  expect(submissions[1].idempotencyKey).toBe(submissions[0].idempotencyKey);
-  expect(submissions[1].body).toEqual(submissions[0].body);
-  expect(submissions[0].body).toMatchObject({
-    listingId: 'node/1',
-    fieldKey: 'address',
-    proposedValue: 'Correct street 12',
-    locale: 'en',
-    consentNoticeVersion: '2026-09-18',
-  });
+  await expect(page.getByRole('checkbox', { name: 'Include external sources' })).not.toBeChecked();
 });
 
 test('keeps every selected neighborhood free of out-of-boundary listings', async ({ page }) => {
@@ -962,130 +690,3 @@ test('keeps every selected neighborhood free of out-of-boundary listings', async
     previousName = name;
   }
 });
-
-test('renders an OSM food listing immediately from the selected map snapshot', async ({ page }) => {
-  const listingId = 'osm-detail-regression';
-  const requestedIds: Array<string | null> = [];
-  await page.addInitScript(({ id }) => {
-    localStorage.setItem(`buurtplaza-detail-listing:${id}`, JSON.stringify({
-      savedAt: Date.now(),
-      listing: {
-        id,
-        locationId: 'dhg',
-        category: 'Food & Drink',
-        foodType: 'restaurant',
-        name: 'Stored map restaurant',
-        description: 'A selected map result should render without live rediscovery.',
-        details: 'Open today',
-        x: 50,
-        y: 50,
-        lat: 52.075,
-        lng: 4.312,
-        source: 'openstreetmap',
-        sourceName: 'OpenStreetMap',
-      },
-    }));
-  }, { id: listingId });
-  await page.route('**/api/listing*', async (route) => {
-    const url = new URL(route.request().url());
-    requestedIds.push(url.searchParams.get('listingId'));
-    await route.fulfill({
-      status: 404,
-      contentType: 'application/json',
-      body: JSON.stringify({ message: 'Not found' }),
-    });
-  });
-
-  await page.goto(`/activiteiten/den-haag/${listingId}?section=food-drink`);
-
-  await expect(page.getByRole('heading', { name: 'Stored map restaurant' })).toBeVisible();
-  await expect(page.getByText('A selected map result should render without live rediscovery.')).toBeVisible();
-  await expect(page.locator('.animate-pulse')).toHaveCount(0);
-  await expect.poll(() => requestedIds).toContain(listingId);
-});
-
-test('opens a shared event URL from a clean context using the stored listing lookup', async ({ page }) => {
-  const listingId = 'source-4242';
-  let requestUrl: URL | null = null;
-  await page.route('**/api/listing*', async (route) => {
-    requestUrl = new URL(route.request().url());
-    await route.fulfill({
-      contentType: 'application/json',
-      body: JSON.stringify({
-        source: 'stored',
-        listing: {
-          id: listingId,
-          locationId: 'dhg',
-          category: 'Family',
-          name: 'Shared stored workshop',
-          description: 'Loaded by ID without a prior map selection.',
-          details: 'Today at 14:00',
-          startsAt: todayAt(14),
-          x: 50,
-          y: 50,
-          lat: 52.075,
-          lng: 4.312,
-          source: 'source_scan',
-          sourceName: 'Local agenda',
-        },
-      }),
-    });
-  });
-
-  await page.goto(`/activiteiten/den-haag/${listingId}?section=events`);
-
-  await expect(page.getByRole('heading', { name: 'Shared stored workshop' })).toBeVisible();
-  await expect(page.getByText('Loaded by ID without a prior map selection.')).toBeVisible();
-  await expect.poll(() => requestUrl?.searchParams.get('listingId') ?? null).toBe(listingId);
-  expect(requestUrl?.searchParams.get('section')).toBe('events');
-  expect(await page.evaluate(() => localStorage.getItem('buurtplaza-detail-listing:source-4242'))).toBeNull();
-});
-
-for (const listing of [
-  {
-    id: 'google-business-detail',
-    section: 'businesses',
-    category: 'Businesses',
-    source: 'google_maps',
-    name: 'Stored Google shop',
-  },
-  {
-    id: 'osm-food-detail',
-    section: 'food-drink',
-    category: 'Food & Drink',
-    source: 'openstreetmap',
-    name: 'Stored OSM cafe',
-  },
-] as const) {
-  test(`opens a direct ${listing.source} ${listing.section} listing by ID`, async ({ page }) => {
-    let requestedSection: string | null = null;
-    await page.route('**/api/listing*', async (route) => {
-      requestedSection = new URL(route.request().url()).searchParams.get('section');
-      await route.fulfill({
-        contentType: 'application/json',
-        body: JSON.stringify({
-          source: 'stored',
-          listing: {
-            id: listing.id,
-            locationId: 'dhg',
-            category: listing.category,
-            name: listing.name,
-            description: 'Stored provider result',
-            details: 'Open today',
-            x: 50,
-            y: 50,
-            lat: 52.075,
-            lng: 4.312,
-            source: listing.source,
-            sourceName: listing.source === 'google_maps' ? 'Google Maps' : 'OpenStreetMap',
-          },
-        }),
-      });
-    });
-
-    await page.goto(`/activiteiten/den-haag/${listing.id}?section=${listing.section}`);
-
-    await expect(page.getByRole('heading', { name: listing.name })).toBeVisible();
-    await expect.poll(() => requestedSection).toBe(listing.section);
-  });
-}

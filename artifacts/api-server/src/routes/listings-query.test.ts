@@ -4,13 +4,8 @@ import { describe, it } from "node:test";
 import {
   allowsExternalQueries,
   fetchOpenStreetMapBusinesses,
-  findStoredListingInRows,
-  listingSnapshotRows,
   filterEventsByNeighborhoods,
   filterListingsByBusinessCategories,
-  foodTypeForGooglePrimaryType,
-  foodTypeForOsmTags,
-  loadStoredBusinessResults,
   normalizeNeighborhoods,
   normalizedListingsKey,
   parseAnonymousId,
@@ -21,55 +16,6 @@ import {
 } from "./listings";
 
 describe("listings query persistence inputs", () => {
-  it("classifies Google Food & Drink types without guessing cuisine", () => {
-    assert.equal(foodTypeForGooglePrimaryType("italian_restaurant"), "restaurant");
-    assert.equal(foodTypeForGooglePrimaryType("coffee_shop"), "cafe");
-    assert.equal(foodTypeForGooglePrimaryType("wine_bar"), "bar");
-    assert.equal(foodTypeForGooglePrimaryType("bakery"), "bakery");
-    assert.equal(foodTypeForGooglePrimaryType("meal_takeaway"), "takeaway");
-    assert.equal(foodTypeForGooglePrimaryType("food"), "other");
-    assert.equal(foodTypeForGooglePrimaryType(undefined), "other");
-  });
-
-  it("classifies OSM Food & Drink tags with a stable fallback", () => {
-    assert.equal(foodTypeForOsmTags({ amenity: "restaurant", cuisine: "thai" }), "restaurant");
-    assert.equal(foodTypeForOsmTags({ amenity: "cafe" }), "cafe");
-    assert.equal(foodTypeForOsmTags({ amenity: "pub" }), "bar");
-    assert.equal(foodTypeForOsmTags({ amenity: "cafe;bar" }), "cafe");
-    assert.equal(foodTypeForOsmTags({ shop: "bakery" }), "bakery");
-    assert.equal(foodTypeForOsmTags({ shop: "pastry" }), "bakery");
-    assert.equal(foodTypeForOsmTags({ shop: "ice_cream" }), "bakery");
-    assert.equal(foodTypeForOsmTags({ amenity: "fast_food" }), "takeaway");
-    assert.equal(foodTypeForOsmTags({ shop: "deli" }), "other");
-  });
-
-  it("preserves website and social links from OpenStreetMap tags", () => {
-    const listings = fetchOpenStreetMapBusinesses(
-      [{
-        id: 42,
-        type: "way",
-        lat: 52.075,
-        lon: 4.312,
-        tags: {
-          name: "Linked bakery",
-          shop: "bakery",
-          "addr:city": "Den Haag",
-          "contact:website": "www.example.com",
-          "contact:facebook": "linked.bakery",
-          instagram: "@linkedbakery",
-        },
-      }],
-      "food-drink",
-      { s: 52.025, w: 4.235, n: 52.125, e: 4.42 },
-      [],
-    );
-
-    assert.equal(listings[0]?.officialUrl, "https://www.example.com");
-    assert.equal(listings[0]?.facebookUrl, "https://www.facebook.com/linked.bakery");
-    assert.equal(listings[0]?.instagramUrl, "https://www.instagram.com/linkedbakery");
-    assert.equal(listings[0]?.sourcePageUrl, "https://www.openstreetmap.org/way/42");
-  });
-
   it("marks approved upcoming events as verified evidence", () => {
     const evidence = summarizeEventEvidence({
       language: "en",
@@ -244,77 +190,6 @@ describe("listings query persistence inputs", () => {
       normalizedListingsKey("dhg", "businesses", "nl", ["Laak Centraal", "Centrum"]),
       normalizedListingsKey(" DHG ", "businesses", "nl", ["  laak   centraal  ", " centrum "]),
     );
-  });
-
-  it("merges individually stored neighborhood results when a combined scope is absent", async () => {
-    const neighborhoods = ["Centrum", "Stationsbuurt", "Bezuidenhout"];
-    const storedByKey = new Map(neighborhoods.map((neighborhood) => [
-      normalizedListingsKey("dhg", "businesses", "en", [neighborhood], []),
-      new Map([["openstreetmap", [{
-        id: `osm-${neighborhood.toLowerCase()}`,
-        locationId: "dhg",
-        category: "Businesses",
-        businessCategory: "Retail & Shopping",
-        name: `${neighborhood} shop`,
-        description: "Stored neighborhood listing",
-        details: neighborhood,
-        x: 50,
-        y: 50,
-        lat: 52.08,
-        lng: 4.31,
-        source: "openstreetmap",
-        sourceName: "OpenStreetMap",
-      }]]]),
-    ]));
-    const combinedKey = normalizedListingsKey("dhg", "businesses", "en", neighborhoods, []);
-
-    const result = await loadStoredBusinessResults(
-      combinedKey,
-      ["openstreetmap"],
-      {
-        cityId: "dhg",
-        section: "businesses",
-        language: "en",
-        neighborhoods,
-        businessCategories: [],
-      },
-      async (key, providers) => {
-        const stored = storedByKey.get(key);
-        return new Map(
-          [...(stored ?? new Map())].filter(([provider]) => providers.includes(provider)),
-        );
-      },
-    );
-
-    assert.deepEqual(
-      result.get("openstreetmap")?.map((listing) => listing.id).sort(),
-      ["osm-bezuidenhout", "osm-centrum", "osm-stationsbuurt"],
-    );
-  });
-
-  it("preserves a checked-empty combined scope instead of reviving member caches", async () => {
-    const neighborhoods = ["Centrum", "Stationsbuurt"];
-    const combinedKey = normalizedListingsKey("dhg", "businesses", "en", neighborhoods, []);
-    let lookupCount = 0;
-
-    const result = await loadStoredBusinessResults(
-      combinedKey,
-      ["openstreetmap"],
-      {
-        cityId: "dhg",
-        section: "businesses",
-        language: "en",
-        neighborhoods,
-        businessCategories: [],
-      },
-      async () => {
-        lookupCount += 1;
-        return new Map([["openstreetmap", []]]);
-      },
-    );
-
-    assert.deepEqual(result.get("openstreetmap"), []);
-    assert.equal(lookupCount, 1);
   });
 
   it("matches event neighborhoods without formatting-sensitive exclusions", () => {

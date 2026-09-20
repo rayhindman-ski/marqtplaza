@@ -968,6 +968,7 @@ export interface BusinessFactCheckInput {
 
 export type BusinessFreshnessStatus = typeof BusinessFreshnessStatus[keyof typeof BusinessFreshnessStatus];
 
+export type ReviewDecisionRecordTargetType = typeof ReviewDecisionRecordTargetType[keyof typeof ReviewDecisionRecordTargetType];
 
 export const BusinessFreshnessStatus = {
   unverified: 'unverified',
@@ -2635,22 +2636,6 @@ export interface ListingsResponse {
   partial?: boolean;
   providers?: ListingsResponseProvidersItem[];
   evidence?: EventEvidence;
-}
-
-export type ListingDetailResponseSource = typeof ListingDetailResponseSource[keyof typeof ListingDetailResponseSource];
-
-
-export const ListingDetailResponseSource = {
-  stored: 'stored',
-} as const;
-
-export interface ListingDetailResponse {
-  listing: Listing;
-  source: ListingDetailResponseSource;
-}
-
-export interface ListingNotFoundResponse {
-  message: string;
 }
 
 export interface GooglePlacesUsage {
