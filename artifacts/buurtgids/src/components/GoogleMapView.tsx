@@ -34,61 +34,10 @@ import {
 } from 'lucide-react';
 import { type Marker as MarkerData, LOCATIONS, type Category, type BusinessCategory, type SocialMapCategory, type FoodType } from '../lib/data';
 import { getMarkerCopy, translations, type Language } from '../lib/i18n';
+import { getMapMarkerColor } from '../lib/mapColors';
 import { NEIGHBORHOOD_BOUNDARIES, type BoundaryPoint, type NeighborhoodBoundary } from '@workspace/geo';
 
 type MapCategory = Category;
-
-const CATEGORY_COLORS: Record<MapCategory, string> = {
-  Museums:       '#8b5cf6',
-  Tours:         '#f36c21',
-  Family:        '#ec4899',
-  Entertainment: '#6366f1',
-  Outdoors:      '#10b981',
-  Markets:       '#f59e0b',
-  Businesses:    '#0ea5e9',
-  'Food & Drink': '#b45309',
-  'Social map': '#0f766e',
-};
-
-const BUSINESS_CATEGORY_COLORS: Record<BusinessCategory, string> = {
-  'Retail & Shopping': '#2563eb',
-  'Food & Drink': '#b45309',
-  'Health & Wellness': '#dc2626',
-  'Beauty & Personal Care': '#db2777',
-  'Professional Services': '#4f46e5',
-  'Finance & Legal': '#0f766e',
-  'Home & Repair': '#7c3aed',
-  'Automotive & Mobility': '#475569',
-  'Education & Childcare': '#0891b2',
-  'Hospitality & Travel': '#c2410c',
-  'Arts, Culture & Entertainment': '#9333ea',
-  'Fitness & Sports': '#16a34a',
-};
-
-const FOOD_TYPE_COLORS: Record<FoodType, string> = {
-  restaurant: '#c2410c',
-  cafe: '#92400e',
-  bar: '#7e22ce',
-  bakery: '#d97706',
-  takeaway: '#e11d48',
-  other: '#64748b',
-};
-
-const SOCIAL_CATEGORY_COLORS: Record<SocialMapCategory, string> = {
-  Geldzaken: '#047857',
-  'Gezin en opvoeden': '#db2777',
-  Gezondheid: '#dc2626',
-  'Heilige plaatsen': '#7c3aed',
-  "Hobby's en interesses": '#9333ea',
-  Ondersteuning: '#ea580c',
-  'Ontmoeten en samenleven': '#0f766e',
-  'Sporten en bewegen': '#16a34a',
-  'Taal en computer': '#2563eb',
-  Vervoer: '#475569',
-  'Werk en opleiding': '#4f46e5',
-  'Wonen en huishouden': '#b45309',
-  'Zorg voor een naaste': '#be123c',
-};
 
 function getSubcategoryIcon(marker: Pick<MarkerData, 'category' | 'businessCategory' | 'socialCategory' | 'foodType'>): LucideIcon {
   if (marker.category === 'Food & Drink' && marker.foodType) {
@@ -181,11 +130,11 @@ function getClusterVisual(points: MapPoint[]) {
   const dominantMarker = ranked[0]?.marker ?? points[0]!;
   const segments = ranked.map(({ count, marker }) => ({
     count,
-    color: getMarkerColor(marker),
+    color: getMapMarkerColor(marker),
   }));
   let completed = 0;
   const background = segments.length <= 1
-    ? getMarkerColor(dominantMarker)
+    ? getMapMarkerColor(dominantMarker)
     : `conic-gradient(${segments.map(({ count, color }) => {
         const start = (completed / points.length) * 100;
         completed += count;
@@ -197,7 +146,7 @@ function getClusterVisual(points: MapPoint[]) {
     isMixed: ranked.length > 1,
     label: getMarkerVisualLabel(dominantMarker),
     background,
-    dominantColor: getMarkerColor(dominantMarker),
+    dominantColor: getMapMarkerColor(dominantMarker),
     colors: [...new Set(segments.map(({ color }) => color))].slice(0, 4),
   };
 }
@@ -382,21 +331,6 @@ type MapPoint = MarkerData;
 
 function getCategoryIcon(marker: MapPoint) {
   return getSubcategoryIcon(marker);
-}
-
-function getMarkerColor(
-  marker: Pick<MarkerData, 'category' | 'businessCategory' | 'socialCategory' | 'foodType'>,
-) {
-  if (marker.category === 'Food & Drink' && marker.foodType) {
-    return FOOD_TYPE_COLORS[marker.foodType];
-  }
-  if (marker.category === 'Businesses' && marker.businessCategory) {
-    return BUSINESS_CATEGORY_COLORS[marker.businessCategory];
-  }
-  if (marker.category === 'Social map' && marker.socialCategory) {
-    return SOCIAL_CATEGORY_COLORS[marker.socialCategory];
-  }
-  return CATEGORY_COLORS[marker.category] ?? CATEGORY_COLORS.Businesses;
 }
 
 function MarkerPreview({
@@ -1136,7 +1070,7 @@ function CoordinateMapFallback({
         const top = ((maxLat - point.lat) / (maxLat - minLat)) * 100;
         const isSelected = point.id === selectedMarkerId;
         const isMuted = Boolean(selectedMarkerId) && !isSelected;
-        const color = getMarkerColor(point);
+        const color = getMapMarkerColor(point);
         const Icon = getCategoryIcon(point);
 
         const className = "marqtplaza-map-marker relative flex items-center justify-center rounded-full transition-transform hover:scale-110 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/35";
@@ -1539,7 +1473,7 @@ function TileMapView({
         const top = world.y - mapTop;
         const isSelected = point.id === selectedMarkerId;
         const isMuted = Boolean(selectedMarkerId) && !isSelected;
-        const color = getMarkerColor(point);
+        const color = getMapMarkerColor(point);
         const Icon = getCategoryIcon(point);
 
         const className = "marqtplaza-map-marker relative flex items-center justify-center rounded-full font-black text-white transition-transform hover:scale-110 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/35";
@@ -1679,7 +1613,7 @@ function GoogleMapCanvas({
 
   const buildMarkerEl = useCallback(
     (marker: MarkerData, isSelected: boolean, isSaved: boolean): HTMLElement => {
-      const color = getMarkerColor(marker);
+      const color = getMapMarkerColor(marker);
       const copy = getMarkerCopy(marker, language);
       const t = translations[language];
       const wrapper = document.createElement('div');

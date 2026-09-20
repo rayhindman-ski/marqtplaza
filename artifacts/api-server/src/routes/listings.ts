@@ -95,6 +95,8 @@ export type Listing = {
   socialCategory?: SocialMapCategory;
   officialUrl?: string;
   sourcePageUrl?: string;
+  facebookUrl?: string;
+  instagramUrl?: string;
   snapshotDate?: string;
   reviewStatus?: "verified" | "review_due" | "changed" | "unavailable";
   reviewReason?: string | null;
@@ -1404,6 +1406,10 @@ export function fetchOpenStreetMapBusinesses(
       lng: element.lon,
       source: "openstreetmap",
       sourceName: "OpenStreetMap",
+      sourcePageUrl: `https://www.openstreetmap.org/${element.type ?? "node"}/${element.id}`,
+      officialUrl: normalizeOsmUrl(tags["contact:website"] ?? tags.website),
+      facebookUrl: normalizeOsmSocialUrl("facebook", tags["contact:facebook"] ?? tags.facebook),
+      instagramUrl: normalizeOsmSocialUrl("instagram", tags["contact:instagram"] ?? tags.instagram),
     };
     const key = listingDedupeKey(listing);
     if (seen.has(key)) continue;
@@ -1422,9 +1428,29 @@ export function fetchOpenStreetMapBusinesses(
 
 export interface OsmElement {
   id: number;
+  type?: "node" | "way" | "relation";
   lat: number;
   lon: number;
   tags: Record<string, string>;
+}
+
+function normalizeOsmUrl(value: string | undefined): string | undefined {
+  const url = value?.trim();
+  if (!url) return undefined;
+  if (/^https?:\/\//i.test(url)) return url;
+  if (/^www\./i.test(url)) return `https://${url}`;
+  return undefined;
+}
+
+function normalizeOsmSocialUrl(
+  provider: "facebook" | "instagram",
+  value: string | undefined,
+): string | undefined {
+  const directUrl = normalizeOsmUrl(value);
+  if (directUrl) return directUrl;
+  const handle = value?.trim().replace(/^@/, "").replace(/^\/+|\/+$/g, "");
+  if (!handle || /\s/.test(handle)) return undefined;
+  return `https://www.${provider}.com/${handle}`;
 }
 
 interface OsmResponse {

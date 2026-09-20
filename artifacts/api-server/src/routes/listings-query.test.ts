@@ -40,6 +40,33 @@ describe("listings query persistence inputs", () => {
     assert.equal(foodTypeForOsmTags({ shop: "deli" }), "other");
   });
 
+  it("preserves website and social links from OpenStreetMap tags", () => {
+    const listings = fetchOpenStreetMapBusinesses(
+      [{
+        id: 42,
+        type: "way",
+        lat: 52.075,
+        lon: 4.312,
+        tags: {
+          name: "Linked bakery",
+          shop: "bakery",
+          "addr:city": "Den Haag",
+          "contact:website": "www.example.com",
+          "contact:facebook": "linked.bakery",
+          instagram: "@linkedbakery",
+        },
+      }],
+      "food-drink",
+      { s: 52.025, w: 4.235, n: 52.125, e: 4.42 },
+      [],
+    );
+
+    assert.equal(listings[0]?.officialUrl, "https://www.example.com");
+    assert.equal(listings[0]?.facebookUrl, "https://www.facebook.com/linked.bakery");
+    assert.equal(listings[0]?.instagramUrl, "https://www.instagram.com/linkedbakery");
+    assert.equal(listings[0]?.sourcePageUrl, "https://www.openstreetmap.org/way/42");
+  });
+
   it("marks approved upcoming events as verified evidence", () => {
     const evidence = summarizeEventEvidence({
       language: "en",

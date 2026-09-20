@@ -123,6 +123,8 @@ export interface Marker {
   socialCategory?: SocialMapCategory;
   officialUrl?: string;
   sourcePageUrl?: string;
+  facebookUrl?: string;
+  instagramUrl?: string;
   snapshotDate?: string;
   reviewStatus?: SocialMapReviewStatus;
   reviewReason?: string | null;

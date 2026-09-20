@@ -4832,6 +4832,12 @@ components:
         sourceUrl:
           type: string
           description: Link to the website where this activity was listed.
+        facebookUrl:
+          type: string
+          description: Public Facebook page supplied by the listing provider.
+        instagramUrl:
+          type: string
+          description: Public Instagram profile supplied by the listing provider.
         businessCategory:
           $ref: "#/components/schemas/BusinessCategory"
         foodType:
@@ -4896,7 +4902,7 @@ components:
           description: Verified organization or service website for a social-map location.
         sourcePageUrl:
           type: string
-          description: Public source page used to verify a social-map location.
+          description: Public provider or source page used to verify this listing.
         snapshotDate:
           type: string
           description: Date the curated social-map selection was last checked.

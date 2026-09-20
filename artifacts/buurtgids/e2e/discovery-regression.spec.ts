@@ -341,6 +341,11 @@ test('uses subcategory colors for individual pins and mixed clusters', async ({ 
   await expect(cluster).toHaveText('2');
   await expect(cluster).toHaveAttribute('data-cluster-colors', '#2563eb,#dc2626');
   await expect(cluster.locator(':scope > span').first()).toHaveCSS('background-image', /conic-gradient/);
+  await expect(
+    page.getByRole('checkbox', { name: 'Retail & shopping', exact: true })
+      .locator('xpath=..')
+      .locator('[data-subcategory-color]'),
+  ).toHaveAttribute('data-subcategory-color', '#2563eb');
 
   const retailFilter = page.getByRole('checkbox', { name: 'Retail & shopping', exact: true });
   const healthFilter = page.getByRole('checkbox', { name: 'Health & wellness', exact: true });
@@ -570,7 +575,9 @@ test('main search external-source setting controls discovery mode and persists',
           lat: 52.071,
           lng: 4.301,
           source: 'google_places',
-           officialUrl: 'https://example.com/stored-postcode-result',
+          officialUrl: 'https://example.com/stored-postcode-result',
+          facebookUrl: 'https://www.facebook.com/stored-postcode-result',
+          instagramUrl: 'https://www.instagram.com/stored-postcode-result',
         }],
       }),
     });
@@ -614,7 +621,19 @@ test('main search external-source setting controls discovery mode and persists',
     'href',
     'https://example.com/stored-postcode-result',
   );
+  await expect(page.getByRole('link', { name: 'Facebook: Stored postcode result' })).toHaveAttribute(
+    'href',
+    'https://www.facebook.com/stored-postcode-result',
+  );
+  await expect(page.getByRole('link', { name: 'Instagram: Stored postcode result' })).toHaveAttribute(
+    'href',
+    'https://www.instagram.com/stored-postcode-result',
+  );
   await page.getByRole('button', { name: /Stored postcode result/ }).click();
+  const carRoute = page.getByRole('link', { name: 'Directions by Car: Stored postcode result' });
+  await expect(carRoute).toBeVisible();
+  await expect(carRoute).toHaveText('');
+  await expect(carRoute).toHaveAttribute('title', 'Car');
   await expect(page.getByTestId('listing-evidence-postcode-result')).toHaveCount(0);
   await page.getByLabel('UserRole').selectOption('designer');
   await page.getByText('Source and check by field').click();

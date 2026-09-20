@@ -12,7 +12,7 @@ import {
   Landmark, Route as RouteIcon, Baby, Building2, Coffee, Gamepad2, HandHeart, Waves, ShoppingBag, ExternalLink, AlertCircle, CalendarPlus,
   CalendarDays, UsersRound, Utensils,
   CloudSun, Cloud, CloudFog, CloudRain, CloudSnow, Sun, Wind, Droplets, Tag, Store,
-  Bike, Car, Footprints, TrainFront, ShieldCheck, Sparkles, Navigation, UserRound, Loader2
+  Bike, Car, Footprints, TrainFront, ShieldCheck, Sparkles, Navigation, UserRound, Loader2, Facebook, Instagram
 } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -45,6 +45,7 @@ import {
   type FoodType,
 } from './lib/data';
 import { GoogleMapView } from './components/GoogleMapView';
+import { getSubcategoryColor } from './lib/mapColors';
 import CaptureView from './pages/CaptureView';
 import SourceDirectoryView from './pages/SourceDirectoryView';
 import EventReviewView from './pages/EventReviewView';
@@ -322,10 +323,10 @@ function RouteLinks({
               target="_blank"
               rel="noopener noreferrer"
               aria-label={`${language === 'nl' ? 'Route via' : 'Directions by'} ${label}: ${marker.name}`}
-              className="inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-border/70 bg-card px-2.5 py-1.5 text-[11px] font-bold text-foreground transition-colors hover:border-primary/40 hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              title={label}
+              className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-border/70 bg-card text-foreground transition-colors hover:border-primary/40 hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
             >
-              <Icon className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
-              {label}
+              <Icon className="h-5 w-5 text-primary" aria-hidden="true" />
             </a>
           );
         })}
@@ -1433,6 +1434,7 @@ function MarkerCard({
     ?? (marker.source ? getListingSourceName(marker.source, language) : undefined);
   const isEvent = topLevelForMarker(marker) === 'events';
   const websiteUrl = marker.officialUrl ?? marker.sourcePageUrl ?? marker.sourceUrl;
+  const hasWebLinks = Boolean(websiteUrl || marker.facebookUrl || marker.instagramUrl);
   const timing = isEvent ? formatEventTiming(marker.startsAt, language) : null;
   const evidence = marker.evidence ?? [];
   const evidenceStatusLabel = {
@@ -1551,20 +1553,55 @@ function MarkerCard({
           >
             {copy.description}
           </p>
-          {!isEvent && websiteUrl && (
-            <a
-              data-testid={`listing-website-${marker.id}`}
-              href={websiteUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={(event) => event.stopPropagation()}
-              className="mb-3 inline-flex items-center gap-1.5 rounded-lg border border-primary/25 bg-primary/5 px-2.5 py-1.5 text-xs font-bold text-primary transition-colors hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-            >
-              <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
-              {marker.officialUrl
-                ? t.officialWebsite
-                : (language === 'nl' ? 'Bekijk website' : 'View website')}
-            </a>
+          {!isEvent && (
+            <div className="mb-3 flex flex-wrap items-center gap-2">
+              {websiteUrl && (
+                <a
+                  data-testid={`listing-website-${marker.id}`}
+                  href={websiteUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={(event) => event.stopPropagation()}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-primary/25 bg-primary/5 px-2.5 py-1.5 text-xs font-bold text-primary transition-colors hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                >
+                  <Globe2 className="h-3.5 w-3.5" aria-hidden="true" />
+                  {marker.officialUrl
+                    ? t.officialWebsite
+                    : (language === 'nl' ? 'Bronpagina' : 'Source page')}
+                </a>
+              )}
+              {marker.facebookUrl && (
+                <a
+                  href={marker.facebookUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={`Facebook: ${marker.name}`}
+                  title="Facebook"
+                  onClick={(event) => event.stopPropagation()}
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-primary/25 bg-primary/5 text-primary transition-colors hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                >
+                  <Facebook className="h-4 w-4" aria-hidden="true" />
+                </a>
+              )}
+              {marker.instagramUrl && (
+                <a
+                  href={marker.instagramUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={`Instagram: ${marker.name}`}
+                  title="Instagram"
+                  onClick={(event) => event.stopPropagation()}
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-primary/25 bg-primary/5 text-primary transition-colors hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                >
+                  <Instagram className="h-4 w-4" aria-hidden="true" />
+                </a>
+              )}
+              {!hasWebLinks && (
+                <span className="text-[11px] font-semibold text-muted-foreground">
+                  {language === 'nl' ? 'Geen website of sociale links vermeld' : 'No website or social links listed'}
+                </span>
+              )}
+            </div>
           )}
           {isExpanded && <div id={`marker-details-${marker.id}`}>
            {isEvent && (
@@ -2138,6 +2175,8 @@ function DiscoveryState({
         socialCategory: l.socialCategory as SocialMapCategory | undefined,
         officialUrl: l.officialUrl,
         sourcePageUrl: l.sourcePageUrl,
+        facebookUrl: l.facebookUrl,
+        instagramUrl: l.instagramUrl,
         snapshotDate: l.snapshotDate,
         reviewStatus: l.reviewStatus as SocialMapReviewStatus | undefined,
         reviewReason: l.reviewReason,
@@ -2474,6 +2513,7 @@ function DiscoveryState({
                 >
                   {visibleSubcategories.map((subcategory) => {
                     const isChecked = subcategories[subcategory];
+                    const color = getSubcategoryColor(subcategory);
                     return (
                       <label
                         key={subcategory}
@@ -2489,6 +2529,12 @@ function DiscoveryState({
                           checked={isChecked}
                           onChange={() => toggleSubcategory(subcategory)}
                           className="h-3.5 w-3.5 shrink-0 accent-primary"
+                        />
+                        <span
+                          data-subcategory-color={color}
+                          className="h-2.5 w-2.5 shrink-0 rounded-full ring-1 ring-black/10"
+                          style={{ backgroundColor: color }}
+                          aria-hidden="true"
                         />
                         <span>{subcategoryLabelFor(subcategory, language)}</span>
                       </label>

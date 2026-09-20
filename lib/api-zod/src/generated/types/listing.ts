@@ -42,6 +42,10 @@ export interface Listing {
   lng: number;
   /** Link to the website where this activity was listed. */
   sourceUrl?: string;
+  /** Public Facebook page supplied by the listing provider. */
+  facebookUrl?: string;
+  /** Public Instagram profile supplied by the listing provider. */
+  instagramUrl?: string;
   businessCategory?: BusinessCategory;
   /** Source-derived Food & Drink venue type. Absent for non-food listings. */
   foodType?: ListingFoodType;
@@ -73,7 +77,7 @@ export interface Listing {
   socialCategory?: SocialMapCategory;
   /** Verified organization or service website for a social-map location. */
   officialUrl?: string;
-  /** Public source page used to verify a social-map location. */
+  /** Public provider or source page used to verify this listing. */
   sourcePageUrl?: string;
   /** Date the curated social-map selection was last checked. */
   snapshotDate?: string;
