@@ -186,6 +186,7 @@ interface GoogleMapViewProps {
   onNeighborhoodHover?: (name: string | null) => void;
   markers: MarkerData[];
   selectedMarkerId: string | null;
+  recenterSelectedMarker?: boolean;
   savedIds: Set<string>;
   onMarkerClick: (id: string) => void;
   onClusterMarkerClick?: (id: string) => void;
@@ -595,10 +596,12 @@ function ClusterSummaryMarker({
   cluster,
   style,
   onClick,
+  onHoverEnd,
 }: {
   cluster: MapPointCluster;
   style: React.CSSProperties;
   onClick?: () => void;
+  onHoverEnd?: () => void;
 }) {
   const count = cluster.points.length;
   const size = count >= 100 ? 62 : count >= 10 ? 56 : 50;
@@ -606,7 +609,7 @@ function ClusterSummaryMarker({
   const downRef = useRef<{ x: number; y: number } | null>(null);
   const draggedRef = useRef(false);
   const label = isInteractive
-    ? `${count} listings in this area. Show listings and zoom in.`
+    ? `${count} listings in this area. Show listings.`
     : `${count} listings in this area`;
   const visual = getClusterVisual(cluster.points);
   const ClusterIcon = getSubcategoryIcon(visual.dominantMarker);
@@ -625,6 +628,10 @@ function ClusterSummaryMarker({
       title={visual.isMixed ? `${count} listings · mostly ${visual.label}` : `${count} ${visual.label} listings`}
       className="absolute z-30 -translate-x-1/2 -translate-y-1/2"
       style={style}
+      onPointerEnter={() => onClick?.()}
+      onPointerLeave={() => onHoverEnd?.()}
+      onFocus={() => onClick?.()}
+      onBlur={() => onHoverEnd?.()}
       onPointerDown={(event) => {
         downRef.current = { x: event.clientX, y: event.clientY };
         draggedRef.current = false;
@@ -684,6 +691,7 @@ function ClusterSummaryMarker({
 function createHtmlClusterElement(
   cluster: MapPointCluster,
   onClick: () => void,
+  onHoverEnd: () => void,
 ): HTMLElement {
   const count = cluster.points.length;
   const size = count >= 100 ? 62 : count >= 10 ? 56 : 50;
@@ -694,7 +702,7 @@ function createHtmlClusterElement(
   button.setAttribute('data-cluster-colors', visual.colors.join(','));
   button.setAttribute(
     'aria-label',
-    `${count} listings in this area. ${visual.isMixed ? `Mostly ${visual.label}, with other categories.` : `${visual.label}.`} Show listings and zoom in.`,
+    `${count} listings in this area. ${visual.isMixed ? `Mostly ${visual.label}, with other categories.` : `${visual.label}.`} Show listings.`,
   );
   button.title = visual.isMixed ? `${count} listings · mostly ${visual.label}` : `${count} ${visual.label} listings`;
   button.style.cssText = [
@@ -760,6 +768,10 @@ function createHtmlClusterElement(
     button.appendChild(mixBadge);
   }
 
+  button.addEventListener('pointerenter', onClick);
+  button.addEventListener('pointerleave', onHoverEnd);
+  button.addEventListener('focus', onClick);
+  button.addEventListener('blur', onHoverEnd);
   attachStationaryActivation(button, onClick);
   return button;
 }
@@ -897,8 +909,10 @@ function CoordinateMapFallback({
   onNeighborhoodHover,
   markers,
   selectedMarkerId,
+  recenterSelectedMarker = true,
   onMarkerClick,
   onClusterClick,
+  onClusterLeave,
 }: Pick<
   GoogleMapViewProps,
   | 'language'
@@ -912,8 +926,12 @@ function CoordinateMapFallback({
    | 'onNeighborhoodHover'
   | 'markers'
   | 'selectedMarkerId'
+  | 'recenterSelectedMarker'
   | 'onMarkerClick'
-> & { onClusterClick?: (cluster: MapPointCluster) => void }) {
+> & {
+  onClusterClick?: (cluster: MapPointCluster) => void;
+  onClusterLeave?: () => void;
+}) {
   const points = getMapPoints(markers);
   const displayedNeighborhoods = showAllNeighborhoods
     ? (getLocation(locationId)?.neighborhoods ?? selectedNeighborhoods)
@@ -936,7 +954,9 @@ function CoordinateMapFallback({
     );
   }
 
-  const selectedPoint = points.find((point) => point.id === selectedMarkerId);
+  const selectedPoint = recenterSelectedMarker
+    ? points.find((point) => point.id === selectedMarkerId)
+    : undefined;
   // The camera follows the selected neighborhoods; context boundaries are drawn
   // but must not widen the viewport to the whole city.
   const viewportAreas = selectedNeighborhoods.length > 0
@@ -1062,6 +1082,7 @@ function CoordinateMapFallback({
                 top: `${(cluster.y / pixelHeight) * 100}%`,
               }}
               onClick={() => onClusterClick?.(cluster)}
+              onHoverEnd={onClusterLeave}
             />
           );
         }
@@ -1142,11 +1163,17 @@ function TileMapView({
   onNeighborhoodHover,
   markers,
   selectedMarkerId,
+  recenterSelectedMarker = true,
   savedIds,
   onMarkerClick,
   onUnavailable,
   onClusterClick,
-}: GoogleMapViewProps & { onUnavailable: () => void; onClusterClick?: (cluster: MapPointCluster) => void; }) {
+  onClusterLeave,
+}: GoogleMapViewProps & {
+  onUnavailable: () => void;
+  onClusterClick?: (cluster: MapPointCluster) => void;
+  onClusterLeave?: () => void;
+}) {
   const containerRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{
     pointerId: number;
@@ -1213,6 +1240,7 @@ function TileMapView({
   }, [locationId, viewportSignature, showAllNeighborhoods, size.height, size.width]);
 
   useEffect(() => {
+    if (!recenterSelectedMarker) return;
     const marker = markersRef.current.find((item) => item.id === selectedMarkerId);
     if (marker?.lat != null && marker.lng != null) {
       setViewport((current) => ({
@@ -1220,7 +1248,7 @@ function TileMapView({
         center: { lat: marker.lat, lng: marker.lng },
       }));
     }
-  }, [selectedMarkerId]);
+  }, [recenterSelectedMarker, selectedMarkerId]);
 
   const tiles = useMemo(() => {
     if (size.width === 0 || size.height === 0) return [];
@@ -1350,11 +1378,7 @@ function TileMapView({
     }
   };
 
-  const zoomToCluster = (cluster: MapPointCluster) => {
-    setViewport((current) => ({
-      center: { lat: cluster.lat, lng: cluster.lng },
-      zoom: Math.min(MAX_TILE_ZOOM, current.zoom + 2),
-    }));
+  const openCluster = (cluster: MapPointCluster) => {
     onClusterClick?.(cluster);
   };
 
@@ -1463,7 +1487,8 @@ function TileMapView({
               key={cluster.id}
               cluster={cluster}
               style={{ left: cluster.x, top: cluster.y }}
-              onClick={() => zoomToCluster(cluster)}
+              onClick={() => openCluster(cluster)}
+              onHoverEnd={onClusterLeave}
             />
           );
         }
@@ -1589,11 +1614,17 @@ function GoogleMapCanvas({
   onNeighborhoodHover,
   markers,
   selectedMarkerId,
+  recenterSelectedMarker = true,
   savedIds,
   onMarkerClick,
   onUnavailable,
   onClusterClick,
-}: GoogleMapViewProps & { onUnavailable: () => void; onClusterClick?: (cluster: MapPointCluster) => void; }) {
+  onClusterLeave,
+}: GoogleMapViewProps & {
+  onUnavailable: () => void;
+  onClusterClick?: (cluster: MapPointCluster) => void;
+  onClusterLeave?: () => void;
+}) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<google.maps.Map | null>(null);
   const markersRef = useRef<Map<string, HtmlMarkerOverlay>>(new Map());
@@ -1761,15 +1792,13 @@ function GoogleMapCanvas({
 
   const buildClusterEl = useCallback(
     (cluster: MapPointCluster): HTMLElement => {
-      return createHtmlClusterElement(cluster, () => {
-        const map = mapRef.current;
-        if (!map) return;
-        map.panTo({ lat: cluster.lat, lng: cluster.lng });
-        map.setZoom(Math.min(18, (map.getZoom() ?? mapZoom) + 2));
-        onClusterClick?.(cluster);
-      });
+      return createHtmlClusterElement(
+        cluster,
+        () => onClusterClick?.(cluster),
+        () => onClusterLeave?.(),
+      );
     },
-    [mapZoom, onClusterClick],
+    [onClusterClick, onClusterLeave],
   );
 
   useEffect(() => {
@@ -2061,12 +2090,13 @@ function GoogleMapCanvas({
   }, [buildClusterEl, buildMarkerEl, mapReady, mapZoom, markers, onMarkerClick, savedIds, selectedMarkerId]);
 
   useEffect(() => {
+    if (!recenterSelectedMarker) return;
     if (!mapReady || !mapRef.current || !selectedMarkerId) return;
     const marker = viewportMarkersRef.current.find((item) => item.id === selectedMarkerId);
     if (marker?.lat != null && marker.lng != null) {
       mapRef.current.panTo({ lat: marker.lat, lng: marker.lng });
     }
-  }, [mapReady, selectedMarkerId]);
+  }, [mapReady, recenterSelectedMarker, selectedMarkerId]);
 
   useEffect(() => () => {
     for (const mapMarker of markersRef.current.values()) {
@@ -2097,6 +2127,31 @@ export function GoogleMapView(props: GoogleMapViewProps) {
   const useTileMap = useCallback(() => setProvider('tiles'), []);
   const useCoordinateFallback = useCallback(() => setProvider('fallback'), []);
   const [openedCluster, setOpenedCluster] = useState<MapPointCluster | null>(null);
+  const clusterCloseTimerRef = useRef<number | null>(null);
+  const openCluster = useCallback((cluster: MapPointCluster) => {
+    if (clusterCloseTimerRef.current != null) {
+      window.clearTimeout(clusterCloseTimerRef.current);
+      clusterCloseTimerRef.current = null;
+    }
+    setOpenedCluster(cluster);
+  }, []);
+  const keepClusterOpen = useCallback(() => {
+    if (clusterCloseTimerRef.current != null) {
+      window.clearTimeout(clusterCloseTimerRef.current);
+      clusterCloseTimerRef.current = null;
+    }
+  }, []);
+  const scheduleClusterClose = useCallback(() => {
+    if (clusterCloseTimerRef.current != null) window.clearTimeout(clusterCloseTimerRef.current);
+    clusterCloseTimerRef.current = window.setTimeout(() => {
+      setOpenedCluster(null);
+      clusterCloseTimerRef.current = null;
+    }, 180);
+  }, []);
+
+  useEffect(() => () => {
+    if (clusterCloseTimerRef.current != null) window.clearTimeout(clusterCloseTimerRef.current);
+  }, []);
 
   // Close the overlay if the selected marker changes (e.g. they picked one)
   useEffect(() => {
@@ -2128,18 +2183,42 @@ export function GoogleMapView(props: GoogleMapViewProps) {
       </div>
     );
   } else if (provider === 'fallback') {
-    content = <CoordinateMapFallback {...props} onClusterClick={setOpenedCluster} />;
+    content = (
+      <CoordinateMapFallback
+        {...props}
+        onClusterClick={openCluster}
+        onClusterLeave={scheduleClusterClose}
+      />
+    );
   } else if (provider === 'tiles') {
-    content = <TileMapView {...props} onUnavailable={useCoordinateFallback} onClusterClick={setOpenedCluster} />;
+    content = (
+      <TileMapView
+        {...props}
+        onUnavailable={useCoordinateFallback}
+        onClusterClick={openCluster}
+        onClusterLeave={scheduleClusterClose}
+      />
+    );
   } else {
-    content = <GoogleMapCanvas {...props} onUnavailable={useTileMap} onClusterClick={setOpenedCluster} />;
+    content = (
+      <GoogleMapCanvas
+        {...props}
+        onUnavailable={useTileMap}
+        onClusterClick={openCluster}
+        onClusterLeave={scheduleClusterClose}
+      />
+    );
   }
 
   return (
     <div className="relative w-full h-full">
       {content}
       {openedCluster && (
-        <div className="absolute inset-0 z-50 flex items-center justify-center p-4 bg-background/20 backdrop-blur-sm">
+        <div
+          className="absolute inset-0 z-50 flex items-center justify-center p-4 bg-background/20 backdrop-blur-sm"
+          onPointerEnter={keepClusterOpen}
+          onPointerLeave={scheduleClusterClose}
+        >
           <div className="bg-card w-full max-w-sm rounded-2xl shadow-2xl border border-border flex flex-col max-h-full">
             <div className="p-3 border-b flex items-center justify-between bg-muted/30 rounded-t-2xl shrink-0">
               <h3 className="font-bold text-sm px-1">

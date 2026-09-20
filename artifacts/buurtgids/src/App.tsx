@@ -108,6 +108,42 @@ function formatEvidenceCheckedAt(value: string, language: Language): string {
 
 type UserRole = 'designer' | 'user';
 const USER_ROLE_STORAGE_KEY = 'buurtplaza-user-role';
+const DETAIL_LISTING_STORAGE_PREFIX = 'buurtplaza-detail-listing:';
+const DETAIL_LISTING_MAX_AGE_MS = 24 * 60 * 60 * 1_000;
+
+function persistDetailListing(listing: Marker): void {
+  try {
+    localStorage.setItem(
+      `${DETAIL_LISTING_STORAGE_PREFIX}${listing.id}`,
+      JSON.stringify({ savedAt: Date.now(), listing }),
+    );
+  } catch {
+    // Storage can be unavailable in privacy modes; the stored-only query below
+    // remains the direct-link fallback.
+  }
+}
+
+function readDetailListing(id: string): Marker | null {
+  try {
+    const raw = localStorage.getItem(`${DETAIL_LISTING_STORAGE_PREFIX}${id}`);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { savedAt?: unknown; listing?: unknown };
+    if (
+      typeof parsed.savedAt !== 'number'
+      || Date.now() - parsed.savedAt > DETAIL_LISTING_MAX_AGE_MS
+      || !parsed.listing
+      || typeof parsed.listing !== 'object'
+      || (parsed.listing as { id?: unknown }).id !== id
+    ) {
+      localStorage.removeItem(`${DETAIL_LISTING_STORAGE_PREFIX}${id}`);
+      return null;
+    }
+    return parsed.listing as Marker;
+  } catch {
+    localStorage.removeItem(`${DETAIL_LISTING_STORAGE_PREFIX}${id}`);
+    return null;
+  }
+}
 
 type CalendarEventData = {
   name: string;
@@ -1847,6 +1883,7 @@ function DiscoveryState({
   const [postcodeFilter, setPostcodeFilter] = useState(initialPostcode ?? '');
   const [neighborhoodSearch, setNeighborhoodSearch] = useState('');
   const [selectedMarker, setSelectedMarker] = useState<string | null>(null);
+  const [viewportPreservingSelection, setViewportPreservingSelection] = useState<string | null>(null);
   const [view, setView] = useState<'map' | 'list'>('list');
   const [agendaTime, setAgendaTime] = useState<AgendaTimeFilter>('all');
   const [agendaPrice, setAgendaPrice] = useState<AgendaPriceFilter>('all');
@@ -2005,6 +2042,7 @@ function DiscoveryState({
 
   const handleMarkerClick = (id: string) => {
     const marker = allMarkers.find((item) => item.id === id);
+    if (marker) persistDetailListing(marker);
     const section = marker ? topLevelForMarker(marker) : listingSection;
     const detailUrl = `/activiteiten/den-haag/${encodeURIComponent(id)}?section=${section}`;
     const detailWindow = window.open(detailUrl, '_blank', 'noopener,noreferrer');
@@ -2014,11 +2052,8 @@ function DiscoveryState({
   };
 
   const handleClusterMarkerClick = (id: string) => {
+    setViewportPreservingSelection(id);
     setSelectedMarker(id);
-    setView('list');
-    window.setTimeout(() => {
-      document.getElementById(`event-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }, 0);
   };
 
   const toggleNeighborhood = (neighborhood: string, options?: { additive?: boolean }) => {
@@ -2982,7 +3017,10 @@ function DiscoveryState({
                         isSelected={selectedMarker === m.id}
                         isSaved={savedIds.has(m.id)}
                         showAdminEvidence={userRole === 'designer'}
-                        onClick={() => setSelectedMarker(m.id)}
+                        onClick={() => {
+                          setViewportPreservingSelection(null);
+                          setSelectedMarker(m.id);
+                        }}
                         onSave={(e) => { e.stopPropagation(); onToggle(m); }}
                       />
                     </div>
@@ -3072,6 +3110,7 @@ function DiscoveryState({
               onNeighborhoodClick={toggleNeighborhood}
               markers={filteredMarkers}
               selectedMarkerId={selectedMarker}
+              recenterSelectedMarker={selectedMarker !== viewportPreservingSelection}
               savedIds={savedIds}
               onMarkerClick={handleMarkerClick}
               onClusterMarkerClick={handleClusterMarkerClick}
@@ -3120,12 +3159,18 @@ function EventDetailView({ eventId, listingSection = 'events' }: { eventId: stri
     ? 'nl'
     : 'en';
   const { savedMarkers, savedStateStatus } = useSavedPlaces();
-  const listingsQuery = useGetListings({ cityId: 'dhg', section: listingSection, language });
   const decodedEventId = decodeURIComponent(eventId);
+  const cachedListing = useMemo(() => readDetailListing(decodedEventId), [decodedEventId]);
+  const listingsQuery = useGetListings({
+    cityId: 'dhg',
+    section: listingSection,
+    language,
+    mode: 'stored_only',
+  });
   const liveListing = listingsQuery.data?.listings.find((item) => item.id === decodedEventId);
-  const listing = liveListing ?? savedMarkers.get(decodedEventId);
+  const listing = liveListing ?? cachedListing ?? savedMarkers.get(decodedEventId);
 
-  if (listingsQuery.isLoading || (!listing && savedStateStatus === 'loading')) {
+  if (!listing && (listingsQuery.isLoading || savedStateStatus === 'loading')) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background p-6">
         <div className="w-full max-w-2xl animate-pulse space-y-4">
@@ -3145,12 +3190,12 @@ function EventDetailView({ eventId, listingSection = 'events' }: { eventId: stri
             <MapPinOff className="h-7 w-7 text-muted-foreground" />
           </div>
           <h1 className="text-2xl font-extrabold text-foreground">
-            {language === 'nl' ? 'Activiteit tijdelijk niet beschikbaar' : 'Event temporarily unavailable'}
+            {language === 'nl' ? 'Vermelding tijdelijk niet beschikbaar' : 'Listing temporarily unavailable'}
           </h1>
           <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
             {language === 'nl'
-              ? 'We konden deze activiteit nu niet ophalen. De bron kan tijdelijk niet beschikbaar zijn of de activiteit kan zijn gewijzigd.'
-              : 'We could not retrieve this activity right now. Its source may be temporarily unavailable or the activity may have changed.'}
+              ? 'We konden deze vermelding nu niet ophalen. De bron kan tijdelijk niet beschikbaar zijn of de vermelding kan zijn gewijzigd.'
+              : 'We could not retrieve this listing right now. Its source may be temporarily unavailable or the listing may have changed.'}
           </p>
           <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
             <button

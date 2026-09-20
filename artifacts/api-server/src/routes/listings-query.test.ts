@@ -8,6 +8,7 @@ import {
   filterListingsByBusinessCategories,
   foodTypeForGooglePrimaryType,
   foodTypeForOsmTags,
+  loadStoredBusinessResults,
   normalizeNeighborhoods,
   normalizedListingsKey,
   parseAnonymousId,
@@ -208,6 +209,77 @@ describe("listings query persistence inputs", () => {
       normalizedListingsKey("dhg", "businesses", "nl", ["Laak Centraal", "Centrum"]),
       normalizedListingsKey(" DHG ", "businesses", "nl", ["  laak   centraal  ", " centrum "]),
     );
+  });
+
+  it("merges individually stored neighborhood results when a combined scope is absent", async () => {
+    const neighborhoods = ["Centrum", "Stationsbuurt", "Bezuidenhout"];
+    const storedByKey = new Map(neighborhoods.map((neighborhood) => [
+      normalizedListingsKey("dhg", "businesses", "en", [neighborhood], []),
+      new Map([["openstreetmap", [{
+        id: `osm-${neighborhood.toLowerCase()}`,
+        locationId: "dhg",
+        category: "Businesses",
+        businessCategory: "Retail & Shopping",
+        name: `${neighborhood} shop`,
+        description: "Stored neighborhood listing",
+        details: neighborhood,
+        x: 50,
+        y: 50,
+        lat: 52.08,
+        lng: 4.31,
+        source: "openstreetmap",
+        sourceName: "OpenStreetMap",
+      }]]]),
+    ]));
+    const combinedKey = normalizedListingsKey("dhg", "businesses", "en", neighborhoods, []);
+
+    const result = await loadStoredBusinessResults(
+      combinedKey,
+      ["openstreetmap"],
+      {
+        cityId: "dhg",
+        section: "businesses",
+        language: "en",
+        neighborhoods,
+        businessCategories: [],
+      },
+      async (key, providers) => {
+        const stored = storedByKey.get(key);
+        return new Map(
+          [...(stored ?? new Map())].filter(([provider]) => providers.includes(provider)),
+        );
+      },
+    );
+
+    assert.deepEqual(
+      result.get("openstreetmap")?.map((listing) => listing.id).sort(),
+      ["osm-bezuidenhout", "osm-centrum", "osm-stationsbuurt"],
+    );
+  });
+
+  it("preserves a checked-empty combined scope instead of reviving member caches", async () => {
+    const neighborhoods = ["Centrum", "Stationsbuurt"];
+    const combinedKey = normalizedListingsKey("dhg", "businesses", "en", neighborhoods, []);
+    let lookupCount = 0;
+
+    const result = await loadStoredBusinessResults(
+      combinedKey,
+      ["openstreetmap"],
+      {
+        cityId: "dhg",
+        section: "businesses",
+        language: "en",
+        neighborhoods,
+        businessCategories: [],
+      },
+      async () => {
+        lookupCount += 1;
+        return new Map([["openstreetmap", []]]);
+      },
+    );
+
+    assert.deepEqual(result.get("openstreetmap"), []);
+    assert.equal(lookupCount, 1);
   });
 
   it("matches event neighborhoods without formatting-sensitive exclusions", () => {

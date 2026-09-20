@@ -44,18 +44,36 @@ async function stubBoundaryDiscovery(page: Page, tilesAvailable: boolean) {
             openNow: true,
           },
           {
-            id: 'scheveningen-boundary-event',
+            id: 'stationsbuurt-boundary-event',
             locationId: 'dhg',
             category: 'Family',
-            name: 'Scheveningen boundary test event',
+            name: 'Stationsbuurt boundary test event',
             description: 'Second event used to verify multi-neighborhood map coverage.',
             details: 'Today',
             startsAt: todayAt(15),
             x: 55,
             y: 45,
-            lat: 52.1059,
-            lng: 4.2742,
-            neighborhood: 'Scheveningen',
+            lat: 52.071,
+            lng: 4.322,
+            neighborhood: 'Stationsbuurt',
+            activityKind: 'family',
+            priceType: 'free',
+            isIndoor: false,
+            openNow: true,
+          },
+          {
+            id: 'bezuidenhout-boundary-event',
+            locationId: 'dhg',
+            category: 'Family',
+            name: 'Bezuidenhout boundary test event',
+            description: 'Third event used to verify multi-neighborhood map coverage.',
+            details: 'Today',
+            startsAt: todayAt(16),
+            x: 60,
+            y: 40,
+            lat: 52.085,
+            lng: 4.34,
+            neighborhood: 'Bezuidenhout',
             activityKind: 'family',
             priceType: 'free',
             isIndoor: false,
@@ -222,6 +240,9 @@ test('keeps discovery filters, map pins, routes, and translations in sync', asyn
   const listIds = (await eventList.locator('[data-event-id]').evaluateAll(
     (nodes) => nodes.map((node) => node.getAttribute('data-event-id')).sort(),
   ));
+  const showMap = page.getByRole('button', { name: 'Show Map', exact: true }).first();
+  if (await showMap.isVisible()) await showMap.click();
+  await page.mouse.move(5, 5);
   await expect(page.locator('[data-map-cluster]')).toHaveCount(1, { timeout: 10_000 });
   await expect(page.locator('[data-map-cluster]')).toHaveText('2');
   await expect(page.locator('[data-map-cluster]')).toHaveAttribute(
@@ -230,8 +251,8 @@ test('keeps discovery filters, map pins, routes, and translations in sync', asyn
   );
   await expect(page.locator('[data-map-pin]')).toHaveCount(0);
 
-  // Activating the cluster reveals its contents.
-  await page.locator('[data-map-cluster]').click();
+  // Hovering the cluster reveals its contents without changing the map camera.
+  await page.locator('[data-map-cluster]').hover();
   await expect(page.getByText('2 results here')).toBeVisible();
   await page.locator('[data-cluster-result-id="approximate-event"]').click();
   await expect(page.locator('[data-map-pin][data-event-id="approximate-event"]')).toHaveCount(1, { timeout: 10_000 });
@@ -335,6 +356,12 @@ test('uses subcategory colors for individual pins and mixed clusters', async ({ 
   await page.goto('/activiteiten/den-haag?neighborhood=Centrum&section=businesses');
   const showMap = page.getByRole('button', { name: 'Show Map', exact: true }).first();
   if (await showMap.isVisible()) await showMap.click();
+  await page.mouse.move(5, 5);
+  const closeCluster = page.getByRole('button', { name: 'Close', exact: true });
+  if (await closeCluster.isVisible()) {
+    await closeCluster.click();
+    await page.mouse.move(5, 5);
+  }
 
   const cluster = page.locator('[data-map-cluster]');
   await expect(cluster).toHaveCount(1, { timeout: 10_000 });
@@ -346,6 +373,25 @@ test('uses subcategory colors for individual pins and mixed clusters', async ({ 
       .locator('xpath=..')
       .locator('[data-subcategory-color]'),
   ).toHaveAttribute('data-subcategory-color', '#2563eb');
+
+  const tileViewportSignature = () => page.locator('img[src*="tile.openstreetmap.org"]').evaluateAll(
+    (tiles) => tiles.map((tile) => ({
+      src: (tile as HTMLImageElement).src,
+      left: (tile as HTMLElement).style.left,
+      top: (tile as HTMLElement).style.top,
+    })),
+  );
+  const viewportBeforeSelection = await tileViewportSignature();
+  await cluster.hover();
+  const retailResult = page.locator('[data-cluster-result-id="retail-color"]');
+  await expect(retailResult).toBeVisible();
+  await retailResult.hover();
+  await page.waitForTimeout(250);
+  await expect(retailResult).toBeVisible();
+  await retailResult.click();
+  await expect(page.locator('[data-cluster-result-id="retail-color"]')).toHaveCount(0);
+  await expect(page.locator('[data-map-pin][data-event-id="retail-color"]')).toBeVisible();
+  expect(await tileViewportSignature()).toEqual(viewportBeforeSelection);
 
   const retailFilter = page.getByRole('checkbox', { name: 'Retail & shopping', exact: true });
   const healthFilter = page.getByRole('checkbox', { name: 'Health & wellness', exact: true });
@@ -480,23 +526,41 @@ for (const [mapPath, tilesAvailable] of [['tile map', true], ['coordinate fallba
     await expect(neighborhoodControl).toBeChecked();
     await expect(page.getByRole('button', { name: 'Select neighborhood: Centrum', exact: true })).toHaveCount(1);
     await expect(page.locator('[data-map-pin][data-event-id="boundary-event"]')).toHaveCount(1);
-    await expect(page.locator('[data-map-pin][data-event-id="scheveningen-boundary-event"]')).toHaveCount(0);
+    await expect(page.locator('[data-map-pin][data-event-id="stationsbuurt-boundary-event"]')).toHaveCount(0);
+    await expect(page.locator('[data-map-pin][data-event-id="bezuidenhout-boundary-event"]')).toHaveCount(0);
 
-    const scheveningenControl = page.getByRole('checkbox', { name: 'Scheveningen', exact: true });
-    const scheveningenBoundary = page.getByRole('button', { name: 'Select neighborhood: Scheveningen', exact: true });
-    await scheveningenBoundary.evaluate((node) => {
+    const stationsbuurtControl = page.getByRole('checkbox', { name: 'Stationsbuurt', exact: true });
+    const stationsbuurtBoundary = page.getByRole('button', { name: 'Select neighborhood: Stationsbuurt', exact: true });
+    await stationsbuurtBoundary.evaluate((node) => {
       node.dispatchEvent(new MouseEvent('click', { bubbles: true, shiftKey: true }));
     });
     await expect(neighborhoodControl).toBeChecked();
-    await expect(scheveningenControl).toBeChecked();
+    await expect(stationsbuurtControl).toBeChecked();
+    await expect(page.getByRole('button', { name: 'Show Map', exact: true })).toHaveCount(0);
     await expect(page.locator('[data-map-pin][data-event-id="boundary-event"]')).toHaveCount(1);
-    await expect(page.locator('[data-map-pin][data-event-id="scheveningen-boundary-event"]')).toHaveCount(1);
+    await expect(page.locator('[data-map-pin][data-event-id="stationsbuurt-boundary-event"]')).toHaveCount(1);
     await expect(boundary).toHaveCSS('stroke-opacity', '1');
-    await expect(scheveningenBoundary).toHaveCSS('stroke-opacity', '1');
+    await expect(stationsbuurtBoundary).toHaveCSS('stroke-opacity', '1');
 
-    await scheveningenBoundary.dispatchEvent('click');
+    const bezuidenhoutControl = page.getByRole('checkbox', { name: 'Bezuidenhout', exact: true });
+    const bezuidenhoutBoundary = page.getByRole('button', { name: 'Select neighborhood: Bezuidenhout', exact: true });
+    await bezuidenhoutBoundary.evaluate((node) => {
+      node.dispatchEvent(new MouseEvent('click', { bubbles: true, shiftKey: true }));
+    });
+    await expect(neighborhoodControl).toBeChecked();
+    await expect(stationsbuurtControl).toBeChecked();
+    await expect(bezuidenhoutControl).toBeChecked();
+    await expect(page.getByRole('button', { name: 'Show Map', exact: true })).toHaveCount(0);
+    await expect(page.locator('[data-map-pin][data-event-id="boundary-event"]')).toHaveCount(1);
+    await expect(page.locator('[data-map-pin][data-event-id="stationsbuurt-boundary-event"]')).toHaveCount(1);
+    await expect(page.locator('[data-map-pin][data-event-id="bezuidenhout-boundary-event"]')).toHaveCount(1);
+    await expect(bezuidenhoutBoundary).toHaveCSS('stroke-opacity', '1');
+
+    await stationsbuurtBoundary.dispatchEvent('click');
     await expect(neighborhoodControl).not.toBeChecked();
-    await expect(scheveningenControl).toBeChecked();
+    await expect(stationsbuurtControl).toBeChecked();
+    await expect(bezuidenhoutControl).not.toBeChecked();
+    await expect(page.getByRole('button', { name: 'Show Map', exact: true })).toHaveCount(0);
   });
 }
 
@@ -807,4 +871,44 @@ test('keeps every selected neighborhood free of out-of-boundary listings', async
     await expect(page.locator('[data-map-pin][data-event-id="outside-boundary-event"]')).toHaveCount(0);
     previousName = name;
   }
+});
+
+test('renders an OSM food listing immediately from the selected map snapshot', async ({ page }) => {
+  const listingId = 'osm-detail-regression';
+  const requestedModes: Array<string | null> = [];
+  await page.addInitScript(({ id }) => {
+    localStorage.setItem(`buurtplaza-detail-listing:${id}`, JSON.stringify({
+      savedAt: Date.now(),
+      listing: {
+        id,
+        locationId: 'dhg',
+        category: 'Food & Drink',
+        foodType: 'restaurant',
+        name: 'Stored map restaurant',
+        description: 'A selected map result should render without live rediscovery.',
+        details: 'Open today',
+        x: 50,
+        y: 50,
+        lat: 52.075,
+        lng: 4.312,
+        source: 'openstreetmap',
+        sourceName: 'OpenStreetMap',
+      },
+    }));
+  }, { id: listingId });
+  await page.route('**/api/listings*', async (route) => {
+    const url = new URL(route.request().url());
+    requestedModes.push(url.searchParams.get('mode'));
+    await route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({ source: 'stored', listings: [] }),
+    });
+  });
+
+  await page.goto(`/activiteiten/den-haag/${listingId}?section=food-drink`);
+
+  await expect(page.getByRole('heading', { name: 'Stored map restaurant' })).toBeVisible();
+  await expect(page.getByText('A selected map result should render without live rediscovery.')).toBeVisible();
+  await expect(page.locator('.animate-pulse')).toHaveCount(0);
+  await expect.poll(() => requestedModes).toContain('stored_only');
 });
