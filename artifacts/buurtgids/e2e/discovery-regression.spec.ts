@@ -253,9 +253,12 @@ test('shows meaningful event context before opening the card', async ({ page }) 
 
   const card = page.locator('#event-boundary-event');
   const disclosure = card.getByRole('button', { name: 'Boundary test event', exact: true });
+  const title = page.getByTestId('listing-title-boundary-event');
   const summary = page.getByTestId('listing-summary-boundary-event');
 
   await expect(disclosure).toHaveAttribute('aria-expanded', 'false');
+  await expect(title).toHaveClass(/line-clamp-2/);
+  await expect(title).not.toHaveClass(/\btruncate\b/);
   await expect(summary).toBeVisible();
   await expect(summary).toHaveText('Event used to keep neighborhood map coverage stable.');
   await expect(summary).toHaveClass(/line-clamp-2/);

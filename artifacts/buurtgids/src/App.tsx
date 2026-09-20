@@ -1494,8 +1494,9 @@ function MarkerCard({
           <span className="min-w-0 flex-1 py-0.5">
             <span className="mb-1 flex items-start justify-between gap-2">
               <span
+                data-testid={`listing-title-${marker.id}`}
                 className={cn(
-                  "min-w-0 truncate font-bold text-base transition-colors",
+                  "min-w-0 flex-1 line-clamp-2 text-sm font-bold leading-snug transition-colors sm:text-base",
                   isSelected ? "text-primary" : "text-foreground group-hover:text-primary",
                 )}
               >
