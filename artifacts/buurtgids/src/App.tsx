@@ -12,7 +12,7 @@ import {
   Landmark, Route as RouteIcon, Baby, Building2, Coffee, Gamepad2, HandHeart, Waves, ShoppingBag, ExternalLink, AlertCircle, CalendarPlus,
   CalendarDays, UsersRound, Utensils,
   CloudSun, Cloud, CloudFog, CloudRain, CloudSnow, Sun, Wind, Droplets, Tag, Store,
-  Bike, Car, Footprints, TrainFront, ShieldCheck, Sparkles, Navigation, UserRound, Loader2
+  Bike, Car, Footprints, TrainFront, ShieldCheck, Sparkles, Navigation, UserRound, Loader2, Menu, Facebook, Instagram
 } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -673,7 +673,7 @@ function LanguageSelector({
   const t = translations[language];
 
   return (
-    <label className="absolute right-5 top-5 z-40 inline-flex items-center gap-2 rounded-full border border-border/70 bg-card/90 px-3 py-2 text-sm font-semibold text-foreground shadow-sm backdrop-blur-md sm:right-7 sm:top-7">
+    <label className="absolute right-20 top-3 z-40 inline-flex items-center gap-2 rounded-full border border-border/70 bg-card/90 px-3 py-2 text-sm font-semibold text-foreground shadow-sm backdrop-blur-md lg:right-7 lg:top-7">
       <Globe2 className="h-4 w-4 text-primary" aria-hidden="true" />
       <span className="sr-only">{t.languageLabel}</span>
       <select
@@ -702,17 +702,17 @@ function UserRoleSelector({
   return (
     <label
       className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border border-border/70 bg-card/90 px-3 text-[11px] font-extrabold text-foreground shadow-sm backdrop-blur-md"
-      title="UserRole"
+      title={userRole === 'designer' ? 'Editor view' : 'Consumer view'}
     >
-      <span aria-hidden="true">UserRole</span>
+      <span>{userRole === 'designer' ? 'Editor' : 'Consumer'}</span>
       <select
         value={userRole}
         onChange={(event) => onUserRoleChange(event.target.value as UserRole)}
-        aria-label="UserRole"
+        aria-label="Preview mode"
         className="cursor-pointer appearance-none bg-transparent text-[11px] font-extrabold lowercase outline-none"
       >
-        <option value="designer">designer</option>
-        <option value="user">user</option>
+        <option value="designer">Editor</option>
+        <option value="user">Consumer</option>
       </select>
     </label>
   );
@@ -847,6 +847,8 @@ function ReferenceCategoryNav({
   const t = translations[language];
   const [location] = useLocation();
   const search = useSearch();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuTriggerRef = useRef<HTMLButtonElement>(null);
   const accountHref = withReturnPath('/account', `${location}${search ? `?${search}` : ''}`);
   const iconForCategory = (id: string) => {
     if (id === 'things-to-do') return CalendarDays;
@@ -860,13 +862,49 @@ function ReferenceCategoryNav({
 
   return (
     <nav
-      aria-label="Categories"
+      aria-label={language === 'nl' ? 'Hoofdnavigatie' : 'Primary navigation'}
       className={cn(
-        "z-30 flex w-full overflow-x-auto border-b border-border/70 bg-card/85 px-4 py-2.5 pr-24 backdrop-blur-md sm:px-6 sm:pr-28",
+        "z-30 w-full border-b border-border/70 bg-card/95 px-4 py-2.5 backdrop-blur-md sm:px-6",
         embedded ? "relative shrink-0" : "absolute left-0 top-0",
       )}
     >
-      <div className="mx-auto flex min-w-max max-w-6xl items-center justify-center gap-4 sm:gap-7">
+      <div className="mx-auto flex max-w-6xl items-center justify-between gap-3">
+        <Link href="/" className="shrink-0 text-xs font-black uppercase tracking-[0.16em] text-primary">
+          MarqtPlaza
+        </Link>
+        <button
+          ref={menuTriggerRef}
+          type="button"
+          aria-expanded={menuOpen}
+          aria-controls="primary-navigation-links"
+          aria-label={menuOpen
+            ? (language === 'nl' ? 'Menu sluiten' : 'Close menu')
+            : (language === 'nl' ? 'Menu openen' : 'Open menu')}
+          onClick={() => setMenuOpen((open) => !open)}
+          onKeyDown={(event) => {
+            if (event.key === 'Escape') {
+              setMenuOpen(false);
+              menuTriggerRef.current?.focus();
+            }
+          }}
+          className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-xl border border-border bg-card text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary lg:hidden"
+        >
+          {menuOpen ? <X className="h-5 w-5" aria-hidden="true" /> : <Menu className="h-5 w-5" aria-hidden="true" />}
+        </button>
+      </div>
+      <div
+        id="primary-navigation-links"
+        className={cn(
+          "mx-auto mt-2 max-w-6xl flex-col items-stretch gap-1 rounded-2xl border border-border/70 bg-card p-2 shadow-lg lg:mt-0 lg:flex lg:flex-row lg:items-center lg:justify-center lg:gap-2 lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none",
+          menuOpen ? "flex" : "hidden",
+        )}
+        onKeyDown={(event) => {
+          if (event.key === 'Escape') {
+            setMenuOpen(false);
+            menuTriggerRef.current?.focus();
+          }
+        }}
+      >
         {t.navCategories.map((category) => {
           const Icon = iconForCategory(category.id);
           if (category.id === 'news') {
@@ -876,9 +914,10 @@ function ReferenceCategoryNav({
                   href="/nieuws"
                   aria-label={category.label}
                   title={category.label}
-                  className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-foreground transition-colors hover:bg-primary/10 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  className="inline-flex min-h-11 items-center gap-2 rounded-lg px-3 text-sm font-bold text-foreground transition-colors hover:bg-primary/10 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                 >
                   <Icon className="h-5 w-5" aria-hidden="true" />
+                  <span>{category.label}</span>
                 </Link>
                 <span className={tooltipClass}>{category.label}</span>
               </span>
@@ -897,9 +936,10 @@ function ReferenceCategoryNav({
                 aria-label={category.label}
                 aria-haspopup={category.id === 'things-to-do' ? 'dialog' : undefined}
                 title={category.label}
-                className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-foreground transition-colors hover:bg-primary/10 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                className="inline-flex min-h-11 items-center gap-2 rounded-lg px-3 text-sm font-bold text-foreground transition-colors hover:bg-primary/10 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
               >
                 <Icon className="h-5 w-5" aria-hidden="true" />
+                <span>{category.label}</span>
               </button>
               <span className={tooltipClass}>{category.label}</span>
             </span>
@@ -920,18 +960,15 @@ function ReferenceCategoryNav({
               href={href}
               aria-label={label}
               title={label}
-              className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-foreground transition-colors hover:bg-primary/10 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              className="inline-flex min-h-11 items-center gap-2 rounded-lg px-3 text-sm font-bold text-foreground transition-colors hover:bg-primary/10 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
             >
               <Icon className="h-5 w-5" aria-hidden="true" />
+              <span>{label}</span>
             </Link>
             <span className={tooltipClass}>{label}</span>
           </span>
         ))}
         <UserRoleSelector userRole={userRole} onUserRoleChange={onUserRoleChange} />
-        <span className="group relative">
-          <Search className="h-5 w-5 text-foreground" aria-label={t.explore} />
-          <span className={tooltipClass}>{t.explore}</span>
-        </span>
       </div>
     </nav>
   );
@@ -999,6 +1036,7 @@ function SearchState({
     'Enschede',
     'Amersfoort',
   ];
+  const popularNeighborhoods: Record<string, string[]> = {};
   const [query, setQuery] = useState('');
   const [error, setError] = useState('');
   const [selectedCityId, setSelectedCityId] = useState<string | null>(null);
@@ -1063,7 +1101,10 @@ function SearchState({
   };
 
   return (
-    <div className="flex-1 flex flex-col items-center justify-center min-h-screen p-6 relative overflow-hidden bg-background">
+    <div className="relative flex min-h-screen flex-1 flex-col items-center overflow-x-hidden bg-background px-4 pb-10 pt-28 sm:px-6 lg:justify-center">
+      <a href="#main-content" className="sr-only z-50 rounded-lg bg-card px-4 py-3 font-bold text-primary focus:not-sr-only focus:absolute focus:left-4 focus:top-4">
+        {language === 'nl' ? 'Naar hoofdinhoud' : 'Skip to main content'}
+      </a>
       <ReferenceCategoryNav
         language={language}
         userRole={userRole}
@@ -1091,15 +1132,27 @@ function SearchState({
         </button>
       )}
 
-      <div className="z-10 w-full max-w-7xl space-y-6 text-center animate-in fade-in slide-in-from-bottom-8 duration-700 ease-out">
+      <main id="main-content" className="z-10 w-full max-w-7xl space-y-6 text-center animate-in fade-in slide-in-from-bottom-8 duration-700 ease-out">
         <div className="space-y-2">
           <img
             src="/marqtplaza-logo.png"
             alt="marqtplaza.com — The Digital Village Square"
             className="mx-auto h-[78px] w-auto md:h-[96px]"
           />
-          <p className="mx-auto max-w-lg text-base font-medium leading-relaxed text-muted-foreground md:text-lg">
-            {t.searchDescription}
+          <h1 className="mx-auto max-w-3xl text-3xl font-black tracking-tight text-foreground sm:text-5xl">
+            {language === 'nl'
+              ? 'Ontdek wat er lokaal gebeurt, waar je ook bent'
+              : 'Discover what is happening locally, wherever you are'}
+          </h1>
+          <p className="mx-auto max-w-2xl text-base font-medium leading-relaxed text-muted-foreground md:text-lg">
+            {language === 'nl'
+              ? 'Vind activiteiten, bedrijven, eten en buurthulp vanuit één rustige, privacyvriendelijke plek.'
+              : 'Find activities, businesses, food, and community support from one calm, privacy-friendly place.'}
+          </p>
+          <p className="mx-auto inline-flex rounded-full border border-primary/25 bg-primary/10 px-4 py-2 text-sm font-extrabold text-foreground">
+            {language === 'nl'
+              ? 'Nu beschikbaar voor heel Den Haag'
+              : 'Currently available across The Hague'}
           </p>
         </div>
 
@@ -1136,50 +1189,31 @@ function SearchState({
 
         <div className="w-full pt-6">
           <div className="grid gap-6 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1.35fr)] lg:items-start">
-            <div className="relative h-[25rem] overflow-hidden rounded-3xl border border-border/70 bg-card/80 text-left shadow-xl backdrop-blur-sm sm:h-[30rem]">
-              <GoogleMapView
-                language={language}
-                locationId={mapLocation.id}
-                selectedNeighborhoods={mapLocation.neighborhoods}
-                showNeighborhoodLabels={false}
-                highlightedNeighborhood={hoveredMapNeighborhood ?? selectedMapNeighborhood}
-                onNeighborhoodClick={setSelectedMapNeighborhood}
-                onNeighborhoodHover={setHoveredMapNeighborhood}
-                markers={[]}
-                selectedMarkerId={null}
-                savedIds={new Set()}
-                onMarkerClick={() => undefined}
-              />
-              <div className="pointer-events-none absolute left-4 top-4 z-10 max-w-[calc(100%-2rem)] rounded-2xl border border-border/70 bg-card/90 px-4 py-3 shadow-lg backdrop-blur-sm">
-                <p className="text-sm font-extrabold text-foreground">
-                  {language === 'nl' ? 'Buurten op de kaart' : 'Neighborhoods on the map'}
+            <section className="flex min-h-[18rem] flex-col justify-between rounded-3xl border border-border/70 bg-card/90 p-6 text-left shadow-xl backdrop-blur-sm sm:p-8">
+              <div>
+                <p className="text-xs font-black uppercase tracking-[0.18em] text-primary">
+                  {language === 'nl' ? 'Jij houdt de regie' : 'You stay in control'}
                 </p>
-                <p className="mt-1 text-xs font-semibold text-muted-foreground">
-                  {getLocationName(mapLocation, language)}
-                  {' · '}
+                <h2 className="mt-3 text-2xl font-black tracking-tight text-foreground">
+                  {language === 'nl' ? 'Begin met de lijst. Kies zelf of je meer deelt.' : 'Start with the list. Choose if you want to share more.'}
+                </h2>
+                <p className="mt-3 text-sm font-medium leading-relaxed text-muted-foreground">
                   {language === 'nl'
-                    ? 'Elke buurt is omlijnd; de namen staan ernaast.'
-                    : 'Each neighborhood is outlined; names are listed alongside.'}
+                    ? 'We laden geen kaart, vragen geen locatie en zoeken niet op het web voordat jij daar bewust voor kiest.'
+                    : 'We do not load a map, request your location, or search the web until you explicitly choose to.'}
                 </p>
               </div>
-              {selectedMapNeighborhood && (
-                <div className="absolute bottom-4 left-4 right-4 z-10 flex items-center justify-between gap-3 rounded-2xl border border-primary/30 bg-card/95 px-4 py-3 text-left shadow-lg backdrop-blur-sm">
-                  <div className="min-w-0">
-                    <p className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-muted-foreground">
-                      {language === 'nl' ? 'Geselecteerde buurt' : 'Selected neighborhood'}
-                    </p>
-                    <p className="truncate text-sm font-extrabold text-foreground">{selectedMapNeighborhood}</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => onSearch(mapLocation.id, selectedMapNeighborhood, DEFAULT_START_SECTION)}
-                    className="shrink-0 rounded-xl bg-primary px-3 py-2 text-xs font-extrabold text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                  >
-                    {language === 'nl' ? 'Selecteer buurt' : 'Select neighborhood'}
-                  </button>
-                </div>
-              )}
-            </div>
+              <details className="mt-6 rounded-2xl border border-border/70 bg-muted/30 p-4">
+                <summary className="cursor-pointer font-extrabold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
+                  {language === 'nl' ? 'Hoe lokaal en web zoeken verschillen' : 'How local and web search differ'}
+                </summary>
+                <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
+                  {language === 'nl'
+                    ? 'Lokaal zoeken gebruikt de bestaande catalogus. Aanvullende webresultaten delen alleen je gekozen zoekgebied met externe aanbieders en zijn geen verificatie door MarqtPlaza.'
+                    : 'Local search uses the established catalogue. Additional web results share only your chosen search area with external providers and are not verified by MarqtPlaza.'}
+                </p>
+              </details>
+            </section>
 
             <div>
               <p className="mb-4 text-xs font-bold uppercase tracking-widest text-muted-foreground">{t.popularDestinations}</p>
@@ -1260,7 +1294,7 @@ function SearchState({
             </div>
           </div>
         </div>
-      </div>
+      </main>
     </div>
   );
 }
@@ -1924,6 +1958,8 @@ function DiscoveryState({
   );
   const [nearbyPosition, setNearbyPosition] = useState<{ lat: number; lng: number } | null>(null);
   const [nearbyStatus, setNearbyStatus] = useState<'idle' | 'locating' | 'ready' | 'fallback'>('idle');
+  const [showMap, setShowMap] = useState(false);
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState(420);
   const sidebarResizeRef = useRef<{ pointerId: number; startX: number; startWidth: number } | null>(null);
   const initialScopeEffectRef = useRef(true);
@@ -1974,15 +2010,15 @@ function DiscoveryState({
   // the new one loads: the client-side polygon and subcategory filters already
   // narrow it correctly, so the user never sees a false "0 results" state.
   const businessesQuery = useGetListings(
-    { cityId: locationId, section: 'businesses', language, neighborhoods: requestedNeighborhoods, businessCategories: requestedBusinessCategories, searchLat: requestedSearchCenter?.lat, searchLng: requestedSearchCenter?.lng, mode, anonymousId },
+    { cityId: locationId, section: 'businesses', language, neighborhoods: requestedNeighborhoods, businessCategories: requestedBusinessCategories, searchLat: requestedSearchCenter?.lat, searchLng: requestedSearchCenter?.lng, mode: 'stored_only', anonymousId },
     // Keep the query enabled even when the final subcategory is unchecked.
     // The empty category value is a real request for the current area; the
     // client-side filter keeps the map empty until the response settles.
-    { query: { enabled: topLevelCategories.businesses && hasSearchArea, placeholderData: keepPreviousData, queryKey: getGetListingsQueryKey({ cityId: locationId, section: 'businesses', language, neighborhoods: requestedNeighborhoods, businessCategories: requestedBusinessCategories, searchLat: requestedSearchCenter?.lat, searchLng: requestedSearchCenter?.lng, mode, anonymousId }) } },
+    { query: { enabled: topLevelCategories.businesses && hasSearchArea, placeholderData: keepPreviousData, queryKey: getGetListingsQueryKey({ cityId: locationId, section: 'businesses', language, neighborhoods: requestedNeighborhoods, businessCategories: requestedBusinessCategories, searchLat: requestedSearchCenter?.lat, searchLng: requestedSearchCenter?.lng, mode: 'stored_only', anonymousId }) } },
   );
   const foodDrinkQuery = useGetListings(
-    { cityId: locationId, section: 'food-drink', language, neighborhoods: requestedNeighborhoods, searchLat: requestedSearchCenter?.lat, searchLng: requestedSearchCenter?.lng, mode, anonymousId },
-    { query: { enabled: topLevelCategories['food-drink'] && hasSearchArea, placeholderData: keepPreviousData, queryKey: getGetListingsQueryKey({ cityId: locationId, section: 'food-drink', language, neighborhoods: requestedNeighborhoods, searchLat: requestedSearchCenter?.lat, searchLng: requestedSearchCenter?.lng, mode, anonymousId }) } },
+    { cityId: locationId, section: 'food-drink', language, neighborhoods: requestedNeighborhoods, searchLat: requestedSearchCenter?.lat, searchLng: requestedSearchCenter?.lng, mode: 'stored_only', anonymousId },
+    { query: { enabled: topLevelCategories['food-drink'] && hasSearchArea, placeholderData: keepPreviousData, queryKey: getGetListingsQueryKey({ cityId: locationId, section: 'food-drink', language, neighborhoods: requestedNeighborhoods, searchLat: requestedSearchCenter?.lat, searchLng: requestedSearchCenter?.lng, mode: 'stored_only', anonymousId }) } },
   );
   const socialMapQuery = useGetListings(
     { cityId: locationId, section: 'social-map', language, neighborhoods: requestedNeighborhoods, mode: 'stored_only', anonymousId },
@@ -2084,6 +2120,7 @@ function DiscoveryState({
       detailWindow.opener = null;
     }
   };
+  const handleClusterMarkerClick = handleMarkerClick;
 
   const toggleNeighborhood = (neighborhood: string) => {
     if (selectedNeighborhoods.includes(neighborhood)) {
@@ -2407,7 +2444,10 @@ function DiscoveryState({
 
       {/* Sidebar List */}
       <div
-      className="relative z-20 flex h-[70vh] min-h-[32rem] w-full flex-col overflow-y-auto border-r border-border bg-card/95 shadow-2xl backdrop-blur-xl md:h-full md:min-h-0 md:w-[var(--sidebar-width)] md:bg-card"
+      className={cn(
+        "relative z-20 flex min-h-screen w-full flex-col overflow-y-auto border-r border-border bg-card/95 shadow-2xl backdrop-blur-xl md:h-full md:min-h-0 md:bg-card",
+        showMap ? "h-[70vh] md:w-[var(--sidebar-width)]" : "md:w-full",
+      )}
       style={{ '--sidebar-width': `${sidebarWidth}px` } as React.CSSProperties}
       >
         <div className="shrink-0 border-b border-border bg-card p-4">
@@ -2420,7 +2460,7 @@ function DiscoveryState({
               <ArrowLeft className="w-6 h-6" />
             </button>
             <div className="flex-1 min-w-0">
-              <h2 className="text-3xl font-extrabold text-foreground tracking-tight">{getLocationName(location, language)}</h2>
+              <h1 className="text-3xl font-extrabold text-foreground tracking-tight">{getLocationName(location, language)}</h1>
               <p className="flex items-center gap-2 text-sm text-muted-foreground font-medium">
                 {t.discoveriesNearby(filteredMarkers.length)}
                 {isRefreshing && <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" aria-hidden="true" />}
@@ -2444,7 +2484,37 @@ function DiscoveryState({
               )}
             </button>
           </div>
-          <div className="mt-3 space-y-2">
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setShowMap((visible) => !visible)}
+              aria-pressed={showMap}
+              className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-primary/35 bg-primary/10 px-4 text-sm font-extrabold text-foreground transition-colors hover:bg-primary/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            >
+              {showMap ? <Search className="h-4 w-4" aria-hidden="true" /> : <MapIcon className="h-4 w-4" aria-hidden="true" />}
+              {showMap
+                ? (language === 'nl' ? 'Toon lijst' : 'Show list')
+                : (language === 'nl' ? 'Toon kaart' : 'Show map')}
+            </button>
+            {!showMap && (
+              <p className="text-xs font-semibold text-muted-foreground">
+                {language === 'nl'
+                  ? 'De kaart wordt pas geladen als je hiervoor kiest.'
+                  : 'The map loads only when you choose to show it.'}
+              </p>
+            )}
+          </div>
+          <button
+            type="button"
+            aria-expanded={mobileFiltersOpen}
+            aria-controls="discovery-filters"
+            onClick={() => setMobileFiltersOpen((open) => !open)}
+            className="mt-2 inline-flex min-h-11 w-full items-center justify-between rounded-xl border border-border bg-muted/35 px-4 text-sm font-extrabold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary md:hidden"
+          >
+            <span>{language === 'nl' ? 'Filters en zoekgebied' : 'Filters and search area'}</span>
+            <ChevronDown className={cn('h-4 w-4 transition-transform', mobileFiltersOpen && 'rotate-180')} aria-hidden="true" />
+          </button>
+          <div id="discovery-filters" className={cn("mt-3 space-y-2", mobileFiltersOpen ? "block" : "hidden md:block")}>
             <FilterFrame title={language === 'nl' ? 'Zoekbereik' : 'Search scope'}>
               <p className="text-xs font-semibold text-muted-foreground" role="status" aria-live="polite">
                 {liveMode
@@ -2754,7 +2824,7 @@ function DiscoveryState({
                         checked={isChecked}
                         onChange={(event) => {
                           const nativeEvent = event.nativeEvent as MouseEvent;
-                          toggleNeighborhood(neighborhood, { additive: nativeEvent.shiftKey });
+                           toggleNeighborhood(neighborhood);
                         }}
                         className="h-4 w-4 shrink-0 accent-primary"
                       />
@@ -2965,13 +3035,14 @@ function DiscoveryState({
                   marker={m}
                   isSelected={selectedMarker === m.id}
                   isSaved={savedIds.has(m.id)}
+                  showAdminEvidence={userRole === 'designer'}
                   onClick={() => setSelectedMarker(m.id)}
                   onSave={(e) => { e.stopPropagation(); onToggle(m); }}
                 />
               </div>
             ))}
             
-            {!isLoading && !webIsLoading && filteredMarkers.length === 0 && !isError && !webIsError && (
+            {!isLoading && filteredMarkers.length === 0 && !isError && (
               <div className="flex flex-col items-center justify-center py-20 px-4 text-center animate-in fade-in zoom-in-95 duration-500">
                 <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mb-5">
                   <MapPinOff className="w-8 h-8 text-muted-foreground" />
@@ -3020,8 +3091,8 @@ function DiscoveryState({
         />
       </div>
 
-      {/* Map Area */}
-      <div className="flex h-[70vh] min-h-[32rem] w-full flex-1 flex-col overflow-hidden bg-background md:h-full md:min-h-0">
+      {/* Map Area: mounted only after an explicit user action. */}
+      {showMap && <div className="flex h-[70vh] min-h-[32rem] w-full flex-1 flex-col overflow-hidden bg-background md:h-full md:min-h-0">
         <ReferenceCategoryNav
           embedded
           language={language}
@@ -3049,7 +3120,7 @@ function DiscoveryState({
           />
 
         </div>
-      </div>
+      </div>}
     </div>
   );
 }

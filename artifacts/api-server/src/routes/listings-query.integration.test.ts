@@ -23,6 +23,10 @@ const anonymousIds = [
   `${runId}-result-failure`,
   `${runId}-stored`,
   `${runId}-scan-to-listing`,
+  `${runId}-older-google`,
+  `${runId}-newer-google`,
+  `${runId}-older-osm`,
+  `${runId}-newer-osm`,
 ];
 const scanEventUrls = [
   "https://www.getyourguide.com/en-gb/the-hague-l1267/test-community-event",
@@ -121,6 +125,63 @@ async function requestEventListings(neighborhood = "Scheveningen") {
     `${baseUrl}/api/listings?cityId=dhg&section=events&language=en&mode=live&neighborhoods=${encodeURIComponent(neighborhood)}&anonymousId=${anonymousIds[3]}`,
   );
   return { status: response.status, body: await response.json() as Record<string, any> };
+}
+
+async function storeListingSnapshot({
+  anonymousId,
+  provider,
+  section,
+  listing,
+  fetchedAt,
+}: {
+  anonymousId: string;
+  provider: "google_places" | "openstreetmap";
+  section: "businesses" | "food-drink";
+  listing: Listing;
+  fetchedAt: Date;
+}) {
+  await db.transaction(async (tx) => {
+    const normalizedKey = JSON.stringify({ cityId: "dhg", section, language: "en" });
+    const [query] = await tx.insert(userQueriesTable).values({
+      cityId: "dhg",
+      section,
+      language: "en",
+      neighborhoods: [],
+      interests: [],
+      mode: "live",
+      anonymousId,
+      normalizedKey,
+      status: "succeeded",
+      startedAt: fetchedAt,
+      completedAt: fetchedAt,
+    }).returning({ id: userQueriesTable.id });
+    const [externalQuery] = await tx.insert(externalQueriesTable).values({
+      userQueryId: query!.id,
+      provider,
+      normalizedKey,
+      requestPayload: {},
+      status: "succeeded",
+      startedAt: fetchedAt,
+      completedAt: fetchedAt,
+    }).returning({ id: externalQueriesTable.id });
+    const [result] = await tx.insert(externalResultsTable).values({
+      externalQueryId: externalQuery!.id,
+      userQueryId: query!.id,
+      provider,
+      normalizedKey,
+      payload: [listing],
+      resultCount: 1,
+      fetchedAt,
+    }).returning({ id: externalResultsTable.id });
+    await tx.insert(externalResultListingsTable).values({
+      externalResultId: result!.id,
+      cityId: "dhg",
+      section,
+      listingId: listing.id,
+      listing,
+      fetchedAt,
+    });
+  });
 }
 
 describe("listings route integration (isolated database integration)", () => {
