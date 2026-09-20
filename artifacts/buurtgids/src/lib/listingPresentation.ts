@@ -154,7 +154,7 @@ export function matchesDiscoveryQuickFilters(
 export function routeUrl(marker: Pick<Marker, 'name' | 'lat' | 'lng' | 'isApproximateLocation'>, mode: RouteMode): string | null {
   if (marker.isApproximateLocation) return null;
   if (!Number.isFinite(marker.lat) || !Number.isFinite(marker.lng)) return null;
-  const destination = `${marker.name}, ${marker.lat}, ${marker.lng}`;
+  const destination = `${marker.lat},${marker.lng}`;
   return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destination)}&travelmode=${mode}`;
 }
 

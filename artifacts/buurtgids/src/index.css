@@ -5,6 +5,15 @@
 @import 'tw-animate-css';
 @plugin "@tailwindcss/typography";
 
+@keyframes buurtplaza-neighborhood-pulse {
+  0%, 100% {
+    fill-opacity: 0.2;
+  }
+  50% {
+    fill-opacity: 0.42;
+  }
+}
+
 @custom-variant dark (&:is(.dark *));
 
 .news-title {
@@ -100,6 +109,19 @@
     -webkit-font-smoothing: antialiased;
     background: hsl(var(--background));
     color: hsl(var(--foreground));
+  }
+
+  /* Honour the OS reduced-motion preference for every animation and
+     transition (tw-animate-css, spinners, framer-motion CSS output). */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
   }
 }
 

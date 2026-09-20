@@ -38,6 +38,20 @@ export const businessProfilesTable = pgTable(
     coverUrl: text("cover_url"),
     isClaimed: boolean("is_claimed").notNull().default(false),
     claimedAt: timestamp("claimed_at", { withTimezone: true }),
+    /**
+     * Publication lifecycle. Existing rows default to `published` so no public
+     * profile disappears when the column is added.
+     *   draft -> published (explicit reviewer publication)
+     *   published <-> unpublished (owner/reviewer), published -> suspended
+     *   (reviewer), any -> archived (terminal)
+     */
+    publicationStatus: text("publication_status").notNull().default("published"),
+    /** Points at the single approved `business_profile_revisions` row, if any. */
+    approvedRevisionId: integer("approved_revision_id"),
+    /** Clerk subject that created a draft business; null for listing-derived rows. */
+    createdByUserId: text("created_by_user_id"),
+    /** Self-reported business category for new-business drafts; null for listing-derived rows. */
+    category: text("category"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true })
       .notNull()
@@ -52,8 +66,52 @@ export const businessProfilesTable = pgTable(
       table.listingId,
     ),
     index("business_profiles_city_claimed_idx").on(table.cityId, table.isClaimed),
+    index("business_profiles_publication_idx").on(table.publicationStatus, table.cityId),
   ],
 );
+
+export const PUBLICATION_STATUSES = [
+  "draft",
+  "unpublished",
+  "published",
+  "suspended",
+  "archived",
+] as const;
+export type PublicationStatus = (typeof PUBLICATION_STATUSES)[number];
+
+/**
+ * Claim states. `pending` is kept as the legacy alias of `submitted` so the
+ * existing moderation queue and the one-open-claim rule keep working.
+ *
+ *   draft -> submitted | withdrawn (intake flow; drafts are private and hold no slot)
+ *   pending|submitted -> approved | rejected | changes_requested | withdrawn
+ *   changes_requested -> submitted (resubmission with current version) | withdrawn
+ *   submitted on an already-owned business -> disputed (competing authority claim,
+ *     recorded for manual review; never grants or transfers ownership by itself)
+ *   disputed -> approved (only once no other owner exists) | rejected | withdrawn
+ * Open states that hold the per-profile slot: pending, submitted,
+ * changes_requested, disputed.
+ */
+export const CLAIM_STATUSES = [
+  /** Private, unsubmitted intake draft; holds no claim slot. */
+  "draft",
+  "pending",
+  "submitted",
+  "changes_requested",
+  "approved",
+  "rejected",
+  "disputed",
+  "withdrawn",
+] as const;
+export type ClaimStatus = (typeof CLAIM_STATUSES)[number];
+/** Listing source recorded for businesses created through the intake draft flow. */
+export const SELF_REPORTED_LISTING_SOURCE = "self_reported";
+export const OPEN_CLAIM_STATUSES = [
+  "pending",
+  "submitted",
+  "changes_requested",
+  "disputed",
+] as const satisfies readonly ClaimStatus[];
 
 export const businessClaimsTable = pgTable(
   "business_claims",
@@ -72,6 +130,22 @@ export const businessClaimsTable = pgTable(
     reviewNote: text("review_note"),
     reviewedBy: text("reviewed_by"),
     reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+    /** Claimant's declared authority over the business (free text, private). */
+    authorityDeclaration: text("authority_declaration"),
+    /** URL or short text reference supporting the declaration (private). */
+    evidenceReference: text("evidence_reference"),
+    /** Optimistic-concurrency version; every claimant or reviewer change increments it. */
+    version: integer("version").notNull().default(1),
+    withdrawnAt: timestamp("withdrawn_at", { withTimezone: true }),
+    /**
+     * Client-supplied `Idempotency-Key` for draft/claim creation. Unique per
+     * claimant so a retried request returns the original claim instead of a
+     * duplicate.
+     */
+    /** Exact raw Idempotency-Key supplied by the claimant; unique per claimant. */
+    idempotencyKey: text("idempotency_key"),
+    /** Digest of the request payload the key was first used with, to detect key reuse with other input. */
+    idempotencyDigest: text("idempotency_digest"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true })
       .notNull()
@@ -84,9 +158,17 @@ export const businessClaimsTable = pgTable(
       table.businessProfileId,
       table.status,
     ),
-    uniqueIndex("business_claims_one_pending_per_profile_unique")
+    uniqueIndex("business_claims_one_open_claim_per_profile_unique")
       .on(table.businessProfileId)
-      .where(sql`${table.status} = 'pending'`),
+      .where(
+        sql`${table.status} in ('pending', 'submitted', 'changes_requested', 'disputed')`,
+      ),
+    uniqueIndex("business_claims_one_draft_per_claimant_unique")
+      .on(table.businessProfileId, table.claimantId)
+      .where(sql`${table.status} = 'draft'`),
+    uniqueIndex("business_claims_claimant_idempotency_unique")
+      .on(table.claimantId, table.idempotencyKey)
+      .where(sql`${table.idempotencyKey} is not null`),
   ],
 );
 

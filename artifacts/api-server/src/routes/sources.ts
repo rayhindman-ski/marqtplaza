@@ -1,9 +1,13 @@
 import { Router } from "express";
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@workspace/db";
-import { discoveredEventsTable } from "@workspace/db/schema";
+import {
+  discoveredEventsTable,
+  eventSourceStatusesTable,
+} from "@workspace/db/schema";
 import { requireEditor } from "../middlewares/requireEditor";
 import { queueMissingEventTranslations } from "../lib/event-localization.js";
+import { logger } from "../lib/logger.js";
 
 const router = Router();
 
@@ -88,6 +92,17 @@ type ScanMetrics = {
   crawlLimitReached: boolean;
 };
 
+type EventSourceScanStatus = "found" | "partial" | "blocked" | "error" | "no_events";
+
+type EventSourceScanResult = ScanMetrics & {
+  sourceId: string;
+  sourceName: string;
+  scannedUrl: string;
+  status: EventSourceScanStatus;
+  events: SourceScanEvent[];
+  message: string;
+};
+
 const DEN_HAAG_SOURCES: SourceDefinition[] = [
   { id: "getyourguide", name: "GetYourGuide", activityUrl: "https://www.getyourguide.com/en-gb/the-hague-l1267/", sourceGroup: "city-agenda" },
   { id: "denhaag-com", name: "DenHaag.com", activityUrl: "https://denhaag.com/en/calendar", sourceGroup: "city-agenda" },
@@ -153,10 +168,21 @@ const MAX_RESPONSE_CHARS = 760_000;
 const FETCH_TIMEOUT_MS = 9_000;
 const MAX_REDIRECTS = 3;
 const MAX_ACTIVE_SCAN_REQUESTS = 2;
+const EVENT_SOURCE_REFRESH_INTERVAL_MS = 12 * 60 * 60 * 1_000;
+const EVENT_SOURCE_SCHEDULER_INTERVAL_MS = 15 * 60 * 1_000;
+const EVENT_SOURCE_QUEUE_DRAIN_INTERVAL_MS = 15 * 1_000;
+const MAX_SCHEDULED_SOURCES_PER_RUN = 2;
+const EVENT_SOURCE_RETRY_LEASE_MS = 15 * 60 * 1_000;
+const RETRY_INTERVALS_MS: Record<"blocked" | "error", number> = {
+  blocked: 6 * 60 * 60 * 1_000,
+  error: 2 * 60 * 60 * 1_000,
+};
 const CRAWLER_USER_AGENT = "marqtplaza.com/1.0";
 const DEN_HAAG_CENTER = { lat: 52.0705, lng: 4.3007 };
 const DEN_HAAG_BOUNDS = { south: 52.05, west: 4.26, north: 52.11, east: 4.36 };
 let activeScanRequests = 0;
+let schedulerTimer: NodeJS.Timeout | undefined;
+let schedulerStarted = false;
 
 function emptyMetrics(): ScanMetrics {
   return {
@@ -825,7 +851,7 @@ function preferredVenue(...values: Array<string | undefined>): string | undefine
   const usable = present.filter((value) => !/^(walking|spazieren)$/i.test(value));
   if (usable.length === 0) return present[0];
   const score = (value: string) => {
-    const hasHaagEvidence = /\b(den haag|the hague|scheveningen|kijkduin|loosduinen|leyweg|strandslag\s*8|kneuterdijk|elandstraat\s*47|25\d{2}[a-z]{2})\b/i.test(value);
+    const hasHaagEvidence = /\b(den haag|the hague|scheveningen|kijkduin|loosduinen|leyweg|strandslag\s*8|kneuterdijk|elandstraat\s*47|(?:25\d{2}|249\d)[a-z]{2})\b/i.test(value);
     return (hasHaagEvidence ? 1_000 : 0) + Math.min(value.length, 240);
   };
   return usable.reduce((best, candidate) => score(candidate) > score(best) ? candidate : best);
@@ -1136,6 +1162,29 @@ function mapCoordinates(event: SourceScanEvent): {
 }
 
 type PublicationStatus = "eligible" | PublicationReason;
+export type SourceScanStatus = "found" | "partial" | "no_events" | "blocked" | "error";
+
+export function sourceScanStatus(input: {
+  eventCount: number;
+  sourceDenied: boolean;
+  pagesFailed: number;
+  crawlLimitReached: boolean;
+}): SourceScanStatus {
+  if (input.eventCount > 0) {
+    return input.crawlLimitReached || input.pagesFailed > 0 ? "partial" : "found";
+  }
+  if (input.sourceDenied) return "blocked";
+  if (input.pagesFailed > 0) return "error";
+  if (input.crawlLimitReached) return "partial";
+  return "no_events";
+}
+
+export function nextSourceScanAt(status: SourceScanStatus, scannedAt: Date): Date {
+  const retryInterval = status === "blocked" || status === "error"
+    ? RETRY_INTERVALS_MS[status]
+    : EVENT_SOURCE_REFRESH_INTERVAL_MS;
+  return new Date(scannedAt.getTime() + retryInterval);
+}
 
 function isForeignLocation(event: SourceScanEvent): boolean {
   const evidence = `${event.title} ${event.venue ?? ""} ${event.description ?? ""}`;
@@ -1167,7 +1216,7 @@ function publicationStatus(event: SourceScanEvent): PublicationStatus {
     return "eligible";
   }
   const evidence = `${event.title} ${event.venue ?? ""} ${event.description ?? ""}`;
-  if (/\b(den haag|the hague|scheveningen|kijkduin|loosduinen|leyweg|haagse markt|the hague market|strandslag\s*8|kneuterdijk|ultramarijn|elandstraat\s*47|25\d{2}\s?[a-z]{2})\b/i.test(evidence)) {
+  if (/\b(den haag|the hague|scheveningen|kijkduin|loosduinen|leyweg|haagse markt|the hague market|strandslag\s*8|kneuterdijk|ultramarijn|elandstraat\s*47|(?:25\d{2}|249\d)\s?[a-z]{2})\b/i.test(evidence)) {
     return "eligible";
   }
   return isForeignLocation(event) ? "foreign_location" : "missing_locality";
@@ -1286,7 +1335,189 @@ async function persistEvents(source: SourceDefinition, events: SourceScanEvent[]
   };
 }
 
-async function scanSource(source: SourceDefinition) {
+function failedSourceScan(source: SourceDefinition, error: unknown): EventSourceScanResult {
+  const message = error instanceof Error ? error.message : "The source scan failed unexpectedly.";
+  logger.warn({ err: error, sourceId: source.id }, "Event source scan failed unexpectedly");
+  return {
+    sourceId: source.id,
+    sourceName: source.name,
+    scannedUrl: source.activityUrl,
+    status: "error",
+    events: [],
+    ...emptyMetrics(),
+    message: `The source could not be scanned: ${message}`,
+  };
+}
+
+async function recordSourceScan(
+  source: SourceDefinition,
+  result: EventSourceScanResult,
+  database: typeof db = db,
+  scannedAt = new Date(),
+): Promise<void> {
+  await database.insert(eventSourceStatusesTable).values({
+    sourceId: source.id,
+    sourceName: source.name,
+    sourceUrl: source.activityUrl,
+    sourceGroup: source.sourceGroup,
+    status: result.status,
+    lastScannedAt: scannedAt,
+    nextScanAt: nextSourceScanAt(result.status, scannedAt),
+    retryLeaseUntil: null,
+    message: result.message,
+    eventsCaptured: result.eventsCaptured,
+    eventsEligible: result.eventsEligible,
+    eventsAdded: result.eventsAdded,
+    eventsUpdated: result.eventsUpdated,
+    pagesFailed: result.pagesFailed,
+  }).onConflictDoUpdate({
+    target: eventSourceStatusesTable.sourceId,
+    set: {
+      sourceName: source.name,
+      sourceUrl: source.activityUrl,
+      sourceGroup: source.sourceGroup,
+      status: result.status,
+      lastScannedAt: scannedAt,
+      nextScanAt: nextSourceScanAt(result.status, scannedAt),
+      retryLeaseUntil: null,
+      message: result.message,
+      eventsCaptured: result.eventsCaptured,
+      eventsEligible: result.eventsEligible,
+      eventsAdded: result.eventsAdded,
+      eventsUpdated: result.eventsUpdated,
+      pagesFailed: result.pagesFailed,
+    },
+  });
+}
+
+async function scanAndRecordSource(
+  source: SourceDefinition,
+  database: typeof db = db,
+  scannedAt = new Date(),
+): Promise<EventSourceScanResult> {
+  let result: EventSourceScanResult;
+  try {
+    result = await scanSource(source);
+  } catch (error) {
+    result = failedSourceScan(source, error);
+  }
+
+  try {
+    await recordSourceScan(source, result, database, scannedAt);
+  } catch (error) {
+    logger.warn({ err: error, sourceId: source.id }, "Event source status could not be persisted");
+  }
+  return result;
+}
+
+export async function ensureEventSourceStatusStorage(database: typeof db = db): Promise<void> {
+  await database.execute(sql`
+    CREATE TABLE IF NOT EXISTS event_source_statuses (
+      source_id text PRIMARY KEY,
+      source_name text NOT NULL,
+      source_url text NOT NULL,
+      source_group text NOT NULL,
+      status text NOT NULL DEFAULT 'pending',
+      last_scanned_at timestamptz,
+      next_scan_at timestamptz,
+      retry_lease_until timestamptz,
+      message text,
+      events_captured integer NOT NULL DEFAULT 0,
+      events_eligible integer NOT NULL DEFAULT 0,
+      events_added integer NOT NULL DEFAULT 0,
+      events_updated integer NOT NULL DEFAULT 0,
+      pages_failed integer NOT NULL DEFAULT 0
+    )
+  `);
+  await database.execute(sql`
+    ALTER TABLE event_source_statuses
+    ADD COLUMN IF NOT EXISTS next_scan_at timestamptz
+  `);
+  await database.execute(sql`
+    ALTER TABLE event_source_statuses
+    ADD COLUMN IF NOT EXISTS retry_lease_until timestamptz
+  `);
+  await database.insert(eventSourceStatusesTable).values(
+    DEN_HAAG_SOURCES.map((source) => ({
+      sourceId: source.id,
+      sourceName: source.name,
+      sourceUrl: source.activityUrl,
+      sourceGroup: source.sourceGroup,
+      status: "pending" as const,
+    })),
+  ).onConflictDoNothing();
+}
+
+async function claimDueEventSourceIds(
+  database: Pick<typeof db, "execute"> = db,
+  now = new Date(),
+): Promise<string[]> {
+  const retryLeaseUntil = new Date(now.getTime() + EVENT_SOURCE_RETRY_LEASE_MS);
+  const result = await database.execute<{ sourceId: string }>(sql`
+    WITH due AS (
+      SELECT source_id
+      FROM event_source_statuses
+      WHERE (
+        (status = 'pending' AND next_scan_at IS NULL)
+        OR (next_scan_at IS NOT NULL AND next_scan_at <= ${now})
+      )
+        AND (retry_lease_until IS NULL OR retry_lease_until <= ${now})
+      ORDER BY next_scan_at ASC NULLS FIRST
+      LIMIT ${MAX_SCHEDULED_SOURCES_PER_RUN}
+      FOR UPDATE SKIP LOCKED
+    )
+    UPDATE event_source_statuses
+    SET retry_lease_until = ${retryLeaseUntil}
+    FROM due
+    WHERE event_source_statuses.source_id = due.source_id
+    RETURNING event_source_statuses.source_id AS "sourceId"
+  `);
+  return result.rows.map((row) => row.sourceId);
+}
+
+export async function runScheduledEventScans(
+  database: typeof db = db,
+  now = new Date(),
+): Promise<EventSourceScanResult[]> {
+  if (activeScanRequests >= MAX_ACTIVE_SCAN_REQUESTS) return [];
+  const dueSourceIds = await claimDueEventSourceIds(database, now);
+  const sources = dueSourceIds
+    .map((sourceId) => SOURCE_BY_ID.get(sourceId))
+    .filter((source): source is SourceDefinition => Boolean(source));
+  if (sources.length === 0) return [];
+
+  activeScanRequests += 1;
+  try {
+    const results = await Promise.all(
+      sources.map((source) => scanAndRecordSource(source, database, now)),
+    );
+    return results;
+  } finally {
+    activeScanRequests -= 1;
+  }
+}
+
+export function startEventSourceScheduler(database: typeof db = db): void {
+  if (schedulerStarted) return;
+  schedulerStarted = true;
+  const run = async () => {
+    let completed = 0;
+    try {
+      completed = (await runScheduledEventScans(database)).length;
+    } catch (error) {
+      logger.warn({ err: error }, "Scheduled event-source refresh failed");
+    } finally {
+      schedulerTimer = setTimeout(() => { void run(); },
+        completed === MAX_SCHEDULED_SOURCES_PER_RUN
+          ? EVENT_SOURCE_QUEUE_DRAIN_INTERVAL_MS
+          : EVENT_SOURCE_SCHEDULER_INTERVAL_MS,
+      );
+    }
+  };
+  void run();
+}
+
+async function scanSource(source: SourceDefinition): Promise<EventSourceScanResult> {
   const metrics = emptyMetrics();
   const sourceOrigin = new URL(source.activityUrl).origin;
   const queue: CrawlPage[] = [];
@@ -1515,14 +1746,12 @@ async function scanSource(source: SourceDefinition) {
     }
   }
 
-  const reachedLimit = metrics.crawlLimitReached;
-  const status = events.length > 0
-    ? (reachedLimit || metrics.pagesFailed > 0 ? "partial" : "found")
-    : sourceDenied
-      ? "blocked"
-      : metrics.pagesFailed > 0
-        ? "error"
-        : "no_events";
+  const status = sourceScanStatus({
+    eventCount: events.length,
+    sourceDenied,
+    pagesFailed: metrics.pagesFailed,
+    crawlLimitReached: metrics.crawlLimitReached,
+  });
 
   const message = status === "blocked"
     ? "The source denied automated access."
@@ -1589,10 +1818,10 @@ router.post("/scan", async (req, res) => {
       return;
     }
 
-    const scans = [];
+    const scans: EventSourceScanResult[] = [];
     for (let index = 0; index < selectedSources.length; index += 2) {
       const batch = selectedSources.slice(index, index + 2);
-      scans.push(...await Promise.all(batch.map(scanSource)));
+      scans.push(...await Promise.all(batch.map((source) => scanAndRecordSource(source))));
     }
 
     res.json({ scannedAt: new Date().toISOString(), scans });
@@ -1780,6 +2009,13 @@ router.patch("/review/:id", requireEditor, async (req, res) => {
 });
 
 export default router;
+
+export const sourcesTesting = {
+  claimDueEventSourceIds,
+  nextSourceScanAt,
+  recordSourceScan,
+  sources: DEN_HAAG_SOURCES,
+};
 
 function removeHtmlSections(html: string, tagNames: string): string {
   return html.replace(new RegExp(`<(${tagNames})\\b[^>]*>[\\s\\S]*?<\\/\\1>`, "gi"), " ");

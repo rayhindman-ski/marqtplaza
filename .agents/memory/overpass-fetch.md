@@ -25,3 +25,7 @@ const res = await fetch(url, {
 - Set `[timeout:20]` in the Overpass QL header (not just the AbortSignal timeout).
 - The free public endpoint (`overpass-api.de`) is accessible from Replit. Mirrors (kumi.systems, openstreetmap.ru) are rate-limited or unreachable.
 - Always catch errors and fall back to static data so the UI is never broken.
+
+**Business tag coverage:** non-food OSM businesses are not only `shop`/`amenity`. Gyms are `leisure=fitness_centre`, hotels/museums `tourism=*`, firms `office=*`, tradespeople `craft=*`. Any gate that requires shop/amenity silently empties Fitness, Hospitality, Arts and Home & Repair.
+
+**Mirrors:** `overpass-api.de` is often unreachable from this environment while `maps.mail.ru/osm/tools/overpass`, `overpass.kumi.systems` and `overpass.private.coffee` respond; rotate endpoints across attempts.

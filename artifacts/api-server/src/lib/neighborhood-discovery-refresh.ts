@@ -1,6 +1,8 @@
 import { pool } from "@workspace/db";
 import { logger } from "./logger.js";
 import {
+  normalizedListingsKey,
+  parseBusinessCategories,
   refreshNeighborhoodDiscoveryScope,
   type NeighborhoodRefreshScope,
 } from "../routes/listings.js";
@@ -53,14 +55,28 @@ export function selectEligibleRefreshScopes(
     if (scopes.has(row.normalizedKey)) continue;
     if (row.section !== "businesses" && row.section !== "food-drink") continue;
     if (row.language !== "nl" && row.language !== "en") continue;
-    scopes.set(row.normalizedKey, {
+    const neighborhoods = Array.isArray(row.neighborhoods)
+      ? row.neighborhoods.filter((value): value is string => typeof value === "string")
+      : [];
+    let normalizedKey = row.normalizedKey;
+    try {
+      const keyFields = JSON.parse(row.normalizedKey) as { businessCategories?: unknown };
+      normalizedKey = normalizedListingsKey(
+        row.cityId,
+        row.section as "businesses" | "food-drink",
+        row.language as "nl" | "en",
+        neighborhoods,
+        row.section === "businesses" ? parseBusinessCategories(keyFields.businessCategories) : [],
+      );
+    } catch {
+      // Keep test and legacy rows unchanged; refreshNeighborhoodDiscoveryScope validates them.
+    }
+    scopes.set(normalizedKey, {
       cityId: row.cityId,
       section: row.section,
       language: row.language,
-      neighborhoods: Array.isArray(row.neighborhoods)
-        ? row.neighborhoods.filter((value): value is string => typeof value === "string")
-        : [],
-      normalizedKey: row.normalizedKey,
+      neighborhoods,
+      normalizedKey,
     });
   }
   return [...scopes.values()];

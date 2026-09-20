@@ -8,6 +8,8 @@
 import type { BusinessCategory } from './businessCategory';
 import type { ListingActivityKind } from './listingActivityKind';
 import type { ListingCategory } from './listingCategory';
+import type { ListingFieldEvidence } from './listingFieldEvidence';
+import type { ListingFoodType } from './listingFoodType';
 import type { ListingMealType } from './listingMealType';
 import type { ListingPriceType } from './listingPriceType';
 import type { ListingSource } from './listingSource';
@@ -40,7 +42,13 @@ export interface Listing {
   lng: number;
   /** Link to the website where this activity was listed. */
   sourceUrl?: string;
+  /** Public Facebook page supplied by the listing provider. */
+  facebookUrl?: string;
+  /** Public Instagram profile supplied by the listing provider. */
+  instagramUrl?: string;
   businessCategory?: BusinessCategory;
+  /** Source-derived Food & Drink venue type. Absent for non-food listings. */
+  foodType?: ListingFoodType;
   source?: ListingSource;
   /** Human-readable publisher or provider that listed this item, distinct from its destination URL. */
   sourceName?: string;
@@ -69,7 +77,7 @@ export interface Listing {
   socialCategory?: SocialMapCategory;
   /** Verified organization or service website for a social-map location. */
   officialUrl?: string;
-  /** Public source page used to verify a social-map location. */
+  /** Public provider or source page used to verify this listing. */
   sourcePageUrl?: string;
   /** Date the curated social-map selection was last checked. */
   snapshotDate?: string;
@@ -80,4 +88,6 @@ export interface Listing {
   lastCheckedAt?: string;
   /** Scheduled date for the next source review. */
   nextReviewAt?: string;
+  /** Field-level public evidence. Missing proof is represented explicitly as unknown. */
+  evidence?: ListingFieldEvidence[];
 }

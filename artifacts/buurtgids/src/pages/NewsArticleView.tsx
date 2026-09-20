@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useLocation, useParams } from 'wouter';
 import { useGetNewsArticle } from '@workspace/api-client-react';
-import { format, parseISO } from 'date-fns';
 import { enUS, nl } from 'date-fns/locale';
 import {
   ArrowLeft, Clock, ExternalLink, Home, Newspaper,
   MapPin, ShieldAlert, Briefcase, Landmark, Trophy, Users
 } from 'lucide-react';
+import { persistLanguage } from '../lib/useAppLanguage';
 import { cn } from '../lib/utils';
 import BrandLogo from '../components/BrandLogo';
 import {
@@ -14,6 +14,7 @@ import {
   newsTranslations,
   type Language,
 } from '../lib/i18n';
+import { formatNewsPublishedAt } from '../lib/newsDate';
 
 const SUBCATEGORY_ICONS: Record<string, React.ElementType> = {
   city: MapPin,
@@ -50,8 +51,7 @@ export default function NewsArticleView() {
   const dateLocale = language === 'nl' ? nl : enUS;
 
   useEffect(() => {
-    window.localStorage.setItem('buurtplaza-language', language);
-    document.documentElement.lang = language;
+    persistLanguage(language);
   }, [language]);
 
   const languagePill = (
@@ -164,9 +164,7 @@ export default function NewsArticleView() {
           <span className="w-1.5 h-1.5 rounded-full bg-[#072C1E]/20" />
           <span className="text-xs font-bold text-[#072C1E]/50 uppercase tracking-widest flex items-center gap-2">
             <Clock className="w-3.5 h-3.5" />
-            {article.publishedAt
-              ? format(parseISO(article.publishedAt), 'd MMMM yyyy, HH:mm', { locale: dateLocale })
-              : copy.recent}
+            {formatNewsPublishedAt(article.publishedAt, language, 'd MMMM yyyy, HH:mm', dateLocale)}
           </span>
           <span className="w-1.5 h-1.5 rounded-full bg-[#072C1E]/20" />
           <span className="text-xs font-bold text-[#072C1E]/50 uppercase tracking-widest">

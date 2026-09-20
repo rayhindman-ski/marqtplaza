@@ -4,13 +4,20 @@ import { getAuth } from "@clerk/express";
 import {
   db,
   discoveredEventsTable,
+  eventSourceStatusesTable,
   externalQueriesTable,
+  externalResultListingsTable,
   externalResultsTable,
   providerUsageTable,
   pool,
   type DiscoveredEvent,
   userQueriesTable,
 } from "@workspace/db";
+import {
+  getNeighborhoodsBoundingBox,
+  getNeighborhoodsCenter,
+  isPointInsideNeighborhoods,
+} from "@workspace/geo";
 import { MARKERS } from "../lib/static-listings.js";
 import {
   SOCIAL_MAP_LISTINGS,
@@ -57,6 +64,17 @@ const BUSINESS_CATEGORIES: readonly BusinessCategory[] = [
 ];
 const BUSINESS_CATEGORY_SET = new Set<string>(BUSINESS_CATEGORIES);
 type ListingSource = "google_maps" | "openstreetmap" | "curated" | "source_scan";
+type ListingEvidenceStatus = "current" | "stale" | "conflicting" | "unknown" | "unavailable";
+type ListingEvidenceField = "name" | "description" | "address" | "event_date" | "opening_times" | "price";
+type ListingFieldEvidence = {
+  field: ListingEvidenceField;
+  sourceLabel: string | null;
+  sourceUrl: string | null;
+  checkedAt: string | null;
+  status: ListingEvidenceStatus;
+  caveat: string | null;
+};
+export type FoodType = "restaurant" | "cafe" | "bar" | "bakery" | "takeaway" | "other";
 export type Listing = {
   id: string;
   locationId: string;
@@ -71,12 +89,15 @@ export type Listing = {
   lng: number;
   sourceUrl?: string;
   businessCategory?: BusinessCategory;
+  foodType?: FoodType;
   source?: ListingSource;
   sourceName?: string;
   neighborhood?: string;
   socialCategory?: SocialMapCategory;
   officialUrl?: string;
   sourcePageUrl?: string;
+  facebookUrl?: string;
+  instagramUrl?: string;
   snapshotDate?: string;
   reviewStatus?: "verified" | "review_due" | "changed" | "unavailable";
   reviewReason?: string | null;
@@ -100,7 +121,168 @@ export type Listing = {
   firstSeenAt?: string;
   lastSeenAt?: string;
   updatedAt?: string;
+  evidence?: ListingFieldEvidence[];
 };
+
+function listingEvidence(listing: Listing): ListingFieldEvidence[] {
+  const checkedAt = listing.lastCheckedAt
+    ?? listing.snapshotDate
+    ?? listing.lastSeenAt
+    ?? listing.updatedAt
+    ?? null;
+  const status: ListingEvidenceStatus = listing.reviewStatus === "changed"
+    ? "conflicting"
+    : listing.reviewStatus === "review_due"
+      ? "stale"
+      : listing.reviewStatus === "unavailable"
+        ? "unavailable"
+        : listing.reviewStatus === "verified" && checkedAt
+          ? "current"
+          : listing.source === "source_scan" && checkedAt
+            ? "current"
+            : "unknown";
+  const sourceLabel = listing.sourceName
+    ?? (listing.source === "google_maps"
+      ? "Google Maps"
+      : listing.source === "openstreetmap"
+        ? "OpenStreetMap"
+        : null);
+  const sourceUrl = listing.sourcePageUrl ?? listing.sourceUrl ?? listing.officialUrl ?? null;
+  const fields: ListingEvidenceField[] = ["name", "description"];
+  if (listing.address || listing.details) fields.push("address");
+  if (listing.startsAt) fields.push("event_date");
+  if (listing.openingTimes) fields.push("opening_times");
+  if (listing.priceText || listing.priceType) fields.push("price");
+  return fields.map((field) => ({
+    field,
+    sourceLabel,
+    sourceUrl,
+    checkedAt,
+    status,
+    caveat: null,
+  }));
+}
+
+export type EventEvidenceStatus = "verified" | "empty" | "stale" | "blocked" | "unavailable";
+
+export type EventEvidenceSource = {
+  id: string;
+  name: string;
+  status: EventEvidenceStatus;
+  lastCheckedAt?: string | null;
+};
+
+export type EventEvidenceStatus = "verified" | "empty" | "stale" | "blocked" | "unavailable";
+
+export type EventEvidenceSource = {
+  id: string;
+  name: string;
+  status: EventEvidenceStatus;
+  lastCheckedAt?: string | null;
+};
+
+export type EventEvidence = {
+  status: EventEvidenceStatus;
+  lastCheckedAt?: string | null;
+  message: string;
+  sources: EventEvidenceSource[];
+};
+
+type EventSourceStatusSnapshot = {
+  sourceId: string;
+  sourceName: string;
+  status: string;
+  lastScannedAt: Date | null;
+};
+
+const EVENT_EVIDENCE_STALE_MS = 24 * 60 * 60 * 1000;
+
+export function summarizeEventEvidence({
+  language,
+  mode,
+  listings,
+  sourceStatuses,
+  now = new Date(),
+}: {
+  language: EventLanguage;
+  mode: "live" | "stored_only";
+  listings: Array<Pick<Listing, "sourceName" | "lastSeenAt">>;
+  sourceStatuses: EventSourceStatusSnapshot[];
+  now?: Date;
+}): EventEvidence {
+  const toPublicStatus = (status: string): EventEvidenceStatus =>
+    status === "found" ? "verified"
+      : status === "no_events" ? "empty"
+        : status === "partial" ? "stale"
+          : status === "blocked" ? "blocked"
+            : "unavailable";
+  const sources = sourceStatuses.length > 0
+    ? sourceStatuses.map((source) => ({
+        id: source.sourceId,
+        name: source.sourceName,
+        status: toPublicStatus(source.status),
+        lastCheckedAt: source.lastScannedAt?.toISOString() ?? null,
+      }))
+    : Array.from(new Map(
+      listings
+        .filter((listing): listing is Pick<Listing, "sourceName" | "lastSeenAt"> & { sourceName: string } => Boolean(listing.sourceName))
+        .map((listing) => [listing.sourceName, listing]),
+    ).entries()).map(([name, listing]) => ({
+      id: name.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+      name,
+      status: "verified" as const,
+      lastCheckedAt: listing.lastSeenAt ?? null,
+    }));
+  const checkedTimes = sources
+    .map((source) => source.lastCheckedAt ? Date.parse(source.lastCheckedAt) : NaN)
+    .filter(Number.isFinite);
+  const latestCheckedAt = checkedTimes.length > 0
+    ? new Date(Math.max(...checkedTimes)).toISOString()
+    : null;
+  const hasFreshSuccessfulScan = sourceStatuses.some((source) =>
+    ["found", "no_events"].includes(source.status)
+    && source.lastScannedAt
+    && now.getTime() - source.lastScannedAt.getTime() <= EVENT_EVIDENCE_STALE_MS,
+  );
+  const hasBlockingSource = sources.some((source) => ["blocked", "unavailable"].includes(source.status));
+  const allSourcesEmpty = sources.length > 0 && sources.every((source) => source.status === "empty");
+  let status: EventEvidenceStatus;
+  if (listings.length > 0) {
+    status = mode === "stored_only" && sourceStatuses.length > 0 && !hasFreshSuccessfulScan
+      ? "stale"
+      : "verified";
+  } else if (sourceStatuses.length === 0) {
+    status = "unavailable";
+  } else if (mode === "stored_only" && !hasFreshSuccessfulScan && !hasBlockingSource) {
+    status = "stale";
+  } else if (allSourcesEmpty) {
+    status = "empty";
+  } else if (hasBlockingSource) {
+    status = "blocked";
+  } else {
+    status = "unavailable";
+  }
+  const message = status === "verified"
+    ? language === "nl"
+      ? `${listings.length} gecontroleerde aankomende evenement${listings.length === 1 ? "" : "en"} beschikbaar.`
+      : `${listings.length} verified upcoming event${listings.length === 1 ? "" : "s"} available.`
+    : status === "empty"
+      ? language === "nl"
+        ? "De gecontroleerde bronnen zijn gelezen, maar er zijn momenteel geen aankomende evenementen."
+        : "Approved sources were checked, but no verified upcoming events are currently available."
+      : status === "stale"
+        ? language === "nl"
+          ? "Opgeslagen evenementgegevens zijn ouder dan 24 uur en kunnen verouderd zijn."
+          : "Stored event evidence is older than 24 hours and may be stale."
+        : status === "blocked"
+          ? language === "nl"
+            ? "De evenementdekking is onvolledig omdat een of meer goedgekeurde bronnen niet konden worden gelezen."
+            : "Event coverage is incomplete because one or more approved sources could not be read."
+          : language === "nl"
+            ? "Bewijs voor actuele evenementen is momenteel niet beschikbaar."
+            : "Evidence for current events is temporarily unavailable.";
+  return { status, lastCheckedAt: latestCheckedAt, message, sources };
+}
 
 export type ClaimableBusinessListing = Pick<
   Listing,
@@ -131,7 +313,9 @@ const CITY_BOUNDS: Record<string, { s: number; w: number; n: number; e: number }
   utr: { s: 52.07, w: 5.09, n: 52.12, e: 5.17 },
   // Include the Hague's outer neighbourhoods. Provider locality evidence
   // below rejects nearby municipalities inside this safe discovery rectangle.
-  dhg: { s: 52.025, w: 4.235, n: 52.125, e: 4.42 },
+  // Must enclose every official polygon in @workspace/geo (outer areas such as
+  // Kijkduin, Wateringse Veld, and Leidschenveen reach beyond the old rectangle).
+  dhg: { s: 52.01, w: 4.185, n: 52.125, e: 4.43 },
   ein: { s: 51.41, w: 5.43, n: 51.47, e: 5.52 },
 };
 
@@ -333,13 +517,51 @@ export function normalizeNeighborhoods(value: unknown): string[] {
   ).values()].sort((a, b) => a.localeCompare(b, "nl-NL"));
 }
 
+export function filterEventsByNeighborhoods(
+  events: DiscoveredEvent[],
+  neighborhoods: string[],
+): DiscoveredEvent[] {
+  const requested = new Set(
+    normalizeNeighborhoods(neighborhoods)
+      .map((neighborhood) => neighborhood.toLocaleLowerCase("nl-NL")),
+  );
+  if (requested.size === 0) return events;
+
+  return events.filter((event) => {
+    // Events without an explicit neighborhood still have usable coordinates.
+    // Keep them so the client can apply the documented radius filter.
+    const rawNeighborhood = event.neighborhood?.trim() ?? "";
+    if (!rawNeighborhood) return true;
+
+    // Delimiter-only values are malformed assignments, not unassigned events.
+    const neighborhood = normalizeNeighborhoods(rawNeighborhood)[0];
+    return Boolean(
+      neighborhood
+      && requested.has(neighborhood.toLocaleLowerCase("nl-NL")),
+    );
+  });
+}
+
 export function parseBusinessCategories(value: unknown): BusinessCategory[] {
   const raw = Array.isArray(value) ? value.join(",") : String(value ?? "");
-  return [...new Set(
-    raw.split(",")
-      .map((category) => category.trim())
-      .filter((category): category is BusinessCategory => BUSINESS_CATEGORY_SET.has(category)),
-  )].sort((a, b) => a.localeCompare(b, "en"));
+  const tokens = raw.split(",").map((token) => token.replaceAll("&amp;", "&").trim());
+  const categories = new Set<BusinessCategory>();
+  // Category names may themselves contain a comma ("Arts, Culture & Entertainment"),
+  // so rejoin adjacent tokens until they form a known category.
+  for (let index = 0; index < tokens.length; index += 1) {
+    let matched = false;
+    for (let end = tokens.length; end > index; end -= 1) {
+      const candidate = tokens.slice(index, end).join(", ");
+      if (BUSINESS_CATEGORY_SET.has(candidate)) {
+        categories.add(candidate as BusinessCategory);
+        index = end - 1;
+        matched = true;
+        break;
+      }
+    }
+    if (!matched) continue;
+  }
+  return [...categories].sort((a, b) => a.localeCompare(b, "en"));
 }
 
 export function normalizedListingsKey(
@@ -415,7 +637,7 @@ function isInHagueBounds(lat: number, lng: number): boolean {
 function hasHagueEvidence(address: string): boolean {
   const value = address.toLowerCase();
   if (/\b(delft|oegstgeest|wassenaar|rijswijk|zoetermeer|leidschendam|voorburg|westland)\b/.test(value)) return false;
-  return /\bden haag\b|\bthe hague\b|\bscheveningen\b|\bs?-?gravenhage\b|\b25\d{2}\s?[a-z]{2}\b/i.test(address);
+  return /\bden haag\b|\bthe hague\b|\bscheveningen\b|\bs?-?gravenhage\b|\b(?:25\d{2}|249\d)\s?[a-z]{2}\b/i.test(address);
 }
 
 type GooglePlace = {
@@ -532,6 +754,17 @@ function isFoodGooglePlace(place: GooglePlace): boolean {
   );
 }
 
+export function foodTypeForGooglePrimaryType(primaryType: string | undefined): FoodType {
+  const type = primaryType?.toLowerCase();
+  if (!type) return "other";
+  if (type === "cafe" || type === "cafeteria" || type === "coffee_shop" || type === "tea_house") return "cafe";
+  if (type === "bar" || type === "pub" || type === "wine_bar" || type === "night_club") return "bar";
+  if (type === "bakery" || type === "dessert_shop" || type === "ice_cream_shop") return "bakery";
+  if (type === "meal_takeaway" || type === "meal_delivery" || type === "fast_food_restaurant") return "takeaway";
+  if (type === "restaurant" || type.endsWith("_restaurant")) return "restaurant";
+  return "other";
+}
+
 function businessCategoryForGooglePlace(
   place: GooglePlace,
   section: Exclude<ListingSection, "events" | "social-map">,
@@ -563,6 +796,41 @@ const overpassRequests = new Map<string, Promise<OsmElement[]>>();
 
 type GeographicBounds = { s: number; w: number; n: number; e: number };
 type SearchCenter = { lat: number; lng: number };
+
+/**
+ * The geographic scope of a provider query. When neighborhoods are requested,
+ * the query is bounded by their official polygons: providers search the padded
+ * bounding box and results outside the polygons are discarded.
+ */
+export interface SearchArea {
+  bounds: GeographicBounds;
+  center?: SearchCenter;
+  neighborhoods: string[];
+}
+
+const NEIGHBORHOOD_QUERY_PADDING_DEGREES = 0.002;
+
+export function resolveSearchArea(
+  cityBounds: GeographicBounds,
+  neighborhoods: string[],
+  requestedCenter?: SearchCenter,
+): SearchArea {
+  const box = getNeighborhoodsBoundingBox(neighborhoods);
+  if (!box) {
+    return { bounds: cityBounds, ...(requestedCenter ? { center: requestedCenter } : {}), neighborhoods: [] };
+  }
+  const center = getNeighborhoodsCenter(neighborhoods);
+  return {
+    bounds: {
+      s: Math.max(cityBounds.s, box.s - NEIGHBORHOOD_QUERY_PADDING_DEGREES),
+      w: Math.max(cityBounds.w, box.w - NEIGHBORHOOD_QUERY_PADDING_DEGREES),
+      n: Math.min(cityBounds.n, box.n + NEIGHBORHOOD_QUERY_PADDING_DEGREES),
+      e: Math.min(cityBounds.e, box.e + NEIGHBORHOOD_QUERY_PADDING_DEGREES),
+    },
+    ...(center ? { center } : {}),
+    neighborhoods: neighborhoods.filter((name) => getNeighborhoodsBoundingBox([name])),
+  };
+}
 type GoogleSearchSpec = { textQuery: string; bounds: GeographicBounds };
 
 function distanceFromSearchCenterSquared(lat: number, lng: number, center: SearchCenter): number {
@@ -847,6 +1115,9 @@ async function collectGooglePlaces(
             locationId: "dhg",
             category: section === "food-drink" ? "Food & Drink" : "Businesses",
              businessCategory,
+             ...(businessCategory === "Food & Drink"
+               ? { foodType: foodTypeForGooglePrimaryType(place.primaryType) }
+               : {}),
             name,
              address,
             description: googlePlaceDescription(place, section),
@@ -992,6 +1263,24 @@ function businessCategoryForOsmTags(
   return "Professional Services";
 }
 
+export function foodTypeForOsmTags(tags: Record<string, string>): FoodType {
+  const amenity = tags.amenity?.toLowerCase();
+  const shop = tags.shop?.toLowerCase();
+  const amenityValues = new Set((amenity ?? "").split(";").filter(Boolean));
+  if (amenityValues.has("cafe")) return "cafe";
+  if (amenityValues.has("bar") || amenityValues.has("pub") || amenityValues.has("biergarten")) return "bar";
+  if (
+    shop === "bakery"
+    || shop === "confectionery"
+    || shop === "pastry"
+    || shop === "ice_cream"
+    || amenityValues.has("ice_cream")
+  ) return "bakery";
+  if (amenityValues.has("fast_food") || amenityValues.has("food_court")) return "takeaway";
+  if (amenityValues.has("restaurant")) return "restaurant";
+  return "other";
+}
+
 function osmAddressFromTags(tags: Record<string, string>): string | undefined {
   const street = tags["addr:street"];
   const houseNumber = tags["addr:housenumber"];
@@ -1006,7 +1295,7 @@ function hasForeignOsmLocality(tags: Record<string, string>): boolean {
   const city = normalizedTitle(tags["addr:city"] ?? tags["addr:place"]);
   if (city && !["den haag", "the hague", "s gravenhage", "scheveningen"].includes(city)) return true;
   const postcode = tags["addr:postcode"];
-  return Boolean(postcode && !/^25\d{2}/.test(postcode.replace(/\s/g, "")));
+  return Boolean(postcode && !/^(?:25\d{2}|249\d)/.test(postcode.replace(/\s/g, "")));
 }
 
 function hasHagueOsmEvidence(tags: Record<string, string>): boolean {
@@ -1085,6 +1374,7 @@ export function fetchOpenStreetMapBusinesses(
   bounds: { s: number; w: number; n: number; e: number },
   businessCategories: BusinessCategory[] = [],
   searchCenter?: SearchCenter,
+  neighborhoods: string[] = [],
 ): Listing[] {
   const listings: Listing[] = [];
   const seen = new Set<string>();
@@ -1092,11 +1382,15 @@ export function fetchOpenStreetMapBusinesses(
 
   for (const element of elements) {
     if (!isInHagueBounds(element.lat, element.lon)) continue;
+    if (neighborhoods.length > 0 && !isPointInsideNeighborhoods(element.lat, element.lon, neighborhoods)) continue;
     const tags = element.tags ?? {};
     if (hasForeignOsmLocality(tags) || !hasHagueOsmEvidence(tags)) continue;
 
     const isFood = isFoodOsmTags(tags);
-    if (!tags.name || (section === "food-drink" ? !isFood : isFood || !Boolean(tags.shop || tags.amenity))) continue;
+    // Non-food businesses are not only shops/amenities: gyms are leisure=*,
+    // hotels/museums tourism=*, and firms/tradespeople office=*/craft=*.
+    const isBusinessTagged = Boolean(tags.shop || tags.amenity || tags.leisure || tags.tourism || tags.office || tags.craft);
+    if (!tags.name || (section === "food-drink" ? !isFood : isFood || !isBusinessTagged)) continue;
 
     const address = osmAddressFromTags(tags);
     const { x, y } = toXY(element.lat, element.lon, bounds);
@@ -1111,6 +1405,7 @@ export function fetchOpenStreetMapBusinesses(
       locationId: "dhg",
       category: section === "food-drink" ? "Food & Drink" : "Businesses",
       businessCategory,
+      ...(businessCategory === "Food & Drink" ? { foodType: foodTypeForOsmTags(tags) } : {}),
       name: tags.name,
       ...(address ? { address } : {}),
       description: descriptionFromTags(tags),
@@ -1121,6 +1416,10 @@ export function fetchOpenStreetMapBusinesses(
       lng: element.lon,
       source: "openstreetmap",
       sourceName: "OpenStreetMap",
+      sourcePageUrl: `https://www.openstreetmap.org/${element.type ?? "node"}/${element.id}`,
+      officialUrl: normalizeOsmUrl(tags["contact:website"] ?? tags.website),
+      facebookUrl: normalizeOsmSocialUrl("facebook", tags["contact:facebook"] ?? tags.facebook),
+      instagramUrl: normalizeOsmSocialUrl("instagram", tags["contact:instagram"] ?? tags.instagram),
     };
     const key = listingDedupeKey(listing);
     if (seen.has(key)) continue;
@@ -1139,9 +1438,29 @@ export function fetchOpenStreetMapBusinesses(
 
 export interface OsmElement {
   id: number;
+  type?: "node" | "way" | "relation";
   lat: number;
   lon: number;
   tags: Record<string, string>;
+}
+
+function normalizeOsmUrl(value: string | undefined): string | undefined {
+  const url = value?.trim();
+  if (!url) return undefined;
+  if (/^https?:\/\//i.test(url)) return url;
+  if (/^www\./i.test(url)) return `https://${url}`;
+  return undefined;
+}
+
+function normalizeOsmSocialUrl(
+  provider: "facebook" | "instagram",
+  value: string | undefined,
+): string | undefined {
+  const directUrl = normalizeOsmUrl(value);
+  if (directUrl) return directUrl;
+  const handle = value?.trim().replace(/^@/, "").replace(/^\/+|\/+$/g, "");
+  if (!handle || /\s/.test(handle)) return undefined;
+  return `https://www.${provider}.com/${handle}`;
 }
 
 interface OsmResponse {
@@ -1271,6 +1590,19 @@ const defaultOverpassRequestDependencies: OverpassRequestDependencies = {
   sleep: (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds)),
 };
 
+function isNarrowedBounds(bounds: GeographicBounds): boolean {
+  return Object.values(CITY_BOUNDS).every((city) =>
+    city.s !== bounds.s || city.w !== bounds.w || city.n !== bounds.n || city.e !== bounds.e,
+  );
+}
+
+export const OVERPASS_ENDPOINTS = [
+  "https://overpass-api.de/api/interpreter",
+  "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
+  "https://overpass.kumi.systems/api/interpreter",
+  "https://overpass.private.coffee/api/interpreter",
+] as const;
+
 export async function fetchCityListingsFromOverpass(
   bounds: { s: number; w: number; n: number; e: number },
   dependencies: OverpassRequestDependencies = defaultOverpassRequestDependencies,
@@ -1278,7 +1610,9 @@ export async function fetchCityListingsFromOverpass(
   searchCenter?: SearchCenter,
 ): Promise<OsmElement[]> {
   const bbox = `${bounds.s},${bounds.w},${bounds.n},${bounds.e}`;
-  const searchArea = searchCenter
+  // A narrowed bounding box (neighborhood scope) is authoritative; the radius
+  // is only a fallback for free-form searches without polygon geometry.
+  const searchArea = searchCenter && !isNarrowedBounds(bounds)
     ? `(around:3000,${searchCenter.lat},${searchCenter.lng})`
     : `(${bbox})`;
   const targetedSelectors = businessCategories
@@ -1292,18 +1626,23 @@ export async function fetchCityListingsFromOverpass(
 out center 2000;`
     : `[out:json][timeout:20];
 (
-  node[amenity][name](${bbox});
-  node[shop][name](${bbox});
-  node[leisure][name](${bbox});
-  node[tourism][name](${bbox});
+  nwr[amenity][name](${bbox});
+  nwr[shop][name](${bbox});
+  nwr[leisure][name](${bbox});
+  nwr[tourism][name](${bbox});
+  nwr[office][name](${bbox});
+  nwr[craft][name](${bbox});
 );
-out 2000;`;
+out center 2000;`;
 
-  const url =
-    "https://overpass-api.de/api/interpreter?data=" + encodeURIComponent(query);
+  const encodedQuery = encodeURIComponent(query);
 
   let lastError: unknown;
   for (let attempt = 0; attempt < PROVIDER_MAX_ATTEMPTS; attempt += 1) {
+    // Rotate through public Overpass instances: the primary host is regularly
+    // unreachable or overloaded while the mirrors keep serving the same data.
+    const endpoint = OVERPASS_ENDPOINTS[attempt % OVERPASS_ENDPOINTS.length]!;
+    const url = `${endpoint}?data=${encodedQuery}`;
     await dependencies.waitForSlot();
     let res: Response;
     try {
@@ -1330,7 +1669,7 @@ out 2000;`;
         return [{ id: element.id, lat, lon, tags: element.tags ?? {} }];
       });
     }
-    lastError = new Error(`Overpass HTTP ${res.status}`);
+    lastError = new Error(`Overpass HTTP ${res.status} (${new URL(endpoint).host})`);
     if (res.status !== 429 && res.status < 500) throw lastError;
     if (attempt + 1 < PROVIDER_MAX_ATTEMPTS) {
       await dependencies.sleep(retryDelayMs(attempt, res.headers.get("retry-after")));
@@ -1385,7 +1724,22 @@ export async function refreshNeighborhoodDiscoveryScope(scope: NeighborhoodRefre
   const bounds = CITY_BOUNDS[scope.cityId];
   if (!bounds) throw new Error(`Unknown city: ${scope.cityId}`);
   const neighborhoods = normalizeNeighborhoods(scope.neighborhoods);
-  const normalizedKey = normalizedListingsKey(scope.cityId, scope.section, scope.language, neighborhoods);
+  let businessCategories: BusinessCategory[] = [];
+  try {
+    const keyFields = JSON.parse(scope.normalizedKey) as { businessCategories?: unknown };
+    businessCategories = scope.section === "businesses"
+      ? parseBusinessCategories(keyFields.businessCategories)
+      : [];
+  } catch {
+    // The key mismatch below remains the explicit guard for malformed refresh scopes.
+  }
+  const normalizedKey = normalizedListingsKey(
+    scope.cityId,
+    scope.section,
+    scope.language,
+    neighborhoods,
+    businessCategories,
+  );
   if (normalizedKey !== scope.normalizedKey) throw new Error("Refresh scope normalized key does not match its fields.");
 
   const queryId = await createListingsQuery({
@@ -1402,8 +1756,20 @@ export async function refreshNeighborhoodDiscoveryScope(scope: NeighborhoodRefre
   const outcomes = await Promise.all(SCHEDULED_DISCOVERY_PROVIDERS.map((provider) =>
     captureProviderResult(queryId, provider, normalizedKey, {
       section: scope.section,
+      neighborhoods,
+      businessCategories,
       scheduled: true,
-    }, async () => fetchOpenStreetMapBusinesses(await fetchCityListings(bounds), scope.section, bounds), 1),
+    }, async () => {
+      const searchArea = resolveSearchArea(bounds, neighborhoods);
+      return fetchOpenStreetMapBusinesses(
+        await fetchCityListings(searchArea.bounds, businessCategories, searchArea.center),
+        scope.section,
+        bounds,
+        businessCategories,
+        searchArea.center,
+        searchArea.neighborhoods,
+      );
+    }, 1),
   ));
   const successful = outcomes.filter((outcome) => !outcome.error);
   const status = successful.length === 0 ? "failed" : "succeeded";
@@ -1434,15 +1800,22 @@ async function captureProviderResult(
     externalQueryId = persistedExternalQueryId;
 
     const listings = await withBoundedBackoff(load, attempts);
+    const fetchedAt = new Date();
     await db.transaction(async (tx) => {
-      await tx.insert(externalResultsTable).values({
+      const [externalResult] = await tx.insert(externalResultsTable).values({
         externalQueryId: persistedExternalQueryId,
         userQueryId: queryId,
         provider,
         normalizedKey,
         payload: listings,
         resultCount: listings.length,
-      });
+        fetchedAt,
+      }).returning({ id: externalResultsTable.id });
+      if (!externalResult) throw new Error(`Could not persist ${provider} result.`);
+      const snapshotRows = listingSnapshotRows(externalResult.id, normalizedKey, listings, fetchedAt);
+      if (snapshotRows.length > 0) {
+        await tx.insert(externalResultListingsTable).values(snapshotRows);
+      }
       await tx.update(externalQueriesTable).set({
         status: "succeeded",
         completedAt: new Date(),
@@ -1473,6 +1846,118 @@ export function mergeStoredProviderListings(
   return mergeBusinessListings(googleListings, osmListings).listings;
 }
 
+const STORED_DETAIL_RESULT_LIMIT = 25;
+
+export function listingSnapshotRows<T extends { id: string }>(
+  externalResultId: number,
+  normalizedKey: string,
+  listings: T[],
+  fetchedAt: Date,
+) {
+  let scope: { cityId?: unknown; section?: unknown };
+  try {
+    scope = JSON.parse(normalizedKey) as { cityId?: unknown; section?: unknown };
+  } catch {
+    return [];
+  }
+  if (typeof scope.cityId !== "string" || typeof scope.section !== "string") return [];
+
+  const uniqueListings = new Map<string, T>();
+  for (const listing of listings) {
+    if (typeof listing.id === "string" && listing.id.length > 0) uniqueListings.set(listing.id, listing);
+  }
+  return [...uniqueListings.values()].map((listing) => ({
+    externalResultId,
+    cityId: scope.cityId as string,
+    section: scope.section as string,
+    listingId: listing.id,
+    listing,
+    fetchedAt,
+  }));
+}
+
+export function findStoredListingInRows(
+  rows: Array<{ payload: unknown }>,
+  listingId: string,
+): Listing | null {
+  for (const row of rows) {
+    if (!Array.isArray(row.payload)) continue;
+    const listing = (row.payload as Listing[]).find((item) => item.id === listingId);
+    if (listing) return listing;
+  }
+  return null;
+}
+
+async function loadStoredExternalListing(
+  cityId: string,
+  section: Exclude<ListingSection, "events" | "social-map">,
+  listingId: string,
+): Promise<Listing | null> {
+  const [snapshot] = await db.select({
+    listing: externalResultListingsTable.listing,
+  }).from(externalResultListingsTable)
+    .where(and(
+      eq(externalResultListingsTable.cityId, cityId),
+      eq(externalResultListingsTable.section, section),
+      eq(externalResultListingsTable.listingId, listingId),
+    ))
+    .orderBy(desc(externalResultListingsTable.fetchedAt), desc(externalResultListingsTable.externalResultId))
+    .limit(1);
+  if (snapshot?.listing && typeof snapshot.listing === "object") return snapshot.listing as Listing;
+
+  // Rows saved before the normalized lookup table was introduced remain
+  // resolvable while new snapshots use the indexed path above.
+  const legacyRows = await db.select({ payload: externalResultsTable.payload })
+    .from(externalResultsTable)
+    .where(and(
+      sql`${externalResultsTable.normalizedKey}::jsonb @> ${JSON.stringify({ cityId, section })}::jsonb`,
+      sql`${externalResultsTable.payload} @> ${JSON.stringify([{ id: listingId }])}::jsonb`,
+    ))
+    .orderBy(desc(externalResultsTable.fetchedAt), desc(externalResultsTable.id))
+    .limit(STORED_DETAIL_RESULT_LIMIT);
+  return findStoredListingInRows(legacyRows, listingId);
+}
+
+function discoveredEventToListing(
+  event: typeof discoveredEventsTable.$inferSelect,
+  language: EventLanguage,
+): Listing {
+  const copy = eventCopyForLanguage(event, language);
+  return {
+    id: `source-${event.id}`,
+    locationId: event.locationId,
+    category: event.category as ListingCategory,
+    name: copy.title,
+    description: copy.description,
+    startsAt: event.startsAt ?? undefined,
+    isCancelled: event.isCancelled,
+    x: event.x,
+    y: event.y,
+    details: localizedEventDetails(event, language),
+    lat: event.lat,
+    lng: event.lng,
+    sourceUrl: event.canonicalUrl,
+    source: "source_scan",
+    sourceName: event.sourceName,
+    isApproximateLocation: event.isApproximateLocation,
+    sourceGroup: (event.sourceGroup === "agenda" ? "city-agenda" : event.sourceGroup) as Listing["sourceGroup"],
+    organizer: event.organizer ?? undefined,
+    activityKind: event.activityKind ?? undefined,
+    priceType: event.priceType as Listing["priceType"],
+    priceText: event.priceText ?? undefined,
+    mealType: event.mealType as Listing["mealType"],
+    audience: event.audience ?? undefined,
+    neighborhood: event.neighborhood ?? undefined,
+    recurrenceText: event.recurrenceText ?? undefined,
+    openingTimes: event.openingTimes ?? undefined,
+    venue: event.venue ?? undefined,
+    isIndoor: event.isIndoor ?? undefined,
+    firstSeenAt: event.firstSeenAt?.toISOString(),
+    lastSeenAt: event.lastSeenAt?.toISOString(),
+    updatedAt: event.updatedAt?.toISOString(),
+  };
+}
+
 async function loadStoredProviderResults(
   normalizedKey: string,
   providers: ExternalProvider[],
@@ -1499,6 +1984,41 @@ function storedMissMessage(language: EventLanguage): string {
     : "No stored results are available for this query. Refresh in live mode.";
 }
 
+export function filterListingsByBusinessCategories(
+  listings: Listing[],
+  businessCategories: BusinessCategory[],
+): Listing[] {
+  if (businessCategories.length === 0) return listings;
+  const selected = new Set(businessCategories);
+  return listings.filter((listing) => listing.businessCategory && selected.has(listing.businessCategory));
+}
+
+// Stored results are keyed by the exact category set. A subcategory selection
+// rarely matches a stored scope of its own, so fall back to the broader
+// all-categories scope for the same area and narrow it by listing category.
+async function loadStoredBusinessResults(
+  normalizedKey: string,
+  providers: ExternalProvider[],
+  scope: {
+    cityId: string;
+    section: ListingSection;
+    language: EventLanguage;
+    neighborhoods: string[];
+    businessCategories: BusinessCategory[];
+  },
+): Promise<Map<ExternalProvider, Listing[]>> {
+  const exact = await loadStoredProviderResults(normalizedKey, providers);
+  if (scope.section !== "businesses" || scope.businessCategories.length === 0) return exact;
+  const missing = providers.filter((provider) => !exact.has(provider));
+  if (missing.length === 0) return exact;
+  const broadKey = normalizedListingsKey(scope.cityId, scope.section, scope.language, scope.neighborhoods, []);
+  const broad = await loadStoredProviderResults(broadKey, missing);
+  for (const [provider, listings] of broad) {
+    exact.set(provider, filterListingsByBusinessCategories(listings, scope.businessCategories));
+  }
+  return exact;
+}
+
 export interface ListingsRouterDependencies {
   getUserId: (req: Parameters<typeof getAuth>[0]) => string | null;
   googlePlacesEnabled?: boolean;
@@ -1513,6 +2033,7 @@ export interface ListingsRouterDependencies {
     section: Exclude<ListingSection, "events" | "social-map">,
     businessCategories: BusinessCategory[],
     searchCenter?: SearchCenter,
+    searchArea?: SearchArea,
   ) => Promise<Listing[]>;
 }
 
@@ -1520,13 +2041,14 @@ const defaultListingsRouterDependencies: ListingsRouterDependencies = {
   getUserId: (req) => getAuth(req).userId,
   googlePlacesEnabled: GOOGLE_PLACES_QUERIES_ENABLED,
   loadGooglePlaces: fetchGooglePlaces,
-  loadOpenStreetMapBusinesses: async (bounds, section, businessCategories, searchCenter) =>
+  loadOpenStreetMapBusinesses: async (bounds, section, businessCategories, searchCenter, searchArea) =>
     fetchOpenStreetMapBusinesses(
-      await fetchCityListings(bounds, businessCategories, searchCenter),
+      await fetchCityListings(searchArea?.bounds ?? bounds, businessCategories, searchCenter),
       section,
       bounds,
       businessCategories,
       searchCenter,
+      searchArea?.neighborhoods ?? [],
     ),
 };
 
@@ -1534,6 +2056,54 @@ export function createListingsRouter(
   dependencies: ListingsRouterDependencies = defaultListingsRouterDependencies,
 ): IRouter {
   const router: IRouter = Router();
+  router.get("/listing", async (req, res): Promise<void> => {
+    const listingId = String(req.query["listingId"] ?? "").trim();
+    const cityId = String(req.query["cityId"] ?? "").trim().toLowerCase();
+    const section = parseListingSection(req.query["section"]);
+    const language = parseEventLanguage(req.query["language"]);
+    if (!listingId || listingId.length > 300 || !cityId || !language || section === "social-map") {
+      res.status(400).json({ message: "A valid listingId, cityId, section, and language are required." });
+      return;
+    }
+
+    let listing: Listing | null = null;
+    if (section === "events") {
+      const storedEventId = /^source-(\d+)$/.exec(listingId)?.[1];
+      if (storedEventId) {
+        const [event] = await db.select()
+          .from(discoveredEventsTable)
+          .where(and(
+            eq(discoveredEventsTable.id, Number(storedEventId)),
+            eq(discoveredEventsTable.locationId, cityId),
+            eq(discoveredEventsTable.reviewStatus, "approved"),
+          ))
+          .limit(1);
+        if (event) listing = discoveredEventToListing(event, language);
+      } else {
+        const curated = MARKERS.find((item) => item.id === listingId && item.locationId === cityId);
+        if (curated) {
+          listing = {
+            ...curated,
+            source: "curated",
+            sourceName: sourceNameFromUrl(curated.sourceUrl),
+          };
+        }
+      }
+    } else if (cityId === "dhg") {
+      listing = await loadStoredExternalListing(cityId, section, listingId);
+    }
+
+    if (!listing) {
+      res.status(404).json({
+        message: language === "nl"
+          ? "Deze opgeslagen vermelding is niet gevonden."
+          : "This stored listing was not found.",
+      });
+      return;
+    }
+    res.json({ listing: { ...listing, evidence: listing.evidence ?? listingEvidence(listing) }, source: "stored" });
+  });
+
   router.get("/listings", async (req, res): Promise<void> => {
   const cityId = String(req.query["cityId"] ?? "").trim();
   const listingSection = parseListingSection(req.query["section"]);
@@ -1546,6 +2116,38 @@ export function createListingsRouter(
   const requestedSearchLng = Number(req.query["searchLng"]);
   const mode = parseListingsMode(req.query["mode"]);
   const anonymousId = parseAnonymousId(req.query["anonymousId"]);
+  const originalJson = res.json.bind(res);
+  res.json = ((body: unknown) => {
+    if (!body || typeof body !== "object" || !("listings" in body)) {
+      return originalJson(body);
+    }
+    const response = body as {
+      listings?: unknown;
+      partial?: unknown;
+      [key: string]: unknown;
+    };
+    const listings = Array.isArray(response.listings) ? response.listings : [];
+    const groupStatus = res.statusCode >= 400
+      ? "error"
+      : response.partial === true
+        ? "partial"
+        : listings.length > 0
+          ? "success"
+          : "empty";
+    return originalJson({
+      ...response,
+      listings: listings.map((listing) => {
+        if (!listing || typeof listing !== "object") return listing;
+        const typedListing = listing as Listing;
+        return {
+          ...typedListing,
+          evidence: typedListing.evidence ?? listingEvidence(typedListing),
+        };
+      }),
+      scopeGroup: mode === "stored_only" ? "local" : "web",
+      groupStatus,
+    });
+  }) as typeof res.json;
 
   if (!cityId || !language) {
     res.status(400).json({
@@ -1561,11 +2163,15 @@ export function createListingsRouter(
     res.status(400).json({ listings: [], source: "fallback", message: `Unknown city: ${cityId}` });
     return;
   }
-  const requestedSearchCenter = Number.isFinite(requestedSearchLat)
+  const clientSearchCenter = Number.isFinite(requestedSearchLat)
     && Number.isFinite(requestedSearchLng)
     && isInHagueBounds(requestedSearchLat, requestedSearchLng)
     ? { lat: requestedSearchLat, lng: requestedSearchLng }
     : undefined;
+  // Official polygon geometry defines the local scope; a client-supplied centre
+  // only matters for free-form searches without neighborhood geometry.
+  const searchArea = resolveSearchArea(bounds, requestedNeighborhoods, clientSearchCenter);
+  const requestedSearchCenter = searchArea.center;
   const normalizedKey = normalizedListingsKey(
     cityId,
     listingSection,
@@ -1671,7 +2277,7 @@ export function createListingsRouter(
         ? ["google_places", "openstreetmap"]
         : ["openstreetmap"];
       if (!allowsExternalQueries(mode)) {
-        const stored = await loadStoredProviderResults(normalizedKey, providers);
+        const stored = await loadStoredBusinessResults(normalizedKey, providers, { cityId, section: listingSection, language, neighborhoods: requestedNeighborhoods, businessCategories: requestedBusinessCategories });
         const googleListings = dependencies.googlePlacesEnabled
           ? stored.get("google_places") ?? []
           : [];
@@ -1693,12 +2299,20 @@ export function createListingsRouter(
               section: listingSection,
               neighborhoods: requestedNeighborhoods,
               businessCategories: requestedBusinessCategories,
-            }, () => dependencies.loadGooglePlaces(
-              bounds,
-              listingSection,
-              requestedNeighborhoods,
-              requestedBusinessCategories,
-            ))]
+            }, async () => {
+              const listings = await dependencies.loadGooglePlaces(
+                bounds,
+                listingSection,
+                requestedNeighborhoods,
+                requestedBusinessCategories,
+              );
+              // Google text search is neighborhood-hinted, not geometry-bound;
+              // enforce the official polygon before results are persisted.
+              return searchArea.neighborhoods.length > 0
+                ? listings.filter((listing) =>
+                  isPointInsideNeighborhoods(listing.lat, listing.lng, searchArea.neighborhoods))
+                : listings;
+            })]
           : []),
         captureProviderResult(queryId, "openstreetmap", normalizedKey, {
           section: listingSection,
@@ -1709,26 +2323,50 @@ export function createListingsRouter(
           listingSection,
           requestedBusinessCategories,
           requestedSearchCenter,
+          searchArea,
         ), 1),
       ]);
       const google = outcomes.find((result) => result.provider === "google_places");
       const osm = outcomes.find((result) => result.provider === "openstreetmap");
       const successful = outcomes.filter((result) => !result.error);
-      const merged = mergeBusinessListings(google?.listings ?? [], osm?.listings ?? []);
+      let googleListings = google?.listings ?? [];
+      let osmListings = osm?.listings ?? [];
+      let servedStoredFallback = false;
+      // A provider outage must not blank a neighborhood that already has verified
+      // results. Reuse saved results, but apply the current polygon filter before
+      // returning them; older rows may have been captured from a city-wide query.
+      if (successful.length < providers.length) {
+        const stored = await loadStoredBusinessResults(normalizedKey, providers, { cityId, section: listingSection, language, neighborhoods: requestedNeighborhoods, businessCategories: requestedBusinessCategories });
+        const filterStored = (listings: Listing[]) => searchArea.neighborhoods.length > 0
+          ? listings.filter((listing) =>
+            isPointInsideNeighborhoods(listing.lat, listing.lng, searchArea.neighborhoods))
+          : listings;
+        if (google?.error && stored.has("google_places")) {
+          googleListings = filterStored(stored.get("google_places") ?? []);
+          servedStoredFallback = googleListings.length > 0;
+        }
+        if (osm?.error && stored.has("openstreetmap")) {
+          osmListings = filterStored(stored.get("openstreetmap") ?? []);
+          servedStoredFallback = servedStoredFallback || osmListings.length > 0;
+        }
+      }
+      const merged = mergeBusinessListings(googleListings, osmListings);
       const partial = successful.length > 0 && successful.length < providers.length;
-      const status = successful.length === 0 ? "failed" : partial ? "partial" : "succeeded";
-      await finalizeListingsQuery(queryId, status, successful.length === 0 ? "All external providers failed." : undefined);
+      const status = successful.length === 0 && !servedStoredFallback ? "failed" : partial || servedStoredFallback ? "partial" : "succeeded";
+      await finalizeListingsQuery(queryId, status, status === "failed" ? "All external providers failed." : undefined);
       if (google?.error) req.log.warn({ err: google.error }, "Google Places listings unavailable");
       if (osm?.error) req.log.warn({ err: osm.error }, "OpenStreetMap listings unavailable");
       res.json({
         listings: merged.listings,
-        source: google?.listings.length ? "google_places" : osm?.listings.length ? "live" : "fallback",
-        message: google?.listings.length
-          ? `${google.listings.length} Haagse ${listingSection === "food-drink" ? "horecazaken" : "bedrijven"} uit Google Places${merged.osmAdded > 0 ? ` en ${merged.osmAdded} aanvullende OpenStreetMap-vermeldingen` : ""}.`
-          : osm?.listings.length
-            ? `${osm.listings.length} Haagse ${listingSection === "food-drink" ? "horecazaken" : "bedrijven"} uit OpenStreetMap.`
-            : "Er zijn tijdelijk geen gecontroleerde resultaten voor deze sectie.",
-        queryId, mode, cacheHit: false, cacheMiss: false, partial,
+        source: servedStoredFallback ? "stored" : googleListings.length ? "google_places" : osmListings.length ? "live" : "fallback",
+        message: servedStoredFallback
+          ? `${merged.listings.length} opgeslagen Haagse resultaten worden getoond terwijl een live bron tijdelijk niet beschikbaar is.`
+          : googleListings.length
+            ? `${googleListings.length} Haagse ${listingSection === "food-drink" ? "horecazaken" : "bedrijven"} uit Google Places${merged.osmAdded > 0 ? ` en ${merged.osmAdded} aanvullende OpenStreetMap-vermeldingen` : ""}.`
+            : osmListings.length
+              ? `${osmListings.length} Haagse ${listingSection === "food-drink" ? "horecazaken" : "bedrijven"} uit OpenStreetMap.`
+              : "Er zijn tijdelijk geen gecontroleerde resultaten voor deze sectie.",
+        queryId, mode, cacheHit: servedStoredFallback, cacheMiss: false, partial: partial || servedStoredFallback,
         providers: successful.map((result) => result.provider),
       });
       return;
@@ -1745,7 +2383,11 @@ export function createListingsRouter(
           gte(discoveredEventsTable.startsAt, today),
         ))
         .orderBy(asc(discoveredEventsTable.startsAt), desc(discoveredEventsTable.lastSeenAt));
-      const localizedEvents = await prepareEventsForMode(discovered, language, mode);
+      const localizedEvents = await prepareEventsForMode(
+        filterEventsByNeighborhoods(discovered, requestedNeighborhoods),
+        language,
+        mode,
+      );
       const discoveredListings = localizedEvents
         .map((event) => {
         const copy = eventCopyForLanguage(event, language);
@@ -1782,6 +2424,26 @@ export function createListingsRouter(
           lastSeenAt: event.lastSeenAt?.toISOString(),
           updatedAt: event.updatedAt?.toISOString(),
       }});
+      let sourceStatuses: EventSourceStatusSnapshot[] = [];
+      try {
+        const persistedStatuses = await db
+          .select({
+            sourceId: eventSourceStatusesTable.sourceId,
+            sourceName: eventSourceStatusesTable.sourceName,
+            status: eventSourceStatusesTable.status,
+            lastScannedAt: eventSourceStatusesTable.lastScannedAt,
+          })
+          .from(eventSourceStatusesTable);
+        sourceStatuses = persistedStatuses;
+      } catch (error) {
+        req.log.warn({ err: error }, "Event source evidence unavailable");
+      }
+      const evidence = summarizeEventEvidence({
+        language,
+        mode,
+        listings: discoveredListings,
+        sourceStatuses,
+      });
       await finalizeListingsQuery(queryId, "succeeded");
       const storedHit = discoveredListings.length > 0;
       res.json({
@@ -1798,6 +2460,7 @@ export function createListingsRouter(
             : language === "nl"
               ? "Er zijn momenteel geen gecontroleerde aankomende evenementen beschikbaar."
               : "No verified upcoming events are currently available.",
+         evidence,
         queryId,
         mode,
         cacheHit: mode === "stored_only" && storedHit,
@@ -1814,6 +2477,7 @@ export function createListingsRouter(
         message: language === "nl"
           ? "Actuele evenementen zijn tijdelijk niet beschikbaar."
           : "Current events are temporarily unavailable.",
+        evidence: summarizeEventEvidence({ language, mode, listings: [], sourceStatuses: [] }),
         queryId, mode, cacheHit: false, cacheMiss: false, partial: false, providers: [],
       });
     }
@@ -1821,7 +2485,7 @@ export function createListingsRouter(
   }
 
   if (!allowsExternalQueries(mode)) {
-    const stored = await loadStoredProviderResults(normalizedKey, ["openstreetmap"]);
+    const stored = await loadStoredBusinessResults(normalizedKey, ["openstreetmap"], { cityId, section: listingSection, language, neighborhoods: requestedNeighborhoods, businessCategories: requestedBusinessCategories });
     const listings = stored.get("openstreetmap") ?? [];
     const hit = stored.has("openstreetmap");
     await finalizeListingsQuery(queryId, "succeeded");
@@ -1907,14 +2571,19 @@ export function createListingsRouter(
         sourceName: sourceNameFromUrl(listing.sourceUrl),
       }));
       await db.transaction(async (tx) => {
-        await tx.insert(externalResultsTable).values({
+        const fetchedAt = new Date();
+        const [externalResult] = await tx.insert(externalResultsTable).values({
           externalQueryId: persistedOverpassQueryId,
           userQueryId: queryId,
           provider: "openstreetmap",
           normalizedKey,
           payload: listings,
           resultCount: 0,
-        });
+          fetchedAt,
+        }).returning({ id: externalResultsTable.id });
+        if (!externalResult) throw new Error("Could not persist OpenStreetMap fallback result.");
+        const snapshotRows = listingSnapshotRows(externalResult.id, normalizedKey, listings, fetchedAt);
+        if (snapshotRows.length > 0) await tx.insert(externalResultListingsTable).values(snapshotRows);
         await tx.update(externalQueriesTable).set({ status: "succeeded", completedAt: new Date() })
           .where(eq(externalQueriesTable.id, persistedOverpassQueryId));
       });
@@ -1929,14 +2598,19 @@ export function createListingsRouter(
     }
 
     await db.transaction(async (tx) => {
-      await tx.insert(externalResultsTable).values({
+      const fetchedAt = new Date();
+      const [externalResult] = await tx.insert(externalResultsTable).values({
         externalQueryId: persistedOverpassQueryId,
         userQueryId: queryId,
         provider: "openstreetmap",
         normalizedKey,
         payload: listings,
         resultCount: listings.length,
-      });
+        fetchedAt,
+      }).returning({ id: externalResultsTable.id });
+      if (!externalResult) throw new Error("Could not persist OpenStreetMap result.");
+      const snapshotRows = listingSnapshotRows(externalResult.id, normalizedKey, listings, fetchedAt);
+      if (snapshotRows.length > 0) await tx.insert(externalResultListingsTable).values(snapshotRows);
       await tx.update(externalQueriesTable).set({ status: "succeeded", completedAt: new Date() })
         .where(eq(externalQueriesTable.id, persistedOverpassQueryId));
     });

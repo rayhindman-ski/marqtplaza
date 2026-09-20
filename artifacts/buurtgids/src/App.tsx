@@ -1,18 +1,18 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { Route, Switch, Router as WouterRouter, Link, Redirect, useLocation, useRoute } from 'wouter';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { ClerkProvider, SignIn, SignUp, useAuth } from '@clerk/react';
+import { Route, Switch, Router as WouterRouter, Link, Redirect, useLocation, useRoute, useSearch } from 'wouter';
+import { QueryClient, QueryClientProvider, keepPreviousData } from '@tanstack/react-query';
+import { ClerkProvider, SignIn, SignUp, useAuth, useClerk } from '@clerk/react';
 import { publishableKeyFromHost } from '@clerk/react/internal';
 import { shadcn } from '@clerk/themes';
 import { 
   Search, MapPinOff, ArrowLeft,
-  Map as MapIcon, List, Clock, Newspaper,
+  Map as MapIcon, Clock, Newspaper,
   Globe2, Bookmark, BookmarkCheck, X, ChevronDown, ChevronUp,
   ScanSearch, RefreshCw, WifiOff, Radio, MapPinned,
   Landmark, Route as RouteIcon, Baby, Building2, Coffee, Gamepad2, HandHeart, Waves, ShoppingBag, ExternalLink, AlertCircle, CalendarPlus,
   CalendarDays, UsersRound, Utensils,
   CloudSun, Cloud, CloudFog, CloudRain, CloudSnow, Sun, Wind, Droplets, Tag, Store,
-  Bike, Car, Footprints, TrainFront, ShieldCheck, Sparkles, Navigation
+  Bike, Car, Footprints, TrainFront, ShieldCheck, Sparkles, Navigation, UserRound, Loader2
 } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -25,6 +25,7 @@ import {
   type SavedEventsResponse,
   type SavedEventsSyncRequest,
   useGetListings,
+  useGetListing,
   useGetWeather,
 } from '@workspace/api-client-react';
 import {
@@ -34,6 +35,7 @@ import {
   BUSINESS_CATEGORIES,
   EVENT_CATEGORIES,
   SOCIAL_MAP_CATEGORIES,
+  FOOD_TYPES,
   type BusinessCategory,
   type Category,
   type ListingSource,
@@ -41,8 +43,10 @@ import {
   type EventActivityKind,
   type SocialMapCategory,
   type SocialMapReviewStatus,
+  type FoodType,
 } from './lib/data';
 import { GoogleMapView } from './components/GoogleMapView';
+import { getSubcategoryColor } from './lib/mapColors';
 import CaptureView from './pages/CaptureView';
 import SourceDirectoryView from './pages/SourceDirectoryView';
 import EventReviewView from './pages/EventReviewView';
@@ -54,8 +58,20 @@ import CommunityModerationView from './pages/CommunityModerationView';
 import DealsView from './pages/DealsView';
 import BusinessProfileView from './pages/BusinessProfileView';
 import BusinessClaimView from './pages/BusinessClaimView';
+import ListingCorrectionView from './pages/ListingCorrectionView';
 import MyBusinessWorkspace from './pages/MyBusinessWorkspace';
+import BusinessRevisionPage from './pages/BusinessRevisionPage';
 import BusinessModerationView from './pages/BusinessModerationView';
+import OnboardingPage from './pages/OnboardingPage';
+import AccountPage from './pages/AccountPage';
+import AccountPreferencesPage from './pages/AccountPreferencesPage';
+import AccountPrivacyPage from './pages/AccountPrivacyPage';
+import { useAccountAuth } from './lib/accountAuth';
+import { featureFlags } from './lib/featureFlags';
+import { carryReturnPath, resolveReturnPath, withReturnPath } from './lib/returnPath';
+import BusinessOnboardingPage from './pages/BusinessOnboardingPage';
+import BusinessLookupPage from './pages/BusinessLookupPage';
+import BusinessDraftPage from './pages/BusinessDraftPage';
 import { useEditorAccess } from './lib/editorAccess';
 import {
   getLocationName,
@@ -67,22 +83,68 @@ import {
   translations,
   type Language,
 } from './lib/i18n';
+import { persistLanguage, useStoredLanguage } from './lib/useAppLanguage';
+import { clerkLocalizationFor } from './lib/clerkLocalization';
 import {
   formatEventTiming,
-  freshnessBadge,
   matchesDiscoveryQuickFilters,
   routeUrl,
-  trustBadge,
   type DiscoveryQuickFilter,
   type RouteMode,
 } from './lib/listingPresentation';
+import { isPointInsideNeighborhoods } from '@workspace/geo';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+function formatEvidenceCheckedAt(value: string, language: Language): string {
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return value;
+  return new Intl.DateTimeFormat(language === 'nl' ? 'nl-NL' : 'en-GB', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(date);
+}
+
 type UserRole = 'designer' | 'user';
 const USER_ROLE_STORAGE_KEY = 'buurtplaza-user-role';
+const DETAIL_LISTING_STORAGE_PREFIX = 'buurtplaza-detail-listing:';
+const DETAIL_LISTING_MAX_AGE_MS = 24 * 60 * 60 * 1_000;
+
+function persistDetailListing(listing: Marker): void {
+  try {
+    localStorage.setItem(
+      `${DETAIL_LISTING_STORAGE_PREFIX}${listing.id}`,
+      JSON.stringify({ savedAt: Date.now(), listing }),
+    );
+  } catch {
+    // Storage can be unavailable in privacy modes; the stored-only query below
+    // remains the direct-link fallback.
+  }
+}
+
+function readDetailListing(id: string): Marker | null {
+  try {
+    const raw = localStorage.getItem(`${DETAIL_LISTING_STORAGE_PREFIX}${id}`);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { savedAt?: unknown; listing?: unknown };
+    if (
+      typeof parsed.savedAt !== 'number'
+      || Date.now() - parsed.savedAt > DETAIL_LISTING_MAX_AGE_MS
+      || !parsed.listing
+      || typeof parsed.listing !== 'object'
+      || (parsed.listing as { id?: unknown }).id !== id
+    ) {
+      localStorage.removeItem(`${DETAIL_LISTING_STORAGE_PREFIX}${id}`);
+      return null;
+    }
+    return parsed.listing as Marker;
+  } catch {
+    localStorage.removeItem(`${DETAIL_LISTING_STORAGE_PREFIX}${id}`);
+    return null;
+  }
+}
 
 type CalendarEventData = {
   name: string;
@@ -298,10 +360,10 @@ function RouteLinks({
               target="_blank"
               rel="noopener noreferrer"
               aria-label={`${language === 'nl' ? 'Route via' : 'Directions by'} ${label}: ${marker.name}`}
-              className="inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-border/70 bg-card px-2.5 py-1.5 text-[11px] font-bold text-foreground transition-colors hover:border-primary/40 hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              title={label}
+              className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-border/70 bg-card text-foreground transition-colors hover:border-primary/40 hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
             >
-              <Icon className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
-              {label}
+              <Icon className="h-5 w-5 text-primary" aria-hidden="true" />
             </a>
           );
         })}
@@ -422,11 +484,46 @@ function alertFromAccountSnapshot(value: Record<string, unknown>): SavedEventAle
 }
 
 type ListingSection = 'events' | 'businesses' | 'food-drink' | 'social-map';
-type FilterSubcategory = Exclude<Category, 'Businesses' | 'Social map'> | BusinessCategory | SocialMapCategory;
+type FilterSubcategory = Exclude<Category, 'Businesses' | 'Social map' | 'Food & Drink'> | BusinessCategory | SocialMapCategory | FoodType;
 const TOP_LEVEL_SECTIONS: ListingSection[] = ['events', 'food-drink', 'social-map', 'businesses'];
-const DEFAULT_START_SECTION: ListingSection = 'events';
+const DEFAULT_START_SECTION = 'events' satisfies ListingSection;
 type AgendaTimeFilter = 'all' | 'today' | 'week';
 type AgendaPriceFilter = 'all' | 'free' | 'low-cost';
+type DiscoveryReturnState = {
+  savedAt: number;
+  locationId: string;
+  topLevelCategories: Record<ListingSection, boolean>;
+  subcategories: Record<FilterSubcategory, boolean>;
+  selectedNeighborhoods: string[];
+  neighborhoodSelection: 'all' | 'some' | 'none';
+  postcodeFilter: string;
+  agendaTime: AgendaTimeFilter;
+  agendaPrice: AgendaPriceFilter;
+  mealOnly: boolean;
+  quickFilters: DiscoveryQuickFilter[];
+};
+
+const DISCOVERY_RETURN_STATE_KEY = 'buurtplaza-discovery-return-state';
+const DISCOVERY_RETURN_STATE_TTL_MS = 24 * 60 * 60 * 1000;
+
+function readDiscoveryReturnState(locationId: string): DiscoveryReturnState | null {
+  try {
+    const value = JSON.parse(window.localStorage.getItem(DISCOVERY_RETURN_STATE_KEY) ?? 'null') as Partial<DiscoveryReturnState> | null;
+    if (!value
+      || value.locationId !== locationId
+      || typeof value.savedAt !== 'number'
+      || Date.now() - value.savedAt > DISCOVERY_RETURN_STATE_TTL_MS
+      || !value.topLevelCategories
+      || !value.subcategories
+      || !Array.isArray(value.selectedNeighborhoods)
+      || !Array.isArray(value.quickFilters)) {
+      return null;
+    }
+    return value as DiscoveryReturnState;
+  } catch {
+    return null;
+  }
+}
 
 const eventActivityLabels: Record<EventActivityKind, { nl: string; en: string }> = {
   community: { nl: 'Samen in de buurt', en: 'Community' },
@@ -490,11 +587,14 @@ function noTopLevelState(): Record<ListingSection, boolean> {
 function subcategoryStateFor(section: ListingSection): Record<FilterSubcategory, boolean> {
   const active = subcategoriesForTopLevel(section);
   const eventSubcategories = EVENT_CATEGORIES.filter(
-    (category): category is Exclude<Category, 'Businesses' | 'Social map'> =>
-      category !== 'Businesses' && category !== 'Social map',
+    (category): category is Exclude<Category, 'Businesses' | 'Social map' | 'Food & Drink'> =>
+      category !== 'Businesses' && category !== 'Social map' && category !== 'Food & Drink',
   );
   return Object.fromEntries(
-    [...eventSubcategories, ...BUSINESS_CATEGORIES, ...SOCIAL_MAP_CATEGORIES].map((category) => [category, active.includes(category)]),
+    [...eventSubcategories, ...BUSINESS_CATEGORIES, ...SOCIAL_MAP_CATEGORIES, ...FOOD_TYPES].map((category) => [
+      category,
+      active.includes(category),
+    ]),
   ) as Record<FilterSubcategory, boolean>;
 }
 
@@ -515,15 +615,15 @@ function noSubcategoryState(): Record<FilterSubcategory, boolean> {
 function subcategoriesForTopLevel(section: ListingSection): FilterSubcategory[] {
   if (section === 'events') {
     return EVENT_CATEGORIES.filter(
-      (category): category is Exclude<Category, 'Businesses' | 'Social map'> =>
-        category !== 'Businesses' && category !== 'Social map',
+      (category): category is Exclude<Category, 'Businesses' | 'Social map' | 'Food & Drink'> =>
+        category !== 'Businesses' && category !== 'Social map' && category !== 'Food & Drink',
     );
   }
   if (section === 'businesses') {
     return BUSINESS_CATEGORIES.filter((subcategory) => subcategory !== 'Food & Drink');
   }
   if (section === 'social-map') return SOCIAL_MAP_CATEGORIES;
-  return ['Food & Drink'];
+  return FOOD_TYPES;
 }
 
 function topLevelForMarker(marker: Marker): ListingSection {
@@ -534,6 +634,17 @@ function topLevelForMarker(marker: Marker): ListingSection {
 }
 
 function subcategoryLabelFor(subcategory: FilterSubcategory, language: Language): string {
+  if (FOOD_TYPES.includes(subcategory as FoodType)) {
+    const labels: Record<FoodType, { nl: string, en: string }> = {
+      restaurant: { nl: 'Restaurant', en: 'Restaurant' },
+      cafe: { nl: 'Café', en: 'Cafe' },
+      bar: { nl: 'Bar', en: 'Bar' },
+      bakery: { nl: 'Bakker', en: 'Bakery' },
+      takeaway: { nl: 'Afhalen & Bezorgen', en: 'Takeaway' },
+      other: { nl: 'Overig', en: 'Other' },
+    };
+    return labels[subcategory as FoodType][language];
+  }
   if (EVENT_CATEGORIES.includes(subcategory as Category)) {
     return translations[language].categories[subcategory as Category];
   }
@@ -734,6 +845,9 @@ function ReferenceCategoryNav({
   embedded?: boolean;
 }) {
   const t = translations[language];
+  const [location] = useLocation();
+  const search = useSearch();
+  const accountHref = withReturnPath('/account', `${location}${search ? `?${search}` : ''}`);
   const iconForCategory = (id: string) => {
     if (id === 'things-to-do') return CalendarDays;
     if (id === 'locals') return UsersRound;
@@ -797,6 +911,8 @@ function ReferenceCategoryNav({
           { href: '/buurt', label: language === 'nl' ? 'Buurtplein' : 'Community', Icon: HandHeart },
           { href: '/deals', label: language === 'nl' ? 'Deals' : 'Deals', Icon: Tag },
           { href: '/mijn-bedrijf', label: language === 'nl' ? 'Mijn bedrijf' : 'My business', Icon: Store },
+          { href: '/bedrijf-aanmelden', label: language === 'nl' ? 'Bedrijf aanmelden' : 'List a business', Icon: Building2 },
+          { href: accountHref, label: language === 'nl' ? 'Mijn account' : 'My account', Icon: UserRound },
         ].filter(({ href }) => userRole === 'designer' || !['/capture', '/bronnen'].includes(href))
           .map(({ href, label, Icon }) => (
           <span key={href} className="group relative">
@@ -824,7 +940,7 @@ function ReferenceCategoryNav({
 function SaveButton({ saved, onToggle }: { saved: boolean; onToggle: (e: React.MouseEvent) => void }) {
   return (
     <button
-      onClick={onToggle}
+      onClick={(e) => { e.stopPropagation(); onToggle(e); }}
       aria-label={saved ? 'Remove from saved' : 'Save this place'}
       className={cn(
         "p-1.5 rounded-lg transition-all duration-200 shrink-0",
@@ -844,9 +960,9 @@ function SaveButton({ saved, onToggle }: { saved: boolean; onToggle: (e: React.M
 const DISCOVERY_EXTERNAL_SOURCES_STORAGE_KEY = 'buurtplaza-discovery-live-mode';
 
 function readIncludeExternalSources(): boolean {
-  if (typeof window === 'undefined') return true;
-  const saved = window.localStorage.getItem(DISCOVERY_EXTERNAL_SOURCES_STORAGE_KEY);
-  return saved === null ? true : saved === 'true';
+  if (typeof window === 'undefined') return false;
+  const saved = window.sessionStorage.getItem(DISCOVERY_EXTERNAL_SOURCES_STORAGE_KEY);
+  return saved === 'true';
 }
 
 function SearchState({
@@ -866,26 +982,52 @@ function SearchState({
   savedCount: number;
   onViewSaved: () => void;
 }) {
-  const popularNeighborhoods: Record<string, string[]> = {
-    dhg: [
-      'Centrum',
-      'Scheveningen',
-      'Zeeheldenkwartier',
-      'Duinoord',
-      'Statenkwartier',
-      'Benoordenhout',
-      'Bezuidenhout',
-      'Regentessekwartier',
-    ],
-  };
+  const majorDutchCities = [
+    'Amsterdam',
+    'Rotterdam',
+    'Den Haag',
+    'Utrecht',
+    'Eindhoven',
+    'Groningen',
+    'Tilburg',
+    'Almere',
+    'Breda',
+    'Nijmegen',
+    'Apeldoorn',
+    'Haarlem',
+    'Arnhem',
+    'Enschede',
+    'Amersfoort',
+  ];
   const [query, setQuery] = useState('');
   const [error, setError] = useState('');
   const [selectedCityId, setSelectedCityId] = useState<string | null>(null);
+  const [selectedMapNeighborhood, setSelectedMapNeighborhood] = useState<string | null>(null);
+  const [hoveredMapNeighborhood, setHoveredMapNeighborhood] = useState<string | null>(null);
   const [includeExternalSources, setIncludeExternalSources] = useState(readIncludeExternalSources);
   const t = translations[language];
+  const mapLocation = LOCATIONS.find((location) => location.id === selectedCityId) ?? LOCATIONS[0];
 
   useEffect(() => {
-    window.localStorage.setItem(
+    if (!mapLocation.neighborhoods.includes(selectedMapNeighborhood ?? '')) {
+      setSelectedMapNeighborhood(null);
+    }
+    if (!mapLocation.neighborhoods.includes(hoveredMapNeighborhood ?? '')) {
+      setHoveredMapNeighborhood(null);
+    }
+  }, [hoveredMapNeighborhood, mapLocation, selectedMapNeighborhood]);
+
+  useEffect(() => {
+    if (!mapLocation.neighborhoods.includes(selectedMapNeighborhood ?? '')) {
+      setSelectedMapNeighborhood(null);
+    }
+    if (!mapLocation.neighborhoods.includes(hoveredMapNeighborhood ?? '')) {
+      setHoveredMapNeighborhood(null);
+    }
+  }, [hoveredMapNeighborhood, mapLocation, selectedMapNeighborhood]);
+
+  useEffect(() => {
+    window.sessionStorage.setItem(
       DISCOVERY_EXTERNAL_SOURCES_STORAGE_KEY,
       String(includeExternalSources),
     );
@@ -900,13 +1042,19 @@ function SearchState({
     const normalizedQuery = query.trim().toLocaleLowerCase('nl-NL').replace(/\s+/g, ' ');
     const normalizedPostcode = query.trim().toLocaleUpperCase('nl-NL').replace(/\s+/g, '');
     const isPostcodeQuery = /^\d{4}(?:[A-Z]{2})?$/.test(normalizedPostcode);
+    const matchedNeighborhood = mapLocation.neighborhoods.find(
+      neighborhood => neighborhood.toLocaleLowerCase('nl-NL').replace(/\s+/g, ' ') === normalizedQuery,
+    );
     const matched = LOCATIONS.find(l =>
       l.name.toLocaleLowerCase('nl-NL') === normalizedQuery ||
       l.nameNl.toLocaleLowerCase('nl-NL') === normalizedQuery ||
       (isPostcodeQuery && l.postcodes.includes(normalizedPostcode.slice(0, 4)))
     );
 
-    if (matched) {
+    if (matchedNeighborhood) {
+      setError('');
+      onSearch(mapLocation.id, matchedNeighborhood, 'events');
+    } else if (matched) {
       setError('');
       onSearch(matched.id, undefined, 'events', isPostcodeQuery ? normalizedPostcode : undefined);
     } else {
@@ -943,36 +1091,17 @@ function SearchState({
         </button>
       )}
 
-      <div className="z-10 w-full max-w-6xl text-center space-y-10 animate-in fade-in slide-in-from-bottom-8 duration-700 ease-out">
-        <div className="space-y-5">
+      <div className="z-10 w-full max-w-7xl space-y-6 text-center animate-in fade-in slide-in-from-bottom-8 duration-700 ease-out">
+        <div className="space-y-2">
           <img
             src="/marqtplaza-logo.png"
             alt="marqtplaza.com — The Digital Village Square"
-            className="h-[100px] md:h-[140px] w-auto mx-auto"
+            className="mx-auto h-[78px] w-auto md:h-[96px]"
           />
-          <p className="text-xl text-muted-foreground font-medium max-w-md mx-auto leading-relaxed">
+          <p className="mx-auto max-w-lg text-base font-medium leading-relaxed text-muted-foreground md:text-lg">
             {t.searchDescription}
           </p>
         </div>
-
-        <label className="mx-auto flex w-full max-w-lg cursor-pointer items-start gap-3 rounded-2xl border border-border/70 bg-card/90 px-4 py-3 text-left shadow-sm backdrop-blur-sm transition-colors hover:border-primary/40">
-          <input
-            type="checkbox"
-            checked={includeExternalSources}
-            onChange={(event) => setIncludeExternalSources(event.target.checked)}
-            className="mt-0.5 h-4 w-4 shrink-0 accent-primary"
-          />
-          <span>
-            <span className="block text-sm font-extrabold text-foreground">
-              {language === 'nl' ? 'Externe bronnen meenemen' : 'Include external sources'}
-            </span>
-            <span className="mt-0.5 block text-xs leading-relaxed text-muted-foreground">
-              {language === 'nl'
-                ? 'Uitgeschakeld gebruikt alleen eerder opgeslagen resultaten. Deze keuze wordt onthouden.'
-                : 'When off, searches use only previously stored results. This choice is remembered.'}
-            </span>
-          </span>
-        </label>
 
         <form onSubmit={handleSubmit} className="relative group w-full max-w-lg mx-auto">
           <div className={cn(
@@ -1006,72 +1135,129 @@ function SearchState({
         </form>
 
         <div className="w-full pt-6">
-          <p className="text-xs text-muted-foreground mb-4 uppercase tracking-widest font-bold">{t.popularDestinations}</p>
-          <div className="flex flex-wrap justify-center gap-2.5">
-            {LOCATIONS.map(loc => {
-              const neighborhoodOptions = selectedCityId === loc.id
-                ? loc.neighborhoods
-                : (popularNeighborhoods[loc.id] ?? loc.neighborhoods.slice(0, 8));
-
-              return (
-              <div
-                key={loc.id}
-                className={cn(
-                  "flex w-full max-w-5xl flex-col items-center gap-2 rounded-2xl p-1.5 transition-colors",
-                  selectedCityId === loc.id && "bg-primary/5 p-3 ring-1 ring-primary/20",
-                )}
-              >
-                <button
-                  type="button"
-                  aria-pressed={selectedCityId === loc.id}
-                  onClick={() => setSelectedCityId(loc.id)}
-                  className={cn(
-                    "px-4 py-2 backdrop-blur-sm border rounded-full text-sm font-semibold transition-all shadow-sm hover:shadow-md",
-                    selectedCityId === loc.id
-                      ? "bg-foreground text-background border-foreground"
-                      : "bg-card/80 border-border/60 text-foreground hover:border-primary/50 hover:text-primary",
-                  )}
-                >
-                  {getLocationName(loc, language)}
-                </button>
-                <div className="w-full text-left">
-                  <p className="mb-2 text-center text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
-                    {selectedCityId === loc.id
-                      ? t.chooseNeighborhood(getLocationName(loc, language))
-                      : t.popularNeighborhoods}
-                  </p>
-                  <div className="mb-3 flex flex-wrap justify-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => onSearch(loc.id, undefined, DEFAULT_START_SECTION)}
-                      className="rounded-full border border-primary/40 bg-primary/10 px-3 py-1.5 text-[11px] font-extrabold text-primary transition-colors hover:bg-primary/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                    >
-                      {t.selectAllNeighborhoods}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setSelectedCityId(null)}
-                      className="rounded-full border border-border/70 bg-card/80 px-3 py-1.5 text-[11px] font-extrabold text-muted-foreground transition-colors hover:border-primary/40 hover:bg-primary/5 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                    >
-                      {t.clearNeighborhoodSelection}
-                    </button>
-                  </div>
-                  <div className="grid w-full grid-cols-2 gap-2 animate-in fade-in slide-in-from-top-1 duration-300 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
-                    {neighborhoodOptions.map((neighborhood) => (
-                      <button
-                        key={neighborhood}
-                        type="button"
-                        onClick={() => onSearch(loc.id, neighborhood, DEFAULT_START_SECTION)}
-                        className="min-h-10 rounded-xl border border-border/50 bg-card/80 px-3 py-2 text-left text-xs font-semibold text-muted-foreground transition-all hover:border-primary/50 hover:bg-primary/5 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                      >
-                        {neighborhood}
-                      </button>
-                    ))}
-                  </div>
-                </div>
+          <div className="grid gap-6 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1.35fr)] lg:items-start">
+            <div className="relative h-[25rem] overflow-hidden rounded-3xl border border-border/70 bg-card/80 text-left shadow-xl backdrop-blur-sm sm:h-[30rem]">
+              <GoogleMapView
+                language={language}
+                locationId={mapLocation.id}
+                selectedNeighborhoods={mapLocation.neighborhoods}
+                showNeighborhoodLabels={false}
+                highlightedNeighborhood={hoveredMapNeighborhood ?? selectedMapNeighborhood}
+                onNeighborhoodClick={setSelectedMapNeighborhood}
+                onNeighborhoodHover={setHoveredMapNeighborhood}
+                markers={[]}
+                selectedMarkerId={null}
+                savedIds={new Set()}
+                onMarkerClick={() => undefined}
+              />
+              <div className="pointer-events-none absolute left-4 top-4 z-10 max-w-[calc(100%-2rem)] rounded-2xl border border-border/70 bg-card/90 px-4 py-3 shadow-lg backdrop-blur-sm">
+                <p className="text-sm font-extrabold text-foreground">
+                  {language === 'nl' ? 'Buurten op de kaart' : 'Neighborhoods on the map'}
+                </p>
+                <p className="mt-1 text-xs font-semibold text-muted-foreground">
+                  {getLocationName(mapLocation, language)}
+                  {' · '}
+                  {language === 'nl'
+                    ? 'Elke buurt is omlijnd; de namen staan ernaast.'
+                    : 'Each neighborhood is outlined; names are listed alongside.'}
+                </p>
               </div>
-              );
-            })}
+              {selectedMapNeighborhood && (
+                <div className="absolute bottom-4 left-4 right-4 z-10 flex items-center justify-between gap-3 rounded-2xl border border-primary/30 bg-card/95 px-4 py-3 text-left shadow-lg backdrop-blur-sm">
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-muted-foreground">
+                      {language === 'nl' ? 'Geselecteerde buurt' : 'Selected neighborhood'}
+                    </p>
+                    <p className="truncate text-sm font-extrabold text-foreground">{selectedMapNeighborhood}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => onSearch(mapLocation.id, selectedMapNeighborhood, DEFAULT_START_SECTION)}
+                    className="shrink-0 rounded-xl bg-primary px-3 py-2 text-xs font-extrabold text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  >
+                    {language === 'nl' ? 'Selecteer buurt' : 'Select neighborhood'}
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <div>
+              <p className="mb-4 text-xs font-bold uppercase tracking-widest text-muted-foreground">{t.popularDestinations}</p>
+              <div className="flex flex-wrap justify-center gap-2.5">
+                {LOCATIONS.map(loc => {
+                  const neighborhoodOptions = selectedCityId === loc.id
+                    ? loc.neighborhoods
+                    : (popularNeighborhoods[loc.id] ?? loc.neighborhoods.slice(0, 8));
+
+                  return (
+                  <div
+                    key={loc.id}
+                    className={cn(
+                      "flex w-full max-w-5xl flex-col items-center gap-2 rounded-2xl p-1.5 transition-colors",
+                      selectedCityId === loc.id && "bg-primary/5 p-3 ring-1 ring-primary/20",
+                    )}
+                  >
+                    <button
+                      type="button"
+                      aria-pressed={selectedCityId === loc.id}
+                      onClick={() => {
+                        setSelectedCityId(loc.id);
+                        setSelectedMapNeighborhood(null);
+                        setHoveredMapNeighborhood(null);
+                      }}
+                      className={cn(
+                        "px-4 py-2 backdrop-blur-sm border rounded-full text-sm font-semibold transition-all shadow-sm hover:shadow-md",
+                        selectedCityId === loc.id
+                          ? "bg-foreground text-background border-foreground"
+                          : "bg-card/80 border-border/60 text-foreground hover:border-primary/50 hover:text-primary",
+                      )}
+                    >
+                      {getLocationName(loc, language)}
+                    </button>
+                    <div className="w-full text-left">
+                      <p className="mb-2 text-center text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
+                        {selectedCityId === loc.id
+                          ? t.chooseNeighborhood(getLocationName(loc, language))
+                          : t.popularNeighborhoods}
+                      </p>
+                      <div className="mb-3 flex flex-wrap justify-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => onSearch(loc.id, undefined, DEFAULT_START_SECTION)}
+                          className="rounded-full border border-primary/40 bg-primary/10 px-3 py-1.5 text-[11px] font-extrabold text-primary transition-colors hover:bg-primary/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                        >
+                          {t.selectAllNeighborhoods}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedCityId(null)}
+                          className="rounded-full border border-border/70 bg-card/80 px-3 py-1.5 text-[11px] font-extrabold text-muted-foreground transition-colors hover:border-primary/40 hover:bg-primary/5 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                        >
+                          {t.clearNeighborhoodSelection}
+                        </button>
+                      </div>
+                      <div className="grid w-full grid-cols-2 gap-2 animate-in fade-in slide-in-from-top-1 duration-300 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-2 xl:grid-cols-3">
+                        {neighborhoodOptions.map((neighborhood) => (
+                          <button
+                            key={neighborhood}
+                            type="button"
+                            onClick={() => onSearch(loc.id, neighborhood, DEFAULT_START_SECTION)}
+                            onMouseEnter={() => selectedCityId === loc.id && setHoveredMapNeighborhood(neighborhood)}
+                            onMouseLeave={() => setHoveredMapNeighborhood(null)}
+                            onFocus={() => selectedCityId === loc.id && setHoveredMapNeighborhood(neighborhood)}
+                            onBlur={() => setHoveredMapNeighborhood(null)}
+                            className="min-h-10 rounded-xl border border-border/50 bg-card/80 px-3 py-2 text-left text-xs font-semibold text-muted-foreground transition-all hover:border-primary/50 hover:bg-primary/5 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                          >
+                            {neighborhood}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                  );
+                })}
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -1149,10 +1335,12 @@ function FilterFrame({
   title,
   children,
   defaultOpen = true,
+  status,
 }: {
   title: string;
   children: React.ReactNode;
   defaultOpen?: boolean;
+  status?: React.ReactNode;
 }) {
   const [isOpen, setIsOpen] = useState(defaultOpen);
   return (
@@ -1164,7 +1352,10 @@ function FilterFrame({
         className="flex min-h-9 w-full items-center justify-between gap-2 px-3 py-2 text-left text-[10px] font-black uppercase tracking-[0.14em] text-muted-foreground hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
       >
         <span>{title}</span>
-        <ChevronDown className={cn("h-4 w-4 shrink-0 transition-transform", isOpen && "rotate-180")} />
+        <span className="flex items-center gap-2">
+          {status}
+          <ChevronDown className={cn("h-4 w-4 shrink-0 transition-transform", isOpen && "rotate-180")} />
+        </span>
       </button>
       {isOpen && <div className="border-t border-border/60 p-2">{children}</div>}
     </section>
@@ -1284,6 +1475,7 @@ function MarkerCard({
   marker,
   isSelected,
   isSaved,
+  showAdminEvidence,
   onClick,
   onSave,
 }: {
@@ -1291,10 +1483,11 @@ function MarkerCard({
   marker: Marker;
   isSelected: boolean;
   isSaved: boolean;
+  showAdminEvidence: boolean;
   onClick: () => void;
   onSave: (e: React.MouseEvent) => void;
 }) {
-  const [isExpanded, setIsExpanded] = useState(true);
+  const [isExpanded, setIsExpanded] = useState(false);
   const Icon = CATEGORY_ICONS[marker.category];
   const DetailIcon = DETAIL_ICONS[marker.category];
   const copy = getMarkerCopy(marker, language);
@@ -1302,9 +1495,25 @@ function MarkerCard({
   const sourceLabel = marker.sourceName
     ?? (marker.source ? getListingSourceName(marker.source, language) : undefined);
   const isEvent = topLevelForMarker(marker) === 'events';
+  const websiteUrl = marker.officialUrl ?? marker.sourcePageUrl ?? marker.sourceUrl;
+  const hasWebLinks = Boolean(websiteUrl || marker.facebookUrl || marker.instagramUrl);
   const timing = isEvent ? formatEventTiming(marker.startsAt, language) : null;
-  const freshness = freshnessBadge(marker, language);
-  const trust = trustBadge(marker, language);
+  const evidence = marker.evidence ?? [];
+  const evidenceStatusLabel = {
+    current: language === 'nl' ? 'Actueel gecontroleerd' : 'Currently checked',
+    stale: language === 'nl' ? 'Controle verlopen' : 'Check overdue',
+    conflicting: language === 'nl' ? 'Bronnen spreken elkaar tegen' : 'Sources conflict',
+    unknown: language === 'nl' ? 'Onbekend' : 'Unknown',
+    unavailable: language === 'nl' ? 'Bron niet beschikbaar' : 'Source unavailable',
+  } as const;
+  const evidenceFieldLabel = {
+    name: language === 'nl' ? 'Naam' : 'Name',
+    description: language === 'nl' ? 'Beschrijving' : 'Description',
+    address: language === 'nl' ? 'Adres' : 'Address',
+    event_date: language === 'nl' ? 'Evenementdatum' : 'Event date',
+    opening_times: language === 'nl' ? 'Openingstijden' : 'Opening times',
+    price: language === 'nl' ? 'Prijs' : 'Price',
+  } as const;
   const eventPrice = marker.priceText?.trim()
     || (marker.priceType === 'free'
       ? (language === 'nl' ? 'Gratis' : 'Free')
@@ -1314,12 +1523,19 @@ function MarkerCard({
           ? (language === 'nl' ? 'Betaald' : 'Paid')
           : (language === 'nl' ? 'Prijs onbekend' : 'Price unknown'));
 
+  useEffect(() => {
+    if (isSelected) setIsExpanded(true);
+  }, [isSelected]);
+
+  const toggleExpanded = () => {
+    onClick();
+    setIsExpanded((current) => !current);
+  };
+
   return (
     <div
-      role="group"
-      onClick={onClick}
       className={cn(
-        "w-full text-left p-4 rounded-2xl border transition-all duration-300 relative group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:border-transparent",
+        "w-full text-left p-4 rounded-2xl border transition-all duration-300 relative group",
         isSelected
           ? "bg-primary/5 border-primary shadow-[0_4px_20px_-4px_rgba(243,108,33,0.15)]"
           : "bg-card border-border hover:border-primary/40 hover:shadow-md"
@@ -1329,47 +1545,40 @@ function MarkerCard({
         <div className="absolute top-0 left-0 w-1.5 h-full bg-primary rounded-l-2xl" />
       )}
       <div className="flex items-start gap-4">
-        <div className={cn(
-          "p-3 rounded-xl shrink-0 transition-colors",
-          isSelected ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20" : "bg-muted text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary"
-        )}>
-          <Icon className="w-5 h-5" />
-        </div>
-        <div className="flex-1 min-w-0 py-0.5">
-          <div className="flex items-start justify-between mb-1 gap-2">
-            <h3 className="min-w-0">
-              <button
-                type="button"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onClick();
-                }}
+        <button
+          type="button"
+          onClick={toggleExpanded}
+          aria-expanded={isExpanded}
+          aria-controls={`marker-details-${marker.id}`}
+          className="flex min-w-0 flex-1 items-start gap-4 rounded-xl text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+        >
+          <span className={cn(
+            "p-3 rounded-xl shrink-0 transition-colors",
+            isSelected ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20" : "bg-muted text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary"
+          )}>
+            <Icon className="w-5 h-5" />
+          </span>
+          <span className="min-w-0 flex-1 py-0.5">
+            <span className="mb-1 flex items-start justify-between gap-2">
+              <span
+                data-testid={`listing-title-${marker.id}`}
                 className={cn(
-                  "max-w-full truncate text-left font-bold text-base transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+                  "min-w-0 flex-1 line-clamp-2 text-sm font-bold leading-snug transition-colors sm:text-base",
                   isSelected ? "text-primary" : "text-foreground group-hover:text-primary",
                 )}
               >
                 {marker.name}
-              </button>
-            </h3>
-            <div className="flex shrink-0 items-center gap-1">
-              <SaveButton saved={isSaved} onToggle={onSave} />
-              <button
-                type="button"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  setIsExpanded((current) => !current);
-                }}
-                aria-expanded={isExpanded}
-                aria-label={language === 'nl'
-                  ? `${isExpanded ? 'Klap in' : 'Klap uit'}: ${marker.name}`
-                  : `${isExpanded ? 'Collapse' : 'Expand'}: ${marker.name}`}
-                className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-              >
-                <ChevronDown className={cn("h-4 w-4 transition-transform", isExpanded && "rotate-180")} />
-              </button>
-            </div>
-          </div>
+              </span>
+              <ChevronDown
+                className={cn("h-4 w-4 shrink-0 text-muted-foreground transition-transform", isExpanded && "rotate-180")}
+                aria-hidden="true"
+              />
+            </span>
+          </span>
+        </button>
+        <SaveButton saved={isSaved} onToggle={onSave} />
+      </div>
+      <div className="ml-16 min-w-0 py-0.5">
           {isEvent && (
             <div className="mb-3">
               <div className="flex flex-wrap items-center gap-3 text-xs font-bold">
@@ -1382,9 +1591,9 @@ function MarkerCard({
                 <span data-testid={`event-price-${marker.id}`} className="rounded-md bg-emerald-700/10 px-2 py-1 text-emerald-800">
                   {language === 'nl' ? 'Prijs' : 'Price'}: {eventPrice}
                 </span>
-                {marker.sourceUrl && (
+                {websiteUrl && (
                   <a
-                    href={marker.sourceUrl}
+                    href={websiteUrl}
                     target="_blank"
                     rel="noopener noreferrer"
                     onClick={(event) => event.stopPropagation()}
@@ -1395,20 +1604,81 @@ function MarkerCard({
                   </a>
                 )}
               </div>
-              <EventCalendarActions
-                language={language}
-                event={{
-                  name: marker.name,
-                  description: copy.description,
-                  startsAt: marker.startsAt,
-                  venue: marker.venue ?? marker.address,
-                  sourceUrl: marker.sourceUrl,
-                }}
-              />
             </div>
           )}
-          {isExpanded && <>
-           {(marker.businessCategory || marker.socialCategory || sourceLabel || trust || freshness || marker.reviewStatus || (topLevelForMarker(marker) === 'events' && eventBadgeLabel(marker, language).length > 0)) && (
+          <p
+            data-testid={`listing-summary-${marker.id}`}
+            className={cn(
+              "mb-3 text-sm leading-relaxed text-muted-foreground",
+              !isExpanded && "line-clamp-2",
+            )}
+          >
+            {copy.description}
+          </p>
+          {!isEvent && (
+            <div className="mb-3 flex flex-wrap items-center gap-2">
+              {websiteUrl && (
+                <a
+                  data-testid={`listing-website-${marker.id}`}
+                  href={websiteUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={(event) => event.stopPropagation()}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-primary/25 bg-primary/5 px-2.5 py-1.5 text-xs font-bold text-primary transition-colors hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                >
+                  <Globe2 className="h-3.5 w-3.5" aria-hidden="true" />
+                  {marker.officialUrl
+                    ? t.officialWebsite
+                    : (language === 'nl' ? 'Bronpagina' : 'Source page')}
+                </a>
+              )}
+              {marker.facebookUrl && (
+                <a
+                  href={marker.facebookUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={`Facebook: ${marker.name}`}
+                  title="Facebook"
+                  onClick={(event) => event.stopPropagation()}
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-primary/25 bg-primary/5 text-primary transition-colors hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                >
+                  <Facebook className="h-4 w-4" aria-hidden="true" />
+                </a>
+              )}
+              {marker.instagramUrl && (
+                <a
+                  href={marker.instagramUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={`Instagram: ${marker.name}`}
+                  title="Instagram"
+                  onClick={(event) => event.stopPropagation()}
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-primary/25 bg-primary/5 text-primary transition-colors hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                >
+                  <Instagram className="h-4 w-4" aria-hidden="true" />
+                </a>
+              )}
+              {!hasWebLinks && (
+                <span className="text-[11px] font-semibold text-muted-foreground">
+                  {language === 'nl' ? 'Geen website of sociale links vermeld' : 'No website or social links listed'}
+                </span>
+              )}
+            </div>
+          )}
+          {isExpanded && <div id={`marker-details-${marker.id}`}>
+           {isEvent && (
+             <EventCalendarActions
+               language={language}
+               event={{
+                 name: marker.name,
+                 description: copy.description,
+                 startsAt: marker.startsAt,
+                 venue: marker.venue ?? marker.address,
+                 sourceUrl: marker.sourceUrl,
+               }}
+             />
+           )}
+           {(marker.businessCategory || marker.socialCategory || sourceLabel || marker.reviewStatus || (topLevelForMarker(marker) === 'events' && eventBadgeLabel(marker, language).length > 0)) && (
              <div className="mb-3 flex flex-wrap items-center gap-1.5">
                {marker.businessCategory && (
                  <span className="rounded-md bg-primary/10 px-2 py-1 text-[11px] font-bold text-primary">
@@ -1434,18 +1704,6 @@ function MarkerCard({
                     {socialMapReviewLabel(marker.reviewStatus, language)}
                   </span>
                 )}
-                {trust && (
-                  <span data-testid={`trust-badge-${marker.id}`} className="inline-flex items-center gap-1 rounded-md bg-sky-600/10 px-2 py-1 text-[11px] font-bold text-sky-800">
-                    <ShieldCheck className="h-3 w-3" aria-hidden="true" />
-                    {trust}
-                  </span>
-                )}
-                {freshness && (
-                  <span data-testid={`freshness-badge-${marker.id}`} className="inline-flex items-center gap-1 rounded-md bg-violet-600/10 px-2 py-1 text-[11px] font-bold text-violet-800">
-                    <Sparkles className="h-3 w-3" aria-hidden="true" />
-                    {freshness}
-                  </span>
-                )}
                 {topLevelForMarker(marker) === 'events' && eventBadgeLabel(marker, language).map((badge) => (
                   <span key={badge.key} className={cn('rounded-md px-2 py-1 text-[11px] font-bold', badge.className)}>
                     {badge.label}
@@ -1453,43 +1711,73 @@ function MarkerCard({
                 ))}
              </div>
            )}
-          <p className="text-muted-foreground text-sm mb-3 line-clamp-2 leading-relaxed">{copy.description}</p>
+           {showAdminEvidence && <details data-testid={`listing-evidence-${marker.id}`} className="mb-3 rounded-xl border border-border/70 bg-muted/20 px-3 py-2 text-xs">
+             <summary className="cursor-pointer font-bold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
+               {language === 'nl' ? 'Bron en controle per veld' : 'Source and check by field'}
+             </summary>
+             {evidence.length === 0 ? (
+               <p className="mt-2 font-semibold text-muted-foreground">
+                 {language === 'nl'
+                   ? 'Bron, controledatum en status zijn onbekend.'
+                   : 'Source, checked date, and status are unknown.'}
+               </p>
+             ) : (
+               <ul className="mt-2 space-y-2">
+                 {evidence.map((item) => (
+                   <li key={item.field} className="rounded-lg bg-card px-2.5 py-2">
+                     <p className="font-bold text-foreground">{evidenceFieldLabel[item.field]}</p>
+                     <p className="mt-0.5 text-muted-foreground">
+                       {(language === 'nl' ? 'Bron' : 'Source')}: {item.sourceLabel ?? (language === 'nl' ? 'Onbekend' : 'Unknown')}
+                       {' · '}
+                       {(language === 'nl' ? 'Gecontroleerd' : 'Checked')}: {item.checkedAt
+                         ? formatEvidenceCheckedAt(item.checkedAt, language)
+                         : (language === 'nl' ? 'Onbekend' : 'Unknown')}
+                       {' · '}
+                       {evidenceStatusLabel[item.status]}
+                     </p>
+                     {item.caveat ? <p className="mt-1 font-semibold text-amber-800">{item.caveat}</p> : null}
+                   </li>
+                 ))}
+               </ul>
+             )}
+           </details>}
           <div className="flex items-center gap-1.5 text-xs font-semibold text-secondary bg-secondary/5 w-fit px-2.5 py-1 rounded-md">
             <DetailIcon className="w-3.5 h-3.5 opacity-70" />
             {copy.details}
           </div>
-          <div className="mt-3 flex items-center justify-between gap-2 border-t border-border/40 pt-3">
-            <div className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
+          <div className="mt-3 flex min-w-0 flex-wrap items-center justify-between gap-2 border-t border-border/40 pt-3">
+            <div className="flex min-w-0 flex-1 items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
               <MapPinned className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
-              <span className="truncate max-w-[200px]">{marker.address ?? `Lat ${marker.lat.toFixed(5)} · Lng ${marker.lng.toFixed(5)}`}</span>
+              <span className="min-w-0 truncate">{marker.address ?? `Lat ${marker.lat.toFixed(5)} · Lng ${marker.lng.toFixed(5)}`}</span>
             </div>
-            <div className="flex items-center gap-3 shrink-0">
+            <div className="flex max-w-full shrink-0 flex-wrap items-center justify-end gap-x-3 gap-y-1">
               {(marker.category === 'Businesses' || marker.category === 'Food & Drink') && (
                 <Link
-                  href={`/bedrijf-claim?listingId=${marker.id}&cityId=dhg&listingSource=${marker.source || 'google_maps'}&name=${encodeURIComponent(marker.name)}&address=${encodeURIComponent(marker.address || '')}`}
+                  href={featureFlags.businessIntake
+                    ? `/bedrijf-nieuw?kind=existing_listing&cityId=dhg&listingSource=${encodeURIComponent(marker.source || 'google_maps')}&listingId=${encodeURIComponent(String(marker.id))}`
+                    : `/bedrijf-claim?listingId=${marker.id}&cityId=dhg&listingSource=${marker.source || 'google_maps'}&name=${encodeURIComponent(marker.name)}&address=${encodeURIComponent(marker.address || '')}`}
                   className="flex items-center gap-1 text-[11px] font-bold text-primary hover:text-primary/80 transition-colors"
                   onClick={e => e.stopPropagation()}
                 >
-                  <Store className="h-3 w-3" /> Eigenaar?
+                  <Store className="h-3 w-3 shrink-0" />
+                  {language === 'nl' ? 'Dit bedrijf claimen' : 'Claim this business'}
                 </Link>
               )}
-              {marker.sourceUrl && !isEvent && (
-                <a
-                  href={marker.sourceUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={e => e.stopPropagation()}
-                  className="flex items-center gap-0.5 text-[11px] font-semibold text-secondary hover:underline"
+              {marker.source && (
+                <Link
+                  href={`/correctie?cityId=${encodeURIComponent(marker.locationId)}&listingSource=${encodeURIComponent(marker.source)}&listingId=${encodeURIComponent(marker.id)}&name=${encodeURIComponent(marker.name)}&locale=${language}`}
+                  className="inline-flex items-center gap-1 text-[11px] font-bold text-primary hover:underline"
+                  onClick={(event) => event.stopPropagation()}
                 >
-                  {marker.officialUrl ? t.officialWebsite : (language === 'nl' ? 'Bron' : 'Source')} <ExternalLink className="h-2.5 w-2.5" />
-                </a>
+                  <AlertCircle className="h-3 w-3" aria-hidden="true" />
+                  {language === 'nl' ? 'Meld een correctie' : 'Report an issue'}
+                </Link>
               )}
             </div>
           </div>
           <RouteLinks language={language} marker={marker} />
-          </>}
+          </div>}
         </div>
-      </div>
     </div>
   );
 }
@@ -1583,6 +1871,7 @@ function DiscoveryState({
   listingSection,
   initialNeighborhood,
   initialPostcode,
+  restorePrevious,
   onBack,
   onLanguageChange,
   savedIds,
@@ -1597,6 +1886,7 @@ function DiscoveryState({
   listingSection: ListingSection;
   initialNeighborhood?: string;
   initialPostcode?: string;
+  restorePrevious?: boolean;
   onBack: () => void;
   onLanguageChange: (language: Language) => void;
   savedIds: Set<string>;
@@ -1606,30 +1896,37 @@ function DiscoveryState({
 }) {
   const location = LOCATIONS.find(l => l.id === locationId);
   const t = translations[language];
+  const restoredState = useMemo(
+    () => restorePrevious ? readDiscoveryReturnState(locationId) : null,
+    [locationId, restorePrevious],
+  );
   const [topLevelCategories, setTopLevelCategories] = useState<Record<ListingSection, boolean>>(
-    () => initialPostcode ? allTopLevelState() : topLevelStateFor(listingSection),
+    () => restoredState?.topLevelCategories ?? (initialPostcode ? allTopLevelState() : topLevelStateFor(listingSection)),
   );
   const [subcategories, setSubcategories] = useState<Record<FilterSubcategory, boolean>>(
-    () => initialPostcode ? allSubcategoryState() : subcategoryStateFor(listingSection),
+    () => restoredState?.subcategories ?? (initialPostcode ? allSubcategoryState() : subcategoryStateFor(listingSection)),
   );
   const [selectedNeighborhoods, setSelectedNeighborhoods] = useState<string[]>(
-    initialNeighborhood ? [initialNeighborhood] : [],
+    restoredState?.selectedNeighborhoods ?? (initialNeighborhood ? [initialNeighborhood] : []),
   );
   const [neighborhoodSelection, setNeighborhoodSelection] = useState<'all' | 'some' | 'none'>(
-    initialNeighborhood ? 'some' : 'all',
+    restoredState?.neighborhoodSelection ?? (initialNeighborhood ? 'some' : 'all'),
   );
-  const [postcodeFilter, setPostcodeFilter] = useState(initialPostcode ?? '');
+  const [postcodeFilter, setPostcodeFilter] = useState(restoredState?.postcodeFilter ?? initialPostcode ?? '');
   const [neighborhoodSearch, setNeighborhoodSearch] = useState('');
   const [selectedMarker, setSelectedMarker] = useState<string | null>(null);
-  const [view, setView] = useState<'map' | 'list'>('map');
-  const [agendaTime, setAgendaTime] = useState<AgendaTimeFilter>('all');
-  const [agendaPrice, setAgendaPrice] = useState<AgendaPriceFilter>('all');
-  const [mealOnly, setMealOnly] = useState(false);
-  const [quickFilters, setQuickFilters] = useState<Set<DiscoveryQuickFilter>>(() => new Set());
+  const [viewportPreservingSelection, setViewportPreservingSelection] = useState<string | null>(null);
+  const [agendaTime, setAgendaTime] = useState<AgendaTimeFilter>(restoredState?.agendaTime ?? 'all');
+  const [agendaPrice, setAgendaPrice] = useState<AgendaPriceFilter>(restoredState?.agendaPrice ?? 'all');
+  const [mealOnly, setMealOnly] = useState(restoredState?.mealOnly ?? false);
+  const [quickFilters, setQuickFilters] = useState<Set<DiscoveryQuickFilter>>(
+    () => new Set(restoredState?.quickFilters ?? []),
+  );
   const [nearbyPosition, setNearbyPosition] = useState<{ lat: number; lng: number } | null>(null);
   const [nearbyStatus, setNearbyStatus] = useState<'idle' | 'locating' | 'ready' | 'fallback'>('idle');
   const [sidebarWidth, setSidebarWidth] = useState(420);
   const sidebarResizeRef = useRef<{ pointerId: number; startX: number; startWidth: number } | null>(null);
+  const initialScopeEffectRef = useRef(true);
   const hasSearchArea = Boolean(
     initialPostcode?.trim()
     || initialNeighborhood?.trim()
@@ -1650,9 +1947,13 @@ function DiscoveryState({
     ? location?.neighborhoodCoords[selectedNeighborhoods[0]]
     : undefined;
 
-  const [liveMode] = useState(readIncludeExternalSources);
+  const [liveMode, setLiveMode] = useState(readIncludeExternalSources);
+  const setDiscoveryScope = useCallback((includeWebResults: boolean) => {
+    sessionStorage.setItem(DISCOVERY_EXTERNAL_SOURCES_STORAGE_KEY, String(includeWebResults));
+    setLiveMode(includeWebResults);
+  }, []);
+  const enableLiveMode = useCallback(() => setDiscoveryScope(true), [setDiscoveryScope]);
 
-  const mode = liveMode ? 'live' : 'stored_only';
   const anonymousId = useMemo(() => {
     let id = localStorage.getItem('buurtplaza-anonymous-id');
     if (!id) {
@@ -1666,26 +1967,44 @@ function DiscoveryState({
 
   // Fetch selected top-level sections only; each query keeps its generated cache key.
   const eventsQuery = useGetListings(
-    { cityId: locationId, section: 'events', language, neighborhoods: requestedNeighborhoods, mode, anonymousId },
-    { query: { enabled: topLevelCategories.events, queryKey: getGetListingsQueryKey({ cityId: locationId, section: 'events', language, neighborhoods: requestedNeighborhoods, mode, anonymousId }) } },
+    { cityId: locationId, section: 'events', language, neighborhoods: requestedNeighborhoods, mode: 'stored_only', anonymousId },
+    { query: { enabled: topLevelCategories.events, queryKey: getGetListingsQueryKey({ cityId: locationId, section: 'events', language, neighborhoods: requestedNeighborhoods, mode: 'stored_only', anonymousId }) } },
   );
+  // Narrowing a filter changes the query key. Keep the previous response while
+  // the new one loads: the client-side polygon and subcategory filters already
+  // narrow it correctly, so the user never sees a false "0 results" state.
   const businessesQuery = useGetListings(
     { cityId: locationId, section: 'businesses', language, neighborhoods: requestedNeighborhoods, businessCategories: requestedBusinessCategories, searchLat: requestedSearchCenter?.lat, searchLng: requestedSearchCenter?.lng, mode, anonymousId },
-    { query: { enabled: topLevelCategories.businesses && hasSearchArea && selectedBusinessCategories.length > 0, queryKey: getGetListingsQueryKey({ cityId: locationId, section: 'businesses', language, neighborhoods: requestedNeighborhoods, businessCategories: requestedBusinessCategories, searchLat: requestedSearchCenter?.lat, searchLng: requestedSearchCenter?.lng, mode, anonymousId }) } },
+    // Keep the query enabled even when the final subcategory is unchecked.
+    // The empty category value is a real request for the current area; the
+    // client-side filter keeps the map empty until the response settles.
+    { query: { enabled: topLevelCategories.businesses && hasSearchArea, placeholderData: keepPreviousData, queryKey: getGetListingsQueryKey({ cityId: locationId, section: 'businesses', language, neighborhoods: requestedNeighborhoods, businessCategories: requestedBusinessCategories, searchLat: requestedSearchCenter?.lat, searchLng: requestedSearchCenter?.lng, mode, anonymousId }) } },
   );
   const foodDrinkQuery = useGetListings(
-    { cityId: locationId, section: 'food-drink', language, neighborhoods: requestedNeighborhoods, mode, anonymousId },
-    { query: { enabled: topLevelCategories['food-drink'] && hasSearchArea, queryKey: getGetListingsQueryKey({ cityId: locationId, section: 'food-drink', language, neighborhoods: requestedNeighborhoods, mode, anonymousId }) } },
+    { cityId: locationId, section: 'food-drink', language, neighborhoods: requestedNeighborhoods, searchLat: requestedSearchCenter?.lat, searchLng: requestedSearchCenter?.lng, mode, anonymousId },
+    { query: { enabled: topLevelCategories['food-drink'] && hasSearchArea, placeholderData: keepPreviousData, queryKey: getGetListingsQueryKey({ cityId: locationId, section: 'food-drink', language, neighborhoods: requestedNeighborhoods, searchLat: requestedSearchCenter?.lat, searchLng: requestedSearchCenter?.lng, mode, anonymousId }) } },
   );
   const socialMapQuery = useGetListings(
-    { cityId: locationId, section: 'social-map', language, neighborhoods: requestedNeighborhoods, mode, anonymousId },
-    { query: { enabled: topLevelCategories['social-map'], queryKey: getGetListingsQueryKey({ cityId: locationId, section: 'social-map', language, neighborhoods: requestedNeighborhoods, mode, anonymousId }) } },
+    { cityId: locationId, section: 'social-map', language, neighborhoods: requestedNeighborhoods, mode: 'stored_only', anonymousId },
+    { query: { enabled: topLevelCategories['social-map'], queryKey: getGetListingsQueryKey({ cityId: locationId, section: 'social-map', language, neighborhoods: requestedNeighborhoods, mode: 'stored_only', anonymousId }) } },
+  );
+  const webBusinessesQuery = useGetListings(
+    { cityId: locationId, section: 'businesses', language, neighborhoods: requestedNeighborhoods, businessCategories: requestedBusinessCategories, searchLat: requestedSearchCenter?.lat, searchLng: requestedSearchCenter?.lng, mode: 'live', anonymousId },
+    { query: { enabled: liveMode && topLevelCategories.businesses && hasSearchArea, queryKey: getGetListingsQueryKey({ cityId: locationId, section: 'businesses', language, neighborhoods: requestedNeighborhoods, businessCategories: requestedBusinessCategories, searchLat: requestedSearchCenter?.lat, searchLng: requestedSearchCenter?.lng, mode: 'live', anonymousId }) } },
+  );
+  const webFoodDrinkQuery = useGetListings(
+    { cityId: locationId, section: 'food-drink', language, neighborhoods: requestedNeighborhoods, searchLat: requestedSearchCenter?.lat, searchLng: requestedSearchCenter?.lng, mode: 'live', anonymousId },
+    { query: { enabled: liveMode && topLevelCategories['food-drink'] && hasSearchArea, queryKey: getGetListingsQueryKey({ cityId: locationId, section: 'food-drink', language, neighborhoods: requestedNeighborhoods, searchLat: requestedSearchCenter?.lat, searchLng: requestedSearchCenter?.lng, mode: 'live', anonymousId }) } },
   );
   const listingQueries = {
     events: eventsQuery,
     businesses: businessesQuery,
     'food-drink': foodDrinkQuery,
     'social-map': socialMapQuery,
+  };
+  const webListingQueries = {
+    businesses: webBusinessesQuery,
+    'food-drink': webFoodDrinkQuery,
   };
 
   useEffect(() => {
@@ -1757,6 +2076,7 @@ function DiscoveryState({
 
   const handleMarkerClick = (id: string) => {
     const marker = allMarkers.find((item) => item.id === id);
+    if (marker) persistDetailListing(marker);
     const section = marker ? topLevelForMarker(marker) : listingSection;
     const detailUrl = `/activiteiten/den-haag/${encodeURIComponent(id)}?section=${section}`;
     const detailWindow = window.open(detailUrl, '_blank', 'noopener,noreferrer');
@@ -1766,15 +2086,11 @@ function DiscoveryState({
   };
 
   const toggleNeighborhood = (neighborhood: string) => {
-    if (neighborhoodSelection === 'all') {
-      setNeighborhoodSelection('some');
-      setSelectedNeighborhoods([neighborhood]);
-    } else if (selectedNeighborhoods.includes(neighborhood)) {
-      const next = selectedNeighborhoods.filter((item) => item !== neighborhood);
-      setSelectedNeighborhoods(next);
-      setNeighborhoodSelection(next.length > 0 ? 'some' : 'none');
+    if (selectedNeighborhoods.includes(neighborhood)) {
+      setSelectedNeighborhoods([]);
+      setNeighborhoodSelection('none');
     } else {
-      setSelectedNeighborhoods([...selectedNeighborhoods, neighborhood]);
+      setSelectedNeighborhoods([neighborhood]);
       setNeighborhoodSelection('some');
     }
     setSelectedMarker(null);
@@ -1818,12 +2134,44 @@ function DiscoveryState({
   };
 
   useEffect(() => {
+    if (initialScopeEffectRef.current) {
+      initialScopeEffectRef.current = false;
+      if (restoredState) return;
+    }
     setTopLevelCategories(initialPostcode ? allTopLevelState() : topLevelStateFor(listingSection));
     setSubcategories(initialPostcode ? allSubcategoryState() : subcategoryStateFor(listingSection));
     setSelectedNeighborhoods(initialNeighborhood ? [initialNeighborhood] : []);
     setNeighborhoodSelection(initialNeighborhood ? 'some' : 'all');
     setSelectedMarker(null);
-  }, [initialNeighborhood, initialPostcode, listingSection]);
+  }, [initialNeighborhood, initialPostcode, listingSection, restoredState]);
+
+  useEffect(() => {
+    const returnState: DiscoveryReturnState = {
+      savedAt: Date.now(),
+      locationId,
+      topLevelCategories,
+      subcategories,
+      selectedNeighborhoods,
+      neighborhoodSelection,
+      postcodeFilter,
+      agendaTime,
+      agendaPrice,
+      mealOnly,
+      quickFilters: [...quickFilters],
+    };
+    window.localStorage.setItem(DISCOVERY_RETURN_STATE_KEY, JSON.stringify(returnState));
+  }, [
+    agendaPrice,
+    agendaTime,
+    locationId,
+    mealOnly,
+    neighborhoodSelection,
+    postcodeFilter,
+    quickFilters,
+    selectedNeighborhoods,
+    subcategories,
+    topLevelCategories,
+  ]);
 
   useEffect(() => {
     if (nearbyStatus !== 'locating') return;
@@ -1854,14 +2202,36 @@ function DiscoveryState({
       window.cancelAnimationFrame(frame);
       window.clearTimeout(timer);
     };
-  }, [selectedMarker, view]);
+  }, [selectedMarker]);
 
   const selectedTopLevelSections = TOP_LEVEL_SECTIONS.filter((section) => topLevelCategories[section]);
-  const selectedQueries = selectedTopLevelSections.map((section) => listingQueries[section]);
-  const selectedData = selectedQueries
+  const selectedLocalQueries = selectedTopLevelSections.map((section) => listingQueries[section]);
+  const selectedWebQueries = liveMode
+    ? selectedTopLevelSections
+      .filter((section): section is 'businesses' | 'food-drink' =>
+        section === 'businesses' || section === 'food-drink')
+      .map((section) => webListingQueries[section])
+    : [];
+  const selectedQueries = [...selectedLocalQueries, ...selectedWebQueries];
+  const localSelectedData = selectedLocalQueries
     .map((query) => query.data)
     .filter((result): result is NonNullable<typeof result> => Boolean(result));
-  const selectedListings = selectedData.flatMap((result) => result.listings);
+  const webSelectedData = selectedWebQueries
+    .map((query) => query.data)
+    .filter((result): result is NonNullable<typeof result> => Boolean(result));
+  const selectedData = [...localSelectedData, ...webSelectedData];
+  const localSelectedListings = [
+    ...new Map(
+      localSelectedData
+        .flatMap((result) => result.listings)
+        .map((listing) => [listing.id, listing] as const),
+    ).values(),
+  ];
+  const localListingIds = new Set(localSelectedListings.map((listing) => listing.id));
+  const webSelectedListings = webSelectedData
+    .flatMap((result) => result.listings)
+    .filter((listing) => !localListingIds.has(listing.id));
+  const selectedListings = [...localSelectedListings, ...webSelectedListings];
   const socialMapSnapshotDate = selectedListings.find((listing) => listing.snapshotDate)?.snapshotDate;
   const visibleSubcategories = Array.from(new Set(
     selectedTopLevelSections.flatMap(subcategoriesForTopLevel),
@@ -1870,7 +2240,8 @@ function DiscoveryState({
   // The listings API already scopes each result to the selected section. Do not
   // fill an empty event response with general static attractions: a first visit
   // must show actual events only, or the explicit empty-event state.
-  const allMarkers: Marker[] = selectedListings.map(l => {
+  type ScopedMarker = Marker & { scopeGroup: 'local' | 'web' };
+  const toMarker = (l: (typeof selectedListings)[number], scopeGroup: 'local' | 'web'): ScopedMarker => {
     return {
       id: l.id,
       locationId: l.locationId,
@@ -1895,6 +2266,8 @@ function DiscoveryState({
         socialCategory: l.socialCategory as SocialMapCategory | undefined,
         officialUrl: l.officialUrl,
         sourcePageUrl: l.sourcePageUrl,
+        facebookUrl: l.facebookUrl,
+        instagramUrl: l.instagramUrl,
         snapshotDate: l.snapshotDate,
         reviewStatus: l.reviewStatus as SocialMapReviewStatus | undefined,
         reviewReason: l.reviewReason,
@@ -1902,10 +2275,12 @@ function DiscoveryState({
         nextReviewAt: l.nextReviewAt,
         sourceGroup: l.sourceGroup,
         organizer: l.organizer,
+        scopeGroup,
         activityKind: l.activityKind as EventActivityKind | null | undefined,
         priceType: l.priceType,
         priceText: l.priceText,
         mealType: l.mealType,
+        foodType: l.foodType,
         audience: l.audience,
         recurrenceText: l.recurrenceText,
         isApproximateLocation: l.isApproximateLocation,
@@ -1914,8 +2289,13 @@ function DiscoveryState({
         firstSeenAt: l.firstSeenAt,
         lastSeenAt: l.lastSeenAt,
         updatedAt: l.updatedAt,
+        evidence: l.evidence,
     };
-  });
+  };
+  const allMarkers: ScopedMarker[] = [
+    ...localSelectedListings.map((listing) => toMarker(listing, 'local')),
+    ...webSelectedListings.map((listing) => toMarker(listing, 'web')),
+  ];
 
   const selectedAreas = selectedNeighborhoods
     .map((neighborhood) => location.neighborhoodCoords[neighborhood])
@@ -1926,16 +2306,27 @@ function DiscoveryState({
   const nearbyOrigin = nearbyPosition
     ?? selectedAreas[0]
     ?? { lat: location.lat, lng: location.lng };
+  // A map click or a refresh can update selectedNeighborhoods before the
+  // checkbox state catches up. Explicit selections must always win over the
+  // "all neighborhoods" default, otherwise pins from the whole city remain
+  // visible while one polygon is highlighted.
+  const activeNeighborhoodNames = neighborhoodSelection === 'all' && selectedNeighborhoods.length === 0
+    ? location.neighborhoods
+    : neighborhoodSelection === 'none'
+      ? []
+      : selectedNeighborhoods;
   const filteredMarkers = allMarkers.filter((marker) => {
     const markerTopLevel = topLevelForMarker(marker);
     if (!topLevelCategories[markerTopLevel]) return false;
-    const markerSubcategory = marker.socialCategory
-      ?? marker.businessCategory
-      ?? (marker.category === 'Businesses' ? undefined : marker.category as FilterSubcategory);
+    const markerSubcategory = marker.category === 'Food & Drink'
+      ? (marker.foodType && FOOD_TYPES.includes(marker.foodType) ? marker.foodType : 'other')
+      : (marker.socialCategory
+        ?? marker.businessCategory
+        ?? (marker.category === 'Businesses' ? undefined : marker.category as FilterSubcategory));
     if (
       markerTopLevel !== 'events'
       && visibleSubcategories.length > 0
-      && (!markerSubcategory || !subcategories[markerSubcategory])
+      && (!markerSubcategory || !subcategories[markerSubcategory as FilterSubcategory])
     ) {
       return false;
     }
@@ -1955,14 +2346,28 @@ function DiscoveryState({
       return false;
     }
     if (neighborhoodSelection === 'none') return false;
-    if (neighborhoodSelection === 'all') return true;
-    if (selectedAreas.length === 0) return false;
+    if (activeNeighborhoodNames.length === 0) return false;
     if (marker.category === 'Social map') {
-      return Boolean(marker.neighborhood && selectedNeighborhoods.includes(marker.neighborhood));
+      if (!marker.neighborhood || !activeNeighborhoodNames.includes(marker.neighborhood)) return false;
     }
-    return selectedAreas.some((area) => getDistanceKm(marker.lat, marker.lng, area.lat, area.lng) <= 2.5);
+    return isPointInsideNeighborhoods(marker.lat, marker.lng, activeNeighborhoodNames);
   });
   const isLoading = selectedQueries.some((query) => query.isLoading);
+  // A background refetch after a filter change shows the previous response
+  // (placeholder data) until the narrowed result arrives; surface that state.
+  const isRefreshing = !isLoading && selectedQueries.some((query) => query.isFetching);
+  const refreshingLabel = language === 'nl' ? 'Resultaten worden bijgewerkt…' : 'Updating results…';
+  const refreshingIndicator = isRefreshing ? (
+    <span
+      role="status"
+      aria-live="polite"
+      data-testid="results-refreshing"
+      className="inline-flex items-center gap-1 text-[10px] font-semibold normal-case tracking-normal text-primary"
+    >
+      <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
+      {refreshingLabel}
+    </span>
+  ) : null;
   const isError = selectedQueries.some((query) => query.isError) && selectedListings.length === 0;
   const refetch = () => Promise.all(selectedQueries.map((query) => query.refetch()));
   const isLive = selectedData.some((result) => result.source === 'live');
@@ -1976,6 +2381,17 @@ function DiscoveryState({
     .filter((result) => result.source === 'fallback' && result.message)
     .map((result) => result.message)
     .join(' ');
+  const eventEvidence = topLevelCategories.events
+    ? selectedData.find((result) => result.evidence)?.evidence
+    : undefined;
+  const evidenceStatus = eventEvidence?.status;
+  const evidenceTone = evidenceStatus === 'verified'
+    ? 'border-emerald-200 bg-emerald-50 text-emerald-950'
+    : evidenceStatus === 'empty'
+      ? 'border-slate-200 bg-slate-50 text-slate-900'
+      : evidenceStatus === 'stale'
+        ? 'border-amber-200 bg-amber-50 text-amber-950'
+        : 'border-rose-200 bg-rose-50 text-rose-950';
 
   const savedCount = savedIds.size;
   const normalizedNeighborhoodSearch = neighborhoodSearch.trim().toLocaleLowerCase(language === 'nl' ? 'nl-NL' : 'en-GB');
@@ -1986,14 +2402,12 @@ function DiscoveryState({
     : location.neighborhoods;
 
   return (
-    <div className="flex h-screen w-full overflow-hidden bg-background">
+    <div className="flex min-h-screen w-full flex-col bg-background md:h-screen md:flex-row md:overflow-hidden">
       <LanguageSelector language={language} onLanguageChange={onLanguageChange} />
 
       {/* Sidebar List */}
-      <div className={cn(
-        "w-full md:w-[var(--sidebar-width)] h-full flex flex-col overflow-y-auto bg-card/95 backdrop-blur-xl md:bg-card border-r border-border shadow-2xl z-20 absolute md:relative transition-transform duration-500 ease-[cubic-bezier(0.32,0.72,0,1)]",
-        view === 'list' ? "translate-y-0" : "translate-y-full md:translate-y-0"
-      )}
+      <div
+      className="relative z-20 flex h-[70vh] min-h-[32rem] w-full flex-col overflow-y-auto border-r border-border bg-card/95 shadow-2xl backdrop-blur-xl md:h-full md:min-h-0 md:w-[var(--sidebar-width)] md:bg-card"
       style={{ '--sidebar-width': `${sidebarWidth}px` } as React.CSSProperties}
       >
         <div className="shrink-0 border-b border-border bg-card p-4">
@@ -2007,7 +2421,10 @@ function DiscoveryState({
             </button>
             <div className="flex-1 min-w-0">
               <h2 className="text-3xl font-extrabold text-foreground tracking-tight">{getLocationName(location, language)}</h2>
-              <p className="text-sm text-muted-foreground font-medium">{t.discoveriesNearby(filteredMarkers.length)}</p>
+              <p className="flex items-center gap-2 text-sm text-muted-foreground font-medium">
+                {t.discoveriesNearby(filteredMarkers.length)}
+                {isRefreshing && <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" aria-hidden="true" />}
+              </p>
             </div>
             <button
               onClick={onViewSaved}
@@ -2028,6 +2445,44 @@ function DiscoveryState({
             </button>
           </div>
           <div className="mt-3 space-y-2">
+            <FilterFrame title={language === 'nl' ? 'Zoekbereik' : 'Search scope'}>
+              <p className="text-xs font-semibold text-muted-foreground" role="status" aria-live="polite">
+                {liveMode
+                  ? (language === 'nl' ? 'Lokaal zoeken met aanvullende webresultaten.' : 'Local search with additional web results.')
+                  : (language === 'nl' ? 'Alleen lokaal zoeken.' : 'Local-only search.')}
+              </p>
+              <label className="mt-2 flex min-h-11 cursor-pointer items-center gap-2 rounded-xl border border-border/70 bg-card px-3 py-2 transition-colors hover:border-primary/40">
+                <input
+                  type="checkbox"
+                  checked={liveMode}
+                  onChange={(event) => setDiscoveryScope(event.target.checked)}
+                  className="h-4 w-4 shrink-0 accent-primary"
+                />
+                <span className="text-xs font-bold text-foreground">
+                  {language === 'nl' ? 'Webresultaten opnemen' : 'Include web results'}
+                </span>
+              </label>
+              <details className="mt-2 rounded-lg bg-muted/40 px-2.5 py-2 text-[11px]">
+                <summary className="cursor-pointer font-bold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
+                  {language === 'nl' ? 'Uitleg over bronnen en privacy' : 'Source and privacy details'}
+                </summary>
+                <div className="mt-2 space-y-2 leading-relaxed text-muted-foreground">
+                  <p>
+                    {language === 'nl'
+                      ? 'Lokaal gebruikt de bestaande catalogus en geïntegreerde bronnen. Webresultaten voegen externe bronnen toe en delen je gekozen zoekgebied met die aanbieders.'
+                      : 'Local-only uses the established catalogue and integrated sources. Web results add external sources and share your selected search area with those providers.'}
+                  </p>
+                  <p>
+                    {language === 'nl'
+                      ? 'Webresultaten zijn geen aanbeveling of verificatie door MarqtPlaza.'
+                      : 'Web results are not endorsed or verified by MarqtPlaza.'}
+                  </p>
+                  <Link to="/account/privacy" className="inline-flex font-bold text-primary underline-offset-2 hover:underline">
+                    {language === 'nl' ? 'Privacyinformatie' : 'Privacy information'}
+                  </Link>
+                </div>
+              </details>
+            </FilterFrame>
             <FilterFrame title={language === 'nl' ? 'Snel kiezen' : 'Quick choices'}>
               <div className="flex flex-wrap gap-1.5" role="group" aria-label={language === 'nl' ? 'Snelle filters' : 'Quick filters'}>
                 {([
@@ -2123,7 +2578,7 @@ function DiscoveryState({
               </div>
             </FilterFrame>
             {visibleSubcategories.length > 0 && (
-              <FilterFrame title={t.subcategories}>
+              <FilterFrame title={t.subcategories} status={refreshingIndicator}>
                 <div className="mb-2">
                   <CategoryActionButtons
                     language={language}
@@ -2136,25 +2591,28 @@ function DiscoveryState({
                 <div
                   role="group"
                   aria-label={t.subcategories}
-                  className="grid grid-cols-2 gap-1"
+                  aria-busy={isRefreshing}
+                  className={cn("grid grid-cols-2 gap-1 transition-opacity", isRefreshing && "opacity-70")}
                 >
                   {visibleSubcategories.map((subcategory) => {
                     const isChecked = subcategories[subcategory];
+                    const color = getSubcategoryColor(subcategory);
                     return (
                       <label
                         key={subcategory}
-                        className={cn(
-                          "flex min-h-8 cursor-pointer items-center gap-1.5 rounded-lg border px-2 py-1.5 text-[10px] font-semibold transition-all",
-                          isChecked
-                            ? "border-primary/50 bg-primary/10 text-foreground shadow-[0_3px_10px_-6px_rgba(243,108,33,0.8)]"
-                            : "border-border/70 bg-card/70 text-muted-foreground hover:border-primary/40 hover:bg-primary/5 hover:text-foreground",
-                        )}
+                        className="flex min-h-8 cursor-pointer items-center gap-1.5 rounded-lg border px-2 py-1.5 text-[10px] font-semibold transition-all hover:brightness-95"
+                        style={{
+                          backgroundColor: isChecked ? color : `${color}1f`,
+                          borderColor: isChecked ? color : `${color}66`,
+                          color: isChecked ? '#ffffff' : color,
+                          boxShadow: isChecked ? `0 3px 10px -6px ${color}` : undefined,
+                        }}
                       >
                         <input
                           type="checkbox"
                           checked={isChecked}
                           onChange={() => toggleSubcategory(subcategory)}
-                          className="h-3.5 w-3.5 shrink-0 accent-primary"
+                          className="h-3.5 w-3.5 shrink-0 accent-white"
                         />
                         <span>{subcategoryLabelFor(subcategory, language)}</span>
                       </label>
@@ -2294,7 +2752,10 @@ function DiscoveryState({
                       <input
                         type="checkbox"
                         checked={isChecked}
-                        onChange={() => toggleNeighborhood(neighborhood)}
+                        onChange={(event) => {
+                          const nativeEvent = event.nativeEvent as MouseEvent;
+                          toggleNeighborhood(neighborhood, { additive: nativeEvent.shiftKey });
+                        }}
                         className="h-4 w-4 shrink-0 accent-primary"
                       />
                       <span className="min-w-0 truncate whitespace-nowrap">{neighborhood}</span>
@@ -2314,6 +2775,11 @@ function DiscoveryState({
                 : neighborhoodSelection === 'none'
                   ? t.noNeighborhoodsSelected
                   : t.allNeighborhoods}
+            </p>
+            <p className="mt-1 text-[10px] text-muted-foreground">
+              {language === 'nl'
+                ? 'Shift+klik om extra buurten toe te voegen of te verwijderen.'
+                : 'Shift+click to add or remove additional neighborhoods.'}
             </p>
           </FilterFrame>
           </div>
@@ -2350,10 +2816,19 @@ function DiscoveryState({
               </span>
             )}
             {isCacheMiss && !liveMode && (
-              <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-rose-600 bg-rose-50 border border-rose-200 px-2.5 py-1 rounded-full dark:bg-rose-950 dark:border-rose-800 dark:text-rose-300">
-                <WifiOff className="w-3 h-3" />
-                {language === 'nl' ? 'Geen lokale gegevens' : 'No local data'}
-              </span>
+              <div className="flex flex-col gap-2 w-full mt-2">
+                <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-rose-600 bg-rose-50 border border-rose-200 px-2.5 py-1.5 rounded-xl dark:bg-rose-950 dark:border-rose-800 dark:text-rose-300">
+                  <WifiOff className="w-4 h-4 shrink-0" />
+                  {language === 'nl' ? 'Er zijn geen opgeslagen resultaten voor deze zoekopdracht.' : 'No saved results exist for this search.'}
+                </span>
+                <button
+                  type="button"
+                  onClick={enableLiveMode}
+                  className="self-start text-xs font-bold text-primary hover:text-primary/80 hover:underline transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-sm"
+                >
+                  {language === 'nl' ? 'Schakel over naar live modus om externe bronnen te doorzoeken' : 'Switch to live mode to search external sources'}
+                </button>
+              </div>
             )}
             {isFallback && fallbackMessage && (
               <span className="text-xs text-muted-foreground">{fallbackMessage}</span>
@@ -2362,6 +2837,46 @@ function DiscoveryState({
               <p className="w-full text-xs leading-relaxed text-muted-foreground">
                 {selectedTopLevelSections.includes('social-map') ? t.socialMapCoverageNote : t.listingsCoverageNote}
               </p>
+            )}
+            {eventEvidence && evidenceStatus && (
+              <div
+                data-testid="event-evidence-summary"
+                role="status"
+                aria-live="polite"
+                className={cn('w-full rounded-xl border px-3 py-2.5', evidenceTone)}
+              >
+                <div className="flex items-start gap-2">
+                  <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                      <span className="text-[10px] font-black uppercase tracking-[0.14em]">
+                        {t.eventEvidenceTitle}
+                      </span>
+                      <span data-testid="event-evidence-status" className="text-xs font-bold">
+                        {t.eventEvidenceStatus[evidenceStatus]}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-xs leading-relaxed">{eventEvidence.message}</p>
+                    {eventEvidence.lastCheckedAt && (
+                      <p className="mt-1 text-[10px] opacity-75">
+                        {t.eventEvidenceLastChecked(formatEvidenceCheckedAt(eventEvidence.lastCheckedAt, language))}
+                      </p>
+                    )}
+                    {eventEvidence.sources.length > 0 && (
+                      <ul className="mt-2 flex flex-wrap gap-1.5" aria-label={t.eventEvidenceTitle}>
+                        {eventEvidence.sources.slice(0, 6).map((source) => (
+                          <li
+                            key={source.id}
+                            className="rounded-full border border-current/15 bg-white/50 px-2 py-0.5 text-[10px] font-semibold"
+                          >
+                            {source.name}: {t.eventEvidenceSourceStatus[source.status]}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                </div>
+              </div>
             )}
             {selectedTopLevelSections.includes('social-map') && socialMapSnapshotDate && (
               <span data-testid="text-social-map-public-snapshot-date" className="w-full text-xs text-muted-foreground">
@@ -2440,6 +2955,7 @@ function DiscoveryState({
               <div 
                 key={m.id} 
                 id={`event-${m.id}`}
+                data-event-id={m.id}
                 data-selected={selectedMarker === m.id || undefined}
                 className="animate-in fade-in slide-in-from-bottom-4 duration-500 fill-mode-both"
                 style={{ animationDelay: `${i * 50}ms` }}
@@ -2455,14 +2971,16 @@ function DiscoveryState({
               </div>
             ))}
             
-            {!isLoading && filteredMarkers.length === 0 && !isError && (
+            {!isLoading && !webIsLoading && filteredMarkers.length === 0 && !isError && !webIsError && (
               <div className="flex flex-col items-center justify-center py-20 px-4 text-center animate-in fade-in zoom-in-95 duration-500">
                 <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mb-5">
                   <MapPinOff className="w-8 h-8 text-muted-foreground" />
                 </div>
                 <h3 className="text-lg font-bold text-foreground mb-2">{t.noDiscoveries}</h3>
                 <p className="text-sm text-muted-foreground max-w-[250px] leading-relaxed">
-                  {t.noDiscoveriesDescription}
+                   {topLevelCategories.events && eventEvidence && allMarkers.length === 0
+                     ? eventEvidence.message
+                     : t.noDiscoveriesDescription}
                 </p>
               </div>
             )}
@@ -2470,15 +2988,6 @@ function DiscoveryState({
           </FilterFrame>
         </div>
         
-        {/* Mobile close list button */}
-        <div className="sticky bottom-0 md:hidden p-4 border-t border-border bg-card/95 backdrop-blur-xl mt-auto shrink-0 pb-safe">
-          <button 
-            onClick={() => setView('map')} 
-            className="w-full py-3.5 bg-muted hover:bg-muted/80 text-foreground rounded-xl font-bold transition-colors"
-          >
-            {t.backToMap}
-          </button>
-        </div>
         <div
           role="separator"
           aria-orientation="vertical"
@@ -2512,7 +3021,7 @@ function DiscoveryState({
       </div>
 
       {/* Map Area */}
-      <div className="flex h-full w-full flex-1 flex-col overflow-hidden bg-background">
+      <div className="flex h-[70vh] min-h-[32rem] w-full flex-1 flex-col overflow-hidden bg-background md:h-full md:min-h-0">
         <ReferenceCategoryNav
           embedded
           language={language}
@@ -2527,37 +3036,44 @@ function DiscoveryState({
             language={language}
             locationId={location.id}
             selectedNeighborhoods={selectedNeighborhoods}
+            showAllNeighborhoods
+            highlightedNeighborhood={selectedNeighborhoods.length === 1 ? selectedNeighborhoods[0] : null}
+            isDataLoading={topLevelCategories.businesses && businessesQuery.isFetching}
+            onNeighborhoodClick={toggleNeighborhood}
             markers={filteredMarkers}
             selectedMarkerId={selectedMarker}
+            recenterSelectedMarker={selectedMarker !== viewportPreservingSelection}
             savedIds={savedIds}
             onMarkerClick={handleMarkerClick}
+            onClusterMarkerClick={handleClusterMarkerClick}
           />
 
-          {/* Mobile Toggle Overlay */}
-          <div className="md:hidden absolute bottom-8 left-1/2 -translate-x-1/2 z-30">
-            <button
-              onClick={() => setView(v => v === 'map' ? 'list' : 'map')}
-              className="bg-foreground text-background px-6 py-3.5 rounded-full shadow-2xl font-bold flex items-center gap-2.5 hover:scale-105 active:scale-95 transition-transform"
-            >
-              {view === 'map' ? <List className="w-5 h-5" /> : <MapIcon className="w-5 h-5" />}
-              <span>{view === 'map' ? t.showList : t.showMap}</span>
-            </button>
-          </div>
         </div>
       </div>
     </div>
   );
 }
 
-function EventDetailView({ eventId, listingSection = 'events' }: { eventId: string; listingSection?: ListingSection }) {
+function EventDetailView({ eventId, listingSection = 'events' }: {
+  eventId: string;
+  listingSection?: Exclude<ListingSection, 'social-map'>;
+}) {
   const [, navigate] = useLocation();
   const language: Language = typeof window !== 'undefined' && window.localStorage.getItem('buurtplaza-language') === 'nl'
     ? 'nl'
     : 'en';
-  const { data, isLoading, isError } = useGetListings({ cityId: 'dhg', section: listingSection, language });
-  const listing = data?.listings.find((item) => item.id === decodeURIComponent(eventId));
+  const { savedMarkers, savedStateStatus } = useSavedPlaces();
+  const decodedEventId = decodeURIComponent(eventId);
+  const cachedListing = useMemo(() => readDetailListing(decodedEventId), [decodedEventId]);
+  const listingQuery = useGetListing({
+    listingId: decodedEventId,
+    cityId: 'dhg',
+    section: listingSection,
+    language,
+  });
+  const listing = listingQuery.data?.listing ?? cachedListing ?? savedMarkers.get(decodedEventId);
 
-  if (isLoading) {
+  if (!listing && (listingQuery.isLoading || savedStateStatus === 'loading')) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background p-6">
         <div className="w-full max-w-2xl animate-pulse space-y-4">
@@ -2569,7 +3085,7 @@ function EventDetailView({ eventId, listingSection = 'events' }: { eventId: stri
     );
   }
 
-  if (isError || !listing) {
+  if (!listing) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background p-6">
         <div className="w-full max-w-md rounded-3xl border border-border bg-card p-8 text-center shadow-xl">
@@ -2577,19 +3093,34 @@ function EventDetailView({ eventId, listingSection = 'events' }: { eventId: stri
             <MapPinOff className="h-7 w-7 text-muted-foreground" />
           </div>
           <h1 className="text-2xl font-extrabold text-foreground">
-            {language === 'nl' ? 'Activiteit niet gevonden' : 'Event not found'}
+            {language === 'nl' ? 'Vermelding tijdelijk niet beschikbaar' : 'Listing temporarily unavailable'}
           </h1>
           <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-            {language === 'nl' ? 'Deze activiteit is niet meer beschikbaar.' : 'This activity is no longer available.'}
+            {language === 'nl'
+              ? 'We konden deze vermelding nu niet ophalen. De bron kan tijdelijk niet beschikbaar zijn of de vermelding kan zijn gewijzigd.'
+              : 'We could not retrieve this listing right now. Its source may be temporarily unavailable or the listing may have changed.'}
           </p>
-          <button
-            type="button"
-            onClick={() => navigate('/activiteiten/den-haag')}
-            className="mt-6 inline-flex items-center gap-2 rounded-full bg-foreground px-5 py-3 text-sm font-bold text-background"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            {language === 'nl' ? 'Terug naar ontdekken' : 'Back to discoveries'}
-          </button>
+          <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+            <button
+              type="button"
+              onClick={() => void listingQuery.refetch()}
+              disabled={listingQuery.isFetching}
+              className="inline-flex items-center gap-2 rounded-full bg-primary px-5 py-3 text-sm font-bold text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-wait disabled:opacity-60"
+            >
+              <RefreshCw className={cn('h-4 w-4', listingQuery.isFetching && 'animate-spin')} />
+              {listingQuery.isFetching
+                ? (language === 'nl' ? 'Opnieuw laden…' : 'Retrying…')
+                : (language === 'nl' ? 'Opnieuw proberen' : 'Try again')}
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate('/activiteiten/den-haag?restore=1')}
+              className="inline-flex items-center gap-2 rounded-full bg-foreground px-5 py-3 text-sm font-bold text-background"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              {language === 'nl' ? 'Terug naar ontdekken' : 'Back to discoveries'}
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -2618,7 +3149,7 @@ function EventDetailView({ eventId, listingSection = 'events' }: { eventId: stri
         <div className="mx-auto flex max-w-5xl items-center justify-between gap-4">
           <button
             type="button"
-            onClick={() => navigate('/activiteiten/den-haag')}
+            onClick={() => navigate('/activiteiten/den-haag?restore=1')}
             className="inline-flex items-center gap-2 rounded-full px-2 py-2 text-sm font-bold text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
           >
             <ArrowLeft className="h-5 w-5" />
@@ -2742,9 +3273,8 @@ function EventDetailView({ eventId, listingSection = 'events' }: { eventId: stri
 function EventDetailRoute() {
   const [, params] = useRoute('/activiteiten/den-haag/:eventId');
   const requestedSection = new URLSearchParams(window.location.search).get('section');
-  const listingSection: ListingSection = requestedSection === 'businesses'
+  const listingSection: Exclude<ListingSection, 'social-map'> = requestedSection === 'businesses'
     || requestedSection === 'food-drink'
-    || requestedSection === 'social-map'
     ? requestedSection
     : DEFAULT_START_SECTION;
   return <EventDetailView eventId={params?.eventId ?? ''} listingSection={listingSection} />;
@@ -2795,8 +3325,7 @@ function MainApp({ initialLocationId }: { initialLocationId?: string } = {}) {
   } = useSavedPlaces();
 
   useEffect(() => {
-    window.localStorage.setItem('buurtplaza-language', language);
-    document.documentElement.lang = language;
+    persistLanguage(language);
   }, [language]);
 
   useEffect(() => {
@@ -2824,6 +3353,7 @@ function MainApp({ initialLocationId }: { initialLocationId?: string } = {}) {
         listingSection={screen.listingSection}
         initialNeighborhood={screen.neighborhood}
         initialPostcode={screen.postcode}
+        restorePrevious={new URLSearchParams(window.location.search).get('restore') === '1'}
         onBack={() => {
           setScreen({ kind: 'search' });
           navigate('/');
@@ -2898,12 +3428,21 @@ export default function App() {
           <Route path="/beoordelen/community" component={CommunityModerationView} />
           <Route path="/sign-in/*?" component={SignInPage} />
           <Route path="/sign-up/*?" component={SignUpPage} />
+          <Route path="/onboarding" component={OnboardingPage} />
+          <Route path="/account/voorkeuren" component={AccountPreferencesPage} />
+          <Route path="/account/privacy" component={AccountPrivacyPage} />
+          <Route path="/account/*?" component={AccountPage} />
+          <Route path="/bedrijf-aanmelden" component={BusinessOnboardingPage} />
+          <Route path="/bedrijf-zoeken" component={BusinessLookupPage} />
+          <Route path="/bedrijf-nieuw" component={BusinessDraftPage} />
           <Route path="/nieuws" component={NewsFeedView} />
           <Route path="/nieuws/:id" component={NewsArticleView} />
           <Route path="/deals" component={DealsView} />
           <Route path="/bedrijf/:slug" component={BusinessProfileView} />
           <Route path="/bedrijf-claim" component={BusinessClaimView} />
+          <Route path="/correctie" component={ListingCorrectionView} />
           <Route path="/mijn-bedrijf" component={MyBusinessWorkspace} />
+          <Route path="/mijn-bedrijf/:id/profiel" component={BusinessRevisionPage} />
           <Route path="/redactie/bedrijven" component={BusinessModerationView} />
           <Route>
             <div className="min-h-screen flex items-center justify-center bg-background text-foreground">
@@ -2954,6 +3493,7 @@ function readBrowserEventAlerts(): SavedEventAlert[] {
 function useSavedPlaces() {
   const [savedMarkers, setSavedMarkers] = useState<Map<string, Marker>>(readBrowserSavedMarkers);
   const [savedEventAlerts, setSavedEventAlerts] = useState<SavedEventAlert[]>(readBrowserEventAlerts);
+  const [accountHydrationStatus, setAccountHydrationStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
   const [syncRetry, setSyncRetry] = useState(0);
   const [hydrationRetry, setHydrationRetry] = useState(0);
   const clerkAuth = useAuth();
@@ -3032,6 +3572,7 @@ function useSavedPlaces() {
 
   useEffect(() => {
     if (!isSignedIn || !userId) {
+      setAccountHydrationStatus('idle');
       if (activeAccountUserRef.current !== null) {
         activeAccountUserRef.current = null;
         accountHydratedRef.current = false;
@@ -3048,6 +3589,7 @@ function useSavedPlaces() {
     activeAccountUserRef.current = userId;
     accountHydratedRef.current = false;
     syncInFlightUserRef.current = null;
+    setAccountHydrationStatus('loading');
 
     const browserMarkers = readBrowserSavedMarkers();
     const browserAlerts = readBrowserEventAlerts();
@@ -3083,9 +3625,11 @@ function useSavedPlaces() {
         // Account data is already safe on the server even if browser cleanup is unavailable.
       }
       accountHydratedRef.current = true;
+      setAccountHydrationStatus('ready');
       setSyncRetry(value => value + 1);
     }).catch(() => {
       if (!cancelled) {
+        setAccountHydrationStatus('error');
         window.setTimeout(() => setHydrationRetry(value => value + 1), 1500);
       }
     });
@@ -3266,8 +3810,11 @@ function useSavedPlaces() {
 
   const savedIds = useMemo(() => new Set(savedMarkers.keys()), [savedMarkers]);
   const savedCount = savedMarkers.size;
+  const savedStateStatus = !clerkAuth.isLoaded || accountHydrationStatus === 'loading'
+    ? 'loading'
+    : accountHydrationStatus;
 
-  return { savedIds, savedMarkers, savedEventAlerts, recordEventRefresh, toggle, savedCount };
+  return { savedIds, savedMarkers, savedEventAlerts, recordEventRefresh, toggle, savedCount, savedStateStatus };
 }
 
 function SavedView({
@@ -3562,10 +4109,60 @@ const clerkAppearance = {
   },
 };
 
+/**
+ * Where Clerk sends a user after it finishes sign-in, sign-up, or verification.
+ * The `terug` parameter is validated against a local allowlist, so an external
+ * or unknown destination silently becomes the account page. New accounts go
+ * through the optional preference step first when accounts are enabled;
+ * otherwise the legacy research registration stays the landing step.
+ */
+function useClerkRedirects() {
+  const search = useSearch();
+  const returnPath = resolveReturnPath(search, '');
+  const signInTarget = `${basePath}${returnPath}`;
+  const signUpTarget = featureFlags.accounts
+    ? `${basePath}${withReturnPath('/account/voorkeuren', returnPath)}`
+    : `${basePath}/onboarding`;
+  const carry = search ? `?${search}` : '';
+  return {
+    signInTarget,
+    signUpTarget,
+    signInUrl: `${basePath}/sign-in${carry}`,
+    signUpUrl: `${basePath}/sign-up${carry}`,
+  };
+}
+
+/**
+ * Clerk renders an empty card for a stale verification step
+ * (`/sign-up/verify-email-address`) when no sign-up is in progress, for example
+ * a bookmarked or history entry reopened after the code was already used.
+ * Send those visitors back to the start of sign-up so the recovery path is visible.
+ */
+function useStaleSignUpStepRecovery() {
+  const [location, navigate] = useLocation();
+  const search = useSearch();
+  const clerk = useClerk();
+  const { isLoaded, isSignedIn } = useAuth();
+  const isVerificationStep = /^\/sign-up\/verify-/.test(location);
+  useEffect(() => {
+    if (!isVerificationStep || !isLoaded || !clerk.loaded || isSignedIn) return;
+    if (clerk.client?.signUp?.id) return;
+    navigate(`/sign-up${search ? `?${search}` : ''}`, { replace: true });
+  }, [isVerificationStep, isLoaded, isSignedIn, clerk, search, navigate]);
+}
+
 function SignUpPage() {
+  const redirects = useClerkRedirects();
+  useStaleSignUpStepRecovery();
   return (
     <div className="flex min-h-[100dvh] items-center justify-center bg-background px-4">
-      <SignUp routing="path" path={`${basePath}/sign-up`} signInUrl={`${basePath}/sign-in`} />
+      <SignUp
+        routing="path"
+        path={`${basePath}/sign-up`}
+        signInUrl={redirects.signInUrl}
+        forceRedirectUrl={redirects.signUpTarget}
+        signInForceRedirectUrl={redirects.signInTarget}
+      />
     </div>
   );
 }
@@ -3576,7 +4173,7 @@ const clerkPubKey = publishableKeyFromHost(
 );
 
 function ApiAuthTokenBridge() {
-  const { getToken, isSignedIn } = useAuth();
+  const { getToken, isSignedIn, userId } = useAccountAuth();
 
   useEffect(() => {
     if (!isSignedIn) {
@@ -3586,22 +4183,26 @@ function ApiAuthTokenBridge() {
 
     setAuthTokenGetter(() => getToken());
     return () => setAuthTokenGetter(null);
-  }, [getToken, isSignedIn]);
+  }, [getToken, isSignedIn, userId]);
 
   return null;
 }
 
 function ClerkProviderWithRouter({ children }: { children: React.ReactNode }) {
   const [, setLocation] = useLocation();
+  // Clerk renders its own sign-in/sign-up/error cards, so it needs the app language
+  // explicitly; otherwise expired-link and code errors stay English-only.
+  const language = useStoredLanguage();
   return (
     <ClerkProvider
       publishableKey={clerkPubKey}
       proxyUrl={clerkProxyUrl}
       appearance={clerkAppearance}
+      localization={clerkLocalizationFor(language)}
       signInUrl={`${basePath}/sign-in`}
       signUpUrl={`${basePath}/sign-up`}
-      routerPush={(to) => setLocation(stripBase(to))}
-      routerReplace={(to) => setLocation(stripBase(to), { replace: true })}
+      routerPush={(to) => setLocation(carryReturnPath(stripBase(to), window.location.search))}
+      routerReplace={(to) => setLocation(carryReturnPath(stripBase(to), window.location.search), { replace: true })}
     >
       <ApiAuthTokenBridge />
       {children}
@@ -3610,9 +4211,16 @@ function ClerkProviderWithRouter({ children }: { children: React.ReactNode }) {
 }
 
 function SignInPage() {
+  const redirects = useClerkRedirects();
   return (
     <div className="flex min-h-[100dvh] items-center justify-center bg-background px-4">
-      <SignIn routing="path" path={`${basePath}/sign-in`} signUpUrl={`${basePath}/sign-up`} />
+      <SignIn
+        routing="path"
+        path={`${basePath}/sign-in`}
+        signUpUrl={redirects.signUpUrl}
+        forceRedirectUrl={redirects.signInTarget}
+        signUpForceRedirectUrl={redirects.signUpTarget}
+      />
     </div>
   );
 }

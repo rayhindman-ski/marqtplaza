@@ -1,0 +1,351 @@
+# MarqtPlaza Enrichments v3
+
+**Created:** 5 September 2026  
+**Subject:** Full MarqtPlaza startup concept and strategy  
+**Purpose:** Independent business and technical critiques from leading general-purpose AI engines, with identified gaps ranked by severity and implementation complexity.
+
+## Methodology
+
+The same evaluation packet and response format were submitted to each engine. The responses below preserve each engine's analysis and wording, with only provider headings and document-level formatting added.
+
+These are model-generated critiques, not verified customer evidence, legal advice, security certification, market validation, or investment advice. Where a response proposes a target or threshold, it should be treated as a test hypothesis unless supported by MarqtPlaza's observed data.
+
+### Engines queried
+
+| Provider | Model | Role in this document |
+|---|---|---|
+| OpenAI | GPT-5.6 Terra | Independent business and technical critique |
+| Anthropic | Claude Sonnet 5 | Independent business and technical critique |
+| Google | Gemini 3.1 Pro Preview | Independent business and technical critique |
+
+## Shared request sent to each engine
+
+> You are an independent startup and systems reviewer. Critique the full MarqtPlaza concept. Be specific, skeptical, and constructive. Do not invent traction, market size, customer evidence, or technical implementation facts.
+>
+> Review the bilingual Dutch/English neighbourhood-discovery proposition; editorial and concierge pilot; free verified merchant profiles; EUR 150–300 paid 30-day campaign; measurement plan; first-100-customer sequence; later revenue options; editorial, privacy, and trust constraints; lightweight technical direction; current absence of completed traction and cost evidence; and competitive position against global maps, review platforms, publishers, marketplaces, neighbourhood networks, and location-data providers.
+>
+> Return Markdown containing: an executive verdict; a business-gap table with at least eight ranked gaps; a technical-gap table with at least eight ranked gaps; a practical complexity legend from 1–5 for a two-person founding team; a list of what not to build yet; testable 30/60/90-day priorities with decision gates; and the ten most important questions requiring founder evidence. Rank gaps first by severity and then by implementation complexity.
+
+---
+
+# OpenAI — GPT-5.6 Terra
+
+## Executive verdict
+
+MarqtPlaza is a disciplined early-stage concept because it explicitly avoids pretending to be a marketplace, live-data product, or broad local-search competitor before evidence exists. The narrow “This Weekend in Zeeheldenkwartier” wedge is sensible, but the proposed value proposition is still vulnerable to free substitutes that already satisfy much of the discovery need with less effort. The core challenge is not building a bilingual guide; it is proving that manual verification and neighbourhood context create enough incremental value for both repeat users and paying merchants. The EUR 150–300 campaign offer is a reasonable test parameter, but it will be difficult to sell and renew unless campaign reporting can show credible, understandable value without overstating attribution. The business may become a useful editorial/concierge service, but its economics could remain labour-bound unless repeated merchant and user behaviour identifies a narrow workflow worth standardising. Expansion should be earned only after two comparable editions demonstrate repeatable production, demand, merchant conversion, and a plausible contribution margin.  
+
+**Single riskiest assumption:** Independent local businesses will pay repeatedly for a neighbourhood discovery campaign when the service does not own bookings, transactions, a large audience, or provable incremental customer acquisition.
+
+## Business critique
+
+| Rank | Gap | Severity | Complexity (1–5) | Why it matters | Recommended next action |
+|---:|---|---|---:|---|---|
+| 1 | No demonstrated merchant willingness to pay or renew | Critical | 1 | A campaign price is only a hypothesis. Merchants may value a free profile but see paid placement as indistinguishable from low-confidence advertising, especially without transaction ownership or proven reach. | Conduct 15–20 structured founder-led merchant interviews before selling broadly. Ask about current local marketing spend, decision process, acceptable evidence of value, expected reporting, and renewal conditions. Seek paid commitments, not verbal enthusiasm. |
+| 2 | Undefined campaign outcome that merchants would consider valuable | Critical | 2 | “Improved profile, placement, distribution, and action reporting” describes activity, not a merchant-recognised outcome. If success criteria differ by business, sales and renewal conversations will become inconsistent. | Create one-page campaign terms with explicit deliverables, excluded promises, action definitions, reporting format, attribution limitations, and a merchant-confirmed success question before purchase. |
+| 3 | No evidence that consumers will return for a dated shortlist | Critical | 2 | A weekend guide may be useful once but not habitual. Without repeat use, merchants may reasonably view campaigns as low-reach, one-off promotion. | Run two comparable weekend editions with a stable format. Measure returning visitors, repeat outbound actions, direct feedback, and the proportion of users who opt into future updates. Decide whether repeat behaviour justifies a recurring editorial cadence. |
+| 4 | Manual verification may not support viable unit economics | Critical | 3 | Verification, bilingual editing, corrections, merchant communication, distribution, and reporting can consume more time than a EUR 150–300 campaign can support. A service business can be valid, but the labour model must be explicit. | Maintain a time ledger per profile, event, correction, campaign, and report. Assign a provisional internal hourly value to founder time and calculate contribution after direct costs and valued labour. |
+| 5 | Differentiation against free substitutes is asserted, not validated | Critical | 3 | Google Maps, social channels, local publishers, and word-of-mouth already offer discovery. “Human verification” may not be visible enough to change user or merchant behaviour. | Test alternative landing-page propositions: verified practicality, neighbourhood curation, bilingual help, and weekend planning. Compare action rates and qualitative feedback; retain only the claim users can articulate back. |
+| 6 | Paid campaign design risks undermining editorial trust | High | 1 | Even with labels and no paid factual ranking, users may interpret featured merchants as editorially preferred. Trust loss would weaken the main wedge. | Publish a short editorial-commercial policy, standard commercial label, correction policy, and campaign eligibility criteria. Test whether users can distinguish factual listings from paid campaign placements. |
+| 7 | Target merchant segment is too broad | High | 1 | Restaurants, salons, galleries, retail, events, and services have different buying cycles, conversion paths, and evidence requirements. A generic campaign will be hard to price and deliver. | Pick one initial merchant archetype, such as independent food, culture, or appointment-based businesses. Define its typical customer action, campaign duration, and reporting unit. |
+| 8 | Distribution strategy is not yet a defensible acquisition channel | High | 2 | A good guide does not create demand by itself. Search, newsletters, social distribution, association referrals, and partner channels each have different cost, control, and measurement properties. | For each edition, record every acquisition channel, effort spent, qualified visits, actions, and repeat visitors. Do not expand distribution channels until one or two show repeatable returns. |
+| 9 | Attribution may be too weak to support sales claims | High | 2 | Outbound clicks and tracked actions do not prove a visit, purchase, or incremental customer. Overclaiming will harm trust; underreporting may make campaigns appear ineffective. | Define an attribution hierarchy: observed outbound action, merchant-reported redeemed code or booking reference, and unverified downstream outcome. Report these separately and never collapse them into “customers.” |
+| 10 | Geographic and category expansion criteria are not defined | High | 2 | “One adjacent cluster at a time” is directionally sound but operationally vague. Expansion before repeatability will increase verification and support burden. | Establish expansion gates: a completed scorecard across two editions, an acceptable correction burden, a documented production process, and evidence of repeat user or merchant demand. |
+| 11 | Legal and commercial positioning needs review | Medium | 2 | Sponsored guides, paid distribution, creator content, referrals, and aggregate insights may trigger advertising-disclosure, consumer-information, tax, contractual, and privacy obligations. | Obtain Netherlands-specific legal and accounting advice on advertising disclosures, invoicing/VAT, referral arrangements, consent language, and merchant campaign terms before paid launch. |
+| 12 | Potential revenue streams are numerous but strategically distracting | Medium | 1 | Grants, white-label editions, creator content, referrals, insights, and sponsored guides each imply different buyers, obligations, and product requirements. Premature pursuit will blur the initial learning loop. | Treat all later revenue streams as a backlog. Select no more than one commercial offer for the first pilot period and document why other options are deferred. |
+
+## Technical critique
+
+| Rank | Gap | Severity | Complexity (1–5) | Why it matters | Recommended next action |
+|---:|---|---|---:|---|---|
+| 1 | No explicit canonical data model for places, events, claims, sources, and campaigns | Critical | 2 | Provenance cannot be reliably preserved if a place, an event occurrence, a source claim, an editor decision, and a commercial campaign are stored as loosely structured page content. Errors and stale facts will become difficult to identify. | Define a minimum schema before publishing at volume: entity ID, type, name, address, category, language fields, factual claims, source URL, source capture date, verification status, checked-on date, owner, and change history. |
+| 2 | Freshness rules are not specified by data type | Critical | 2 | Opening hours, event dates, menus, ticket availability, accessibility details, and closures decay at different rates. A single “checked-on” date does not tell users whether a particular fact is still dependable. | Set explicit freshness policies by field type, including expiry dates and review triggers. Automatically mark or suppress content when required re-checks are overdue. |
+| 3 | Analytics design may create misleading attribution | Critical | 2 | Basic web analytics and outbound-link tracking can count clicks but cannot establish visits, purchases, or incremental demand. Tracking design must align with the restrained commercial claims. | Create an event taxonomy distinguishing page view, qualified visit, listing exposure, outbound click, phone/email intent, map intent, coupon/referral use, and merchant-confirmed outcome. Document what each event can and cannot prove. |
+| 4 | Consent and privacy basis for measurement are undefined | Critical | 2 | “Consented outbound actions” requires clear decisions about cookies, identifiers, analytics providers, retention, user rights, and whether tracking is necessary or optional. Dutch/EU privacy obligations are material even for a small pilot. | Prepare a data inventory, privacy notice, cookie/consent approach, retention schedule, and processor list. Use privacy-minimising analytics by default and avoid collecting personal data unless necessary for a defined purpose. |
+| 5 | Commercial and editorial content need enforceable separation in the content system | High | 1 | Labels applied manually in page copy are easy to omit or inconsistently display. Paid campaigns must not silently influence factual inclusion, rankings, or corrections. | Add structured fields for editorial status, commercial status, sponsor identity, campaign dates, and label text. Make the front end render required labels from these fields rather than relying on editor memory. |
+| 6 | Corrections workflow lacks service levels and audit trail | High | 1 | A visible correction route is not enough if reports are lost, disputed, or resolved without preserving why a factual change was made. | Create a correction intake form or mailbox workflow with ticket ID, reporter type, affected claim, evidence, decision, resolution date, and escalation path. Publish expected response categories without promising unrealistic response times. |
+| 7 | Bilingual quality assurance is undefined | High | 2 | Dutch and English versions can drift, carry different practical details, or use culturally misleading language. Inconsistent versions damage trust, particularly for time-sensitive events. | Define a source-language field, translation owner, review status, and policy for what must be bilingual versus what may remain in the original language. Require re-review when source content changes. |
+| 8 | Security and abuse controls are not described | High | 2 | Even without open listings, correction forms, contact forms, merchant links, analytics dashboards, and admin accounts can be abused. Malicious submissions or compromised accounts could alter local factual information. | Use role-based access, strong authentication for admin accounts, least-privilege permissions, backups, software update routines, rate limits, spam protection, and a simple incident-response checklist. |
+| 9 | Accessibility requirements are absent | High | 2 | A local guide is especially likely to be used on mobile and by people needing accessible practical information. An inaccessible guide also reduces reach and may create avoidable compliance risk. | Set a pragmatic accessibility baseline: semantic structure, keyboard navigation, colour contrast, descriptive links, form labels, responsive layouts, and manual mobile testing. Track accessibility attributes separately from unverified claims. |
+| 10 | Operational workflow is insufficiently specified | High | 3 | The main technical risk may be operational consistency rather than software. Without clear handoffs, content may be published without verification, translations may lag, and campaigns may be reported inconsistently. | Document an end-to-end workflow: discovery, source capture, verification, editorial approval, translation, publication, freshness review, corrections, campaign delivery, reporting, and archival. Assign one accountable owner for each stage. |
+| 11 | Data retention, deletion, and backup policy are missing | Medium | 1 | Source snapshots, merchant contact details, correction reports, analytics events, and campaign records have different retention needs. Keeping everything indefinitely creates unnecessary privacy and operational risk. | Define retention periods, deletion procedures, backup frequency, restore testing, and access controls for each data class. |
+| 12 | No performance and scale boundary has been defined | Medium | 2 | A lightweight guide can work initially, but image-heavy pages, embedded maps, third-party scripts, and bilingual duplication can degrade mobile performance. Scale problems should be anticipated without prematurely building infrastructure. | Establish simple service boundaries: target mobile page weight, expected content volume, cache approach, monitoring for broken links, and a trigger for technical redesign based on observed load or editorial friction. |
+
+## Complexity legend
+
+| Level | Practical meaning for a two-person founding team |
+|---:|---|
+| 1 | Can be completed in days using existing tools, templates, documentation, or manual process changes. Minimal external dependency. |
+| 2 | Requires one to three weeks of focused work, basic configuration or light development, and disciplined operating routines. |
+| 3 | Requires several weeks, cross-functional design decisions, repeated testing, and likely some specialist advice or contractor support. |
+| 4 | Requires a substantial product/system build, integration work, legal review, or sustained operational capacity that competes with core validation work. |
+| 5 | Requires major capital, specialist team capability, regulated or high-risk operations, complex integrations, or infrastructure that is unjustified before clear traction. |
+
+## What not to build yet
+
+1. **Payments, booking, or transaction ownership**  
+   These introduce support, refund, reconciliation, fraud, contractual, and potentially regulatory obligations. The pilot should first establish whether discovery and outbound actions are valuable.
+
+2. **Live availability, live opening-hours, or real-time inventory claims**  
+   These require dependable integrations or continuous verification. Incorrect “live” information would directly undermine the trust proposition.
+
+3. **An open merchant listing or self-service publishing platform**  
+   Open submissions create moderation, duplicates, spam, disputes, inaccurate claims, and ranking pressure. The initial differentiation depends on controlled editorial verification.
+
+4. **User reviews, ratings, comments, or social community features**  
+   These create content moderation, defamation, manipulation, and dispute-management burdens. They also shift the product away from curated discovery toward a weaker version of established review platforms.
+
+5. **Algorithmic personalisation or recommendation engines**  
+   There will not initially be enough behavioural data to justify them, and personalisation increases privacy complexity. A clear editorial shortlist is more appropriate for the pilot.
+
+6. **Multi-neighbourhood or citywide expansion**  
+   Wider coverage multiplies verification and freshness obligations before the team knows the cost and return of one neighbourhood workflow.
+
+7. **A merchant self-serve campaign dashboard**  
+   Early campaigns should be delivered manually so founders can learn what merchants actually ask for in reporting, approvals, changes, and renewal conversations.
+
+8. **Aggregate-insights product or personal-data monetisation model**  
+   The concept correctly rejects personal-data resale. Aggregate insights should wait until there is sufficient lawful, representative, privacy-protected data and a credible buyer need.
+
+## 30/60/90-day priorities
+
+### Days 1–30: establish a credible pilot operating system
+
+- Define the initial editorial scope precisely: what counts as “This Weekend,” eligible categories, geographical boundary, publishing schedule, and minimum verification standard.
+- Build the minimum structured content model for places, event occurrences, sources, claims, checked dates, corrections, commercial labels, and campaigns.
+- Publish editorial, corrections, commercial-labelling, privacy, and campaign-term pages in plain Dutch and English where relevant.
+- Create a manual verification checklist and a correction ticket workflow.
+- Recruit a small set of prospective design partners, but do not represent them as customers unless they have accepted terms or paid.
+- Conduct structured interviews with both likely users and merchants.
+
+**Decision gate:** Proceed to a first public edition only if the team can produce a dated shortlist with complete source links, checked dates, correction route, and clearly separated commercial labels without relying on undocumented memory or ad hoc spreadsheets.
+
+### Days 31–60: run two comparable editions and test commercial demand
+
+- Publish two comparable weekend editions using the same inclusion, verification, and measurement rules.
+- Track source of traffic, qualified visits, outbound actions, correction volume, verification time, support time, and content-production time.
+- Offer the standard 30-day campaign only with written terms, a fixed price within the proposed test range, and explicit non-guarantee language.
+- Record every merchant sales conversation: segment, objection, requested proof, accepted deliverables, price response, and reason for acceptance or rejection.
+- Test a small number of distribution channels separately rather than mixing all promotion into one launch.
+- Produce campaign reports that distinguish observed actions from merchant-reported downstream outcomes.
+
+**Decision gate:** Continue the paid campaign experiment only if at least some merchants accept the actual terms and payment process, and the team can deliver reports without claiming that clicks equal customers or sales. If no merchant accepts, revise the segment, offer, price, or evidence standard before expanding supply.
+
+### Days 61–90: assess repeatability before expansion
+
+- Complete a two-edition scorecard covering user behaviour, correction burden, production time, merchant conversations, invoices, cash collected, direct costs, and valued founder time.
+- Compare free verified profiles, paid campaign placements, and distribution channels without allowing campaign status to affect factual listing quality.
+- Identify the most repeated operational bottleneck: verification, translation, media permissions, campaign reporting, correction handling, or merchant onboarding.
+- Automate only the narrowest repeated workflow that demonstrably saves time or reduces errors.
+- Interview campaign buyers and non-buyers after the pilot to determine what evidence they trusted, what they did not understand, and what would cause renewal.
+- Decide whether the next step is: repeat in Zeeheldenkwartier, refine the offer, narrow the merchant segment, pause paid campaigns, or expand to one adjacent cluster.
+
+**Decision gate:** Expand geography or category only if the two-edition scorecard shows a documented, repeatable production process; manageable correction and support load; at least one credible recurring demand signal from users or merchants; and a plausible path to contribution after direct costs and valued team time.
+
+## Questions requiring founder evidence
+
+1. What specific user problem is materially better solved by MarqtPlaza than Google Maps, local publisher guides, Instagram, and personal recommendations?
+2. Which exact consumer segment is expected to use “This Weekend in Zeeheldenkwartier,” and what evidence supports its bilingual needs?
+3. How often do intended users currently seek this type of information, and what would make them return rather than search anew elsewhere?
+4. Which merchant category has the strongest reason to buy a EUR 150–300 discovery campaign, and who is the economic buyer?
+5. What current marketing alternatives do target merchants use, what do they pay, and what evidence do they require before renewing?
+6. What does a fully verified listing or event cost in founder time, including sourcing, checking, translation, updates, corrections, and support?
+7. What action can be measured credibly for each merchant type, and which downstream outcomes will remain unobservable?
+8. How will the service distinguish editorial inclusion, paid campaign placement, sponsorship, referral arrangements, and partner-funded content in every user-facing surface?
+9. What sources are reliable enough for factual claims, what permissions are needed for media or copied details, and how will source disputes be handled?
+10. What result from the first two editions would cause the founders to stop, narrow, reprice, or materially change the concept rather than continue expanding?
+
+---
+
+# Anthropic — Claude Sonnet 5
+
+## Executive verdict
+
+The concept is unusually disciplined for a pre-launch idea: it explicitly refuses to claim traction it doesn't have, draws hard lines against scope creep (no payments, no marketplace, no open listings), and separates paid status from factual/organic inclusion in a way that protects trust. That discipline is a genuine strength. But discipline is not evidence of demand. The plan is essentially "we will build a small trustworthy thing and see if anyone cares," which is a reasonable way to *test* a business, but the document currently reads as if the test design is the strategy rather than a precursor to one. The single riskiest assumption is that a narrow, manually-curated neighbourhood guide generates enough recurring *consumer* attention that merchants are buying real distribution when they pay EUR 150–300 — not just a nicer listing. If consumer repeat-use never materializes, the commercial offer quietly becomes "pay us to write your bilingual description," which is a much weaker and less defensible business than the one implied by the "discovery service" framing. Everything else (pricing, expansion, later revenue lines) is downstream of whether that attention exists and is verifiably attributable to the product rather than to founder outreach effort.
+
+## Business critique
+
+| Rank | Gap | Severity | Complexity | Why it matters | Recommended next action |
+|---|---|---|---|---|---|
+| 1 | No evidence that consumers will use/return to the guide vs. free substitutes (Google Maps, Instagram, local FB/WhatsApp groups) | Critical | 2 | If there's no repeat consumer attention, the merchant offer has nothing real to sell — it's editorial writing, not distribution | Publish edition 1 and 2 before selling anything at scale; measure unprompted return visits, not just first-touch traffic |
+| 2 | Unit economics of manual verification are unmodeled (founder hours per listing vs. EUR 150–300 revenue) | Critical | 2 | The whole "no heavy SaaS yet" plan only works if margin per listing is positive after time cost; if not, growth increases losses | Time-track verification/correction/support per listing for the first 10–20 profiles before pricing decisions |
+| 3 | Chicken-and-egg sequencing: paid campaigns are pitched before consumer traffic is proven | High | 3 | Selling "distribution" without demonstrated audience risks a one-time transactional sale with no renewal logic | Delay commercial pitch until at least one full weekend cycle has measurable organic (non-founder-driven) consumer engagement |
+| 4 | Differentiation from indebuurt/DPG and similar Dutch hyperlocal incumbents is asserted, not demonstrated | High | 3 | These competitors already do bilingual-adjacent, hyperlocal, editorially-flavored content at scale; "deeper verification" may not be a wedge users perceive | Directly compare one existing indebuurt-style page against a MarqtPlaza page with real neighbourhood residents and record their stated preference/reason |
+| 5 | No stated criteria for when/why to expand to an "adjacent cluster" | Medium | 1 | Without a gate, expansion becomes a morale decision instead of an evidence decision, risking premature dilution of founder time | Define explicit numeric or behavioral thresholds (e.g., renewal rate, repeat-use rate) before touching neighbourhood #2 |
+| 6 | Bilingual targeting assumes a real underserved Dutch/English audience segment in this specific neighbourhood without stated basis | Medium | 2 | If the English-speaking population is small or already well-served informally, bilingual overhead is pure cost | Talk to actual residents/expats in the neighbourhood about how they currently find weekend activities before committing translation effort |
+| 7 | Pricing (EUR 150–300) has no stated anchor (cost-plus, competitor pricing, willingness-to-pay signal) | High | 2 | Arbitrary pricing risks either leaving money on the table or triggering high churn after one cycle when merchants see no guaranteed effect | Run price as an explicit test variable across the first cohort (e.g., split range) and record acceptance/renewal by price point |
+| 8 | Founder-led sales dependency has no articulated fallback if referral/association channel underperforms | Medium | 3 | The plan leans on "merchant/association referrals" as the second growth lever without evidence this channel wants to cooperate | Have at least one direct conversation with a relevant merchant association to confirm interest before including it in the plan as a channel |
+| 9 | Speculative later-revenue lines (grants, white-label, aggregate insights) risk distracting a two-person team | Low | 1 | Listing nine future revenue streams this early creates temptation to chase optionality instead of finishing the core loop | Explicitly park this list; revisit only after the first paid cohort renews once |
+| 10 | "Contribution after direct costs and valued team time" is named as a metric but no method for valuing team time is specified | Medium | 2 | Without an hourly rate assumption, this metric can't actually be computed, so profitability claims later will be unverifiable | Set an explicit (even provisional) founder hourly rate now so contribution math is comparable across editions |
+
+## Technical critique
+
+| Rank | Gap | Severity | Complexity | Why it matters | Recommended next action |
+|---|---|---|---|---|---|
+| 1 | No defined data schema for listings (source link, checked date, correction history, bilingual fields, campaign status) | Critical | 2 | Without structure, provenance and "checked-on" claims become unenforceable as volume grows, undermining the core trust promise | Define a minimal structured record format now, even if stored in a simple spreadsheet/lightweight database, before content volume grows |
+| 2 | Attribution/measurement mechanism for "qualified visits" and "attributable channel conversion" is named but not specified | Critical | 3 | These are the core metrics the whole commercial model depends on; if unmeasurable in practice, all reported numbers will be unverifiable estimates | Decide concretely how outbound clicks/actions will be tagged and consented (e.g., redirect links with consent-gated tracking) before campaign 1 launches |
+| 3 | Freshness/staleness policy is undefined (how often is "checked-on" re-verified, what happens to expired listings) | High | 2 | A dated shortlist that isn't actively re-checked degrades trust fast, especially for a "this weekend" format with a short shelf life | Set an explicit re-verification cadence and a visible rule for retiring or flagging stale entries |
+| 4 | Consent and GDPR mechanics for tracking outbound "consented actions" are not specified | High | 3 | Netherlands/EU privacy law applies directly; vague "privacy protection" is not a compliance plan | Document the specific consent flow and legal basis before any tracking goes live, ideally with a basic compliance checklist reviewed against GDPR |
+| 5 | Conflict-of-interest enforcement between paid campaigns and organic ranking is a stated policy, not a stated process/control | High | 3 | With one small team curating both paid and organic content, "paid status must not control ranking" is easy to unintentionally violate without a separation mechanism | Define a manual checklist or separation-of-duties rule (e.g., ranking criteria written down and applied identically regardless of payment status) |
+| 6 | Correction-route workflow lacks defined triage rules, SLA, or abuse handling | Medium | 2 | Once corrections are public-facing, they can be used for spam, competitor sabotage, or unmanageable volume | Define who reviews corrections, expected response time, and a basic rule for handling bad-faith submissions |
+| 7 | Bilingual content workflow (translation source of truth, update propagation) is unspecified | Medium | 2 | Two-language maintenance doubles editing effort per change; without a workflow, one language will silently drift out of date | Decide which language is canonical and how updates propagate to the other before adding more listings |
+| 8 | Accessibility (WCAG-level basics: contrast, screen-reader compatibility, language tagging for bilingual text) is not mentioned | Medium | 2 | A "lightweight web guide" can easily ship inaccessible by default, excluding users and creating avoidable rework later | Add basic accessibility checks to the initial build checklist rather than retrofitting later |
+| 9 | Single point of failure: no backup/versioning plan for the manually verified dataset | High | 2 | Loss or corruption of the verification history would destroy the product's core credibility asset (provenance) | Set up basic version control/backup for the listings data from day one, even if the system itself stays lightweight |
+| 10 | No stated technical plan for how the system will need to change when expanding to a second neighbourhood (schema reuse vs. rebuild) | Medium | 3 | Without a portability check, neighbourhood 1's ad hoc tooling could become unusable at neighbourhood 2, forcing a rebuild under time pressure | Before expansion, explicitly test whether the same schema/tooling can represent a second neighbourhood without redesign |
+
+## Complexity legend
+
+- **1 – Trivial for two people:** Hours to ~1 day. Editing docs, writing policy text, manual spreadsheet changes, a single conversation. No new tools.
+- **2 – Small effort:** A few days to ~2 weeks. A lightweight process, a script, a simple structured file, one round of testing. Doable alongside other work.
+- **3 – Real build:** 2–6 weeks of focused work for one or both founders. Requires an actual feature (tracking mechanism, schema migration, consent flow) and likely takes priority over other tasks during that window.
+- **4 – Substantial investment:** 6–12 weeks. Meaningful engineering/legal/compliance work; likely needs external input (legal review, contractor) and forces deprioritization of other roadmap items.
+- **5 – Major undertaking:** 3+ months, or requires resources (funding, hires, formal infrastructure) beyond what two founders can absorb alongside running the pilot. Should not be attempted before the core loop is proven.
+
+## What not to build yet
+
+- **Payments/booking infrastructure** — no proven demand yet, and adds compliance and liability burden disproportionate to a 30-day discovery campaign.
+- **Open/self-serve listing submission** — undermines the manual-verification trust promise before that trust is established, and invites low-quality or spam entries.
+- **Live-availability integrations** (tables, tickets, stock) — technically heavy, dependent on third-party APIs, and outside the stated "dated shortlist" scope.
+- **Broad geographic expansion** — dilutes the founder time needed to prove the single-neighbourhood playbook works at all.
+- **Open review community** — creates moderation and legal exposure, and directly conflicts with the "editorial, verified" positioning that differentiates from Yelp/Tripadvisor.
+- **Native mobile apps** — a lightweight bilingual web guide is sufficient to test the core hypothesis; app store overhead isn't justified pre-traction.
+- **Heavy SaaS/automation tooling** — explicitly deferred in the concept already, and correctly so; automating a workflow that isn't yet repeated and understood risks building the wrong thing.
+- **Personalization or recommendation algorithms** — requires data volume and behavioral history that a single-neighbourhood pilot won't generate.
+
+## 30/60/90-day priorities
+
+**Day 0–30**
+- Publish edition 1 of the guide with the full verification/provenance/correction workflow live, even manually.
+- Track founder time spent per listing on verification, correction handling, and support.
+- Decision gate: Can the team articulate, in writing, exactly how a "qualified visit" and "meaningful action" are being measured today (not conceptually — mechanically)? If not, do not proceed to paid campaigns.
+
+**Day 31–60**
+- Publish edition 2 to test whether any consumers return without new founder-driven prompting.
+- Approach a small number of design-partner merchants for free verified profiles; observe how they respond to the "no guaranteed outcomes" framing before asking for money.
+- Decision gate: Is there any measurable non-founder-driven repeat consumer engagement between edition 1 and edition 2? If none, do not launch the paid campaign offer yet — investigate demand further instead.
+
+**Day 61–90**
+- If the gate above is passed, run the first paid cohort at the test price, with full time-tracking to compute contribution after costs.
+- Explicitly test the correction-route and conflict-of-interest separation process under real (even if small) paid/unpaid mixed conditions.
+- Decision gate: Does contribution after direct costs and valued founder time trend toward positive, and does at least one merchant express interest in renewal before being asked? If not, revisit pricing, scope, or the underlying value proposition before considering expansion to an adjacent cluster.
+
+## Questions requiring founder evidence
+
+1. What specific evidence (conversations, observed behavior) suggests residents/visitors in Zeeheldenkwartier lack an adequate free alternative today?
+2. How many founder-hours does it actually take to verify, correct, and support one listing through a full cycle?
+3. Has any merchant, informally or formally, indicated willingness to pay EUR 150–300 before this document was written, or is this price purely hypothetical?
+4. What does "meaningful action" concretely mean in a measurable, loggable sense, and how will consent for tracking it be obtained?
+5. What happens operationally when correction volume exceeds what one or two founders can triage in a reasonable time?
+6. What is the actual (not assum
+
+---
+
+# Google — Gemini 3.1 Pro Preview
+
+## Executive verdict
+The MarqtPlaza concept demonstrates excellent discipline by actively constraining scope and avoiding the premature scaling traps of typical local-discovery platforms (e.g., live-availability, automated scraping, marketplace dynamics). Framing the initial product as an editorial "concierge" service ensures high quality, builds local trust, and creates a clear wedge against broader, noisier substitutes like Google Maps or Tripadvisor. However, the business model faces a severe headwind: charging small, independent businesses €150–€300 upfront for an awareness campaign with no guaranteed footfall or ROI is notoriously difficult, especially for a new platform with no existing audience. The manual, low-tech verification approach ensures data provenance but fundamentally caps margins and operational scalability. Ultimately, success hinges entirely on the founders' ability to sell the *intangible* value of local brand awareness and expat reach to pragmatic shop owners before runaway operational costs kill the pilot.
+
+**Single riskiest assumption:** Local independent businesses in Zeeheldenkwartier will pay €150–€300 upfront for a 30-day awareness campaign purely on the promise of transparent reporting, without any guarantees of footfall, revenue, or baseline click volume.
+
+## Complexity legend
+*For a two-person founding team:*
+*   **1 - Trivial:** Can be executed in hours to a few days using existing no-code tools, basic spreadsheets, or standard copy.
+*   **2 - Easy:** Requires up to a week of focused effort; basic web styling, simple integrations (e.g., lightweight forms), or standard legal templating.
+*   **3 - Moderate:** Takes 1-2 weeks; custom scripting, lightweight database design, analytics setup, or creating structured sales playbooks.
+*   **4 - Hard:** Requires multiple weeks; robust custom architecture, complex attribution modeling without third-party cookies, or overcoming significant behavioral hurdles in sales/marketing.
+*   **5 - Severe:** Takes months; deep technical infrastructure, highly sophisticated data pipelines, or fundamentally changing consumer habits at scale.
+
+## Business critique
+
+| Rank | Gap | Severity | Complexity | Why it matters | Recommended next action |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| 1 | **Merchant willingness to pay** | Critical | 4 | SMBs typically have zero marketing budget and demand direct ROI. €150-€300 upfront for unproven awareness is a massive friction point. | Pre-sell the campaign to 5 merchants before writing a single line of code. Offer a money-back guarantee for the pilot. |
+| 2 | **Consumer acquisition channel** | Critical | 4 | Even with a great guide, consumers must remember to visit it. Without organic search dominance or a viral loop, CAC may exceed merchant LTV. | Map exactly how the first 500 users will find the "This Weekend" guide (e.g., local Facebook groups, physical flyers). |
+| 3 | **Unit economics of manual ops** | High | 3 | Manual verification, translation, and formatting do not scale. If a profile takes 4 hours to build and sells for €150, founders are working for minimum wage. | Time-track the creation of the first 10 free profiles. Establish a strict maximum time allowance per profile. |
+| 4 | **Campaign renewal & Churn** | High | 4 | If the 30-day campaign generates only 5 outbound clicks, the merchant will not renew. High churn kills local business models. | Define the minimum acceptable performance metric that justifies a renewal conversation, and plan how to hit it. |
+| 5 | **Proof of bilingual value** | Medium | 2 | The concept assumes merchants care enough about the English-speaking expat/tourist market to pay for access to it. | Survey 10 local merchants specifically about their desire/struggle to reach non-Dutch speakers. |
+| 6 | **Defining "meaningful actions"** | Medium | 2 | "Views/clicks are not customers" is a good ethos, but what *is* a meaningful action on a static web guide? Directions clicked? Phone number copied? | Define precisely what 3-5 actions will be tracked and reported to the merchant as proof of value. |
+| 7 | **Differentiation from free media** | Medium | 3 | Indebuurt and local Instagram accounts offer immense local reach for free. MarqtPlaza must clearly articulate why its paid product is superior. | Draft a competitive positioning matrix specifically comparing the €150 campaign against a free Instagram post. |
+| 8 | **Free-to-paid transition** | Low | 2 | Having free verified profiles alongside paid campaigns creates a risk that merchants will simply settle for the free tier forever. | Clearly define the feature gating: what exactly does €150 buy that the free, verified profile lacks? |
+
+## Technical critique
+
+| Rank | Gap | Severity | Complexity | Why it matters | Recommended next action |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| 1 | **Accurate, privacy-safe attribution** | Critical | 3 | You must prove outbound actions to merchants without violating GDPR or using invasive cookies. Basic link tracking can be blocked by ad-blockers. | Implement server-side redirect tracking for outbound links (e.g., `marqtplaza.com/go/merchant-id`) to ensure reliable counts. |
+| 2 | **Freshness monitoring & decay** | Critical | 3 | "Checked-on dates" lose value rapidly. A guide with 6-month-old verification dates looks abandoned and destroys consumer trust. | Build a simple cron job or Airtable script that flags profiles to the founders when the "last verified" date exceeds 30 days. |
+| 3 | **Merchant reporting automation** | High | 2 | Manually pulling analytics and writing reports for every merchant at the end of 30 days will quickly become an operational bottleneck. | Create a standardized reporting template that pulls directly from your analytics database (e.g., Looker Studio connected to GA4/Plausible). |
+| 4 | **Bilingual data modeling** | High | 3 | Managing two languages requires a strict schema. Fallbacks (what if English is missing?) must be handled gracefully so the UI doesn't break. | Design the database schema (even if in Airtable/Notion) with explicit `desc_nl` and `desc_en` fields and a UI fallback logic. |
+| 5 | **Correction intake & triage** | Medium | 2 | You need a "correction route", but open forms invite spam and competitor sabotage. Intake must be frictionless but secure. | Implement a simple form with basic bot protection (Cloudflare Turnstile/hCaptcha) that feeds into a private manual-review queue. |
+| 6 | **Internal CMS / Ops workflow** | Medium | 3 | The founders need a centralized place to manage verification status, sales stages, and content publishing without editing raw code. | Set up a headless CMS or structured Airtable base that serves as both the CRM and the content API for the frontend. |
+| 7 | **Mobile accessibility (a11y)** | Low | 2 | Local discovery happens on the street. If the web guide is not heavily optimized for mobile and accessible (contrast, tap targets), usage will tank. | Audit the pilot frontend using Lighthouse; enforce a minimum 90+ score for mobile performance and accessibility. |
+| 8 | **Data provenance schema** | Low | 3 | Storing "source links" and "manual verification" evidence requires structured storage to defend against claims of factual inaccuracy. | Add hidden fields in the CMS for `verification_source_url`, `verifier_name`, and `verification_notes` that are kept internal. |
+
+## What not to build yet
+1.  **User Accounts / Logins:** Consumers do not want to create an account just to read a weekend guide. Rely on cookies/local storage if you need to track "repeat use" in the pilot phase.
+2.  **Self-Serve Merchant Portals:** Building a secure dashboard for merchants to edit their own profiles is complex. Handle all updates via email/forms manually to learn exactly what merchants want to change.
+3.  **Native iOS/Android Apps:** App store friction will kill consumer acquisition. A fast, mobile-optimized responsive web page is vastly superior for an early-stage discovery guide.
+4.  **Payment Gateways / Checkout:** Invoicing a handful of test merchants €150 via standard bank transfer (Tikkie/iDEAL links) is entirely sufficient. Do not build Stripe integrations until transaction volume demands it.
+5.  **Automated Web Scraping:** This violates the core promise of "manual verification" and introduces messy, unstructured data that will ruin the curated editorial feel.
+6.  **Complex Recommendation Algorithms:** The value prop is a "small dated shortlist." Curation should be done by the founders' editorial judgment, not machine learning.
+7.  **In-Platform Reviews / Ratings:** Managing a review community requires massive moderation resources to prevent abuse. Stick to factual, verified details and external source links.
+
+## 30/60/90-day priorities
+
+**30-Day Priority: The Audience & Content Test**
+*   *Action:* Build the minimal web frontend. Curate "This Weekend in Zeeheldenkwartier" for two consecutive weekends with 10-15 free, high-quality bilingual profiles. Distribute via local channels.
+*   *Measurement:* Unique local visitors, outbound clicks, time-on-page.
+*   *Decision Gate:* Did we achieve at least 100 organic unique visitors and a 10% outbound click-through rate? If no, the consumer value proposition is failing; do not start sales.
+
+**60-Day Priority: The Merchant Pitch Test**
+*   *Action:* Armed with consumer engagement data from month 1, conduct founder-led sales pitches to 15-20 local independent businesses.
+*   *Measurement:* Commercial conversations held, objections recorded, signed commercial commitments.
+*   *Decision Gate:* Can we secure 3 paid campaigns at €150+ upfront? If merchants refuse, pivot the monetization strategy or the campaign deliverables.
+
+**90-Day Priority: The Operations & Renewal Test**
+*   *Action:* Execute the 3 paid campaigns. Track all internal time spent on verification, setup, and reporting. Deliver the end-of-campaign report and ask for a renewal.
+*   *Measurement:* Internal hours per campaign, cost of delivery, renewal rate.
+*   *Decision Gate:* Did at least 1 merchant renew, and did the campaign take less than 4 hours of internal time to execute? If ops time is too high, the unit economics are structurally unviable.
+
+## Questions requiring founder evidence
+1.  Can you provide names/quotes from 3 local business owners who have explicitly stated they would pay €150 upfront for this specific awareness campaign?
+2.  If the platform does not guarantee footfall, what specific metric will you put on the end-of-month report to prove the €150 was well spent?
+3.  What is your specific, zero-budget distribution strategy to ensure "This Weekend in Zeeheldenkwartier" reaches enough consumers to generate outbound clicks?
+4.  Why will a bilingual Dutch/English resident open MarqtPlaza instead of simply searching "events near me" on Google Maps or Instagram?
+5.  How many hours of founder time will it take to source, verify, translate, format, and publish a single merchant profile?
+6.  How will you handle the inevitable scenario where a merchant pays €150 but receives zero trackable outbound clicks from your platform?
+7.  What evidence suggests that the expat/bilingual angle is a strong enough wedge to drive habitual consumer retention?
+8.  If you are not using heavy SaaS or scraping, how will you systematically track which of your curated profiles have changed their opening hours or closed down?
+9.  By what mechanism will you attribute a "qualified visit" or "meaningful action" without utilizing privacy-invasive tracking?
+10. How will you fund the business and yourselves during the "First-100 plan" when revenue will be negligible and manual labor will be exceptionally high?
+
+---
+
+# Cross-engine comparison
+
+## Strongest areas of agreement
+
+1. **The core demand assumption is still unproven.** All three engines treat repeat consumer utility and merchant willingness to renew as the decisive unknowns.
+2. **The initial scope should remain narrow.** They support one neighbourhood, one recurring consumer decision, and a deliberately manual pilot before citywide expansion.
+3. **The campaign requires stricter economics.** The EUR 150–300 price must be tested against sales, verification, bilingual production, support, correction, reporting, and founder-time costs.
+4. **Attribution must be defined before selling outcomes.** The engines consistently distinguish measurable platform actions from visits, customers, and revenue.
+5. **Freshness and provenance are core product capabilities.** Checked dates, source evidence, ownership, expiry, and correction history should be designed as structured data rather than editorial notes.
+6. **Trust rules need operational enforcement.** Clear policies are insufficient without permissions, audit trails, complaint handling, escalation, and separation of paid and factual content.
+7. **Bilingual quality creates real operating cost.** Translation workflow, review ownership, terminology consistency, fallback behaviour, and parity need explicit acceptance criteria.
+8. **Heavy SaaS and marketplace features should wait.** Payments, booking, open submissions, review systems, personalization, and broad automation would add risk before the wedge is validated.
+
+## Main differences in emphasis
+
+- **OpenAI** places the strongest emphasis on explicit experiment design, unit economics, falsifiable decision gates, and structured operational controls.
+- **Claude** places comparatively more emphasis on strategic contradiction, founder capacity, editorial independence, positioning clarity, and the risk of creating a labour-intensive agency rather than a scalable product.
+- **Gemini** places comparatively more emphasis on the technical operating model: freshness state, provenance, bilingual workflow, analytics consent, abuse controls, accessibility, and the path from manual operations to a maintainable system.
+
+## Recommended interpretation
+
+The critiques should not be averaged into one giant backlog. Use their overlap to define the minimum pilot contract:
+
+1. a precise consumer job and neighbourhood boundary;
+2. a structured verified-card model with ownership and expiry;
+3. a measurable 30-day merchant offer with a cost ledger;
+4. privacy-safe event definitions and attribution limits;
+5. written correction, sponsorship, and incident procedures;
+6. explicit stop, revise, and continue gates based on observed activation, repeat use, contribution, and renewal intent.

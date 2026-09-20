@@ -65,8 +65,20 @@ export const BUSINESS_CATEGORIES: BusinessCategory[] = [
 export type ListingSource = 'google_maps' | 'openstreetmap' | 'curated' | 'source_scan';
 export type SocialMapReviewStatus = 'verified' | 'review_due' | 'changed' | 'unavailable';
 export type EventPriceType = 'free' | 'low-cost' | 'paid' | 'unknown';
+export type ListingEvidenceStatus = 'current' | 'stale' | 'conflicting' | 'unknown' | 'unavailable';
+export type ListingEvidenceField = 'name' | 'description' | 'address' | 'event_date' | 'opening_times' | 'price';
+export type ListingFieldEvidence = {
+  field: ListingEvidenceField;
+  sourceLabel: string | null;
+  sourceUrl: string | null;
+  checkedAt: string | null;
+  status: ListingEvidenceStatus;
+  caveat: string | null;
+};
 export type EventMealType = 'community-meal' | 'food-support';
 export type EventActivityKind = 'community' | 'culture' | 'learning' | 'movement' | 'meal' | 'family' | 'market' | 'outdoor' | 'entertainment';
+export type FoodType = 'restaurant' | 'cafe' | 'bar' | 'bakery' | 'takeaway' | 'other';
+export const FOOD_TYPES: FoodType[] = ['restaurant', 'cafe', 'bar', 'bakery', 'takeaway', 'other'];
 
 export interface Location {
   id: string;
@@ -101,6 +113,8 @@ export interface Marker {
   sourceUrl?: string;
   /** Normalized business taxonomy label, present for business listings. */
   businessCategory?: BusinessCategory;
+  /** Source-derived Food & Drink venue type. */
+  foodType?: FoodType;
   /** Provider or editorial source for this listing. */
   source?: ListingSource;
   /** Human-readable publisher or provider that listed this item. */
@@ -109,6 +123,8 @@ export interface Marker {
   socialCategory?: SocialMapCategory;
   officialUrl?: string;
   sourcePageUrl?: string;
+  facebookUrl?: string;
+  instagramUrl?: string;
   snapshotDate?: string;
   reviewStatus?: SocialMapReviewStatus;
   reviewReason?: string | null;
@@ -129,6 +145,7 @@ export interface Marker {
   firstSeenAt?: string;
   lastSeenAt?: string;
   updatedAt?: string;
+  evidence?: ListingFieldEvidence[];
 }
 
 // Active cities — add more Location entries here when expanding beyond Den Haag.

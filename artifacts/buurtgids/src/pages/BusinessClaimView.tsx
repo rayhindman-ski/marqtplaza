@@ -13,6 +13,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
+import { sanitizeReturnPath } from '@/lib/returnPath';
 import {
   Form,
   FormControl,
@@ -38,6 +39,12 @@ export default function BusinessClaimView() {
   const { isSignedIn, isLoaded } = useAuth();
   const queryClient = useQueryClient();
   const searchParams = new URLSearchParams(window.location.search);
+  const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
+  const authReturnPath = sanitizeReturnPath(
+    `${window.location.pathname}${window.location.search}${window.location.hash}`,
+    basePath,
+  );
+  const forceRedirectUrl = `${basePath}${authReturnPath ?? '/account'}`;
   
   const listingId = searchParams.get('listingId');
   const cityId = searchParams.get('cityId');
@@ -88,7 +95,7 @@ export default function BusinessClaimView() {
             Je staat op het punt om <strong>{name}</strong> te claimen op Buurtplaza. Log in of maak een account aan om verder te gaan.
           </p>
           <div className="pt-4">
-            <SignInButton mode="modal" forceRedirectUrl={window.location.href}>
+            <SignInButton mode="modal" forceRedirectUrl={forceRedirectUrl}>
               <Button size="lg" className="w-full font-bold text-lg h-14">
                 Inloggen / Registreren
               </Button>

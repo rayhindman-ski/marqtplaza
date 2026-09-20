@@ -16,6 +16,7 @@ import {
   ToggleCommunityPostParticipationParams,
 } from "@workspace/api-zod";
 import { requireEditor } from "../middlewares/requireEditor.js";
+import { hasUserRegistration } from "./registration.js";
 
 const router: IRouter = Router();
 
@@ -153,6 +154,10 @@ router.post("/community-posts", async (req, res): Promise<void> => {
     res.status(401).json({ error: "Sign in to post something local." });
     return;
   }
+  if (!(await hasUserRegistration(auth.userId))) {
+    res.status(403).json({ error: "Complete your registration before posting locally." });
+    return;
+  }
 
   const parsed = CreateCommunityPostBody.safeParse(req.body);
   const cityId = parsed.success ? parsed.data.cityId.trim() : "";
@@ -242,6 +247,10 @@ router.put("/community-posts/:id/participation", async (req, res): Promise<void>
   const auth = getAuth(req);
   if (!auth.userId) {
     res.status(401).json({ error: "Sign in to show your interest." });
+    return;
+  }
+  if (!(await hasUserRegistration(auth.userId))) {
+    res.status(403).json({ error: "Complete your registration before participating." });
     return;
   }
 
