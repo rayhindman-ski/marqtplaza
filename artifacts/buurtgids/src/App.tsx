@@ -12,7 +12,7 @@ import {
   Landmark, Route as RouteIcon, Baby, Building2, Coffee, Gamepad2, HandHeart, Waves, ShoppingBag, ExternalLink, AlertCircle, CalendarPlus,
   CalendarDays, UsersRound, Utensils,
   CloudSun, Cloud, CloudFog, CloudRain, CloudSnow, Sun, Wind, Droplets, Tag, Store,
-  Bike, Car, Footprints, TrainFront, ShieldCheck, Sparkles, Navigation, UserRound, Loader2
+  Bike, Car, Footprints, TrainFront, ShieldCheck, Sparkles, Navigation, UserRound, Loader2, Menu, Facebook, Instagram
 } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -93,6 +93,7 @@ import {
   type RouteMode,
 } from './lib/listingPresentation';
 import { isPointInsideNeighborhoods } from '@workspace/geo';
+import { parseDiscoveryUrlState, serializeDiscoveryUrlState } from './lib/discoveryUrlState';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -673,7 +674,7 @@ function LanguageSelector({
   const t = translations[language];
 
   return (
-    <label className="absolute right-5 top-5 z-40 inline-flex items-center gap-2 rounded-full border border-border/70 bg-card/90 px-3 py-2 text-sm font-semibold text-foreground shadow-sm backdrop-blur-md sm:right-7 sm:top-7">
+    <label className="absolute right-3 top-16 z-40 inline-flex items-center gap-2 rounded-full border border-border/70 bg-card/90 px-3 py-2 text-sm font-semibold text-foreground shadow-sm backdrop-blur-md lg:right-7 lg:top-20">
       <Globe2 className="h-4 w-4 text-primary" aria-hidden="true" />
       <span className="sr-only">{t.languageLabel}</span>
       <select
@@ -702,17 +703,17 @@ function UserRoleSelector({
   return (
     <label
       className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border border-border/70 bg-card/90 px-3 text-[11px] font-extrabold text-foreground shadow-sm backdrop-blur-md"
-      title="UserRole"
+      title={userRole === 'designer' ? 'Editor view' : 'Consumer view'}
     >
-      <span aria-hidden="true">UserRole</span>
+      <span>{userRole === 'designer' ? 'Editor' : 'Consumer'}</span>
       <select
         value={userRole}
         onChange={(event) => onUserRoleChange(event.target.value as UserRole)}
-        aria-label="UserRole"
+        aria-label="Preview mode"
         className="cursor-pointer appearance-none bg-transparent text-[11px] font-extrabold lowercase outline-none"
       >
-        <option value="designer">designer</option>
-        <option value="user">user</option>
+        <option value="designer">Editor</option>
+        <option value="user">Consumer</option>
       </select>
     </label>
   );
@@ -847,6 +848,8 @@ function ReferenceCategoryNav({
   const t = translations[language];
   const [location] = useLocation();
   const search = useSearch();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuTriggerRef = useRef<HTMLButtonElement>(null);
   const accountHref = withReturnPath('/account', `${location}${search ? `?${search}` : ''}`);
   const iconForCategory = (id: string) => {
     if (id === 'things-to-do') return CalendarDays;
@@ -860,13 +863,49 @@ function ReferenceCategoryNav({
 
   return (
     <nav
-      aria-label="Categories"
+      aria-label={language === 'nl' ? 'Hoofdnavigatie' : 'Primary navigation'}
       className={cn(
-        "z-30 flex w-full overflow-x-auto border-b border-border/70 bg-card/85 px-4 py-2.5 pr-24 backdrop-blur-md sm:px-6 sm:pr-28",
+        "z-30 w-full border-b border-border/70 bg-card/95 px-4 py-2.5 backdrop-blur-md sm:px-6",
         embedded ? "relative shrink-0" : "absolute left-0 top-0",
       )}
     >
-      <div className="mx-auto flex min-w-max max-w-6xl items-center justify-center gap-4 sm:gap-7">
+      <div className="mx-auto flex max-w-6xl items-center justify-between gap-3">
+        <Link href="/" className="shrink-0 text-xs font-black uppercase tracking-[0.16em] text-primary">
+          MarqtPlaza
+        </Link>
+        <button
+          ref={menuTriggerRef}
+          type="button"
+          aria-expanded={menuOpen}
+          aria-controls="primary-navigation-links"
+          aria-label={menuOpen
+            ? (language === 'nl' ? 'Menu sluiten' : 'Close menu')
+            : (language === 'nl' ? 'Menu openen' : 'Open menu')}
+          onClick={() => setMenuOpen((open) => !open)}
+          onKeyDown={(event) => {
+            if (event.key === 'Escape') {
+              setMenuOpen(false);
+              menuTriggerRef.current?.focus();
+            }
+          }}
+          className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-xl border border-border bg-card text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary lg:hidden"
+        >
+          {menuOpen ? <X className="h-5 w-5" aria-hidden="true" /> : <Menu className="h-5 w-5" aria-hidden="true" />}
+        </button>
+      </div>
+      <div
+        id="primary-navigation-links"
+        className={cn(
+          "mx-auto mt-2 max-w-6xl flex-col items-stretch gap-1 rounded-2xl border border-border/70 bg-card p-2 shadow-lg lg:mt-0 lg:flex lg:flex-row lg:items-center lg:justify-center lg:gap-2 lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none",
+          menuOpen ? "flex" : "hidden",
+        )}
+        onKeyDown={(event) => {
+          if (event.key === 'Escape') {
+            setMenuOpen(false);
+            menuTriggerRef.current?.focus();
+          }
+        }}
+      >
         {t.navCategories.map((category) => {
           const Icon = iconForCategory(category.id);
           if (category.id === 'news') {
@@ -876,9 +915,10 @@ function ReferenceCategoryNav({
                   href="/nieuws"
                   aria-label={category.label}
                   title={category.label}
-                  className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-foreground transition-colors hover:bg-primary/10 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  className="inline-flex min-h-11 items-center gap-2 rounded-lg px-3 text-sm font-bold text-foreground transition-colors hover:bg-primary/10 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                 >
                   <Icon className="h-5 w-5" aria-hidden="true" />
+                  <span>{category.label}</span>
                 </Link>
                 <span className={tooltipClass}>{category.label}</span>
               </span>
@@ -897,9 +937,10 @@ function ReferenceCategoryNav({
                 aria-label={category.label}
                 aria-haspopup={category.id === 'things-to-do' ? 'dialog' : undefined}
                 title={category.label}
-                className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-foreground transition-colors hover:bg-primary/10 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                className="inline-flex min-h-11 items-center gap-2 rounded-lg px-3 text-sm font-bold text-foreground transition-colors hover:bg-primary/10 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
               >
                 <Icon className="h-5 w-5" aria-hidden="true" />
+                <span>{category.label}</span>
               </button>
               <span className={tooltipClass}>{category.label}</span>
             </span>
@@ -920,28 +961,27 @@ function ReferenceCategoryNav({
               href={href}
               aria-label={label}
               title={label}
-              className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-foreground transition-colors hover:bg-primary/10 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              className="inline-flex min-h-11 items-center gap-2 rounded-lg px-3 text-sm font-bold text-foreground transition-colors hover:bg-primary/10 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
             >
               <Icon className="h-5 w-5" aria-hidden="true" />
+              <span>{label}</span>
             </Link>
             <span className={tooltipClass}>{label}</span>
           </span>
         ))}
         <UserRoleSelector userRole={userRole} onUserRoleChange={onUserRoleChange} />
-        <span className="group relative">
-          <Search className="h-5 w-5 text-foreground" aria-label={t.explore} />
-          <span className={tooltipClass}>{t.explore}</span>
-        </span>
       </div>
     </nav>
   );
 }
 
-function SaveButton({ saved, onToggle }: { saved: boolean; onToggle: (e: React.MouseEvent) => void }) {
+function SaveButton({ language, saved, onToggle }: { language: Language; saved: boolean; onToggle: (e: React.MouseEvent) => void }) {
   return (
     <button
       onClick={(e) => { e.stopPropagation(); onToggle(e); }}
-      aria-label={saved ? 'Remove from saved' : 'Save this place'}
+      aria-label={saved
+        ? (language === 'nl' ? 'Verwijder uit bewaard' : 'Remove from saved')
+        : (language === 'nl' ? 'Bewaar deze plek' : 'Save this place')}
       className={cn(
         "p-1.5 rounded-lg transition-all duration-200 shrink-0",
         saved
@@ -999,6 +1039,7 @@ function SearchState({
     'Enschede',
     'Amersfoort',
   ];
+  const popularNeighborhoods: Record<string, string[]> = {};
   const [query, setQuery] = useState('');
   const [error, setError] = useState('');
   const [selectedCityId, setSelectedCityId] = useState<string | null>(null);
@@ -1063,7 +1104,10 @@ function SearchState({
   };
 
   return (
-    <div className="flex-1 flex flex-col items-center justify-center min-h-screen p-6 relative overflow-hidden bg-background">
+    <div className="relative flex min-h-screen flex-1 flex-col items-center overflow-x-hidden bg-background px-4 pb-10 pt-28 sm:px-6 lg:justify-center">
+      <a href="#main-content" className="sr-only z-50 rounded-lg bg-card px-4 py-3 font-bold text-primary focus:not-sr-only focus:absolute focus:left-4 focus:top-4">
+        {language === 'nl' ? 'Naar hoofdinhoud' : 'Skip to main content'}
+      </a>
       <ReferenceCategoryNav
         language={language}
         userRole={userRole}
@@ -1091,15 +1135,27 @@ function SearchState({
         </button>
       )}
 
-      <div className="z-10 w-full max-w-7xl space-y-6 text-center animate-in fade-in slide-in-from-bottom-8 duration-700 ease-out">
+      <main id="main-content" className="z-10 w-full max-w-7xl space-y-6 text-center animate-in fade-in slide-in-from-bottom-8 duration-700 ease-out">
         <div className="space-y-2">
           <img
             src="/marqtplaza-logo.png"
             alt="marqtplaza.com — The Digital Village Square"
             className="mx-auto h-[78px] w-auto md:h-[96px]"
           />
-          <p className="mx-auto max-w-lg text-base font-medium leading-relaxed text-muted-foreground md:text-lg">
-            {t.searchDescription}
+          <h1 className="mx-auto max-w-3xl text-3xl font-black tracking-tight text-foreground sm:text-5xl">
+            {language === 'nl'
+              ? 'Ontdek wat er lokaal gebeurt, waar je ook bent'
+              : 'Discover what is happening locally, wherever you are'}
+          </h1>
+          <p className="mx-auto max-w-2xl text-base font-medium leading-relaxed text-muted-foreground md:text-lg">
+            {language === 'nl'
+              ? 'Vind activiteiten, bedrijven, eten en buurthulp vanuit één rustige, privacyvriendelijke plek.'
+              : 'Find activities, businesses, food, and community support from one calm, privacy-friendly place.'}
+          </p>
+          <p className="mx-auto inline-flex rounded-full border border-primary/25 bg-primary/10 px-4 py-2 text-sm font-extrabold text-foreground">
+            {language === 'nl'
+              ? 'Nu beschikbaar voor heel Den Haag'
+              : 'Currently available across The Hague'}
           </p>
         </div>
 
@@ -1136,50 +1192,31 @@ function SearchState({
 
         <div className="w-full pt-6">
           <div className="grid gap-6 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1.35fr)] lg:items-start">
-            <div className="relative h-[25rem] overflow-hidden rounded-3xl border border-border/70 bg-card/80 text-left shadow-xl backdrop-blur-sm sm:h-[30rem]">
-              <GoogleMapView
-                language={language}
-                locationId={mapLocation.id}
-                selectedNeighborhoods={mapLocation.neighborhoods}
-                showNeighborhoodLabels={false}
-                highlightedNeighborhood={hoveredMapNeighborhood ?? selectedMapNeighborhood}
-                onNeighborhoodClick={setSelectedMapNeighborhood}
-                onNeighborhoodHover={setHoveredMapNeighborhood}
-                markers={[]}
-                selectedMarkerId={null}
-                savedIds={new Set()}
-                onMarkerClick={() => undefined}
-              />
-              <div className="pointer-events-none absolute left-4 top-4 z-10 max-w-[calc(100%-2rem)] rounded-2xl border border-border/70 bg-card/90 px-4 py-3 shadow-lg backdrop-blur-sm">
-                <p className="text-sm font-extrabold text-foreground">
-                  {language === 'nl' ? 'Buurten op de kaart' : 'Neighborhoods on the map'}
+            <section className="flex min-h-[18rem] flex-col justify-between rounded-3xl border border-border/70 bg-card/90 p-6 text-left shadow-xl backdrop-blur-sm sm:p-8">
+              <div>
+                <p className="text-xs font-black uppercase tracking-[0.18em] text-primary">
+                  {language === 'nl' ? 'Jij houdt de regie' : 'You stay in control'}
                 </p>
-                <p className="mt-1 text-xs font-semibold text-muted-foreground">
-                  {getLocationName(mapLocation, language)}
-                  {' · '}
+                <h2 className="mt-3 text-2xl font-black tracking-tight text-foreground">
+                  {language === 'nl' ? 'Begin met de lijst. Kies zelf of je meer deelt.' : 'Start with the list. Choose if you want to share more.'}
+                </h2>
+                <p className="mt-3 text-sm font-medium leading-relaxed text-muted-foreground">
                   {language === 'nl'
-                    ? 'Elke buurt is omlijnd; de namen staan ernaast.'
-                    : 'Each neighborhood is outlined; names are listed alongside.'}
+                    ? 'We laden geen kaart, vragen geen locatie en zoeken niet op het web voordat jij daar bewust voor kiest.'
+                    : 'We do not load a map, request your location, or search the web until you explicitly choose to.'}
                 </p>
               </div>
-              {selectedMapNeighborhood && (
-                <div className="absolute bottom-4 left-4 right-4 z-10 flex items-center justify-between gap-3 rounded-2xl border border-primary/30 bg-card/95 px-4 py-3 text-left shadow-lg backdrop-blur-sm">
-                  <div className="min-w-0">
-                    <p className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-muted-foreground">
-                      {language === 'nl' ? 'Geselecteerde buurt' : 'Selected neighborhood'}
-                    </p>
-                    <p className="truncate text-sm font-extrabold text-foreground">{selectedMapNeighborhood}</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => onSearch(mapLocation.id, selectedMapNeighborhood, DEFAULT_START_SECTION)}
-                    className="shrink-0 rounded-xl bg-primary px-3 py-2 text-xs font-extrabold text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                  >
-                    {language === 'nl' ? 'Selecteer buurt' : 'Select neighborhood'}
-                  </button>
-                </div>
-              )}
-            </div>
+              <details className="mt-6 rounded-2xl border border-border/70 bg-muted/30 p-4">
+                <summary className="cursor-pointer font-extrabold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
+                  {language === 'nl' ? 'Hoe lokaal en web zoeken verschillen' : 'How local and web search differ'}
+                </summary>
+                <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
+                  {language === 'nl'
+                    ? 'Lokaal zoeken gebruikt de bestaande catalogus. Aanvullende webresultaten delen alleen je gekozen zoekgebied met externe aanbieders en zijn geen verificatie door MarqtPlaza.'
+                    : 'Local search uses the established catalogue. Additional web results share only your chosen search area with external providers and are not verified by MarqtPlaza.'}
+                </p>
+              </details>
+            </section>
 
             <div>
               <p className="mb-4 text-xs font-bold uppercase tracking-widest text-muted-foreground">{t.popularDestinations}</p>
@@ -1260,7 +1297,7 @@ function SearchState({
             </div>
           </div>
         </div>
-      </div>
+      </main>
     </div>
   );
 }
@@ -1470,12 +1507,28 @@ function MapPin({
   );
 }
 
+const getEvidenceStatusLabel = (language: Language) => ({
+  current: language === 'nl' ? 'Actueel gecontroleerd' : 'Currently checked',
+  stale: language === 'nl' ? 'Controle verlopen' : 'Check overdue',
+  conflicting: language === 'nl' ? 'Bronnen spreken elkaar tegen' : 'Sources conflict',
+  unknown: language === 'nl' ? 'Onbekend' : 'Unknown',
+  unavailable: language === 'nl' ? 'Bron niet beschikbaar' : 'Source unavailable',
+} as const);
+
+const getEvidenceFieldLabel = (language: Language) => ({
+  name: language === 'nl' ? 'Naam' : 'Name',
+  description: language === 'nl' ? 'Beschrijving' : 'Description',
+  address: language === 'nl' ? 'Adres' : 'Address',
+  event_date: language === 'nl' ? 'Evenementdatum' : 'Event date',
+  opening_times: language === 'nl' ? 'Openingstijden' : 'Opening times',
+  price: language === 'nl' ? 'Prijs' : 'Price',
+} as const);
+
 function MarkerCard({
   language,
   marker,
   isSelected,
   isSaved,
-  showAdminEvidence,
   onClick,
   onSave,
 }: {
@@ -1483,7 +1536,6 @@ function MarkerCard({
   marker: Marker;
   isSelected: boolean;
   isSaved: boolean;
-  showAdminEvidence: boolean;
   onClick: () => void;
   onSave: (e: React.MouseEvent) => void;
 }) {
@@ -1499,21 +1551,8 @@ function MarkerCard({
   const hasWebLinks = Boolean(websiteUrl || marker.facebookUrl || marker.instagramUrl);
   const timing = isEvent ? formatEventTiming(marker.startsAt, language) : null;
   const evidence = marker.evidence ?? [];
-  const evidenceStatusLabel = {
-    current: language === 'nl' ? 'Actueel gecontroleerd' : 'Currently checked',
-    stale: language === 'nl' ? 'Controle verlopen' : 'Check overdue',
-    conflicting: language === 'nl' ? 'Bronnen spreken elkaar tegen' : 'Sources conflict',
-    unknown: language === 'nl' ? 'Onbekend' : 'Unknown',
-    unavailable: language === 'nl' ? 'Bron niet beschikbaar' : 'Source unavailable',
-  } as const;
-  const evidenceFieldLabel = {
-    name: language === 'nl' ? 'Naam' : 'Name',
-    description: language === 'nl' ? 'Beschrijving' : 'Description',
-    address: language === 'nl' ? 'Adres' : 'Address',
-    event_date: language === 'nl' ? 'Evenementdatum' : 'Event date',
-    opening_times: language === 'nl' ? 'Openingstijden' : 'Opening times',
-    price: language === 'nl' ? 'Prijs' : 'Price',
-  } as const;
+  const evidenceStatusLabel = getEvidenceStatusLabel(language);
+  const evidenceFieldLabel = getEvidenceFieldLabel(language);
   const eventPrice = marker.priceText?.trim()
     || (marker.priceType === 'free'
       ? (language === 'nl' ? 'Gratis' : 'Free')
@@ -1576,7 +1615,7 @@ function MarkerCard({
             </span>
           </span>
         </button>
-        <SaveButton saved={isSaved} onToggle={onSave} />
+        <SaveButton language={language} saved={isSaved} onToggle={onSave} />
       </div>
       <div className="ml-16 min-w-0 py-0.5">
           {isEvent && (
@@ -1711,7 +1750,7 @@ function MarkerCard({
                 ))}
              </div>
            )}
-           {showAdminEvidence && <details data-testid={`listing-evidence-${marker.id}`} className="mb-3 rounded-xl border border-border/70 bg-muted/20 px-3 py-2 text-xs">
+           <details data-testid={`listing-evidence-${marker.id}`} className="mb-3 rounded-xl border border-border/70 bg-muted/20 px-3 py-2 text-xs">
              <summary className="cursor-pointer font-bold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
                {language === 'nl' ? 'Bron en controle per veld' : 'Source and check by field'}
              </summary>
@@ -1740,7 +1779,7 @@ function MarkerCard({
                  ))}
                </ul>
              )}
-           </details>}
+           </details>
           <div className="flex items-center gap-1.5 text-xs font-semibold text-secondary bg-secondary/5 w-fit px-2.5 py-1 rounded-md">
             <DetailIcon className="w-3.5 h-3.5 opacity-70" />
             {copy.details}
@@ -1871,6 +1910,8 @@ function DiscoveryState({
   listingSection,
   initialNeighborhood,
   initialPostcode,
+  initialScope = 'local',
+  urlErrors = [],
   restorePrevious,
   onBack,
   onLanguageChange,
@@ -1886,6 +1927,8 @@ function DiscoveryState({
   listingSection: ListingSection;
   initialNeighborhood?: string;
   initialPostcode?: string;
+  initialScope?: 'local' | 'web';
+  urlErrors?: readonly { code: string; parameter: string }[];
   restorePrevious?: boolean;
   onBack: () => void;
   onLanguageChange: (language: Language) => void;
@@ -1924,6 +1967,8 @@ function DiscoveryState({
   );
   const [nearbyPosition, setNearbyPosition] = useState<{ lat: number; lng: number } | null>(null);
   const [nearbyStatus, setNearbyStatus] = useState<'idle' | 'locating' | 'ready' | 'fallback'>('idle');
+  const [showMap, setShowMap] = useState(false);
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState(420);
   const sidebarResizeRef = useRef<{ pointerId: number; startX: number; startWidth: number } | null>(null);
   const initialScopeEffectRef = useRef(true);
@@ -1947,7 +1992,7 @@ function DiscoveryState({
     ? location?.neighborhoodCoords[selectedNeighborhoods[0]]
     : undefined;
 
-  const [liveMode, setLiveMode] = useState(readIncludeExternalSources);
+  const [liveMode, setLiveMode] = useState(() => initialScope === 'web' || readIncludeExternalSources());
   const setDiscoveryScope = useCallback((includeWebResults: boolean) => {
     sessionStorage.setItem(DISCOVERY_EXTERNAL_SOURCES_STORAGE_KEY, String(includeWebResults));
     setLiveMode(includeWebResults);
@@ -1974,15 +2019,15 @@ function DiscoveryState({
   // the new one loads: the client-side polygon and subcategory filters already
   // narrow it correctly, so the user never sees a false "0 results" state.
   const businessesQuery = useGetListings(
-    { cityId: locationId, section: 'businesses', language, neighborhoods: requestedNeighborhoods, businessCategories: requestedBusinessCategories, searchLat: requestedSearchCenter?.lat, searchLng: requestedSearchCenter?.lng, mode, anonymousId },
+    { cityId: locationId, section: 'businesses', language, neighborhoods: requestedNeighborhoods, businessCategories: requestedBusinessCategories, searchLat: requestedSearchCenter?.lat, searchLng: requestedSearchCenter?.lng, mode: 'stored_only', anonymousId },
     // Keep the query enabled even when the final subcategory is unchecked.
     // The empty category value is a real request for the current area; the
     // client-side filter keeps the map empty until the response settles.
-    { query: { enabled: topLevelCategories.businesses && hasSearchArea, placeholderData: keepPreviousData, queryKey: getGetListingsQueryKey({ cityId: locationId, section: 'businesses', language, neighborhoods: requestedNeighborhoods, businessCategories: requestedBusinessCategories, searchLat: requestedSearchCenter?.lat, searchLng: requestedSearchCenter?.lng, mode, anonymousId }) } },
+    { query: { enabled: topLevelCategories.businesses && hasSearchArea, placeholderData: keepPreviousData, queryKey: getGetListingsQueryKey({ cityId: locationId, section: 'businesses', language, neighborhoods: requestedNeighborhoods, businessCategories: requestedBusinessCategories, searchLat: requestedSearchCenter?.lat, searchLng: requestedSearchCenter?.lng, mode: 'stored_only', anonymousId }) } },
   );
   const foodDrinkQuery = useGetListings(
-    { cityId: locationId, section: 'food-drink', language, neighborhoods: requestedNeighborhoods, searchLat: requestedSearchCenter?.lat, searchLng: requestedSearchCenter?.lng, mode, anonymousId },
-    { query: { enabled: topLevelCategories['food-drink'] && hasSearchArea, placeholderData: keepPreviousData, queryKey: getGetListingsQueryKey({ cityId: locationId, section: 'food-drink', language, neighborhoods: requestedNeighborhoods, searchLat: requestedSearchCenter?.lat, searchLng: requestedSearchCenter?.lng, mode, anonymousId }) } },
+    { cityId: locationId, section: 'food-drink', language, neighborhoods: requestedNeighborhoods, searchLat: requestedSearchCenter?.lat, searchLng: requestedSearchCenter?.lng, mode: 'stored_only', anonymousId },
+    { query: { enabled: topLevelCategories['food-drink'] && hasSearchArea, placeholderData: keepPreviousData, queryKey: getGetListingsQueryKey({ cityId: locationId, section: 'food-drink', language, neighborhoods: requestedNeighborhoods, searchLat: requestedSearchCenter?.lat, searchLng: requestedSearchCenter?.lng, mode: 'stored_only', anonymousId }) } },
   );
   const socialMapQuery = useGetListings(
     { cityId: locationId, section: 'social-map', language, neighborhoods: requestedNeighborhoods, mode: 'stored_only', anonymousId },
@@ -2084,6 +2129,7 @@ function DiscoveryState({
       detailWindow.opener = null;
     }
   };
+  const handleClusterMarkerClick = handleMarkerClick;
 
   const toggleNeighborhood = (neighborhood: string) => {
     if (selectedNeighborhoods.includes(neighborhood)) {
@@ -2407,7 +2453,10 @@ function DiscoveryState({
 
       {/* Sidebar List */}
       <div
-      className="relative z-20 flex h-[70vh] min-h-[32rem] w-full flex-col overflow-y-auto border-r border-border bg-card/95 shadow-2xl backdrop-blur-xl md:h-full md:min-h-0 md:w-[var(--sidebar-width)] md:bg-card"
+      className={cn(
+        "relative z-20 flex min-h-screen w-full flex-col overflow-y-auto border-r border-border bg-card/95 shadow-2xl backdrop-blur-xl md:h-full md:min-h-0 md:bg-card",
+        showMap ? "h-[70vh] md:w-[var(--sidebar-width)]" : "md:w-full",
+      )}
       style={{ '--sidebar-width': `${sidebarWidth}px` } as React.CSSProperties}
       >
         <div className="shrink-0 border-b border-border bg-card p-4">
@@ -2420,7 +2469,7 @@ function DiscoveryState({
               <ArrowLeft className="w-6 h-6" />
             </button>
             <div className="flex-1 min-w-0">
-              <h2 className="text-3xl font-extrabold text-foreground tracking-tight">{getLocationName(location, language)}</h2>
+              <h1 className="text-3xl font-extrabold text-foreground tracking-tight">{getLocationName(location, language)}</h1>
               <p className="flex items-center gap-2 text-sm text-muted-foreground font-medium">
                 {t.discoveriesNearby(filteredMarkers.length)}
                 {isRefreshing && <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" aria-hidden="true" />}
@@ -2444,7 +2493,37 @@ function DiscoveryState({
               )}
             </button>
           </div>
-          <div className="mt-3 space-y-2">
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setShowMap((visible) => !visible)}
+              aria-pressed={showMap}
+              className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-primary/35 bg-primary/10 px-4 text-sm font-extrabold text-foreground transition-colors hover:bg-primary/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            >
+              {showMap ? <Search className="h-4 w-4" aria-hidden="true" /> : <MapIcon className="h-4 w-4" aria-hidden="true" />}
+              {showMap
+                ? (language === 'nl' ? 'Toon lijst' : 'Show list')
+                : (language === 'nl' ? 'Toon kaart' : 'Show map')}
+            </button>
+            {!showMap && (
+              <p className="text-xs font-semibold text-muted-foreground">
+                {language === 'nl'
+                  ? 'De kaart wordt pas geladen als je hiervoor kiest.'
+                  : 'The map loads only when you choose to show it.'}
+              </p>
+            )}
+          </div>
+          <button
+            type="button"
+            aria-expanded={mobileFiltersOpen}
+            aria-controls="discovery-filters"
+            onClick={() => setMobileFiltersOpen((open) => !open)}
+            className="mt-2 inline-flex min-h-11 w-full items-center justify-between rounded-xl border border-border bg-muted/35 px-4 text-sm font-extrabold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary md:hidden"
+          >
+            <span>{language === 'nl' ? 'Filters en zoekgebied' : 'Filters and search area'}</span>
+            <ChevronDown className={cn('h-4 w-4 transition-transform', mobileFiltersOpen && 'rotate-180')} aria-hidden="true" />
+          </button>
+          <div id="discovery-filters" className={cn("mt-3 space-y-2", mobileFiltersOpen ? "block" : "hidden md:block")}>
             <FilterFrame title={language === 'nl' ? 'Zoekbereik' : 'Search scope'}>
               <p className="text-xs font-semibold text-muted-foreground" role="status" aria-live="polite">
                 {liveMode
@@ -2754,7 +2833,7 @@ function DiscoveryState({
                         checked={isChecked}
                         onChange={(event) => {
                           const nativeEvent = event.nativeEvent as MouseEvent;
-                          toggleNeighborhood(neighborhood, { additive: nativeEvent.shiftKey });
+                           toggleNeighborhood(neighborhood);
                         }}
                         className="h-4 w-4 shrink-0 accent-primary"
                       />
@@ -2786,6 +2865,28 @@ function DiscoveryState({
         </div>
 
         {/* Data source badge */}
+        {urlErrors && urlErrors.length > 0 && (
+          <div role="alert" className="mx-4 mt-4 mb-2 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-amber-900 dark:border-amber-500/20 dark:bg-amber-500/5 dark:text-amber-200">
+            <div className="flex items-start gap-3">
+              <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
+              <div>
+                <h3 className="font-extrabold text-sm mb-1">
+                  {language === 'nl' ? 'Sommige zoektermen zijn niet (meer) geldig' : 'Some search criteria are not (or no longer) valid'}
+                </h3>
+                <p className="text-xs leading-relaxed opacity-90 mb-2">
+                  {language === 'nl'
+                    ? 'We hebben je zoekopdracht aangepast naar beschikbare opties voor Den Haag, zodat je gewoon verder kunt.'
+                    : 'We updated your search to available options for The Hague, so you can continue browsing.'}
+                </p>
+                <ul className="text-[11px] list-disc list-inside ml-2 opacity-80 font-medium space-y-0.5">
+                  {urlErrors.map((err, i) => (
+                    <li key={i}>{err.parameter}: {err.code.replace(/-/g, ' ')}</li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          </div>
+        )}
         {!isLoading && (
           <div className="flex flex-wrap items-center gap-2 px-4 py-3">
             {isLive ? (
@@ -2971,7 +3072,7 @@ function DiscoveryState({
               </div>
             ))}
             
-            {!isLoading && !webIsLoading && filteredMarkers.length === 0 && !isError && !webIsError && (
+            {!isLoading && filteredMarkers.length === 0 && !isError && (
               <div className="flex flex-col items-center justify-center py-20 px-4 text-center animate-in fade-in zoom-in-95 duration-500">
                 <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mb-5">
                   <MapPinOff className="w-8 h-8 text-muted-foreground" />
@@ -3020,8 +3121,8 @@ function DiscoveryState({
         />
       </div>
 
-      {/* Map Area */}
-      <div className="flex h-[70vh] min-h-[32rem] w-full flex-1 flex-col overflow-hidden bg-background md:h-full md:min-h-0">
+      {/* Map Area: mounted only after an explicit user action. */}
+      {showMap && <div className="flex h-[70vh] min-h-[32rem] w-full flex-1 flex-col overflow-hidden bg-background md:h-full md:min-h-0">
         <ReferenceCategoryNav
           embedded
           language={language}
@@ -3049,7 +3150,7 @@ function DiscoveryState({
           />
 
         </div>
-      </div>
+      </div>}
     </div>
   );
 }
@@ -3059,9 +3160,8 @@ function EventDetailView({ eventId, listingSection = 'events' }: {
   listingSection?: Exclude<ListingSection, 'social-map'>;
 }) {
   const [, navigate] = useLocation();
-  const language: Language = typeof window !== 'undefined' && window.localStorage.getItem('buurtplaza-language') === 'nl'
-    ? 'nl'
-    : 'en';
+  const parsedUrlState = parseDiscoveryUrlState(window.location.search).state;
+  const language: Language = parsedUrlState.locale;
   const { savedMarkers, savedStateStatus } = useSavedPlaces();
   const decodedEventId = decodeURIComponent(eventId);
   const cachedListing = useMemo(() => readDetailListing(decodedEventId), [decodedEventId]);
@@ -3227,6 +3327,39 @@ function EventDetailView({ eventId, listingSection = 'events' }: {
             />
           )}
 
+          <div className="mt-8">
+            <details data-testid={`listing-evidence-${listing.id}`} className="rounded-xl border border-border/70 bg-muted/20 px-4 py-3 text-sm">
+              <summary className="cursor-pointer font-bold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
+                {language === 'nl' ? 'Bron en controle per veld' : 'Source and check by field'}
+              </summary>
+              {!listing.evidence || listing.evidence.length === 0 ? (
+                <p className="mt-3 font-semibold text-muted-foreground">
+                  {language === 'nl'
+                    ? 'Bron, controledatum en status zijn onbekend.'
+                    : 'Source, checked date, and status are unknown.'}
+                </p>
+              ) : (
+                <ul className="mt-3 space-y-3">
+                  {listing.evidence.map((item) => (
+                    <li key={item.field} className="rounded-lg bg-card px-3 py-2.5">
+                      <p className="font-bold text-foreground">{getEvidenceFieldLabel(language)[item.field]}</p>
+                      <p className="mt-1 text-muted-foreground">
+                        {(language === 'nl' ? 'Bron' : 'Source')}: {item.sourceLabel ?? (language === 'nl' ? 'Onbekend' : 'Unknown')}
+                        {' · '}
+                        {(language === 'nl' ? 'Gecontroleerd' : 'Checked')}: {item.checkedAt
+                          ? formatEvidenceCheckedAt(item.checkedAt, language)
+                          : (language === 'nl' ? 'Onbekend' : 'Unknown')}
+                        {' · '}
+                        {getEvidenceStatusLabel(language)[item.status]}
+                      </p>
+                      {item.caveat ? <p className="mt-1.5 font-semibold text-amber-800">{item.caveat}</p> : null}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </details>
+          </div>
+
           <RouteLinks
             language={language}
             marker={{
@@ -3272,12 +3405,52 @@ function EventDetailView({ eventId, listingSection = 'events' }: {
 
 function EventDetailRoute() {
   const [, params] = useRoute('/activiteiten/den-haag/:eventId');
-  const requestedSection = new URLSearchParams(window.location.search).get('section');
+  const requestedSection = parseDiscoveryUrlState(window.location.search).state.section;
   const listingSection: Exclude<ListingSection, 'social-map'> = requestedSection === 'businesses'
     || requestedSection === 'food-drink'
     ? requestedSection
     : DEFAULT_START_SECTION;
   return <EventDetailView eventId={params?.eventId ?? ''} listingSection={listingSection} />;
+}
+
+function UnsupportedCityRoute() {
+  const [, params] = useRoute('/activiteiten/:citySlug');
+  const language = parseDiscoveryUrlState(window.location.search).state.locale;
+  return (
+    <main className="flex min-h-screen items-center justify-center bg-background px-5 py-12">
+      <section className="w-full max-w-xl rounded-3xl border border-border bg-card p-8 text-center shadow-xl">
+        <MapPinOff className="mx-auto h-10 w-10 text-primary" aria-hidden="true" />
+        <h1 className="mt-5 text-3xl font-extrabold text-foreground">
+          {language === 'nl' ? 'Deze stad wordt nog niet ondersteund' : 'This city is not supported yet'}
+        </h1>
+        <p className="mt-3 leading-7 text-muted-foreground">
+          {language === 'nl'
+            ? `De huidige gecontroleerde dekking is beperkt tot Den Haag. “${params?.citySlug ?? ''}” is niet stilzwijgend vervangen.`
+            : `Current checked coverage is limited to The Hague. “${params?.citySlug ?? ''}” was not silently substituted.`}
+        </p>
+        <Link
+          href={`/activiteiten/den-haag${language === 'nl' ? '?locale=nl' : ''}`}
+          className="mt-6 inline-flex min-h-11 items-center rounded-full bg-primary px-5 py-3 font-bold text-primary-foreground"
+        >
+          {language === 'nl' ? 'Ontdek Den Haag' : 'Discover The Hague'}
+        </Link>
+      </section>
+    </main>
+  );
+}
+
+function NotFoundRoute() {
+  const language = useStoredLanguage();
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-background text-foreground">
+      <div className="text-center">
+        <h1 className="text-4xl font-bold mb-2">404</h1>
+        <p className="text-muted-foreground">
+          {language === 'nl' ? 'Pagina niet gevonden' : 'Page not found'}
+        </p>
+      </div>
+    </div>
+  );
 }
 
 type AppScreen =
@@ -3296,21 +3469,35 @@ function getInitialListingSection(): ListingSection {
 
 function MainApp({ initialLocationId }: { initialLocationId?: string } = {}) {
   const [, navigate] = useLocation();
+  const searchString = useSearch();
+  const parsedUrl = useMemo(() => parseDiscoveryUrlState(searchString), [searchString]);
+  const parsedUrlState = parsedUrl.state;
+  const initialUrlErrors = useRef(parsedUrl.errors);
+  const storedLanguage = useStoredLanguage();
+  const requestedLocale = new URLSearchParams(searchString).get('locale');
+
   const [screen, setScreen] = useState<AppScreen>(() =>
     initialLocationId
       ? {
           kind: 'discovery',
           locationId: initialLocationId,
-          neighborhood: new URLSearchParams(window.location.search).get('neighborhood') || undefined,
-          postcode: new URLSearchParams(window.location.search).get('postcode') || undefined,
+          neighborhood: parsedUrlState.neighborhood,
+          postcode: parsedUrlState.postcode,
           listingSection: getInitialListingSection(),
         }
       : { kind: 'search' },
   );
-  const [language, setLanguage] = useState<Language>(() => {
-    if (typeof window === 'undefined') return 'en';
-    return window.localStorage.getItem('buurtplaza-language') === 'nl' ? 'nl' : 'en';
-  });
+
+  const language: Language = requestedLocale === 'nl' || requestedLocale === 'en'
+    ? parsedUrlState.locale
+    : storedLanguage;
+
+  const setLanguage = useCallback((newLang: Language) => {
+    const search = serializeDiscoveryUrlState({ ...parsedUrlState, locale: newLang });
+    persistLanguage(newLang);
+    navigate(window.location.pathname + (search ? `?${search}` : ''), { replace: true });
+  }, [navigate, parsedUrlState]);
+
   const [userRole, setUserRole] = useState<UserRole>(() => {
     if (typeof window === 'undefined') return 'user';
     return window.localStorage.getItem(USER_ROLE_STORAGE_KEY) === 'designer' ? 'designer' : 'user';
@@ -3324,9 +3511,31 @@ function MainApp({ initialLocationId }: { initialLocationId?: string } = {}) {
     savedCount,
   } = useSavedPlaces();
 
+  const clerkAuth = useAuth();
+
+  const handleToggle = useCallback((marker: Marker) => {
+    if (!clerkAuth.isSignedIn) {
+      const currentPath = window.location.pathname + window.location.search;
+      navigate(withReturnPath('/sign-in', currentPath));
+      return;
+    }
+    toggle(marker);
+  }, [clerkAuth.isSignedIn, navigate, toggle]);
+
   useEffect(() => {
     persistLanguage(language);
+    if (typeof document !== 'undefined') {
+      document.documentElement.lang = language;
+    }
   }, [language]);
+
+  useEffect(() => {
+    if (!initialLocationId || parsedUrl.valid) return;
+    navigate(
+      window.location.pathname + (parsedUrl.canonical ? `?${parsedUrl.canonical}` : ''),
+      { replace: true },
+    );
+  }, [initialLocationId, navigate, parsedUrl.canonical, parsedUrl.valid]);
 
   useEffect(() => {
     window.localStorage.setItem(USER_ROLE_STORAGE_KEY, userRole);
@@ -3339,7 +3548,7 @@ function MainApp({ initialLocationId }: { initialLocationId?: string } = {}) {
         savedMarkers={savedMarkers}
         eventAlerts={savedEventAlerts}
         onEventRefresh={recordEventRefresh}
-        onToggle={toggle}
+        onToggle={handleToggle}
         onBack={() => setScreen({ kind: 'search' })}
       />
     );
@@ -3353,6 +3562,8 @@ function MainApp({ initialLocationId }: { initialLocationId?: string } = {}) {
         listingSection={screen.listingSection}
         initialNeighborhood={screen.neighborhood}
         initialPostcode={screen.postcode}
+        initialScope={parsedUrlState.scope}
+        urlErrors={initialUrlErrors.current}
         restorePrevious={new URLSearchParams(window.location.search).get('restore') === '1'}
         onBack={() => {
           setScreen({ kind: 'search' });
@@ -3362,7 +3573,7 @@ function MainApp({ initialLocationId }: { initialLocationId?: string } = {}) {
         userRole={userRole}
         onUserRoleChange={setUserRole}
         savedIds={savedIds}
-        onToggle={toggle}
+        onToggle={handleToggle}
         onEventRefresh={recordEventRefresh}
         onViewSaved={() => setScreen({ kind: 'saved' })}
       />
@@ -3385,11 +3596,14 @@ function MainApp({ initialLocationId }: { initialLocationId?: string } = {}) {
         });
 
         if (locId === 'dhg') {
-          const params = new URLSearchParams();
-          if (neighborhood) params.set('neighborhood', neighborhood);
-          if (postcode) params.set('postcode', postcode);
-          if (listingSection !== 'events') params.set('section', listingSection);
-          const query = params.toString();
+          const query = serializeDiscoveryUrlState({
+            locale: language,
+            city: 'den-haag',
+            section: listingSection,
+            neighborhood,
+            postcode,
+            scope: readIncludeExternalSources() ? 'web' : 'local',
+          });
           navigate(`/activiteiten/den-haag${query ? `?${query}` : ''}`);
         }
       }}
@@ -3420,6 +3634,7 @@ export default function App() {
           <Route path="/activiteiten/den-haag">
             <MainApp initialLocationId="dhg" />
           </Route>
+          <Route path="/activiteiten/:citySlug" component={UnsupportedCityRoute} />
           <Route path="/capture" component={CaptureRoute} />
           <Route path="/bronnen" component={SourceDirectoryView} />
           <Route path="/buurt" component={CommunityFeedView} />
@@ -3444,14 +3659,7 @@ export default function App() {
           <Route path="/mijn-bedrijf" component={MyBusinessWorkspace} />
           <Route path="/mijn-bedrijf/:id/profiel" component={BusinessRevisionPage} />
           <Route path="/redactie/bedrijven" component={BusinessModerationView} />
-          <Route>
-            <div className="min-h-screen flex items-center justify-center bg-background text-foreground">
-              <div className="text-center">
-                <h1 className="text-4xl font-bold mb-2">404</h1>
-                <p className="text-muted-foreground">Page not found</p>
-              </div>
-            </div>
-          </Route>
+          <Route component={NotFoundRoute} />
         </Switch>
           <Toaster />
         </QueryClientProvider>

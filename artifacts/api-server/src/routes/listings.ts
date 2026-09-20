@@ -172,15 +172,6 @@ export type EventEvidenceSource = {
   lastCheckedAt?: string | null;
 };
 
-export type EventEvidenceStatus = "verified" | "empty" | "stale" | "blocked" | "unavailable";
-
-export type EventEvidenceSource = {
-  id: string;
-  name: string;
-  status: EventEvidenceStatus;
-  lastCheckedAt?: string | null;
-};
-
 export type EventEvidence = {
   status: EventEvidenceStatus;
   lastCheckedAt?: string | null;

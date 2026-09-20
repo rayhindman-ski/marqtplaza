@@ -34,6 +34,7 @@ import {
 } from 'lucide-react';
 import { type Marker as MarkerData, LOCATIONS, type Category, type BusinessCategory, type SocialMapCategory, type FoodType } from '../lib/data';
 import { getMarkerCopy, translations, type Language } from '../lib/i18n';
+import { getMapMarkerColor } from '../lib/mapColors';
 import { NEIGHBORHOOD_BOUNDARIES, type BoundaryPoint, type NeighborhoodBoundary } from '@workspace/geo';
 
 type MapCategory = Category;
@@ -311,24 +312,6 @@ const MAP_COPY = {
 
 function DataLoadingNotice({ isDataLoading }: { isDataLoading: boolean }) {
   if (!isDataLoading) return null;
-
-  return (
-    <div
-      role="status"
-      aria-live="polite"
-      data-testid="map-fetching-notice"
-      className="pointer-events-none absolute left-1/2 top-4 z-30 -translate-x-1/2 rounded-full border border-primary/30 bg-card/95 px-4 py-2 text-xs font-extrabold text-primary shadow-lg backdrop-blur-sm"
-    >
-      <span
-        aria-hidden="true"
-        className="mr-2 inline-block h-2 w-2 animate-pulse rounded-full bg-primary align-middle"
-      />
-      Fetching data please wait
-    </div>
-  );
-}
-
-type MapPoint = MarkerData;
 
   return (
     <div
@@ -818,6 +801,14 @@ function shouldShowNeighborhoodLabel(
   return !options.showAllNeighborhoods || options.selectedNeighborhoods.includes(name);
 }
 
+function isNeighborhoodSelected(
+  name: string,
+  selectedNeighborhoods: string[],
+  highlightedNeighborhood: string | null,
+): boolean {
+  return highlightedNeighborhood === name || selectedNeighborhoods.includes(name);
+}
+
 function handleNeighborhoodKeyDown(
   event: React.KeyboardEvent<SVGPolygonElement>,
   name: string,
@@ -859,7 +850,11 @@ function CoordinateMapFallback({
   | 'markers'
   | 'selectedMarkerId'
   | 'onMarkerClick'
->) {
+  | 'recenterSelectedMarker'
+> & {
+  onClusterClick: (cluster: MapPointCluster) => void;
+  onClusterLeave: () => void;
+}) {
   const points = getMapPoints(markers);
   const displayedNeighborhoods = showAllNeighborhoods
     ? (getLocation(locationId)?.neighborhoods ?? selectedNeighborhoods)
@@ -2067,6 +2062,7 @@ export function GoogleMapView(props: GoogleMapViewProps) {
       clusterCloseTimerRef.current = null;
     }, 180);
   }, []);
+  let content;
 
   if (
     props.markers.length === 0

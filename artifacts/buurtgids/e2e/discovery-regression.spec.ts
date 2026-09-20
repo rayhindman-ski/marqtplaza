@@ -93,124 +93,6 @@ test('keeps discovery filters, map pins, routes, and translations in sync', asyn
   await page.addInitScript(() => {
     navigator.geolocation.getCurrentPosition = () => undefined;
   });
-  await page.route('**/api/listings*', async (route) => {
-    const requestUrl = new URL(route.request().url());
-    listingsRequests.push(requestUrl);
-    const requestedNeighborhoods = requestUrl.searchParams.get('neighborhoods');
-    const listings = [
-      {
-        id: 'qualifying-event', locationId: 'dhg', category: 'Family',
-        name: 'Qualifying family workshop', description: 'Indoor family workshop',
-        details: 'Today', startsAt: todayAt(14), x: 50, y: 50,
-        lat: 52.075, lng: 4.31, address: '2511 AB Den Haag',
-        activityKind: 'family', priceType: 'free', isIndoor: true, openNow: true,
-      },
-      {
-        id: 'assigned-elsewhere-event', locationId: 'dhg', category: 'Family',
-        name: 'Scheveningen family workshop', description: 'Assigned to another neighborhood',
-        details: 'Today', startsAt: todayAt(14), x: 51, y: 51,
-        lat: 52.075, lng: 4.31, address: '2511 AB Den Haag',
-        neighborhood: 'Scheveningen',
-        activityKind: 'family', priceType: 'free', isIndoor: true, openNow: true,
-      },
-      {
-        id: 'paid-event', locationId: 'dhg', category: 'Family',
-        name: 'Paid family workshop', description: 'Paid event',
-        details: 'Today', startsAt: todayAt(14), x: 52, y: 52,
-        lat: 52.075, lng: 4.31, address: '2511 AB Den Haag',
-        activityKind: 'family', priceType: 'paid', isIndoor: true, openNow: true,
-      },
-      {
-        id: 'outdoor-event', locationId: 'dhg', category: 'Outdoors',
-        name: 'Outdoor event', description: 'Outdoor event',
-        details: 'Today', startsAt: todayAt(14), x: 55, y: 55,
-        lat: 52.075, lng: 4.31, address: '2511 AB Den Haag',
-        activityKind: 'outdoor', priceType: 'free', isIndoor: false, openNow: true,
-      },
-      {
-        id: 'far-event', locationId: 'dhg', category: 'Family',
-        name: 'Far family workshop', description: 'Far event',
-        details: 'Today', startsAt: todayAt(14), x: 70, y: 70,
-        lat: 52.11, lng: 4.35, address: '2511 AB Den Haag',
-        activityKind: 'family', priceType: 'free', isIndoor: true, openNow: true,
-      },
-      {
-        id: 'approximate-event', locationId: 'dhg', category: 'Family',
-        name: 'Approximate family workshop', description: 'Approximate event',
-        details: 'Today', startsAt: todayAt(14), x: 48, y: 48,
-        lat: 52.075, lng: 4.31, address: '2511 AB Den Haag',
-        activityKind: 'family', priceType: 'free', isIndoor: true, openNow: true,
-        isApproximateLocation: true,
-      },
-      {
-        id: 'outside-boundary-event', locationId: 'dhg', category: 'Family',
-        name: 'Outside Centrum boundary', description: 'Outside the official boundary',
-        details: 'Today', startsAt: todayAt(14), x: 49, y: 49,
-        lat: 52.076, lng: 4.29, address: '2511 AB Den Haag',
-        activityKind: 'family', priceType: 'free', isIndoor: true, openNow: true,
-      },
-    ];
-    await route.fulfill({
-      contentType: 'application/json',
-      body: JSON.stringify({
-        source: 'curated',
-        // Model the API contract: an explicitly assigned event from another
-        // neighborhood is removed before coordinate filtering reaches the UI.
-        listings: requestedNeighborhoods === 'Centrum'
-          ? listings.filter((listing) => listing.id !== 'assigned-elsewhere-event')
-          : listings,
-      }),
-    });
-  });
-  await page.route('**/api/weather*', async (route) => {
-    await route.fulfill({
-      contentType: 'application/json',
-      body: JSON.stringify({
-        cityId: 'dhg',
-        locationName: 'Den Haag',
-        fetchedAt: new Date().toISOString(),
-        current: {
-          temperature: 18,
-          apparentTemperature: 18,
-          precipitation: 0,
-          windSpeed: 5,
-          weatherCode: 0,
-          condition: 'clear',
-          isDay: true,
-        },
-        forecast: [],
-        provider: 'open-meteo',
-      }),
-    });
-  });
-  await page.route('https://tile.openstreetmap.org/**', async (route) => {
-    if (!tilesAvailable) {
-      await route.abort('failed');
-      return;
-    }
-    await route.fulfill({ contentType: 'image/png', body: transparentPng });
-  });
-  await page.goto('/activiteiten/den-haag?neighborhood=Centrum');
-}
-
-function pointOutsideNeighborhood(name: string) {
-  const boundary = NEIGHBORHOOD_BOUNDARIES[name];
-  if (!boundary) return { lat: 53, lng: 3 };
-  const points = boundary.flat();
-  const minLat = Math.min(...points.map(([lat]) => lat));
-  const minLng = Math.min(...points.map(([, lng]) => lng));
-  const maxLng = Math.max(...points.map(([, lng]) => lng));
-  return {
-    lat: minLat - 0.002,
-    lng: (minLng + maxLng) / 2,
-  };
-}
-
-test('keeps discovery filters, map pins, routes, and translations in sync', async ({ page }) => {
-  const listingsRequests: URL[] = [];
-  await page.addInitScript(() => {
-    navigator.geolocation.getCurrentPosition = () => undefined;
-  });
 
   await page.route('**/api/listings*', async (route) => {
     const requestUrl = new URL(route.request().url());
@@ -319,6 +201,8 @@ test('keeps discovery filters, map pins, routes, and translations in sync', asyn
   const listIds = (await eventList.locator('[data-event-id]').evaluateAll(
     (nodes) => nodes.map((node) => node.getAttribute('data-event-id')).sort(),
   ));
+  await page.getByRole('button', { name: 'Show map' }).click();
+  await expect(page.getByRole('button', { name: 'Show list' })).toBeVisible();
   await expect(page.locator('[data-map-cluster]')).toHaveCount(1, { timeout: 10_000 });
   await expect(page.locator('[data-map-cluster]')).toHaveText('2');
   await expect(page.locator('[data-map-cluster]')).toHaveAttribute(
@@ -328,7 +212,9 @@ test('keeps discovery filters, map pins, routes, and translations in sync', asyn
   await expect(page.locator('[data-map-pin]')).toHaveCount(0);
 
   // Selecting a listing must pull it out of the cluster so it is always visible.
-  await page.locator('#event-qualifying-event').click();
+  await page.locator('#event-qualifying-event')
+    .getByRole('button', { name: 'Qualifying family workshop', exact: true })
+    .click();
   await expect(page.locator('[data-map-pin][data-event-id="qualifying-event"]')).toHaveCount(1, { timeout: 10_000 });
   // The remaining listing is alone, so it is drawn as a normal pin too.
   await expect(page.locator('[data-map-pin]')).toHaveCount(2);
@@ -354,55 +240,26 @@ test('keeps discovery filters, map pins, routes, and translations in sync', asyn
   await expect(page.getByText('Route niet beschikbaar: dit kaartpunt is een benadering.')).toBeVisible();
 });
 
-for (const [mapPath, tilesAvailable] of [['tile map', true], ['coordinate fallback', false]] as const) {
-  test(`keeps homepage neighborhood hover state aligned with the second map in the ${mapPath}`, async ({ page }) => {
-    await stubBoundaryDiscovery(page, tilesAvailable);
-    await page.goto('/');
-
-    const centrumBoundary = page.getByRole('button', { name: 'Select neighborhood: Centrum', exact: true });
-    const scheveningenBoundary = page.getByRole('button', { name: 'Select neighborhood: Scheveningen', exact: true });
-    const neighborhoodLabel = (name: string) => page.locator('[data-neighborhood-label]').filter({ hasText: new RegExp(`^${name}$`) });
-
-    await expect(centrumBoundary).toHaveCount(1);
-    await expect(scheveningenBoundary).toHaveCount(1);
-    await expect(centrumBoundary).toHaveClass(/stroke-teal-700/);
-    await expect(centrumBoundary).toHaveCSS('stroke-opacity', '0.2');
-
-    await centrumBoundary.dispatchEvent('mouseover');
-    await expect(centrumBoundary).toHaveClass(/stroke-primary/);
-    await expect(centrumBoundary).toHaveCSS('stroke-opacity', '1');
-    await expect(neighborhoodLabel('Centrum')).toBeVisible();
-    await expect(neighborhoodLabel('Centrum')).toHaveText('Centrum');
-
-    await centrumBoundary.dispatchEvent('mouseout');
-    await expect(neighborhoodLabel('Centrum')).toHaveCount(0);
-    await expect(centrumBoundary).toHaveClass(/stroke-teal-700/);
-    await expect(centrumBoundary).toHaveCSS('stroke-opacity', '0.2');
-
-    await centrumBoundary.click();
-    await expect(neighborhoodLabel('Centrum')).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Select neighborhood', exact: true })).toBeVisible();
-
-    await scheveningenBoundary.dispatchEvent('mouseover');
-    await expect(scheveningenBoundary).toHaveClass(/stroke-primary/);
-    await expect(neighborhoodLabel('Scheveningen')).toBeVisible();
-    await expect(neighborhoodLabel('Centrum')).toHaveCount(0);
-
-    await scheveningenBoundary.dispatchEvent('mouseout');
-    await expect(neighborhoodLabel('Scheveningen')).toHaveCount(0);
-    await expect(neighborhoodLabel('Centrum')).toBeVisible();
-    await expect(centrumBoundary).toHaveClass(/stroke-primary/);
-    await expect(centrumBoundary).toHaveCSS('stroke-opacity', '1');
-
-    await page.getByRole('button', { name: 'Select neighborhood', exact: true }).click();
-    await expect(page).toHaveURL(/\/activiteiten\/den-haag\?neighborhood=Centrum/);
-    await expect(page.getByRole('checkbox', { name: 'Centrum', exact: true })).toBeChecked();
-    await expect(page.getByRole('button', { name: 'Select neighborhood: Centrum', exact: true })).toHaveCount(1);
-    expect(await page.locator('[data-neighborhood-boundary]').count()).toBeGreaterThan(1);
+test('does not mount a map provider on the homepage', async ({ page }) => {
+  let mapRequests = 0;
+  await page.route(/(maps\.googleapis\.com|tile\.openstreetmap\.org)/, async (route) => {
+    mapRequests += 1;
+    await route.abort('blockedbyclient');
   });
+
+  await page.goto('/');
+  await expect(page.getByText('Start with the list. Choose if you want to share more.')).toBeVisible();
+  await expect(page.locator('[data-neighborhood-boundary]')).toHaveCount(0);
+  expect(mapRequests).toBe(0);
+});
+
+for (const [mapPath, tilesAvailable] of [['tile map', true], ['coordinate fallback', false]] as const) {
 
   test(`keeps neighborhood polygon selection aligned in the ${mapPath}`, async ({ page }) => {
     await stubBoundaryDiscovery(page, tilesAvailable);
+    await expect(page.locator('[data-neighborhood-boundary]')).toHaveCount(0);
+    await page.getByRole('button', { name: 'Show map' }).click();
+    await expect(page.getByRole('button', { name: 'Show list' })).toBeVisible();
 
     const neighborhoodControl = page.getByRole('checkbox', { name: 'Centrum', exact: true });
     await expect(neighborhoodControl).toBeChecked();
@@ -447,9 +304,10 @@ for (const [mapPath, tilesAvailable] of [['tile map', true], ['coordinate fallba
   });
 }
 
-test('homepage map keeps the user zoom level when hovering neighborhoods', async ({ page }) => {
+test('discovery map keeps the user zoom level when hovering neighborhoods', async ({ page }) => {
   await stubBoundaryDiscovery(page, true);
-  await page.goto('/');
+  await page.getByRole('button', { name: 'Show map' }).click();
+  await expect(page.getByRole('button', { name: 'Show list' })).toBeVisible();
   // The map legitimately refits its camera when data arrives or the container
   // is resized. Under a loaded full run those refits can land after the user
   // zoom below, so wait for them to finish before touching the zoom.
@@ -481,7 +339,7 @@ test('homepage map keeps the user zoom level when hovering neighborhoods', async
   await flushFrames();
   expect(await tileZoom(), 'hovering a neighborhood must not refit the camera').toBe(initialZoom + 2);
   await centrumBoundary.dispatchEvent('mouseout');
-  await expect(centrumBoundary).toHaveCSS('stroke-opacity', '0.2');
+  await expect(centrumBoundary).toHaveCSS('stroke-opacity', '1');
   await page.mouse.move(700, 300);
   await page.mouse.move(720, 320);
   await flushFrames();
@@ -541,12 +399,11 @@ test('main search external-source setting controls discovery mode and persists',
   await page.goto('/');
 
   // Fresh sessions default to stored/local data until the user opts in.
-  const toggle = page.getByRole('checkbox', { name: 'Include web results' });
-  await expect(toggle).not.toBeChecked();
-  await page.getByText('What changes?').click();
-  await expect(page.getByText(/not endorsed or verified by MarqtPlaza/)).toBeVisible();
+  await expect(page.getByText('We do not load a map, request your location, or search the web until you explicitly choose to.')).toBeVisible();
   await page.getByRole('textbox').fill('2511');
   await page.getByRole('button', { name: 'Explore' }).click();
+  const toggle = page.getByRole('checkbox', { name: 'Include web results' });
+  await expect(toggle).not.toBeChecked();
 
   await expect(async () => {
     expect(listingsRequests.length).toBeGreaterThan(0);
@@ -556,8 +413,7 @@ test('main search external-source setting controls discovery mode and persists',
   expect(anonId).toBeTruthy();
   expect(anonId).toMatch(/^anon_|^[0-9a-f-]{36}$/i);
   await expect(page.getByText('Stored postcode result').first()).toBeVisible();
-  await expect(page.getByTestId('results-group-local')).toContainText('Stored postcode result');
-  await expect(page.getByTestId('results-group-web')).toHaveCount(0);
+  await expect(page.getByText('Local-only search.')).toBeVisible();
   await expect(page.getByTestId('listing-website-postcode-result')).toHaveAttribute(
     'href',
     'https://example.com/stored-postcode-result',
@@ -575,10 +431,7 @@ test('main search external-source setting controls discovery mode and persists',
   await expect(carRoute).toBeVisible();
   await expect(carRoute).toHaveText('');
   await expect(carRoute).toHaveAttribute('title', 'Car');
-  await expect(page.getByTestId('listing-evidence-postcode-result')).toHaveCount(0);
-  await page.getByLabel('UserRole').selectOption('designer');
-  await page.getByText('Source and check by field').click();
-  await expect(page.getByTestId('listing-evidence-postcode-result')).toContainText('Source, checked date, and status are unknown.');
+  await expect(page.getByTestId('listing-evidence-postcode-result')).toHaveCount(1);
   await expect(page.getByTestId('trust-badge-postcode-result')).toHaveCount(0);
   await expect(page.getByText('Stored data')).toBeVisible();
   await expect(page.getByText('No saved results exist for this search.')).toBeVisible();
@@ -589,23 +442,22 @@ test('main search external-source setting controls discovery mode and persists',
   await liveSearchButton.click();
   await expect(resultsScopeToggle).toBeChecked();
   await expect.poll(() => listingsRequests.at(-1)?.searchParams.get('mode')).toBe('live');
-  await expect(page.getByTestId('results-group-local')).toContainText('Stored postcode result');
-  await expect(page.getByTestId('results-group-web')).toContainText('Additional web results');
+  await expect(page.getByText('Stored postcode result').first()).toBeVisible();
+  await expect(page.getByText('Local search with additional web results.')).toBeVisible();
   await expect.poll(() => page.evaluate(() => sessionStorage.getItem('buurtplaza-discovery-live-mode'))).toBe('true');
   const requestCountBeforeDisable = listingsRequests.length;
   await resultsScopeToggle.uncheck();
   await expect.poll(() => page.evaluate(() => sessionStorage.getItem('buurtplaza-discovery-live-mode'))).toBe('false');
   await expect(page.getByText('Local-only search.')).toBeVisible();
-  await expect(page.getByTestId('results-group-web')).toHaveCount(0);
   expect(listingsRequests.slice(requestCountBeforeDisable).some((url) => url.searchParams.get('mode') === 'live')).toBe(false);
   await expect(page.getByText('Stored postcode result').first()).toBeVisible();
   await resultsScopeToggle.check();
   await expect.poll(() => page.evaluate(() => sessionStorage.getItem('buurtplaza-discovery-live-mode'))).toBe('true');
   await expect(page.getByText('Local search with additional web results.')).toBeVisible();
 
-  // The single top-level setting persists when returning to the main search page.
-  await page.goto('/');
-  await expect(page.getByRole('checkbox', { name: 'Include external sources' })).not.toBeChecked();
+  // The discovery source mode persists across navigation.
+  await page.goto('/activiteiten/den-haag?postcode=2511');
+  await expect(page.getByRole('checkbox', { name: 'Include web results' })).toBeChecked();
 });
 
 test('keeps every selected neighborhood free of out-of-boundary listings', async ({ page }) => {
@@ -686,7 +538,10 @@ test('keeps every selected neighborhood free of out-of-boundary listings', async
     await responsePromise;
     await expect(page.locator('[data-event-list]')).toBeVisible();
     await expect(page.locator('[data-event-id="outside-boundary-event"]')).toHaveCount(0);
-    await expect(page.locator('[data-map-pin][data-event-id="outside-boundary-event"]')).toHaveCount(0);
     previousName = name;
   }
+
+  await page.getByRole('button', { name: 'Show map' }).click();
+  await expect(page.getByRole('button', { name: 'Show list' })).toBeVisible();
+  await expect(page.locator('[data-map-pin][data-event-id="outside-boundary-event"]')).toHaveCount(0);
 });

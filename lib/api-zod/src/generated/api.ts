@@ -3398,10 +3398,7 @@ export const ReviewBusinessClaimParams = zod.object({
 
 export const reviewBusinessClaimBodyReasonMax = 500;
 
-export const createBusinessIntakeDraftBodyBusinessNeighborhoodMin = 2;
-export const createBusinessIntakeDraftBodyBusinessNeighborhoodMax = 120;
 
-export const createBusinessIntakeDraftBodyBusinessAddressMax = 240;
 
 export const ReviewBusinessClaimBody = zod.object({
   "decision": zod.enum(['approve', 'reject', 'request_changes']),
@@ -3556,7 +3553,6 @@ export const GetEditorialQueueResponse = zod.object({
   "hasMore": zod.boolean()
 }).describe('Cursor pagination envelope shared by list operations added after this contract version.')
 })
-})
 
 
 /**
@@ -3579,9 +3575,7 @@ export const reviewBusinessRevisionBodyFactChecksItemNoteMax = 500;
 
 export const reviewBusinessRevisionBodyFactChecksMax = 20;
 
-export const reviewBusinessRevisionBodyFactChecksItemNoteMax = 500;
 
-export const reviewBusinessRevisionBodyFactChecksMax = 20;
 
 export const ReviewBusinessRevisionBody = zod.object({
   "decision": zod.enum(['approve', 'reject', 'request_changes']),

@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "hello": "tsx ./src/hello.ts",
+    "test:post-merge": "node --test ./src/post-merge.test.mjs",
     "test:typecheck-scripts": "node --test ./src/check-typecheck-scripts.test.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },

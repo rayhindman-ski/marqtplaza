@@ -6,6 +6,8 @@ import {
   fetchOpenStreetMapBusinesses,
   filterEventsByNeighborhoods,
   filterListingsByBusinessCategories,
+  findStoredListingInRows,
+  listingSnapshotRows,
   normalizeNeighborhoods,
   normalizedListingsKey,
   parseAnonymousId,
