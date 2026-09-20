@@ -65,7 +65,7 @@ describe('listing presentation', () => {
     );
   });
 
-  it('applies the nearby radius and refuses approximate route destinations', () => {
+  it('uses exact coordinates for routes and refuses approximate destinations', () => {
     const nearby = new Set(['nearby'] as const);
     assert.equal(
       matchesDiscoveryQuickFilters(marker, nearby, {
@@ -78,13 +78,27 @@ describe('listing presentation', () => {
       const url = routeUrl(marker, mode);
       assert.ok(url, `expected a route URL for ${mode}`);
       assert.match(url, new RegExp(`travelmode=${mode}`));
-      assert.match(url, /destination=Family%20workshop%2C%2052\.071%2C%204\.301/);
+      assert.equal(new URL(url).searchParams.get('destination'), '52.071,4.301');
     }
 
     const approximateMarker = { ...marker, isApproximateLocation: true };
     for (const mode of routeModes) {
       assert.equal(routeUrl(approximateMarker, mode), null, `approximate marker exposed ${mode} directions`);
     }
+  });
+
+  it('does not mix event names into Google Maps route destinations', () => {
+    const url = routeUrl({
+      ...marker,
+      name: 'Golden Stage – The Indo on screen',
+      lat: 52.086869,
+      lng: 4.306416,
+    }, 'driving');
+
+    assert.ok(url);
+    const destination = new URL(url).searchParams.get('destination');
+    assert.equal(destination, '52.086869,4.306416');
+    assert.equal(destination?.includes('Golden Stage'), false);
   });
 
   it('keeps every active quick filter conjunctive', () => {
