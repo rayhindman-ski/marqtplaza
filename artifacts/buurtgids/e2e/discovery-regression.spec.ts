@@ -411,6 +411,96 @@ test('uses subcategory colors for individual pins and mixed clusters', async ({ 
   await expect(page.locator('[data-map-pin][data-event-id="retail-color"]')).toHaveCount(0);
 });
 
+test('restores discovery filters and map after returning from listing details', async ({ page }) => {
+  await page.context().route('https://maps.googleapis.com/**', async (route) => {
+    await route.abort('failed');
+  });
+  await page.context().route('**/api/listings*', async (route) => {
+    await route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({
+        source: 'curated',
+        listings: [
+          {
+            id: 'return-state-retail',
+            locationId: 'dhg',
+            category: 'Businesses',
+            businessCategory: 'Retail & Shopping',
+            name: 'Return state shop',
+            description: 'A listing used to verify discovery return state.',
+            details: 'Open',
+            neighborhood: 'Centrum',
+            lat: 52.075,
+            lng: 4.312,
+            x: 50,
+            y: 50,
+          },
+          {
+            id: 'return-state-health',
+            locationId: 'dhg',
+            category: 'Businesses',
+            businessCategory: 'Health & Wellness',
+            name: 'Filtered health listing',
+            description: 'This listing should remain filtered after returning.',
+            details: 'Open',
+            neighborhood: 'Centrum',
+            lat: 52.078,
+            lng: 4.315,
+            x: 55,
+            y: 45,
+          },
+        ],
+      }),
+    });
+  });
+  await page.context().route('**/api/weather*', async (route) => {
+    await route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({
+        cityId: 'dhg',
+        locationName: 'Den Haag',
+        fetchedAt: new Date().toISOString(),
+        current: {
+          temperature: 18,
+          apparentTemperature: 18,
+          precipitation: 0,
+          windSpeed: 5,
+          weatherCode: 0,
+          condition: 'clear',
+          isDay: true,
+        },
+        forecast: [],
+        provider: 'open-meteo',
+      }),
+    });
+  });
+  await page.context().route('https://tile.openstreetmap.org/**', async (route) => {
+    await route.fulfill({ contentType: 'image/png', body: transparentPng });
+  });
+
+  await page.goto('/activiteiten/den-haag?neighborhood=Centrum&section=businesses');
+  await page.getByRole('checkbox', { name: 'Health & wellness', exact: true }).uncheck();
+  const showMap = page.getByRole('button', { name: 'Show Map', exact: true }).first();
+  if (await showMap.isVisible()) await showMap.click();
+
+  const retailPin = page.locator('[data-map-pin][data-event-id="return-state-retail"]');
+  await expect(retailPin).toBeVisible({ timeout: 10_000 });
+  await expect(page.locator('[data-map-pin][data-event-id="return-state-health"]')).toHaveCount(0);
+
+  const detailPagePromise = page.waitForEvent('popup');
+  await retailPin.click();
+  const detailPage = await detailPagePromise;
+  await expect(detailPage.getByRole('heading', { name: 'Return state shop' })).toBeVisible();
+  await detailPage.getByRole('button', { name: 'Back to discoveries' }).click();
+
+  await expect(detailPage.getByRole('checkbox', { name: 'Centrum', exact: true })).toBeChecked();
+  await expect(detailPage.getByRole('checkbox', { name: 'Businesses', exact: true })).toBeChecked();
+  await expect(detailPage.getByRole('checkbox', { name: 'Retail & shopping', exact: true })).toBeChecked();
+  await expect(detailPage.getByRole('checkbox', { name: 'Health & wellness', exact: true })).not.toBeChecked();
+  await expect(detailPage.locator('[data-map-pin][data-event-id="return-state-retail"]')).toBeVisible({ timeout: 10_000 });
+  await expect(detailPage.getByRole('button', { name: 'Show Map', exact: true })).toHaveCount(0);
+});
+
 test('shows meaningful event context before opening the card', async ({ page }) => {
   await stubBoundaryDiscovery(page, true);
   await page.goto('/activiteiten/den-haag');

@@ -488,6 +488,44 @@ const TOP_LEVEL_SECTIONS: ListingSection[] = ['events', 'food-drink', 'social-ma
 const DEFAULT_START_SECTION: ListingSection = 'events';
 type AgendaTimeFilter = 'all' | 'today' | 'week';
 type AgendaPriceFilter = 'all' | 'free' | 'low-cost';
+type DiscoveryView = 'map' | 'list';
+
+type DiscoveryReturnState = {
+  savedAt: number;
+  locationId: string;
+  topLevelCategories: Record<ListingSection, boolean>;
+  subcategories: Record<FilterSubcategory, boolean>;
+  selectedNeighborhoods: string[];
+  neighborhoodSelection: 'all' | 'some' | 'none';
+  postcodeFilter: string;
+  view: DiscoveryView;
+  agendaTime: AgendaTimeFilter;
+  agendaPrice: AgendaPriceFilter;
+  mealOnly: boolean;
+  quickFilters: DiscoveryQuickFilter[];
+};
+
+const DISCOVERY_RETURN_STATE_KEY = 'buurtplaza-discovery-return-state';
+const DISCOVERY_RETURN_STATE_TTL_MS = 24 * 60 * 60 * 1000;
+
+function readDiscoveryReturnState(locationId: string): DiscoveryReturnState | null {
+  try {
+    const value = JSON.parse(window.localStorage.getItem(DISCOVERY_RETURN_STATE_KEY) ?? 'null') as Partial<DiscoveryReturnState> | null;
+    if (!value
+      || value.locationId !== locationId
+      || typeof value.savedAt !== 'number'
+      || Date.now() - value.savedAt > DISCOVERY_RETURN_STATE_TTL_MS
+      || !value.topLevelCategories
+      || !value.subcategories
+      || !Array.isArray(value.selectedNeighborhoods)
+      || !Array.isArray(value.quickFilters)) {
+      return null;
+    }
+    return value as DiscoveryReturnState;
+  } catch {
+    return null;
+  }
+}
 
 const eventActivityLabels: Record<EventActivityKind, { nl: string; en: string }> = {
   community: { nl: 'Samen in de buurt', en: 'Community' },
@@ -1845,6 +1883,7 @@ function DiscoveryState({
   listingSection,
   initialNeighborhood,
   initialPostcode,
+  restorePrevious,
   onBack,
   onLanguageChange,
   savedIds,
@@ -1859,6 +1898,7 @@ function DiscoveryState({
   listingSection: ListingSection;
   initialNeighborhood?: string;
   initialPostcode?: string;
+  restorePrevious?: boolean;
   onBack: () => void;
   onLanguageChange: (language: Language) => void;
   savedIds: Set<string>;
@@ -1868,31 +1908,38 @@ function DiscoveryState({
 }) {
   const location = LOCATIONS.find(l => l.id === locationId);
   const t = translations[language];
+  const restoredState = useMemo(
+    () => restorePrevious ? readDiscoveryReturnState(locationId) : null,
+    [locationId, restorePrevious],
+  );
   const [topLevelCategories, setTopLevelCategories] = useState<Record<ListingSection, boolean>>(
-    () => initialPostcode ? allTopLevelState() : topLevelStateFor(listingSection),
+    () => restoredState?.topLevelCategories ?? (initialPostcode ? allTopLevelState() : topLevelStateFor(listingSection)),
   );
   const [subcategories, setSubcategories] = useState<Record<FilterSubcategory, boolean>>(
-    () => initialPostcode ? allSubcategoryState() : subcategoryStateFor(listingSection),
+    () => restoredState?.subcategories ?? (initialPostcode ? allSubcategoryState() : subcategoryStateFor(listingSection)),
   );
   const [selectedNeighborhoods, setSelectedNeighborhoods] = useState<string[]>(
-    initialNeighborhood ? [initialNeighborhood] : [],
+    restoredState?.selectedNeighborhoods ?? (initialNeighborhood ? [initialNeighborhood] : []),
   );
   const [neighborhoodSelection, setNeighborhoodSelection] = useState<'all' | 'some' | 'none'>(
-    initialNeighborhood ? 'some' : 'all',
+    restoredState?.neighborhoodSelection ?? (initialNeighborhood ? 'some' : 'all'),
   );
-  const [postcodeFilter, setPostcodeFilter] = useState(initialPostcode ?? '');
+  const [postcodeFilter, setPostcodeFilter] = useState(restoredState?.postcodeFilter ?? initialPostcode ?? '');
   const [neighborhoodSearch, setNeighborhoodSearch] = useState('');
   const [selectedMarker, setSelectedMarker] = useState<string | null>(null);
   const [viewportPreservingSelection, setViewportPreservingSelection] = useState<string | null>(null);
-  const [view, setView] = useState<'map' | 'list'>('list');
-  const [agendaTime, setAgendaTime] = useState<AgendaTimeFilter>('all');
-  const [agendaPrice, setAgendaPrice] = useState<AgendaPriceFilter>('all');
-  const [mealOnly, setMealOnly] = useState(false);
-  const [quickFilters, setQuickFilters] = useState<Set<DiscoveryQuickFilter>>(() => new Set());
+  const [view, setView] = useState<DiscoveryView>(restoredState?.view ?? 'list');
+  const [agendaTime, setAgendaTime] = useState<AgendaTimeFilter>(restoredState?.agendaTime ?? 'all');
+  const [agendaPrice, setAgendaPrice] = useState<AgendaPriceFilter>(restoredState?.agendaPrice ?? 'all');
+  const [mealOnly, setMealOnly] = useState(restoredState?.mealOnly ?? false);
+  const [quickFilters, setQuickFilters] = useState<Set<DiscoveryQuickFilter>>(
+    () => new Set(restoredState?.quickFilters ?? []),
+  );
   const [nearbyPosition, setNearbyPosition] = useState<{ lat: number; lng: number } | null>(null);
   const [nearbyStatus, setNearbyStatus] = useState<'idle' | 'locating' | 'ready' | 'fallback'>('idle');
   const [sidebarWidth, setSidebarWidth] = useState(420);
   const sidebarResizeRef = useRef<{ pointerId: number; startX: number; startWidth: number } | null>(null);
+  const initialScopeEffectRef = useRef(true);
   const hasSearchArea = Boolean(
     initialPostcode?.trim()
     || initialNeighborhood?.trim()
@@ -2110,12 +2157,46 @@ function DiscoveryState({
   };
 
   useEffect(() => {
+    if (initialScopeEffectRef.current) {
+      initialScopeEffectRef.current = false;
+      if (restoredState) return;
+    }
     setTopLevelCategories(initialPostcode ? allTopLevelState() : topLevelStateFor(listingSection));
     setSubcategories(initialPostcode ? allSubcategoryState() : subcategoryStateFor(listingSection));
     setSelectedNeighborhoods(initialNeighborhood ? [initialNeighborhood] : []);
     setNeighborhoodSelection(initialNeighborhood ? 'some' : 'all');
     setSelectedMarker(null);
-  }, [initialNeighborhood, initialPostcode, listingSection]);
+  }, [initialNeighborhood, initialPostcode, listingSection, restoredState]);
+
+  useEffect(() => {
+    const returnState: DiscoveryReturnState = {
+      savedAt: Date.now(),
+      locationId,
+      topLevelCategories,
+      subcategories,
+      selectedNeighborhoods,
+      neighborhoodSelection,
+      postcodeFilter,
+      view,
+      agendaTime,
+      agendaPrice,
+      mealOnly,
+      quickFilters: [...quickFilters],
+    };
+    window.localStorage.setItem(DISCOVERY_RETURN_STATE_KEY, JSON.stringify(returnState));
+  }, [
+    agendaPrice,
+    agendaTime,
+    locationId,
+    mealOnly,
+    neighborhoodSelection,
+    postcodeFilter,
+    quickFilters,
+    selectedNeighborhoods,
+    subcategories,
+    topLevelCategories,
+    view,
+  ]);
 
   useEffect(() => {
     if (nearbyStatus !== 'locating') return;
@@ -3211,7 +3292,7 @@ function EventDetailView({ eventId, listingSection = 'events' }: { eventId: stri
             </button>
             <button
               type="button"
-              onClick={() => navigate('/activiteiten/den-haag')}
+              onClick={() => navigate('/activiteiten/den-haag?restore=1')}
               className="inline-flex items-center gap-2 rounded-full bg-foreground px-5 py-3 text-sm font-bold text-background"
             >
               <ArrowLeft className="h-4 w-4" />
@@ -3246,7 +3327,7 @@ function EventDetailView({ eventId, listingSection = 'events' }: { eventId: stri
         <div className="mx-auto flex max-w-5xl items-center justify-between gap-4">
           <button
             type="button"
-            onClick={() => navigate('/activiteiten/den-haag')}
+            onClick={() => navigate('/activiteiten/den-haag?restore=1')}
             className="inline-flex items-center gap-2 rounded-full px-2 py-2 text-sm font-bold text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
           >
             <ArrowLeft className="h-5 w-5" />
@@ -3451,6 +3532,7 @@ function MainApp({ initialLocationId }: { initialLocationId?: string } = {}) {
         listingSection={screen.listingSection}
         initialNeighborhood={screen.neighborhood}
         initialPostcode={screen.postcode}
+        restorePrevious={new URLSearchParams(window.location.search).get('restore') === '1'}
         onBack={() => {
           setScreen({ kind: 'search' });
           navigate('/');
