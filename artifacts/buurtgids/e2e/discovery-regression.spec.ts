@@ -36,6 +36,7 @@ async function stubBoundaryDiscovery(page: Page, tilesAvailable: boolean) {
           y: 50,
           lat: 52.071,
           lng: 4.301,
+           neighborhood: 'Centrum',
           activityKind: 'family',
           priceType: 'free',
           isIndoor: true,
@@ -244,6 +245,26 @@ test('keeps discovery filters, map pins, routes, and translations in sync', asyn
     await expect(page.getByText(label, { exact: true }).first()).toBeVisible();
   }
   await expect(page.getByText('Route niet beschikbaar: dit kaartpunt is een benadering.')).toBeVisible();
+});
+
+test('shows meaningful event context before opening the card', async ({ page }) => {
+  await stubBoundaryDiscovery(page, true);
+  await page.goto('/activiteiten/den-haag');
+
+  const card = page.locator('#event-boundary-event');
+  const disclosure = card.getByRole('button', { name: 'Boundary test event', exact: true });
+  const summary = page.getByTestId('listing-summary-boundary-event');
+
+  await expect(disclosure).toHaveAttribute('aria-expanded', 'false');
+  await expect(summary).toBeVisible();
+  await expect(summary).toHaveText('Event used to keep neighborhood map coverage stable.');
+  await expect(summary).toHaveClass(/line-clamp-2/);
+  await expect(card.getByText('Add to your calendar')).toHaveCount(0);
+
+  await disclosure.click();
+  await expect(disclosure).toHaveAttribute('aria-expanded', 'true');
+  await expect(summary).not.toHaveClass(/line-clamp-2/);
+  await expect(card.getByText('Add to your calendar')).toBeVisible();
 });
 
 for (const [mapPath, tilesAvailable] of [['tile map', true], ['coordinate fallback', false]] as const) {

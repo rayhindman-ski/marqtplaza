@@ -1536,19 +1536,30 @@ function MarkerCard({
                   </a>
                 )}
               </div>
-              <EventCalendarActions
-                language={language}
-                event={{
-                  name: marker.name,
-                  description: copy.description,
-                  startsAt: marker.startsAt,
-                  venue: marker.venue ?? marker.address,
-                  sourceUrl: marker.sourceUrl,
-                }}
-              />
             </div>
           )}
+          <p
+            data-testid={`listing-summary-${marker.id}`}
+            className={cn(
+              "mb-3 text-sm leading-relaxed text-muted-foreground",
+              !isExpanded && "line-clamp-2",
+            )}
+          >
+            {copy.description}
+          </p>
           {isExpanded && <div id={`marker-details-${marker.id}`}>
+           {isEvent && (
+             <EventCalendarActions
+               language={language}
+               event={{
+                 name: marker.name,
+                 description: copy.description,
+                 startsAt: marker.startsAt,
+                 venue: marker.venue ?? marker.address,
+                 sourceUrl: marker.sourceUrl,
+               }}
+             />
+           )}
            {(marker.businessCategory || marker.socialCategory || sourceLabel || marker.reviewStatus || (topLevelForMarker(marker) === 'events' && eventBadgeLabel(marker, language).length > 0)) && (
              <div className="mb-3 flex flex-wrap items-center gap-1.5">
                {marker.businessCategory && (
@@ -1582,7 +1593,6 @@ function MarkerCard({
                 ))}
              </div>
            )}
-          <p className="text-muted-foreground text-sm mb-3 line-clamp-2 leading-relaxed">{copy.description}</p>
            <details data-testid={`listing-evidence-${marker.id}`} className="mb-3 rounded-xl border border-border/70 bg-muted/20 px-3 py-2 text-xs">
              <summary className="cursor-pointer font-bold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
                {language === 'nl' ? 'Bron en controle per veld' : 'Source and check by field'}
