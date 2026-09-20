@@ -29,7 +29,7 @@ async function stubBoundaryDiscovery(page: Page, tilesAvailable: boolean) {
             id: 'boundary-event',
             locationId: 'dhg',
             category: 'Family',
-            name: 'Centrum boundary test event',
+            name: 'Boundary test event',
             description: 'Event used to keep neighborhood map coverage stable.',
             details: 'Today',
             startsAt: todayAt(14),
@@ -265,6 +265,99 @@ test('keeps discovery filters, map pins, routes, and translations in sync', asyn
     await expect(page.getByText(label, { exact: true }).first()).toBeVisible();
   }
   await expect(page.getByText('Route niet beschikbaar: dit kaartpunt is een benadering.')).toBeVisible();
+});
+
+test('uses subcategory colors for individual pins and mixed clusters', async ({ page }) => {
+  await page.route('https://maps.googleapis.com/**', async (route) => {
+    await route.abort('failed');
+  });
+  await page.route('**/api/listings*', async (route) => {
+    await route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({
+        source: 'curated',
+        listings: [
+          {
+            id: 'retail-color',
+            locationId: 'dhg',
+            category: 'Businesses',
+            businessCategory: 'Retail & Shopping',
+            name: 'Retail color test',
+            description: 'Retail listing used to verify map colors.',
+            details: 'Open',
+            lat: 52.075,
+            lng: 4.312,
+            x: 50,
+            y: 50,
+          },
+          {
+            id: 'health-color',
+            locationId: 'dhg',
+            category: 'Businesses',
+            businessCategory: 'Health & Wellness',
+            name: 'Health color test',
+            description: 'Health listing used to verify map colors.',
+            details: 'Open',
+            lat: 52.075,
+            lng: 4.312,
+            x: 50,
+            y: 50,
+          },
+        ],
+      }),
+    });
+  });
+  await page.route('**/api/weather*', async (route) => {
+    await route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({
+        cityId: 'dhg',
+        locationName: 'Den Haag',
+        fetchedAt: new Date().toISOString(),
+        current: {
+          temperature: 18,
+          apparentTemperature: 18,
+          precipitation: 0,
+          windSpeed: 5,
+          weatherCode: 0,
+          condition: 'clear',
+          isDay: true,
+        },
+        forecast: [],
+        provider: 'open-meteo',
+      }),
+    });
+  });
+  await page.route('https://tile.openstreetmap.org/**', async (route) => {
+    await route.fulfill({ contentType: 'image/png', body: transparentPng });
+  });
+
+  await page.goto('/activiteiten/den-haag?neighborhood=Centrum&section=businesses');
+  const showMap = page.getByRole('button', { name: 'Show Map', exact: true }).first();
+  if (await showMap.isVisible()) await showMap.click();
+
+  const cluster = page.locator('[data-map-cluster]');
+  await expect(cluster).toHaveCount(1, { timeout: 10_000 });
+  await expect(cluster).toHaveText('2');
+  await expect(cluster).toHaveAttribute('data-cluster-colors', '#2563eb,#dc2626');
+  await expect(cluster.locator(':scope > span').first()).toHaveCSS('background-image', /conic-gradient/);
+
+  const retailFilter = page.getByRole('checkbox', { name: 'Retail & shopping', exact: true });
+  const healthFilter = page.getByRole('checkbox', { name: 'Health & wellness', exact: true });
+  await healthFilter.uncheck();
+  await expect(page.locator('[data-map-pin][data-event-id="retail-color"]')).toHaveAttribute(
+    'data-marker-color',
+    '#2563eb',
+  );
+  await expect(page.locator('[data-map-pin][data-event-id="health-color"]')).toHaveCount(0);
+
+  await healthFilter.check();
+  await retailFilter.uncheck();
+  await expect(page.locator('[data-map-pin][data-event-id="health-color"]')).toHaveAttribute(
+    'data-marker-color',
+    '#dc2626',
+  );
+  await expect(page.locator('[data-map-pin][data-event-id="retail-color"]')).toHaveCount(0);
 });
 
 test('shows meaningful event context before opening the card', async ({ page }) => {

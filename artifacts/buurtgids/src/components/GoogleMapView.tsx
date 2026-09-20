@@ -50,6 +50,46 @@ const CATEGORY_COLORS: Record<MapCategory, string> = {
   'Social map': '#0f766e',
 };
 
+const BUSINESS_CATEGORY_COLORS: Record<BusinessCategory, string> = {
+  'Retail & Shopping': '#2563eb',
+  'Food & Drink': '#b45309',
+  'Health & Wellness': '#dc2626',
+  'Beauty & Personal Care': '#db2777',
+  'Professional Services': '#4f46e5',
+  'Finance & Legal': '#0f766e',
+  'Home & Repair': '#7c3aed',
+  'Automotive & Mobility': '#475569',
+  'Education & Childcare': '#0891b2',
+  'Hospitality & Travel': '#c2410c',
+  'Arts, Culture & Entertainment': '#9333ea',
+  'Fitness & Sports': '#16a34a',
+};
+
+const FOOD_TYPE_COLORS: Record<FoodType, string> = {
+  restaurant: '#c2410c',
+  cafe: '#92400e',
+  bar: '#7e22ce',
+  bakery: '#d97706',
+  takeaway: '#e11d48',
+  other: '#64748b',
+};
+
+const SOCIAL_CATEGORY_COLORS: Record<SocialMapCategory, string> = {
+  Geldzaken: '#047857',
+  'Gezin en opvoeden': '#db2777',
+  Gezondheid: '#dc2626',
+  'Heilige plaatsen': '#7c3aed',
+  "Hobby's en interesses": '#9333ea',
+  Ondersteuning: '#ea580c',
+  'Ontmoeten en samenleven': '#0f766e',
+  'Sporten en bewegen': '#16a34a',
+  'Taal en computer': '#2563eb',
+  Vervoer: '#475569',
+  'Werk en opleiding': '#4f46e5',
+  'Wonen en huishouden': '#b45309',
+  'Zorg voor een naaste': '#be123c',
+};
+
 function getSubcategoryIcon(marker: Pick<MarkerData, 'category' | 'businessCategory' | 'socialCategory' | 'foodType'>): LucideIcon {
   if (marker.category === 'Food & Drink' && marker.foodType) {
     const foodIcons: Record<FoodType, LucideIcon> = {
@@ -139,11 +179,26 @@ function getClusterVisual(points: MapPoint[]) {
   }
   const ranked = [...counts.values()].sort((a, b) => b.count - a.count);
   const dominantMarker = ranked[0]?.marker ?? points[0]!;
+  const segments = ranked.map(({ count, marker }) => ({
+    count,
+    color: getMarkerColor(marker),
+  }));
+  let completed = 0;
+  const background = segments.length <= 1
+    ? getMarkerColor(dominantMarker)
+    : `conic-gradient(${segments.map(({ count, color }) => {
+        const start = (completed / points.length) * 100;
+        completed += count;
+        const end = (completed / points.length) * 100;
+        return `${color} ${start}% ${end}%`;
+      }).join(', ')})`;
   return {
     dominantMarker,
     isMixed: ranked.length > 1,
     label: getMarkerVisualLabel(dominantMarker),
-    colors: [...new Set(points.map((point) => getCategoryColor(point.category)))].slice(0, 4),
+    background,
+    dominantColor: getMarkerColor(dominantMarker),
+    colors: [...new Set(segments.map(({ color }) => color))].slice(0, 4),
   };
 }
 
@@ -329,8 +384,19 @@ function getCategoryIcon(marker: MapPoint) {
   return getSubcategoryIcon(marker);
 }
 
-function getCategoryColor(category: MapCategory) {
-  return CATEGORY_COLORS[category] ?? CATEGORY_COLORS.Businesses;
+function getMarkerColor(
+  marker: Pick<MarkerData, 'category' | 'businessCategory' | 'socialCategory' | 'foodType'>,
+) {
+  if (marker.category === 'Food & Drink' && marker.foodType) {
+    return FOOD_TYPE_COLORS[marker.foodType];
+  }
+  if (marker.category === 'Businesses' && marker.businessCategory) {
+    return BUSINESS_CATEGORY_COLORS[marker.businessCategory];
+  }
+  if (marker.category === 'Social map' && marker.socialCategory) {
+    return SOCIAL_CATEGORY_COLORS[marker.socialCategory];
+  }
+  return CATEGORY_COLORS[marker.category] ?? CATEGORY_COLORS.Businesses;
 }
 
 function MarkerPreview({
@@ -610,7 +676,6 @@ function ClusterSummaryMarker({
     : `${count} listings in this area`;
   const visual = getClusterVisual(cluster.points);
   const ClusterIcon = getSubcategoryIcon(visual.dominantMarker);
-  const color = getCategoryColor(visual.dominantMarker.category);
   const accessibleLabel = visual.isMixed
     ? `${label} Mostly ${visual.label}, with other categories.`
     : `${label} ${visual.label}.`;
@@ -619,6 +684,7 @@ function ClusterSummaryMarker({
     <div
       key={cluster.id}
       data-map-cluster
+      data-cluster-colors={visual.colors.join(',')}
       role={isInteractive ? 'button' : 'img'}
       tabIndex={isInteractive ? 0 : undefined}
       aria-label={accessibleLabel}
@@ -660,8 +726,8 @@ function ClusterSummaryMarker({
         style={{
           width: size,
           height: size,
-          background: color,
-          boxShadow: `0 7px 16px -5px rgba(23,34,53,0.5), 0 0 0 2px ${color}4d`,
+          background: visual.background,
+          boxShadow: `0 7px 16px -5px rgba(23,34,53,0.5), 0 0 0 2px ${visual.dominantColor}4d`,
         }}
       >
         <ClusterIcon className="mb-0.5 h-3.5 w-3.5" strokeWidth={2.5} aria-hidden="true" />
@@ -688,10 +754,10 @@ function createHtmlClusterElement(
   const count = cluster.points.length;
   const size = count >= 100 ? 62 : count >= 10 ? 56 : 50;
   const visual = getClusterVisual(cluster.points);
-  const color = getCategoryColor(visual.dominantMarker.category);
   const button = document.createElement('button');
   button.type = 'button';
   button.setAttribute('data-map-cluster', '');
+  button.setAttribute('data-cluster-colors', visual.colors.join(','));
   button.setAttribute(
     'aria-label',
     `${count} listings in this area. ${visual.isMixed ? `Mostly ${visual.label}, with other categories.` : `${visual.label}.`} Show listings and zoom in.`,
@@ -708,8 +774,8 @@ function createHtmlClusterElement(
     `height:${size}px`,
     'border:3px solid #fff',
     'border-radius:50%',
-    `background:${color}`,
-    `box-shadow:0 7px 16px -5px rgba(23,34,53,0.5),0 0 0 2px ${color}4d`,
+    `background:${visual.background}`,
+    `box-shadow:0 7px 16px -5px rgba(23,34,53,0.5),0 0 0 2px ${visual.dominantColor}4d`,
     'color:#fff',
     'font:900 14px/1 ui-sans-serif,system-ui,sans-serif',
     'cursor:pointer',
@@ -1070,7 +1136,7 @@ function CoordinateMapFallback({
         const top = ((maxLat - point.lat) / (maxLat - minLat)) * 100;
         const isSelected = point.id === selectedMarkerId;
         const isMuted = Boolean(selectedMarkerId) && !isSelected;
-        const color = getCategoryColor(point.category);
+        const color = getMarkerColor(point);
         const Icon = getCategoryIcon(point);
 
         const className = "marqtplaza-map-marker relative flex items-center justify-center rounded-full transition-transform hover:scale-110 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/35";
@@ -1105,6 +1171,7 @@ function CoordinateMapFallback({
               type="button"
               data-map-pin
               data-event-id={point.id}
+              data-marker-color={color}
               onClick={() => onMarkerClick(point.id)}
               onMouseEnter={() => setHoveredMarkerId(point.id)}
               onMouseLeave={() => setHoveredMarkerId(null)}
@@ -1472,7 +1539,7 @@ function TileMapView({
         const top = world.y - mapTop;
         const isSelected = point.id === selectedMarkerId;
         const isMuted = Boolean(selectedMarkerId) && !isSelected;
-        const color = getCategoryColor(point.category);
+        const color = getMarkerColor(point);
         const Icon = getCategoryIcon(point);
 
         const className = "marqtplaza-map-marker relative flex items-center justify-center rounded-full font-black text-white transition-transform hover:scale-110 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/35";
@@ -1515,6 +1582,7 @@ function TileMapView({
               type="button"
               data-map-pin
               data-event-id={point.id}
+              data-marker-color={color}
               onPointerDown={(event) => event.stopPropagation()}
               onClick={(event) => {
                 event.stopPropagation();
@@ -1611,7 +1679,7 @@ function GoogleMapCanvas({
 
   const buildMarkerEl = useCallback(
     (marker: MarkerData, isSelected: boolean, isSaved: boolean): HTMLElement => {
-      const color = getCategoryColor(marker.category);
+      const color = getMarkerColor(marker);
       const copy = getMarkerCopy(marker, language);
       const t = translations[language];
       const wrapper = document.createElement('div');
@@ -1662,6 +1730,7 @@ function GoogleMapCanvas({
       element.setAttribute('type', 'button');
       element.setAttribute('data-map-pin', '');
       element.setAttribute('data-event-id', marker.id);
+      element.setAttribute('data-marker-color', color);
       element.setAttribute('aria-label', t.openMarker(marker.name));
       element.addEventListener('click', () => onMarkerClick(marker.id));
       const icon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
