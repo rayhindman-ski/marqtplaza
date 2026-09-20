@@ -1966,14 +1966,19 @@ function DiscoveryState({
     }, 0);
   };
 
-  const toggleNeighborhood = (neighborhood: string) => {
-    if (selectedNeighborhoods.includes(neighborhood)) {
-      setSelectedNeighborhoods([]);
-      setNeighborhoodSelection('none');
-    } else {
-      setSelectedNeighborhoods([neighborhood]);
-      setNeighborhoodSelection('some');
-    }
+  const toggleNeighborhood = (neighborhood: string, options?: { additive?: boolean }) => {
+    const additive = options?.additive === true;
+    setSelectedNeighborhoods((previous) => {
+      const next = additive
+        ? previous.includes(neighborhood)
+          ? previous.filter((name) => name !== neighborhood)
+          : [...previous, neighborhood]
+        : previous.length === 1 && previous[0] === neighborhood
+          ? []
+          : [neighborhood];
+      setNeighborhoodSelection(next.length > 0 ? 'some' : 'none');
+      return next;
+    });
     setSelectedMarker(null);
   };
 
@@ -2605,7 +2610,10 @@ function DiscoveryState({
                       <input
                         type="checkbox"
                         checked={isChecked}
-                        onChange={() => toggleNeighborhood(neighborhood)}
+                        onChange={(event) => {
+                          const nativeEvent = event.nativeEvent as MouseEvent;
+                          toggleNeighborhood(neighborhood, { additive: nativeEvent.shiftKey });
+                        }}
                         className="h-4 w-4 shrink-0 accent-primary"
                       />
                       <span className="min-w-0 truncate whitespace-nowrap">{neighborhood}</span>
@@ -2625,6 +2633,11 @@ function DiscoveryState({
                 : neighborhoodSelection === 'none'
                   ? t.noNeighborhoodsSelected
                   : t.allNeighborhoods}
+            </p>
+            <p className="mt-1 text-[10px] text-muted-foreground">
+              {language === 'nl'
+                ? 'Shift+klik om extra buurten toe te voegen of te verwijderen.'
+                : 'Shift+click to add or remove additional neighborhoods.'}
             </p>
           </FilterFrame>
           </div>

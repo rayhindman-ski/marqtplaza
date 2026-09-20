@@ -295,6 +295,7 @@ for (const [mapPath, tilesAvailable] of [['tile map', true], ['coordinate fallba
 
   test(`keeps neighborhood polygon selection aligned in the ${mapPath}`, async ({ page }) => {
     await stubBoundaryDiscovery(page, tilesAvailable);
+    await page.getByRole('button', { name: 'Show Map', exact: true }).first().click();
 
     const neighborhoodControl = page.getByRole('checkbox', { name: 'Centrum', exact: true });
     await expect(neighborhoodControl).toBeChecked();
@@ -336,6 +337,18 @@ for (const [mapPath, tilesAvailable] of [['tile map', true], ['coordinate fallba
     await neighborhoodControl.check();
     await expect(neighborhoodControl).toBeChecked();
     await expect(page.getByRole('button', { name: 'Select neighborhood: Centrum', exact: true })).toHaveCount(1);
+
+    const scheveningenControl = page.getByRole('checkbox', { name: 'Scheveningen', exact: true });
+    const scheveningenBoundary = page.getByRole('button', { name: 'Select neighborhood: Scheveningen', exact: true });
+    await scheveningenBoundary.evaluate((node) => {
+      node.dispatchEvent(new MouseEvent('click', { bubbles: true, shiftKey: true }));
+    });
+    await expect(neighborhoodControl).toBeChecked();
+    await expect(scheveningenControl).toBeChecked();
+
+    await scheveningenBoundary.dispatchEvent('click');
+    await expect(neighborhoodControl).not.toBeChecked();
+    await expect(scheveningenControl).toBeChecked();
   });
 }
 

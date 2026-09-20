@@ -15,7 +15,7 @@ import {
   Briefcase,
   Store,
   Cross,
-  UtensilsCrossed,
+  Utensils,
   Croissant,
   Martini,
   HeartHandshake,
@@ -53,7 +53,7 @@ const CATEGORY_COLORS: Record<MapCategory, string> = {
 function getSubcategoryIcon(marker: Pick<MarkerData, 'category' | 'businessCategory' | 'socialCategory' | 'foodType'>): LucideIcon {
   if (marker.category === 'Food & Drink' && marker.foodType) {
     const foodIcons: Record<FoodType, LucideIcon> = {
-      restaurant: UtensilsCrossed,
+      restaurant: Utensils,
       cafe: Coffee,
       bar: Martini,
       bakery: Croissant,
@@ -66,7 +66,7 @@ function getSubcategoryIcon(marker: Pick<MarkerData, 'category' | 'businessCateg
   if (marker.category === 'Businesses' && marker.businessCategory) {
     const businessIcons: Record<BusinessCategory, LucideIcon> = {
       'Retail & Shopping': Store,
-      'Food & Drink': UtensilsCrossed,
+      'Food & Drink': Utensils,
       'Health & Wellness': HeartPulse,
       'Beauty & Personal Care': HeartPulse,
       'Professional Services': Briefcase,
@@ -178,7 +178,7 @@ interface GoogleMapViewProps {
   showNeighborhoodLabels?: boolean;
   highlightedNeighborhood?: string | null;
   isDataLoading?: boolean;
-  onNeighborhoodClick?: (name: string) => void;
+  onNeighborhoodClick?: (name: string, options?: { additive?: boolean }) => void;
   onNeighborhoodHover?: (name: string | null) => void;
   markers: MarkerData[];
   selectedMarkerId: string | null;
@@ -365,7 +365,7 @@ function getCategoryIconMarkup(marker: Pick<MarkerData, 'category' | 'businessCa
 
   if (marker.category === 'Food & Drink' && marker.foodType) {
     const foodIcons: Record<FoodType, string> = {
-      restaurant: '<path d="m16 2-2.3 2.3a3 3 0 0 0 0 4.2l1.8 1.8a3 3 0 0 0 4.2 0L22 8"/><path d="M15 15 3.3 2.8a2 2 0 0 0-2.8 2.8L12 17.3"/><path d="m20 9-4.2 4.2a3 3 0 0 1-4.2 0l-1.4-1.4"/><path d="m18 11 4 4"/><path d="m11 18-5.7 5.7a1 1 0 0 1-1.4-1.4L9.6 16.6"/><path d="M8 22 22 8"/>', // UtensilsCrossed
+      restaurant: '<path d="M3 2v7a3 3 0 0 0 6 0V2"/><path d="M6 2v20"/><path d="M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2Z"/><path d="M21 15v7"/>', // Utensils
       cafe: '<path d="M17 8h1a4 4 0 0 1 0 8h-1"/><path d="M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4Z"/><line x1="6" x2="6" y1="2" y2="4"/><line x1="10" x2="10" y1="2" y2="4"/><line x1="14" x2="14" y1="2" y2="4"/>', // Coffee
       bar: '<path d="M8 22h8"/><path d="M12 15v7"/><path d="M12 15a8.03 8.03 0 0 0 8-8V5c0-1.1-.9-2-2-2H6c-1.1 0-2 .9-2 2v2a8.03 8.03 0 0 0 8 8Z"/><path d="M4 5h16"/>', // Martini
       bakery: '<path d="m4.6 13.4-.6 6A2 2 0 0 0 6 22h12a2 2 0 0 0 2-2.6l-.6-6"/><path d="M2.5 13a22.8 22.8 0 0 1 19 0"/><path d="M17 13a5.5 5.5 0 0 0-10 0"/><path d="M11 2a4 4 0 0 0-4 4"/><path d="M17 6a4 4 0 0 0-4-4"/>', // Croissant
@@ -378,7 +378,7 @@ function getCategoryIconMarkup(marker: Pick<MarkerData, 'category' | 'businessCa
   if (marker.category === 'Businesses' && marker.businessCategory) {
     const businessIcons: Record<BusinessCategory, string> = {
       'Retail & Shopping': '<path d="m2 7 4.41-4.41A2 2 0 0 1 7.83 2h8.34a2 2 0 0 1 1.42.59L22 7"/><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><path d="M15 22v-4a2 2 0 0 0-2-2h-2a2 2 0 0 0-2 2v4"/><path d="M2 7h20"/><path d="M22 7v3a2 2 0 0 1-2 2v0a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 16 12a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 12 12a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 8 12a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 4 12a2 2 0 0 1-2-2V7"/>', // Store
-      'Food & Drink': '<path d="m16 2-2.3 2.3a3 3 0 0 0 0 4.2l1.8 1.8a3 3 0 0 0 4.2 0L22 8"/><path d="M15 15 3.3 2.8a2 2 0 0 0-2.8 2.8L12 17.3"/><path d="m20 9-4.2 4.2a3 3 0 0 1-4.2 0l-1.4-1.4"/><path d="m18 11 4 4"/><path d="m11 18-5.7 5.7a1 1 0 0 1-1.4-1.4L9.6 16.6"/><path d="M8 22 22 8"/>', // UtensilsCrossed
+      'Food & Drink': '<path d="M3 2v7a3 3 0 0 0 6 0V2"/><path d="M6 2v20"/><path d="M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2Z"/><path d="M21 15v7"/>', // Utensils
       'Health & Wellness': '<path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/><path d="M3.22 12H9.5l.5-1 2 4.5 2-7 1.5 3.5h5.27"/>', // HeartPulse
       'Beauty & Personal Care': '<path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/><path d="M3.22 12H9.5l.5-1 2 4.5 2-7 1.5 3.5h5.27"/>', // HeartPulse
       'Professional Services': '<rect width="20" height="14" x="2" y="7" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>', // Briefcase
@@ -869,11 +869,11 @@ function shouldShowNeighborhoodLabel(
 function handleNeighborhoodKeyDown(
   event: React.KeyboardEvent<SVGPolygonElement>,
   name: string,
-  onNeighborhoodClick?: (name: string) => void,
+  onNeighborhoodClick?: (name: string, options?: { additive?: boolean }) => void,
 ) {
   if (onNeighborhoodClick && (event.key === 'Enter' || event.key === ' ')) {
     event.preventDefault();
-    onNeighborhoodClick(name);
+    onNeighborhoodClick(name, { additive: event.shiftKey });
   }
 }
 
@@ -1002,7 +1002,7 @@ function CoordinateMapFallback({
                     const projected = projectCoordinatePoint(point, bounds);
                     return `${projected.x},${projected.y}`;
                   }).join(' ')}
-                  onClick={() => onNeighborhoodClick?.(area.name)}
+                  onClick={(event) => onNeighborhoodClick?.(area.name, { additive: event.shiftKey })}
                    onMouseEnter={() => onNeighborhoodHover?.(area.name)}
                    onMouseLeave={() => onNeighborhoodHover?.(null)}
                    onFocus={() => onNeighborhoodHover?.(area.name)}
@@ -1394,7 +1394,7 @@ function TileMapView({
                 return `${world.x - mapLeft},${world.y - mapTop}`;
               }).join(' ')}
               onPointerDown={(event) => event.stopPropagation()}
-              onClick={() => onNeighborhoodClick?.(area.name)}
+              onClick={(event) => onNeighborhoodClick?.(area.name, { additive: event.shiftKey })}
               onMouseEnter={() => onNeighborhoodHover?.(area.name)}
               onMouseLeave={() => onNeighborhoodHover?.(null)}
               onFocus={() => onNeighborhoodHover?.(area.name)}
@@ -1917,7 +1917,10 @@ function GoogleMapCanvas({
         zIndex: 1,
       });
       if (onNeighborhoodClick) {
-        polygon.addListener('click', () => neighborhoodClickRef.current?.(area.name));
+        polygon.addListener('click', (event: google.maps.PolyMouseEvent) => {
+          const domEvent = event.domEvent as MouseEvent | undefined;
+          neighborhoodClickRef.current?.(area.name, { additive: domEvent?.shiftKey === true });
+        });
       }
       if (onNeighborhoodHover) {
         polygon.addListener('mouseover', () => neighborhoodHoverRef.current?.(area.name));
