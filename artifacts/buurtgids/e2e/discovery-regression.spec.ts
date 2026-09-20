@@ -965,7 +965,7 @@ test('keeps every selected neighborhood free of out-of-boundary listings', async
 
 test('renders an OSM food listing immediately from the selected map snapshot', async ({ page }) => {
   const listingId = 'osm-detail-regression';
-  const requestedModes: Array<string | null> = [];
+  const requestedIds: Array<string | null> = [];
   await page.addInitScript(({ id }) => {
     localStorage.setItem(`buurtplaza-detail-listing:${id}`, JSON.stringify({
       savedAt: Date.now(),
@@ -986,12 +986,13 @@ test('renders an OSM food listing immediately from the selected map snapshot', a
       },
     }));
   }, { id: listingId });
-  await page.route('**/api/listings*', async (route) => {
+  await page.route('**/api/listing*', async (route) => {
     const url = new URL(route.request().url());
-    requestedModes.push(url.searchParams.get('mode'));
+    requestedIds.push(url.searchParams.get('listingId'));
     await route.fulfill({
+      status: 404,
       contentType: 'application/json',
-      body: JSON.stringify({ source: 'stored', listings: [] }),
+      body: JSON.stringify({ message: 'Not found' }),
     });
   });
 
@@ -1000,5 +1001,91 @@ test('renders an OSM food listing immediately from the selected map snapshot', a
   await expect(page.getByRole('heading', { name: 'Stored map restaurant' })).toBeVisible();
   await expect(page.getByText('A selected map result should render without live rediscovery.')).toBeVisible();
   await expect(page.locator('.animate-pulse')).toHaveCount(0);
-  await expect.poll(() => requestedModes).toContain('stored_only');
+  await expect.poll(() => requestedIds).toContain(listingId);
 });
+
+test('opens a shared event URL from a clean context using the stored listing lookup', async ({ page }) => {
+  const listingId = 'source-4242';
+  let requestUrl: URL | null = null;
+  await page.route('**/api/listing*', async (route) => {
+    requestUrl = new URL(route.request().url());
+    await route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({
+        source: 'stored',
+        listing: {
+          id: listingId,
+          locationId: 'dhg',
+          category: 'Family',
+          name: 'Shared stored workshop',
+          description: 'Loaded by ID without a prior map selection.',
+          details: 'Today at 14:00',
+          startsAt: todayAt(14),
+          x: 50,
+          y: 50,
+          lat: 52.075,
+          lng: 4.312,
+          source: 'source_scan',
+          sourceName: 'Local agenda',
+        },
+      }),
+    });
+  });
+
+  await page.goto(`/activiteiten/den-haag/${listingId}?section=events`);
+
+  await expect(page.getByRole('heading', { name: 'Shared stored workshop' })).toBeVisible();
+  await expect(page.getByText('Loaded by ID without a prior map selection.')).toBeVisible();
+  await expect.poll(() => requestUrl?.searchParams.get('listingId') ?? null).toBe(listingId);
+  expect(requestUrl?.searchParams.get('section')).toBe('events');
+  expect(await page.evaluate(() => localStorage.getItem('buurtplaza-detail-listing:source-4242'))).toBeNull();
+});
+
+for (const listing of [
+  {
+    id: 'google-business-detail',
+    section: 'businesses',
+    category: 'Businesses',
+    source: 'google_maps',
+    name: 'Stored Google shop',
+  },
+  {
+    id: 'osm-food-detail',
+    section: 'food-drink',
+    category: 'Food & Drink',
+    source: 'openstreetmap',
+    name: 'Stored OSM cafe',
+  },
+] as const) {
+  test(`opens a direct ${listing.source} ${listing.section} listing by ID`, async ({ page }) => {
+    let requestedSection: string | null = null;
+    await page.route('**/api/listing*', async (route) => {
+      requestedSection = new URL(route.request().url()).searchParams.get('section');
+      await route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify({
+          source: 'stored',
+          listing: {
+            id: listing.id,
+            locationId: 'dhg',
+            category: listing.category,
+            name: listing.name,
+            description: 'Stored provider result',
+            details: 'Open today',
+            x: 50,
+            y: 50,
+            lat: 52.075,
+            lng: 4.312,
+            source: listing.source,
+            sourceName: listing.source === 'google_maps' ? 'Google Maps' : 'OpenStreetMap',
+          },
+        }),
+      });
+    });
+
+    await page.goto(`/activiteiten/den-haag/${listing.id}?section=${listing.section}`);
+
+    await expect(page.getByRole('heading', { name: listing.name })).toBeVisible();
+    await expect.poll(() => requestedSection).toBe(listing.section);
+  });
+}

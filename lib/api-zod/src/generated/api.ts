@@ -1051,6 +1051,81 @@ export const GetListingsResponse = zod.object({
 
 
 /**
+ * Resolves the latest stored public listing without querying a live provider.
+ * @summary Get one stored public listing by ID
+ */
+export const getListingQueryListingIdMax = 300;
+
+
+
+export const GetListingQueryParams = zod.object({
+  "listingId": zod.coerce.string().min(1).max(getListingQueryListingIdMax),
+  "cityId": zod.coerce.string(),
+  "section": zod.enum(['events', 'businesses', 'food-drink']),
+  "language": zod.enum(['nl', 'en'])
+})
+
+export const GetListingResponse = zod.object({
+  "listing": zod.object({
+  "id": zod.string(),
+  "locationId": zod.string(),
+  "category": zod.enum(['Museums', 'Tours', 'Family', 'Entertainment', 'Outdoors', 'Markets', 'Businesses', 'Food & Drink', 'Social map']),
+  "name": zod.string(),
+  "address": zod.string().optional().describe('Provider-supplied or curated visitor address when one is available.'),
+  "description": zod.string(),
+  "startsAt": zod.string().optional().describe('Verified upcoming event start date and time when this listing is an event.'),
+  "isCancelled": zod.boolean().optional().describe('Whether the current approved event source explicitly marks the event as cancelled.'),
+  "openingTimes": zod.string().optional().describe('Source-provided opening or event time range when available.'),
+  "venue": zod.string().optional().describe('Event venue when the source provides one.'),
+  "x": zod.number(),
+  "y": zod.number(),
+  "details": zod.string(),
+  "lat": zod.number().describe('WGS 84 latitude for displaying the activity on the map.'),
+  "lng": zod.number().describe('WGS 84 longitude for displaying the activity on the map.'),
+  "sourceUrl": zod.string().optional().describe('Link to the website where this activity was listed.'),
+  "facebookUrl": zod.string().optional().describe('Public Facebook page supplied by the listing provider.'),
+  "instagramUrl": zod.string().optional().describe('Public Instagram profile supplied by the listing provider.'),
+  "businessCategory": zod.enum(['Retail & Shopping', 'Food & Drink', 'Health & Wellness', 'Beauty & Personal Care', 'Professional Services', 'Finance & Legal', 'Home & Repair', 'Automotive & Mobility', 'Education & Childcare', 'Hospitality & Travel', 'Arts, Culture & Entertainment', 'Fitness & Sports']).optional().describe('Normalized category for business and food-and-drink listings.'),
+  "foodType": zod.enum(['restaurant', 'cafe', 'bar', 'bakery', 'takeaway', 'other']).optional().describe('Source-derived Food & Drink venue type. Absent for non-food listings.'),
+  "source": zod.enum(['google_maps', 'openstreetmap', 'curated', 'source_scan']).optional().describe('Provider or editorial source for an individual listing.'),
+  "sourceName": zod.string().optional().describe('Human-readable publisher or provider that listed this item, distinct from its destination URL.'),
+  "sourceGroup": zod.enum(['city-agenda', 'culture', 'community', 'meals']).optional().describe('The approved source stream that supplied this event.'),
+  "organizer": zod.string().optional().describe('The organizer explicitly named by the source.'),
+  "activityKind": zod.enum(['community', 'culture', 'learning', 'movement', 'meal', 'family', 'market', 'outdoor', 'entertainment']).optional(),
+  "priceType": zod.enum(['free', 'low-cost', 'paid', 'unknown']).optional().describe('Price access is only shown when the source gives explicit evidence.'),
+  "priceText": zod.string().optional(),
+  "mealType": zod.enum(['community-meal', 'food-support']).optional(),
+  "audience": zod.string().optional(),
+  "recurrenceText": zod.string().optional(),
+  "isApproximateLocation": zod.boolean().optional().describe('Whether the map pin is an approximate fallback rather than an exact destination.'),
+  "isIndoor": zod.boolean().nullish().describe('Indoor classification only when explicit source evidence supports it.'),
+  "openNow": zod.boolean().nullish().describe('Current opening status from a provider that supplies structured opening status.'),
+  "firstSeenAt": zod.coerce.date().optional(),
+  "lastSeenAt": zod.coerce.date().optional(),
+  "updatedAt": zod.coerce.date().optional(),
+  "neighborhood": zod.string().optional().describe('Den Haag neighborhood context for a curated social-map location.'),
+  "socialCategory": zod.enum(['Geldzaken', 'Gezin en opvoeden', 'Gezondheid', 'Heilige plaatsen', 'Hobby\'s en interesses', 'Ondersteuning', 'Ontmoeten en samenleven', 'Sporten en bewegen', 'Taal en computer', 'Vervoer', 'Werk en opleiding', 'Wonen en huishouden', 'Zorg voor een naaste']).optional().describe('Curated support theme for the Den Haag social map.'),
+  "officialUrl": zod.string().optional().describe('Verified organization or service website for a social-map location.'),
+  "sourcePageUrl": zod.string().optional().describe('Public provider or source page used to verify this listing.'),
+  "snapshotDate": zod.string().optional().describe('Date the curated social-map selection was last checked.'),
+  "reviewStatus": zod.enum(['verified', 'review_due', 'changed', 'unavailable']).optional().describe('Public-safe status of a curated social-map record.'),
+  "reviewReason": zod.string().nullish().describe('Why this social-map record needs editorial attention, when applicable.'),
+  "lastCheckedAt": zod.string().optional().describe('Date or timestamp of the latest source review for this record.'),
+  "nextReviewAt": zod.string().optional().describe('Scheduled date for the next source review.'),
+  "evidence": zod.array(zod.object({
+  "field": zod.enum(['name', 'description', 'address', 'event_date', 'opening_times', 'price']),
+  "sourceLabel": zod.string().nullable(),
+  "sourceUrl": zod.string().nullable(),
+  "checkedAt": zod.string().nullable(),
+  "status": zod.enum(['current', 'stale', 'conflicting', 'unknown', 'unavailable']),
+  "caveat": zod.string().nullable()
+})).optional().describe('Field-level public evidence. Missing proof is represented explicitly as unknown.')
+}),
+  "source": zod.enum(['stored'])
+})
+
+
+/**
  * Resolves the listing server-side and records a correction for review. The
  * submission never changes the public listing. A required Idempotency-Key
  * makes retries safe; reusing a key with different input returns 409.

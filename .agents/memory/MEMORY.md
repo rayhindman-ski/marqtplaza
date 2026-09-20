@@ -38,3 +38,4 @@
 - [Clerk offline stub](clerk-offline-stub.md) — real Clerk screens in the default e2e suite: stub environment (POST), client, dev_browser; only CDN bundles need network.
 - [v0.41 discovery safeguards](v041-discovery-safeguards.md) — fresh sessions are local-only and maps must stay unloaded until the user explicitly opens them.
 - [Collapsed listing cards](collapsed-listing-cards.md) — show meaningful context before secondary actions; expansion reveals full detail and utilities.
+- [Orval path/query parameter collision](orval-path-query-collision.md) — avoid operations combining path and query params when generated Zod barrels emit duplicate Params names.

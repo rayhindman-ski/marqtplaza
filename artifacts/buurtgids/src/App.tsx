@@ -25,6 +25,7 @@ import {
   type SavedEventsResponse,
   type SavedEventsSyncRequest,
   useGetListings,
+  useGetListing,
   useGetWeather,
 } from '@workspace/api-client-react';
 import {
@@ -485,7 +486,7 @@ function alertFromAccountSnapshot(value: Record<string, unknown>): SavedEventAle
 type ListingSection = 'events' | 'businesses' | 'food-drink' | 'social-map';
 type FilterSubcategory = Exclude<Category, 'Businesses' | 'Social map' | 'Food & Drink'> | BusinessCategory | SocialMapCategory | FoodType;
 const TOP_LEVEL_SECTIONS: ListingSection[] = ['events', 'food-drink', 'social-map', 'businesses'];
-const DEFAULT_START_SECTION: ListingSection = 'events';
+const DEFAULT_START_SECTION = 'events' satisfies ListingSection;
 type AgendaTimeFilter = 'all' | 'today' | 'week';
 type AgendaPriceFilter = 'all' | 'free' | 'low-cost';
 type DiscoveryView = 'map' | 'list';
@@ -3234,7 +3235,10 @@ function DiscoveryState({
   );
 }
 
-function EventDetailView({ eventId, listingSection = 'events' }: { eventId: string; listingSection?: ListingSection }) {
+function EventDetailView({ eventId, listingSection = 'events' }: {
+  eventId: string;
+  listingSection?: Exclude<ListingSection, 'social-map'>;
+}) {
   const [, navigate] = useLocation();
   const language: Language = typeof window !== 'undefined' && window.localStorage.getItem('buurtplaza-language') === 'nl'
     ? 'nl'
@@ -3242,16 +3246,15 @@ function EventDetailView({ eventId, listingSection = 'events' }: { eventId: stri
   const { savedMarkers, savedStateStatus } = useSavedPlaces();
   const decodedEventId = decodeURIComponent(eventId);
   const cachedListing = useMemo(() => readDetailListing(decodedEventId), [decodedEventId]);
-  const listingsQuery = useGetListings({
+  const listingQuery = useGetListing({
+    listingId: decodedEventId,
     cityId: 'dhg',
     section: listingSection,
     language,
-    mode: 'stored_only',
   });
-  const liveListing = listingsQuery.data?.listings.find((item) => item.id === decodedEventId);
-  const listing = liveListing ?? cachedListing ?? savedMarkers.get(decodedEventId);
+  const listing = listingQuery.data?.listing ?? cachedListing ?? savedMarkers.get(decodedEventId);
 
-  if (!listing && (listingsQuery.isLoading || savedStateStatus === 'loading')) {
+  if (!listing && (listingQuery.isLoading || savedStateStatus === 'loading')) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background p-6">
         <div className="w-full max-w-2xl animate-pulse space-y-4">
@@ -3281,12 +3284,12 @@ function EventDetailView({ eventId, listingSection = 'events' }: { eventId: stri
           <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
             <button
               type="button"
-              onClick={() => void listingsQuery.refetch()}
-              disabled={listingsQuery.isFetching}
+              onClick={() => void listingQuery.refetch()}
+              disabled={listingQuery.isFetching}
               className="inline-flex items-center gap-2 rounded-full bg-primary px-5 py-3 text-sm font-bold text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-wait disabled:opacity-60"
             >
-              <RefreshCw className={cn('h-4 w-4', listingsQuery.isFetching && 'animate-spin')} />
-              {listingsQuery.isFetching
+              <RefreshCw className={cn('h-4 w-4', listingQuery.isFetching && 'animate-spin')} />
+              {listingQuery.isFetching
                 ? (language === 'nl' ? 'Opnieuw laden…' : 'Retrying…')
                 : (language === 'nl' ? 'Opnieuw proberen' : 'Try again')}
             </button>
@@ -3451,9 +3454,8 @@ function EventDetailView({ eventId, listingSection = 'events' }: { eventId: stri
 function EventDetailRoute() {
   const [, params] = useRoute('/activiteiten/den-haag/:eventId');
   const requestedSection = new URLSearchParams(window.location.search).get('section');
-  const listingSection: ListingSection = requestedSection === 'businesses'
+  const listingSection: Exclude<ListingSection, 'social-map'> = requestedSection === 'businesses'
     || requestedSection === 'food-drink'
-    || requestedSection === 'social-map'
     ? requestedSection
     : DEFAULT_START_SECTION;
   return <EventDetailView eventId={params?.eventId ?? ''} listingSection={listingSection} />;

@@ -2637,6 +2637,22 @@ export interface ListingsResponse {
   evidence?: EventEvidence;
 }
 
+export type ListingDetailResponseSource = typeof ListingDetailResponseSource[keyof typeof ListingDetailResponseSource];
+
+
+export const ListingDetailResponseSource = {
+  stored: 'stored',
+} as const;
+
+export interface ListingDetailResponse {
+  listing: Listing;
+  source: ListingDetailResponseSource;
+}
+
+export interface ListingNotFoundResponse {
+  message: string;
+}
+
 export interface GooglePlacesUsage {
   /** @minimum 0 */
   used: number;
@@ -2874,6 +2890,34 @@ export type GetListingsMode = typeof GetListingsMode[keyof typeof GetListingsMod
 export const GetListingsMode = {
   live: 'live',
   stored_only: 'stored_only',
+} as const;
+
+export type GetListingParams = {
+/**
+ * @minLength 1
+ * @maxLength 300
+ */
+listingId: string;
+cityId: string;
+section: GetListingSection;
+language: GetListingLanguage;
+};
+
+export type GetListingSection = typeof GetListingSection[keyof typeof GetListingSection];
+
+
+export const GetListingSection = {
+  events: 'events',
+  businesses: 'businesses',
+  'food-drink': 'food-drink',
+} as const;
+
+export type GetListingLanguage = typeof GetListingLanguage[keyof typeof GetListingLanguage];
+
+
+export const GetListingLanguage = {
+  nl: 'nl',
+  en: 'en',
 } as const;
 
 export type RunSocialMapReview502 = {

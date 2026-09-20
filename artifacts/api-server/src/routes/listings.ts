@@ -1829,6 +1829,77 @@ export function mergeStoredProviderListings(
   return mergeBusinessListings(googleListings, osmListings).listings;
 }
 
+const STORED_DETAIL_RESULT_LIMIT = 25;
+
+export function findStoredListingInRows(
+  rows: Array<{ payload: unknown }>,
+  listingId: string,
+): Listing | null {
+  for (const row of rows) {
+    if (!Array.isArray(row.payload)) continue;
+    const listing = (row.payload as Listing[]).find((item) => item.id === listingId);
+    if (listing) return listing;
+  }
+  return null;
+}
+
+async function loadStoredExternalListing(
+  cityId: string,
+  section: Exclude<ListingSection, "events" | "social-map">,
+  listingId: string,
+): Promise<Listing | null> {
+  const rows = await db.select({
+    payload: externalResultsTable.payload,
+  }).from(externalResultsTable)
+    .where(and(
+      sql`${externalResultsTable.normalizedKey}::jsonb @> ${JSON.stringify({ cityId, section })}::jsonb`,
+      sql`${externalResultsTable.payload} @> ${JSON.stringify([{ id: listingId }])}::jsonb`,
+    ))
+    .orderBy(desc(externalResultsTable.fetchedAt), desc(externalResultsTable.id))
+    .limit(STORED_DETAIL_RESULT_LIMIT);
+  return findStoredListingInRows(rows, listingId);
+}
+
+function discoveredEventToListing(
+  event: typeof discoveredEventsTable.$inferSelect,
+  language: EventLanguage,
+): Listing {
+  const copy = eventCopyForLanguage(event, language);
+  return {
+    id: `source-${event.id}`,
+    locationId: event.locationId,
+    category: event.category as ListingCategory,
+    name: copy.title,
+    description: copy.description,
+    startsAt: event.startsAt ?? undefined,
+    isCancelled: event.isCancelled,
+    x: event.x,
+    y: event.y,
+    details: localizedEventDetails(event, language),
+    lat: event.lat,
+    lng: event.lng,
+    sourceUrl: event.canonicalUrl,
+    source: "source_scan",
+    sourceName: event.sourceName,
+    isApproximateLocation: event.isApproximateLocation,
+    sourceGroup: (event.sourceGroup === "agenda" ? "city-agenda" : event.sourceGroup) as Listing["sourceGroup"],
+    organizer: event.organizer ?? undefined,
+    activityKind: event.activityKind ?? undefined,
+    priceType: event.priceType as Listing["priceType"],
+    priceText: event.priceText ?? undefined,
+    mealType: event.mealType as Listing["mealType"],
+    audience: event.audience ?? undefined,
+    neighborhood: event.neighborhood ?? undefined,
+    recurrenceText: event.recurrenceText ?? undefined,
+    openingTimes: event.openingTimes ?? undefined,
+    venue: event.venue ?? undefined,
+    isIndoor: event.isIndoor ?? undefined,
+    firstSeenAt: event.firstSeenAt?.toISOString(),
+    lastSeenAt: event.lastSeenAt?.toISOString(),
+    updatedAt: event.updatedAt?.toISOString(),
+  };
+}
+
 async function loadStoredProviderResults(
   normalizedKey: string,
   providers: ExternalProvider[],
@@ -1971,6 +2042,54 @@ export function createListingsRouter(
   dependencies: ListingsRouterDependencies = defaultListingsRouterDependencies,
 ): IRouter {
   const router: IRouter = Router();
+  router.get("/listing", async (req, res): Promise<void> => {
+    const listingId = String(req.query["listingId"] ?? "").trim();
+    const cityId = String(req.query["cityId"] ?? "").trim().toLowerCase();
+    const section = parseListingSection(req.query["section"]);
+    const language = parseEventLanguage(req.query["language"]);
+    if (!listingId || listingId.length > 300 || !cityId || !language || section === "social-map") {
+      res.status(400).json({ message: "A valid listingId, cityId, section, and language are required." });
+      return;
+    }
+
+    let listing: Listing | null = null;
+    if (section === "events") {
+      const storedEventId = /^source-(\d+)$/.exec(listingId)?.[1];
+      if (storedEventId) {
+        const [event] = await db.select()
+          .from(discoveredEventsTable)
+          .where(and(
+            eq(discoveredEventsTable.id, Number(storedEventId)),
+            eq(discoveredEventsTable.locationId, cityId),
+            eq(discoveredEventsTable.reviewStatus, "approved"),
+          ))
+          .limit(1);
+        if (event) listing = discoveredEventToListing(event, language);
+      } else {
+        const curated = MARKERS.find((item) => item.id === listingId && item.locationId === cityId);
+        if (curated) {
+          listing = {
+            ...curated,
+            source: "curated",
+            sourceName: sourceNameFromUrl(curated.sourceUrl),
+          };
+        }
+      }
+    } else if (cityId === "dhg") {
+      listing = await loadStoredExternalListing(cityId, section, listingId);
+    }
+
+    if (!listing) {
+      res.status(404).json({
+        message: language === "nl"
+          ? "Deze opgeslagen vermelding is niet gevonden."
+          : "This stored listing was not found.",
+      });
+      return;
+    }
+    res.json({ listing: { ...listing, evidence: listing.evidence ?? listingEvidence(listing) }, source: "stored" });
+  });
+
   router.get("/listings", async (req, res): Promise<void> => {
   const cityId = String(req.query["cityId"] ?? "").trim();
   const listingSection = parseListingSection(req.query["section"]);
@@ -2255,42 +2374,7 @@ export function createListingsRouter(
         language,
         mode,
       );
-      const discoveredListings = localizedEvents
-        .map((event) => {
-        const copy = eventCopyForLanguage(event, language);
-        return {
-        id: `source-${event.id}`,
-        locationId: event.locationId,
-        category: event.category,
-        name: copy.title,
-        description: copy.description,
-        startsAt: event.startsAt,
-        isCancelled: event.isCancelled,
-        x: event.x,
-        y: event.y,
-        details: localizedEventDetails(event, language),
-        lat: event.lat,
-        lng: event.lng,
-        sourceUrl: event.canonicalUrl,
-         source: "source_scan" as const,
-         sourceName: event.sourceName,
-          isApproximateLocation: event.isApproximateLocation,
-          sourceGroup: event.sourceGroup === "agenda" ? "city-agenda" : event.sourceGroup,
-          organizer: event.organizer,
-          activityKind: event.activityKind,
-          priceType: event.priceType,
-          priceText: event.priceText,
-          mealType: event.mealType,
-          audience: event.audience,
-          neighborhood: event.neighborhood,
-          recurrenceText: event.recurrenceText,
-          openingTimes: event.openingTimes,
-          venue: event.venue,
-          isIndoor: event.isIndoor,
-          firstSeenAt: event.firstSeenAt?.toISOString(),
-          lastSeenAt: event.lastSeenAt?.toISOString(),
-          updatedAt: event.updatedAt?.toISOString(),
-      }});
+      const discoveredListings = localizedEvents.map((event) => discoveredEventToListing(event, language));
       let sourceStatuses: EventSourceStatusSnapshot[] = [];
       try {
         const persistedStatuses = await db

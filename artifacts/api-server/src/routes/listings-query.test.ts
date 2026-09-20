@@ -4,6 +4,7 @@ import { describe, it } from "node:test";
 import {
   allowsExternalQueries,
   fetchOpenStreetMapBusinesses,
+  findStoredListingInRows,
   filterEventsByNeighborhoods,
   filterListingsByBusinessCategories,
   foodTypeForGooglePrimaryType,
@@ -166,6 +167,16 @@ describe("listings query persistence inputs", () => {
   it("never allows external provider work in stored-only mode", () => {
     assert.equal(allowsExternalQueries("live"), true);
     assert.equal(allowsExternalQueries("stored_only"), false);
+  });
+
+  it("selects Google and OSM listing IDs from a bounded newest-first stored row set", () => {
+    const rows = [
+      { payload: [{ id: "google-place-1", source: "google_maps", name: "Google shop" }] },
+      { payload: [{ id: "osm-node-2", source: "openstreetmap", name: "OSM cafe" }] },
+    ];
+    assert.equal(findStoredListingInRows(rows, "google-place-1")?.name, "Google shop");
+    assert.equal(findStoredListingInRows(rows, "osm-node-2")?.name, "OSM cafe");
+    assert.equal(findStoredListingInRows(rows, "missing"), null);
   });
 
   it("accepts only bounded anonymous browser identifiers", () => {

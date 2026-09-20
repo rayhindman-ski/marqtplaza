@@ -70,6 +70,7 @@ import type {
   GetDealsParams,
   GetEditorialQueueParams,
   GetEventReviewCandidatesParams,
+  GetListingParams,
   GetListingsParams,
   GetNewsParams,
   GetPublicationQueueParams,
@@ -81,6 +82,8 @@ import type {
   LifecycleMessages,
   ListingCorrectionReceipt,
   ListingCorrectionReviewItem,
+  ListingDetailResponse,
+  ListingNotFoundResponse,
   ListingsResponse,
   LookupBusinessesParams,
   ModerationDecision,
@@ -2143,6 +2146,91 @@ export function useGetListings<TData = Awaited<ReturnType<typeof getListings>>, 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetListingsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetListingUrl = (params: GetListingParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/listing?${stringifiedParams}` : `/api/listing`
+}
+
+/**
+ * Resolves the latest stored public listing without querying a live provider.
+ * @summary Get one stored public listing by ID
+ */
+export const getListing = async (params: GetListingParams, options?: Parameters<typeof customFetch>[1]): Promise<ListingDetailResponse> => {
+
+  return customFetch<ListingDetailResponse>(getGetListingUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetListingQueryKey = (params?: GetListingParams,) => {
+    return [
+    `/api/listing`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetListingQueryOptions = <TData = Awaited<ReturnType<typeof getListing>>, TError = ErrorType<void | ListingNotFoundResponse>>(params: GetListingParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getListing>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetListingQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getListing>>> = ({ signal }) => getListing(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getListing>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetListingQueryResult = NonNullable<Awaited<ReturnType<typeof getListing>>>
+export type GetListingQueryError = ErrorType<void | ListingNotFoundResponse>
+
+
+/**
+ * @summary Get one stored public listing by ID
+ */
+
+export function useGetListing<TData = Awaited<ReturnType<typeof getListing>>, TError = ErrorType<void | ListingNotFoundResponse>>(
+ params: GetListingParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getListing>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetListingQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

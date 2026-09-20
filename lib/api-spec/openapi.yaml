@@ -871,6 +871,53 @@ paths:
               schema:
                 $ref: "#/components/schemas/ListingsResponse"
 
+  /listing:
+    get:
+      operationId: getListing
+      tags: [listings]
+      summary: Get one stored public listing by ID
+      description: Resolves the latest stored public listing without querying a live provider.
+      parameters:
+        - name: listingId
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 300
+        - name: cityId
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: section
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [events, businesses, food-drink]
+        - name: language
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [nl, en]
+      responses:
+        "200":
+          description: Stored listing
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListingDetailResponse"
+        "400":
+          description: Invalid listing lookup
+        "404":
+          description: Stored listing not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListingNotFoundResponse"
+
   /places/{cityId}/{listingSource}/corrections:
     post:
       operationId: submitListingCorrection
@@ -5222,6 +5269,23 @@ components:
         - source
         - scopeGroup
         - groupStatus
+
+    ListingDetailResponse:
+      type: object
+      properties:
+        listing:
+          $ref: "#/components/schemas/Listing"
+        source:
+          type: string
+          enum: [stored]
+      required: [listing, source]
+
+    ListingNotFoundResponse:
+      type: object
+      properties:
+        message:
+          type: string
+      required: [message]
 
     EventEvidence:
       type: object
