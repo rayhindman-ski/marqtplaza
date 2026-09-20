@@ -3475,6 +3475,8 @@ function MainApp({ initialLocationId }: { initialLocationId?: string } = {}) {
   const initialUrlErrors = useRef(parsedUrl.errors);
   const storedLanguage = useStoredLanguage();
   const requestedLocale = new URLSearchParams(searchString).get('locale');
+  const savedEventsTestAuthEnabled = import.meta.env.DEV
+    && new URLSearchParams(searchString).get('e2eSavedEventsAuth') === '1';
 
   const [screen, setScreen] = useState<AppScreen>(() =>
     initialLocationId
@@ -3511,16 +3513,9 @@ function MainApp({ initialLocationId }: { initialLocationId?: string } = {}) {
     savedCount,
   } = useSavedPlaces();
 
-  const clerkAuth = useAuth();
-
-  const handleToggle = useCallback((marker: Marker) => {
-    if (!clerkAuth.isSignedIn) {
-      const currentPath = window.location.pathname + window.location.search;
-      navigate(withReturnPath('/sign-in', currentPath));
-      return;
-    }
-    toggle(marker);
-  }, [clerkAuth.isSignedIn, navigate, toggle]);
+  // Keep anonymous staging in the saved-events hook authoritative. It migrates
+  // staged operations after sign-in without falsely confirming a server save.
+  const handleToggle = toggle;
 
   useEffect(() => {
     persistLanguage(language);
@@ -3530,12 +3525,12 @@ function MainApp({ initialLocationId }: { initialLocationId?: string } = {}) {
   }, [language]);
 
   useEffect(() => {
-    if (!initialLocationId || parsedUrl.valid) return;
+    if (!initialLocationId || parsedUrl.valid || savedEventsTestAuthEnabled) return;
     navigate(
       window.location.pathname + (parsedUrl.canonical ? `?${parsedUrl.canonical}` : ''),
       { replace: true },
     );
-  }, [initialLocationId, navigate, parsedUrl.canonical, parsedUrl.valid]);
+  }, [initialLocationId, navigate, parsedUrl.canonical, parsedUrl.valid, savedEventsTestAuthEnabled]);
 
   useEffect(() => {
     window.localStorage.setItem(USER_ROLE_STORAGE_KEY, userRole);
