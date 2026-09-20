@@ -8,6 +8,7 @@ import {
   db,
   discoveredEventsTable,
   externalQueriesTable,
+  externalResultListingsTable,
   externalResultsTable,
   eventSourceStatusesTable,
   pool,
@@ -22,6 +23,10 @@ const anonymousIds = [
   `${runId}-result-failure`,
   `${runId}-stored`,
   `${runId}-scan-to-listing`,
+  `${runId}-direct-old-google`,
+  `${runId}-direct-new-google`,
+  `${runId}-direct-old-osm`,
+  `${runId}-direct-new-osm`,
 ];
 const scanEventUrls = [
   "https://www.getyourguide.com/en-gb/the-hague-l1267/test-community-event",
@@ -120,6 +125,66 @@ async function requestEventListings(neighborhood = "Scheveningen") {
     `${baseUrl}/api/listings?cityId=dhg&section=events&language=en&mode=live&neighborhoods=${encodeURIComponent(neighborhood)}&anonymousId=${anonymousIds[3]}`,
   );
   return { status: response.status, body: await response.json() as Record<string, any> };
+}
+
+async function storeListingSnapshot({
+  anonymousId,
+  provider,
+  section,
+  listing,
+  fetchedAt,
+}: {
+  anonymousId: string;
+  provider: "google_places" | "openstreetmap";
+  section: "businesses" | "food-drink";
+  listing: Listing;
+  fetchedAt: Date;
+}): Promise<void> {
+  const normalizedKey = JSON.stringify({
+    cityId: "dhg",
+    section,
+    language: "en",
+    neighborhoods: [],
+    businessCategories: [],
+  });
+  const [userQuery] = await db.insert(userQueriesTable).values({
+    cityId: "dhg",
+    section,
+    language: "en",
+    anonymousId,
+    normalizedKey,
+    status: "succeeded",
+    completedAt: fetchedAt,
+  }).returning({ id: userQueriesTable.id });
+  assert.ok(userQuery);
+  const [externalQuery] = await db.insert(externalQueriesTable).values({
+    userQueryId: userQuery.id,
+    provider,
+    normalizedKey,
+    requestPayload: {},
+    status: "succeeded",
+    startedAt: fetchedAt,
+    completedAt: fetchedAt,
+  }).returning({ id: externalQueriesTable.id });
+  assert.ok(externalQuery);
+  const [externalResult] = await db.insert(externalResultsTable).values({
+    externalQueryId: externalQuery.id,
+    userQueryId: userQuery.id,
+    provider,
+    normalizedKey,
+    payload: [listing],
+    resultCount: 1,
+    fetchedAt,
+  }).returning({ id: externalResultsTable.id });
+  assert.ok(externalResult);
+  await db.insert(externalResultListingsTable).values({
+    externalResultId: externalResult.id,
+    cityId: "dhg",
+    section,
+    listingId: listing.id,
+    listing,
+    fetchedAt,
+  });
 }
 
 describe("listings route integration (isolated database integration)", () => {
@@ -237,6 +302,82 @@ describe("listings route integration (isolated database integration)", () => {
     assert.equal(failedExternalQuery?.status, "failed");
     assert.ok(failedExternalQuery?.error);
     assert.ok(failedExternalQuery?.completedAt);
+    await pool.query(`drop trigger if exists ${resultTriggerName} on "external-results"`);
+  });
+
+  it("opens the newest stored Google and OSM listing snapshots without live discovery", async () => {
+    const olderAt = new Date("2026-01-01T10:00:00.000Z");
+    const newerAt = new Date("2026-01-02T10:00:00.000Z");
+    const googleId = `${runId}-google-place`;
+    const osmId = `osm-${runId}`;
+    const olderGoogle: Listing = {
+      ...osmListing,
+      id: googleId,
+      category: "Businesses",
+      name: "Older Google Business",
+      source: "google_maps",
+      sourceName: "Google Maps",
+    };
+    const newerGoogle: Listing = { ...olderGoogle, name: "Newest Google Business" };
+    const olderOsm: Listing = {
+      ...osmListing,
+      id: osmId,
+      category: "Food & Drink",
+      businessCategory: "Food & Drink",
+      name: "Older OSM Restaurant",
+    };
+    const newerOsm: Listing = { ...olderOsm, name: "Newest OSM Restaurant" };
+
+    await storeListingSnapshot({
+      anonymousId: anonymousIds[4],
+      provider: "google_places",
+      section: "businesses",
+      listing: olderGoogle,
+      fetchedAt: olderAt,
+    });
+    await storeListingSnapshot({
+      anonymousId: anonymousIds[5],
+      provider: "google_places",
+      section: "businesses",
+      listing: newerGoogle,
+      fetchedAt: newerAt,
+    });
+    await storeListingSnapshot({
+      anonymousId: anonymousIds[6],
+      provider: "openstreetmap",
+      section: "food-drink",
+      listing: olderOsm,
+      fetchedAt: olderAt,
+    });
+    await storeListingSnapshot({
+      anonymousId: anonymousIds[7],
+      provider: "openstreetmap",
+      section: "food-drink",
+      listing: newerOsm,
+      fetchedAt: newerAt,
+    });
+
+    const googleCallsBefore = googleLoaderCalls;
+    const osmCallsBefore = osmLoaderCalls;
+    const [googleResponse, osmResponse, missingResponse] = await Promise.all([
+      fetch(`${baseUrl}/api/listing?cityId=dhg&section=businesses&language=en&listingId=${encodeURIComponent(googleId)}`),
+      fetch(`${baseUrl}/api/listing?cityId=dhg&section=food-drink&language=en&listingId=${encodeURIComponent(osmId)}`),
+      fetch(`${baseUrl}/api/listing?cityId=dhg&section=businesses&language=en&listingId=${runId}-missing`),
+    ]);
+    const googleBody = await googleResponse.json() as { listing: Listing; source: string };
+    const osmBody = await osmResponse.json() as { listing: Listing; source: string };
+    const missingBody = await missingResponse.json() as { message: string };
+
+    assert.equal(googleResponse.status, 200);
+    assert.equal(googleBody.listing.name, "Newest Google Business");
+    assert.equal(googleBody.source, "stored");
+    assert.equal(osmResponse.status, 200);
+    assert.equal(osmBody.listing.name, "Newest OSM Restaurant");
+    assert.equal(osmBody.source, "stored");
+    assert.equal(missingResponse.status, 404);
+    assert.equal(missingBody.message, "This stored listing was not found.");
+    assert.equal(googleLoaderCalls, googleCallsBefore);
+    assert.equal(osmLoaderCalls, osmCallsBefore);
   });
 
   it("never invokes provider loaders for a stored-only cache miss and still returns 200", async () => {
