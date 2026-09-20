@@ -8,6 +8,7 @@ import {
   timestamp,
   uniqueIndex,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { externalQueriesTable } from "./externalQueries";
@@ -30,6 +31,9 @@ export const externalResultsTable = pgTable(
     uniqueIndex("external_results_external_query_id_unique").on(table.externalQueryId),
     index("external_results_user_query_id_index").on(table.userQueryId),
     index("external_results_lookup_index").on(table.normalizedKey, table.provider, table.fetchedAt),
+    index("external_results_normalized_key_jsonb_index")
+      .using("gin", sql`(${table.normalizedKey}::jsonb)`),
+    index("external_results_payload_jsonb_index").using("gin", table.payload),
   ],
 );
 

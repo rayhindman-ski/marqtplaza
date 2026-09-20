@@ -30,6 +30,7 @@ export * from "./socialMapReviewReports";
 export * from "./userQueries";
 export * from "./externalQueries";
 export * from "./externalResults";
+export * from "./externalResultListings";
 export * from "./userRegistrations";
 export * from "./accounts";
 export * from "./businessReview";

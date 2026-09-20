@@ -5,6 +5,7 @@ import {
   allowsExternalQueries,
   fetchOpenStreetMapBusinesses,
   findStoredListingInRows,
+  listingSnapshotRows,
   filterEventsByNeighborhoods,
   filterListingsByBusinessCategories,
   foodTypeForGooglePrimaryType,
@@ -177,6 +178,29 @@ describe("listings query persistence inputs", () => {
     assert.equal(findStoredListingInRows(rows, "google-place-1")?.name, "Google shop");
     assert.equal(findStoredListingInRows(rows, "osm-node-2")?.name, "OSM cafe");
     assert.equal(findStoredListingInRows(rows, "missing"), null);
+  });
+
+  it("normalizes one deduplicated lookup row per listing without changing its payload", () => {
+    const fetchedAt = new Date("2026-09-20T12:00:00.000Z");
+    const older = { id: "osm-node-2", source: "openstreetmap", name: "Old name" };
+    const newest = { id: "osm-node-2", source: "openstreetmap", name: "New name" };
+    const rows = listingSnapshotRows(
+      42,
+      JSON.stringify({ cityId: "dhg", section: "businesses", language: "nl" }),
+      [older, newest],
+      fetchedAt,
+    );
+
+    assert.equal(rows.length, 1);
+    assert.deepEqual(rows[0], {
+      externalResultId: 42,
+      cityId: "dhg",
+      section: "businesses",
+      listingId: "osm-node-2",
+      listing: newest,
+      fetchedAt,
+    });
+    assert.deepEqual(listingSnapshotRows(42, "not-json", [newest], fetchedAt), []);
   });
 
   it("accepts only bounded anonymous browser identifiers", () => {

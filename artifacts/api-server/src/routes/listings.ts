@@ -6,6 +6,7 @@ import {
   discoveredEventsTable,
   eventSourceStatusesTable,
   externalQueriesTable,
+  externalResultListingsTable,
   externalResultsTable,
   providerUsageTable,
   pool,
@@ -1790,15 +1791,22 @@ async function captureProviderResult(
     externalQueryId = persistedExternalQueryId;
 
     const listings = await withBoundedBackoff(load, attempts);
+    const fetchedAt = new Date();
     await db.transaction(async (tx) => {
-      await tx.insert(externalResultsTable).values({
+      const [externalResult] = await tx.insert(externalResultsTable).values({
         externalQueryId: persistedExternalQueryId,
         userQueryId: queryId,
         provider,
         normalizedKey,
         payload: listings,
         resultCount: listings.length,
-      });
+        fetchedAt,
+      }).returning({ id: externalResultsTable.id });
+      if (!externalResult) throw new Error(`Could not persist ${provider} result.`);
+      const snapshotRows = listingSnapshotRows(externalResult.id, normalizedKey, listings, fetchedAt);
+      if (snapshotRows.length > 0) {
+        await tx.insert(externalResultListingsTable).values(snapshotRows);
+      }
       await tx.update(externalQueriesTable).set({
         status: "succeeded",
         completedAt: new Date(),
@@ -1831,6 +1839,34 @@ export function mergeStoredProviderListings(
 
 const STORED_DETAIL_RESULT_LIMIT = 25;
 
+export function listingSnapshotRows<T extends { id: string }>(
+  externalResultId: number,
+  normalizedKey: string,
+  listings: T[],
+  fetchedAt: Date,
+) {
+  let scope: { cityId?: unknown; section?: unknown };
+  try {
+    scope = JSON.parse(normalizedKey) as { cityId?: unknown; section?: unknown };
+  } catch {
+    return [];
+  }
+  if (typeof scope.cityId !== "string" || typeof scope.section !== "string") return [];
+
+  const uniqueListings = new Map<string, T>();
+  for (const listing of listings) {
+    if (typeof listing.id === "string" && listing.id.length > 0) uniqueListings.set(listing.id, listing);
+  }
+  return [...uniqueListings.values()].map((listing) => ({
+    externalResultId,
+    cityId: scope.cityId as string,
+    section: scope.section as string,
+    listingId: listing.id,
+    listing,
+    fetchedAt,
+  }));
+}
+
 export function findStoredListingInRows(
   rows: Array<{ payload: unknown }>,
   listingId: string,
@@ -1848,16 +1884,29 @@ async function loadStoredExternalListing(
   section: Exclude<ListingSection, "events" | "social-map">,
   listingId: string,
 ): Promise<Listing | null> {
-  const rows = await db.select({
-    payload: externalResultsTable.payload,
-  }).from(externalResultsTable)
+  const [snapshot] = await db.select({
+    listing: externalResultListingsTable.listing,
+  }).from(externalResultListingsTable)
+    .where(and(
+      eq(externalResultListingsTable.cityId, cityId),
+      eq(externalResultListingsTable.section, section),
+      eq(externalResultListingsTable.listingId, listingId),
+    ))
+    .orderBy(desc(externalResultListingsTable.fetchedAt), desc(externalResultListingsTable.externalResultId))
+    .limit(1);
+  if (snapshot?.listing && typeof snapshot.listing === "object") return snapshot.listing as Listing;
+
+  // Rows saved before the normalized lookup table was introduced remain
+  // resolvable while new snapshots use the indexed path above.
+  const legacyRows = await db.select({ payload: externalResultsTable.payload })
+    .from(externalResultsTable)
     .where(and(
       sql`${externalResultsTable.normalizedKey}::jsonb @> ${JSON.stringify({ cityId, section })}::jsonb`,
       sql`${externalResultsTable.payload} @> ${JSON.stringify([{ id: listingId }])}::jsonb`,
     ))
     .orderBy(desc(externalResultsTable.fetchedAt), desc(externalResultsTable.id))
     .limit(STORED_DETAIL_RESULT_LIMIT);
-  return findStoredListingInRows(rows, listingId);
+  return findStoredListingInRows(legacyRows, listingId);
 }
 
 function discoveredEventToListing(
@@ -2522,14 +2571,19 @@ export function createListingsRouter(
         sourceName: sourceNameFromUrl(listing.sourceUrl),
       }));
       await db.transaction(async (tx) => {
-        await tx.insert(externalResultsTable).values({
+        const fetchedAt = new Date();
+        const [externalResult] = await tx.insert(externalResultsTable).values({
           externalQueryId: persistedOverpassQueryId,
           userQueryId: queryId,
           provider: "openstreetmap",
           normalizedKey,
           payload: listings,
           resultCount: 0,
-        });
+          fetchedAt,
+        }).returning({ id: externalResultsTable.id });
+        if (!externalResult) throw new Error("Could not persist OpenStreetMap fallback result.");
+        const snapshotRows = listingSnapshotRows(externalResult.id, normalizedKey, listings, fetchedAt);
+        if (snapshotRows.length > 0) await tx.insert(externalResultListingsTable).values(snapshotRows);
         await tx.update(externalQueriesTable).set({ status: "succeeded", completedAt: new Date() })
           .where(eq(externalQueriesTable.id, persistedOverpassQueryId));
       });
@@ -2544,14 +2598,19 @@ export function createListingsRouter(
     }
 
     await db.transaction(async (tx) => {
-      await tx.insert(externalResultsTable).values({
+      const fetchedAt = new Date();
+      const [externalResult] = await tx.insert(externalResultsTable).values({
         externalQueryId: persistedOverpassQueryId,
         userQueryId: queryId,
         provider: "openstreetmap",
         normalizedKey,
         payload: listings,
         resultCount: listings.length,
-      });
+        fetchedAt,
+      }).returning({ id: externalResultsTable.id });
+      if (!externalResult) throw new Error("Could not persist OpenStreetMap result.");
+      const snapshotRows = listingSnapshotRows(externalResult.id, normalizedKey, listings, fetchedAt);
+      if (snapshotRows.length > 0) await tx.insert(externalResultListingsTable).values(snapshotRows);
       await tx.update(externalQueriesTable).set({ status: "succeeded", completedAt: new Date() })
         .where(eq(externalQueriesTable.id, persistedOverpassQueryId));
     });

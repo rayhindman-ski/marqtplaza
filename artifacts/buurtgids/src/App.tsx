@@ -6,7 +6,7 @@ import { publishableKeyFromHost } from '@clerk/react/internal';
 import { shadcn } from '@clerk/themes';
 import { 
   Search, MapPinOff, ArrowLeft,
-  Map as MapIcon, List, Clock, Newspaper,
+  Map as MapIcon, Clock, Newspaper,
   Globe2, Bookmark, BookmarkCheck, X, ChevronDown, ChevronUp,
   ScanSearch, RefreshCw, WifiOff, Radio, MapPinned,
   Landmark, Route as RouteIcon, Baby, Building2, Coffee, Gamepad2, HandHeart, Waves, ShoppingBag, ExternalLink, AlertCircle, CalendarPlus,
@@ -489,8 +489,6 @@ const TOP_LEVEL_SECTIONS: ListingSection[] = ['events', 'food-drink', 'social-ma
 const DEFAULT_START_SECTION = 'events' satisfies ListingSection;
 type AgendaTimeFilter = 'all' | 'today' | 'week';
 type AgendaPriceFilter = 'all' | 'free' | 'low-cost';
-type DiscoveryView = 'map' | 'list';
-
 type DiscoveryReturnState = {
   savedAt: number;
   locationId: string;
@@ -499,7 +497,6 @@ type DiscoveryReturnState = {
   selectedNeighborhoods: string[];
   neighborhoodSelection: 'all' | 'some' | 'none';
   postcodeFilter: string;
-  view: DiscoveryView;
   agendaTime: AgendaTimeFilter;
   agendaPrice: AgendaPriceFilter;
   mealOnly: boolean;
@@ -1006,7 +1003,6 @@ function SearchState({
   const [error, setError] = useState('');
   const [selectedMapNeighborhood, setSelectedMapNeighborhood] = useState<string | null>(null);
   const [hoveredMapNeighborhood, setHoveredMapNeighborhood] = useState<string | null>(null);
-  const [showHomepageMap, setShowHomepageMap] = useState(false);
   const [includeExternalSources, setIncludeExternalSources] = useState(readIncludeExternalSources);
   const t = translations[language];
   const mapLocation = LOCATIONS.find((location) => location.id === 'dhg') ?? LOCATIONS[0];
@@ -1036,13 +1032,19 @@ function SearchState({
     const normalizedQuery = query.trim().toLocaleLowerCase('nl-NL').replace(/\s+/g, ' ');
     const normalizedPostcode = query.trim().toLocaleUpperCase('nl-NL').replace(/\s+/g, '');
     const isPostcodeQuery = /^\d{4}(?:[A-Z]{2})?$/.test(normalizedPostcode);
+    const matchedNeighborhood = mapLocation.neighborhoods.find(
+      neighborhood => neighborhood.toLocaleLowerCase('nl-NL').replace(/\s+/g, ' ') === normalizedQuery,
+    );
     const matched = LOCATIONS.find(l =>
       l.name.toLocaleLowerCase('nl-NL') === normalizedQuery ||
       l.nameNl.toLocaleLowerCase('nl-NL') === normalizedQuery ||
       (isPostcodeQuery && l.postcodes.includes(normalizedPostcode.slice(0, 4)))
     );
 
-    if (matched) {
+    if (matchedNeighborhood) {
+      setError('');
+      onSearch(mapLocation.id, matchedNeighborhood, 'events');
+    } else if (matched) {
       setError('');
       onSearch(matched.id, undefined, 'events', isPostcodeQuery ? normalizedPostcode : undefined);
     } else {
@@ -1172,69 +1174,45 @@ function SearchState({
         <div className="w-full pt-2">
           <div className="grid gap-5 lg:grid-cols-[minmax(0,2.4fr)_minmax(15rem,0.8fr)] lg:items-stretch">
             <div className="relative h-[31rem] overflow-hidden rounded-3xl border border-border/70 bg-card/80 text-left shadow-xl backdrop-blur-sm sm:h-[38rem]">
-              {showHomepageMap ? (
-                <>
-                  <GoogleMapView
-                    language={language}
-                    locationId={mapLocation.id}
-                    selectedNeighborhoods={mapLocation.neighborhoods}
-                    showNeighborhoodLabels={false}
-                    highlightedNeighborhood={hoveredMapNeighborhood ?? selectedMapNeighborhood}
-                    onNeighborhoodClick={setSelectedMapNeighborhood}
-                    onNeighborhoodHover={setHoveredMapNeighborhood}
-                    markers={[]}
-                    selectedMarkerId={null}
-                    savedIds={new Set()}
-                    onMarkerClick={() => undefined}
-                  />
-                  <div className="pointer-events-none absolute left-4 top-4 z-10 max-w-[calc(100%-2rem)] rounded-2xl border border-border/70 bg-card/90 px-4 py-3 shadow-lg backdrop-blur-sm">
-                    <p className="text-sm font-extrabold text-foreground">
-                      {language === 'nl' ? 'Buurten op de kaart' : 'Neighborhoods on the map'}
+              <GoogleMapView
+                language={language}
+                locationId={mapLocation.id}
+                selectedNeighborhoods={mapLocation.neighborhoods}
+                showNeighborhoodLabels={false}
+                highlightedNeighborhood={hoveredMapNeighborhood ?? selectedMapNeighborhood}
+                onNeighborhoodClick={setSelectedMapNeighborhood}
+                onNeighborhoodHover={setHoveredMapNeighborhood}
+                markers={[]}
+                selectedMarkerId={null}
+                savedIds={new Set()}
+                onMarkerClick={() => undefined}
+              />
+              <div className="pointer-events-none absolute left-4 top-4 z-10 max-w-[calc(100%-2rem)] rounded-2xl border border-border/70 bg-card/90 px-4 py-3 shadow-lg backdrop-blur-sm">
+                <p className="text-sm font-extrabold text-foreground">
+                  {language === 'nl' ? 'Buurten op de kaart' : 'Neighborhoods on the map'}
+                </p>
+                <p className="mt-1 text-xs font-semibold text-muted-foreground">
+                  {getLocationName(mapLocation, language)}
+                  {' · '}
+                  {language === 'nl'
+                    ? 'Selecteer een buurt op de kaart of typ de naam hierboven.'
+                    : 'Select a neighborhood on the map or type its name above.'}
+                </p>
+              </div>
+              {selectedMapNeighborhood && (
+                <div className="absolute bottom-4 left-4 right-4 z-10 flex items-center justify-between gap-3 rounded-2xl border border-primary/30 bg-card/95 px-4 py-3 text-left shadow-lg backdrop-blur-sm">
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-muted-foreground">
+                      {language === 'nl' ? 'Geselecteerde buurt' : 'Selected neighborhood'}
                     </p>
-                    <p className="mt-1 text-xs font-semibold text-muted-foreground">
-                      {getLocationName(mapLocation, language)}
-                      {' · '}
-                      {language === 'nl'
-                        ? 'Selecteer een buurt direct op de kaart.'
-                        : 'Select a neighborhood directly on the map.'}
-                    </p>
+                    <p className="truncate text-sm font-extrabold text-foreground">{selectedMapNeighborhood}</p>
                   </div>
-                  {selectedMapNeighborhood && (
-                    <div className="absolute bottom-4 left-4 right-4 z-10 flex items-center justify-between gap-3 rounded-2xl border border-primary/30 bg-card/95 px-4 py-3 text-left shadow-lg backdrop-blur-sm">
-                      <div className="min-w-0">
-                        <p className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-muted-foreground">
-                          {language === 'nl' ? 'Geselecteerde buurt' : 'Selected neighborhood'}
-                        </p>
-                        <p className="truncate text-sm font-extrabold text-foreground">{selectedMapNeighborhood}</p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => onSearch(mapLocation.id, selectedMapNeighborhood, DEFAULT_START_SECTION)}
-                        className="shrink-0 rounded-xl bg-primary px-3 py-2 text-xs font-extrabold text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                      >
-                        {language === 'nl' ? 'Selecteer buurt' : 'Select neighborhood'}
-                      </button>
-                    </div>
-                  )}
-                </>
-              ) : (
-                <div className="flex h-full flex-col items-center justify-center px-6 text-center">
-                  <MapIcon className="h-10 w-10 text-primary" aria-hidden="true" />
-                  <h2 className="mt-4 text-lg font-extrabold text-foreground">
-                    {language === 'nl' ? 'De kaart staat uit' : 'The map is off'}
-                  </h2>
-                  <p className="mt-2 max-w-sm text-sm leading-relaxed text-muted-foreground">
-                    {language === 'nl'
-                      ? 'Zoek zonder kaart of open de kaart om een buurt visueel te kiezen.'
-                      : 'Search without a map, or open it to choose a neighborhood visually.'}
-                  </p>
                   <button
                     type="button"
-                    onClick={() => setShowHomepageMap(true)}
-                    className="mt-5 inline-flex min-h-11 items-center gap-2 rounded-full bg-primary px-5 py-3 text-sm font-bold text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                    onClick={() => onSearch(mapLocation.id, selectedMapNeighborhood, DEFAULT_START_SECTION)}
+                    className="shrink-0 rounded-xl bg-primary px-3 py-2 text-xs font-extrabold text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                   >
-                    <MapIcon className="h-4 w-4" aria-hidden="true" />
-                    {t.showMap}
+                    {language === 'nl' ? 'Selecteer buurt' : 'Select neighborhood'}
                   </button>
                 </div>
               )}
@@ -1929,7 +1907,6 @@ function DiscoveryState({
   const [neighborhoodSearch, setNeighborhoodSearch] = useState('');
   const [selectedMarker, setSelectedMarker] = useState<string | null>(null);
   const [viewportPreservingSelection, setViewportPreservingSelection] = useState<string | null>(null);
-  const [view, setView] = useState<DiscoveryView>(restoredState?.view ?? 'list');
   const [agendaTime, setAgendaTime] = useState<AgendaTimeFilter>(restoredState?.agendaTime ?? 'all');
   const [agendaPrice, setAgendaPrice] = useState<AgendaPriceFilter>(restoredState?.agendaPrice ?? 'all');
   const [mealOnly, setMealOnly] = useState(restoredState?.mealOnly ?? false);
@@ -2178,7 +2155,6 @@ function DiscoveryState({
       selectedNeighborhoods,
       neighborhoodSelection,
       postcodeFilter,
-      view,
       agendaTime,
       agendaPrice,
       mealOnly,
@@ -2196,7 +2172,6 @@ function DiscoveryState({
     selectedNeighborhoods,
     subcategories,
     topLevelCategories,
-    view,
   ]);
 
   useEffect(() => {
@@ -2228,7 +2203,7 @@ function DiscoveryState({
       window.cancelAnimationFrame(frame);
       window.clearTimeout(timer);
     };
-  }, [selectedMarker, view]);
+  }, [selectedMarker]);
 
   const selectedTopLevelSections = TOP_LEVEL_SECTIONS.filter((section) => topLevelCategories[section]);
   const selectedLocalQueries = selectedTopLevelSections.map((section) => listingQueries[section]);
@@ -2434,14 +2409,12 @@ function DiscoveryState({
     : location.neighborhoods;
 
   return (
-    <div className="flex h-screen w-full overflow-hidden bg-background">
+    <div className="flex min-h-screen w-full flex-col bg-background md:h-screen md:flex-row md:overflow-hidden">
       <LanguageSelector language={language} onLanguageChange={onLanguageChange} />
 
       {/* Sidebar List */}
-      <div className={cn(
-        "w-full md:w-[var(--sidebar-width)] h-full flex flex-col overflow-y-auto bg-card/95 backdrop-blur-xl md:bg-card border-r border-border shadow-2xl z-20 absolute md:relative transition-transform duration-500 ease-[cubic-bezier(0.32,0.72,0,1)]",
-        view === 'list' ? "translate-y-0" : "translate-y-full md:translate-y-0"
-      )}
+      <div
+      className="relative z-20 flex h-[70vh] min-h-[32rem] w-full flex-col overflow-y-auto border-r border-border bg-card/95 shadow-2xl backdrop-blur-xl md:h-full md:min-h-0 md:w-[var(--sidebar-width)] md:bg-card"
       style={{ '--sidebar-width': `${sidebarWidth}px` } as React.CSSProperties}
       >
         <div className="shrink-0 border-b border-border bg-card p-4">
@@ -2634,24 +2607,19 @@ function DiscoveryState({
                     return (
                       <label
                         key={subcategory}
-                        className={cn(
-                          "flex min-h-8 cursor-pointer items-center gap-1.5 rounded-lg border px-2 py-1.5 text-[10px] font-semibold transition-all",
-                          isChecked
-                            ? "border-primary/50 bg-primary/10 text-foreground shadow-[0_3px_10px_-6px_rgba(243,108,33,0.8)]"
-                            : "border-border/70 bg-card/70 text-muted-foreground hover:border-primary/40 hover:bg-primary/5 hover:text-foreground",
-                        )}
+                        className="flex min-h-8 cursor-pointer items-center gap-1.5 rounded-lg border px-2 py-1.5 text-[10px] font-semibold transition-all hover:brightness-95"
+                        style={{
+                          backgroundColor: isChecked ? color : `${color}1f`,
+                          borderColor: isChecked ? color : `${color}66`,
+                          color: isChecked ? '#ffffff' : color,
+                          boxShadow: isChecked ? `0 3px 10px -6px ${color}` : undefined,
+                        }}
                       >
                         <input
                           type="checkbox"
                           checked={isChecked}
                           onChange={() => toggleSubcategory(subcategory)}
-                          className="h-3.5 w-3.5 shrink-0 accent-primary"
-                        />
-                        <span
-                          data-subcategory-color={color}
-                          className="h-2.5 w-2.5 shrink-0 rounded-full ring-1 ring-black/10"
-                          style={{ backgroundColor: color }}
-                          aria-hidden="true"
+                          className="h-3.5 w-3.5 shrink-0 accent-white"
                         />
                         <span>{subcategoryLabelFor(subcategory, language)}</span>
                       </label>
@@ -3128,15 +3096,6 @@ function DiscoveryState({
           </FilterFrame>
         </div>
         
-        {/* Mobile close list button */}
-        <div className="sticky bottom-0 md:hidden p-4 border-t border-border bg-card/95 backdrop-blur-xl mt-auto shrink-0 pb-safe">
-          <button 
-            onClick={() => setView('map')} 
-            className="w-full py-3.5 bg-muted hover:bg-muted/80 text-foreground rounded-xl font-bold transition-colors"
-          >
-            {t.backToMap}
-          </button>
-        </div>
         <div
           role="separator"
           aria-orientation="vertical"
@@ -3170,7 +3129,7 @@ function DiscoveryState({
       </div>
 
       {/* Map Area */}
-      <div className="flex h-full w-full flex-1 flex-col overflow-hidden bg-background">
+      <div className="flex h-[70vh] min-h-[32rem] w-full flex-1 flex-col overflow-hidden bg-background md:h-full md:min-h-0">
         <ReferenceCategoryNav
           embedded
           language={language}
@@ -3181,54 +3140,22 @@ function DiscoveryState({
         />
         <WeatherCard cityId={locationId} language={language} />
         <div className="relative min-h-0 flex-1">
-          {view === 'map' ? (
-            <GoogleMapView
-              language={language}
-              locationId={location.id}
-              selectedNeighborhoods={selectedNeighborhoods}
-              showAllNeighborhoods
-              highlightedNeighborhood={selectedNeighborhoods.length === 1 ? selectedNeighborhoods[0] : null}
-              isDataLoading={topLevelCategories.businesses && businessesQuery.isFetching}
-              onNeighborhoodClick={toggleNeighborhood}
-              markers={filteredMarkers}
-              selectedMarkerId={selectedMarker}
-              recenterSelectedMarker={selectedMarker !== viewportPreservingSelection}
-              savedIds={savedIds}
-              onMarkerClick={handleMarkerClick}
-              onClusterMarkerClick={handleClusterMarkerClick}
-            />
-          ) : (
-            <div className="hidden h-full flex-col items-center justify-center bg-muted/20 px-8 text-center md:flex">
-              <MapIcon className="h-10 w-10 text-primary" aria-hidden="true" />
-              <h2 className="mt-4 text-lg font-extrabold text-foreground">
-                {language === 'nl' ? 'Bekijk resultaten zonder kaart' : 'Browse results without the map'}
-              </h2>
-              <p className="mt-2 max-w-md text-sm leading-relaxed text-muted-foreground">
-                {language === 'nl'
-                  ? 'De kaart en kaartprovider worden pas geladen wanneer je hiervoor kiest.'
-                  : 'The map and map provider load only after you choose to open them.'}
-              </p>
-              <button
-                type="button"
-                onClick={() => setView('map')}
-                className="mt-5 inline-flex min-h-11 items-center gap-2 rounded-full bg-primary px-5 py-3 text-sm font-bold text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
-              >
-                <MapIcon className="h-4 w-4" aria-hidden="true" />
-                {t.showMap}
-              </button>
-            </div>
-          )}
+          <GoogleMapView
+            language={language}
+            locationId={location.id}
+            selectedNeighborhoods={selectedNeighborhoods}
+            showAllNeighborhoods
+            highlightedNeighborhood={selectedNeighborhoods.length === 1 ? selectedNeighborhoods[0] : null}
+            isDataLoading={topLevelCategories.businesses && businessesQuery.isFetching}
+            onNeighborhoodClick={toggleNeighborhood}
+            markers={filteredMarkers}
+            selectedMarkerId={selectedMarker}
+            recenterSelectedMarker={selectedMarker !== viewportPreservingSelection}
+            savedIds={savedIds}
+            onMarkerClick={handleMarkerClick}
+            onClusterMarkerClick={handleClusterMarkerClick}
+          />
 
-          {/* Mobile Toggle Overlay */}
-          <div className="md:hidden absolute bottom-8 left-1/2 -translate-x-1/2 z-30">
-            <button
-              onClick={() => setView(v => v === 'map' ? 'list' : 'map')}
-              className="bg-foreground text-background px-6 py-3.5 rounded-full shadow-2xl font-bold flex items-center gap-2.5 hover:scale-105 active:scale-95 transition-transform"
-            >
-              {view === 'map' ? <List className="w-5 h-5" /> : <MapIcon className="w-5 h-5" />}
-              <span>{view === 'map' ? t.showList : t.showMap}</span>
-            </button>
-          </div>
         </div>
       </div>
     </div>
