@@ -298,6 +298,15 @@ for (const [mapPath, tilesAvailable] of [['tile map', true], ['coordinate fallba
     await neighborhoodControl.click();
     await expect(neighborhoodControl).toHaveAttribute('aria-pressed', 'true');
     await expect(page.getByRole('button', { name: 'Select neighborhood: Centrum', exact: true })).toHaveCount(1);
+
+    const bezuidenhoutControl = page.locator('[data-neighborhood-list]').getByRole('button', { name: 'Bezuidenhout', exact: true });
+    await bezuidenhoutControl.click();
+    await expect(neighborhoodControl).toHaveAttribute('aria-pressed', 'true');
+    await expect(bezuidenhoutControl).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByRole('button', { name: 'Select neighborhood: Centrum', exact: true })).toHaveCSS('stroke-opacity', '1');
+    await expect(page.getByRole('button', { name: 'Select neighborhood: Bezuidenhout', exact: true })).toHaveCSS('stroke-opacity', '1');
+    await expect(page.getByRole('button', { name: 'Select neighborhood: Centrum', exact: true })).toHaveCSS('stroke-width', '5px');
+    await expect(page.getByRole('button', { name: 'Select neighborhood: Bezuidenhout', exact: true })).toHaveCSS('stroke-width', '5px');
   });
 }
 

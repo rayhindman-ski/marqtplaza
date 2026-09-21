@@ -2198,13 +2198,13 @@ function DiscoveryState({
   const handleClusterMarkerClick = handleMarkerClick;
 
   const toggleNeighborhood = (neighborhood: string) => {
-    if (selectedNeighborhoods.includes(neighborhood)) {
-      setSelectedNeighborhoods([]);
-      setNeighborhoodSelection('none');
-    } else {
-      setSelectedNeighborhoods([neighborhood]);
-      setNeighborhoodSelection('some');
-    }
+    setSelectedNeighborhoods((current) => {
+      const next = current.includes(neighborhood)
+        ? current.filter((name) => name !== neighborhood)
+        : [...current, neighborhood];
+      setNeighborhoodSelection(next.length > 0 ? 'some' : 'none');
+      return next;
+    });
     setSelectedMarker(null);
   };
 
@@ -2821,8 +2821,10 @@ function DiscoveryState({
                       <span
                         aria-hidden="true"
                         className={cn(
-                          "grid h-4 w-4 shrink-0 place-items-center rounded-full border text-[10px]",
-                          isChecked ? "border-primary-foreground/70" : "border-border",
+                          "grid h-4 w-4 shrink-0 place-items-center rounded border text-[10px] font-black",
+                          isChecked
+                            ? "border-primary-foreground/80 bg-primary-foreground/15"
+                            : "border-border bg-card",
                         )}
                       >
                         {isChecked ? '✓' : ''}
