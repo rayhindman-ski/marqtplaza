@@ -14,6 +14,7 @@ import {
   parseBusinessCategories,
   parseListingsMode,
   prepareEventsForMode,
+  storedNeighborhoodScopes,
   summarizeEventEvidence,
 } from "./listings";
 
@@ -192,6 +193,19 @@ describe("listings query persistence inputs", () => {
       normalizedListingsKey("dhg", "businesses", "nl", ["Laak Centraal", "Centrum"]),
       normalizedListingsKey(" DHG ", "businesses", "nl", ["  laak   centraal  ", " centrum "]),
     );
+  });
+
+  it("reuses each selected neighborhood's stored scope for multi-select unions", () => {
+    assert.deepEqual(
+      storedNeighborhoodScopes(["Stationsbuurt", "Centrum", "Bezuidenhout"]),
+      [
+        ["Bezuidenhout", "Centrum", "Stationsbuurt"],
+        ["Bezuidenhout"],
+        ["Centrum"],
+        ["Stationsbuurt"],
+      ],
+    );
+    assert.deepEqual(storedNeighborhoodScopes(["Centrum"]), [["Centrum"]]);
   });
 
   it("matches event neighborhoods without formatting-sensitive exclusions", () => {

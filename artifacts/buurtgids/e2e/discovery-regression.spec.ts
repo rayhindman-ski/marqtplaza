@@ -253,6 +253,113 @@ test('does not mount a map provider on the homepage', async ({ page }) => {
   await expect.poll(() => mapRequests).toBeGreaterThan(0);
 });
 
+test('adding a third neighborhood never decreases the visible results', async ({ page }) => {
+  const listingsByNeighborhood = {
+    Centrum: {
+      id: 'centrum-cafe',
+      locationId: 'dhg',
+      category: 'Food & Drink',
+      foodType: 'cafe',
+      name: 'Centrum cafe',
+      description: 'Cafe in Centrum',
+      details: 'Centrum',
+      address: '2511 AB Den Haag',
+      x: 50,
+      y: 50,
+      lat: 52.07860321,
+      lng: 4.30803492,
+      source: 'openstreetmap',
+    },
+    Bezuidenhout: {
+      id: 'bezuidenhout-cafe',
+      locationId: 'dhg',
+      category: 'Food & Drink',
+      foodType: 'cafe',
+      name: 'Bezuidenhout cafe',
+      description: 'Cafe in Bezuidenhout',
+      details: 'Bezuidenhout',
+      address: '2595 AA Den Haag',
+      x: 55,
+      y: 45,
+      lat: 52.08124098,
+      lng: 4.33381478,
+      source: 'openstreetmap',
+    },
+    Stationsbuurt: {
+      id: 'stationsbuurt-cafe',
+      locationId: 'dhg',
+      category: 'Food & Drink',
+      foodType: 'cafe',
+      name: 'Stationsbuurt cafe',
+      description: 'Cafe in Stationsbuurt',
+      details: 'Stationsbuurt',
+      address: '2515 AA Den Haag',
+      x: 53,
+      y: 55,
+      lat: 52.07498918,
+      lng: 4.32281084,
+      source: 'openstreetmap',
+    },
+  } as const;
+
+  await page.route('https://maps.googleapis.com/**', async (route) => route.abort('failed'));
+  await page.route('https://tile.openstreetmap.org/**', async (route) => {
+    await route.fulfill({ contentType: 'image/png', body: transparentPng });
+  });
+  await page.route('**/api/listings*', async (route) => {
+    const url = new URL(route.request().url());
+    const requested = (url.searchParams.get('neighborhoods') ?? '')
+      .split(',')
+      .filter((name): name is keyof typeof listingsByNeighborhood => name in listingsByNeighborhood);
+    await route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({
+        source: 'stored',
+        listings: requested.map((name) => listingsByNeighborhood[name]),
+      }),
+    });
+  });
+  await page.route('**/api/weather*', async (route) => {
+    await route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({
+        cityId: 'dhg',
+        locationName: 'Den Haag',
+        fetchedAt: new Date().toISOString(),
+        current: {
+          temperature: 18,
+          apparentTemperature: 18,
+          precipitation: 0,
+          windSpeed: 5,
+          weatherCode: 0,
+          condition: 'clear',
+          isDay: true,
+        },
+        forecast: [],
+        provider: 'open-meteo',
+      }),
+    });
+  });
+
+  await page.goto('/activiteiten/den-haag?section=food-drink&neighborhood=Centrum');
+  const visibleResults = page.locator('[data-event-list] [data-event-id]');
+  await expect(visibleResults).toHaveCount(1);
+
+  const counts = [await visibleResults.count()];
+  for (const neighborhood of ['Bezuidenhout', 'Stationsbuurt']) {
+    await page.getByRole('button', { name: `Select neighborhood: ${neighborhood}`, exact: true })
+      .dispatchEvent('click', { shiftKey: true });
+    await expect(page.getByRole('button', { name: `Select neighborhood: ${neighborhood}`, exact: true }))
+      .toHaveCSS('stroke-opacity', '1');
+    await expect(visibleResults).toHaveCount(counts.length + 1);
+    counts.push(await visibleResults.count());
+  }
+
+  expect(counts).toEqual([1, 2, 3]);
+  expect(counts[1]).toBeGreaterThanOrEqual(counts[0]);
+  expect(counts[2]).toBeGreaterThanOrEqual(counts[1]);
+});
+
 for (const [mapPath, tilesAvailable] of [['tile map', true], ['coordinate fallback', false]] as const) {
 
   test(`keeps neighborhood polygon selection aligned in the ${mapPath}`, async ({ page }) => {

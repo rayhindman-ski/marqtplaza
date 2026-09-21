@@ -1969,6 +1969,27 @@ async function loadStoredProviderResults(
   return results;
 }
 
+export function storedNeighborhoodScopes(neighborhoods: string[]): string[][] {
+  const normalized = normalizeNeighborhoods(neighborhoods);
+  if (normalized.length <= 1) return [normalized];
+  return [normalized, ...normalized.map((neighborhood) => [neighborhood])];
+}
+
+function mergeStoredProviderResults(
+  target: Map<ExternalProvider, Listing[]>,
+  source: Map<ExternalProvider, Listing[]>,
+): void {
+  for (const [provider, listings] of source) {
+    const unique = new Map(
+      (target.get(provider) ?? []).map((listing) => [listing.id, listing] as const),
+    );
+    for (const listing of listings) {
+      if (!unique.has(listing.id)) unique.set(listing.id, listing);
+    }
+    target.set(provider, [...unique.values()]);
+  }
+}
+
 function storedMissMessage(language: EventLanguage): string {
   return language === "nl"
     ? "Geen opgeslagen resultaten beschikbaar voor deze zoekopdracht. Vernieuw in live-modus."
@@ -1998,16 +2019,40 @@ async function loadStoredBusinessResults(
     businessCategories: BusinessCategory[];
   },
 ): Promise<Map<ExternalProvider, Listing[]>> {
-  const exact = await loadStoredProviderResults(normalizedKey, providers);
-  if (scope.section !== "businesses" || scope.businessCategories.length === 0) return exact;
-  const missing = providers.filter((provider) => !exact.has(provider));
-  if (missing.length === 0) return exact;
-  const broadKey = normalizedListingsKey(scope.cityId, scope.section, scope.language, scope.neighborhoods, []);
-  const broad = await loadStoredProviderResults(broadKey, missing);
-  for (const [provider, listings] of broad) {
-    exact.set(provider, filterListingsByBusinessCategories(listings, scope.businessCategories));
+  const combined = new Map<ExternalProvider, Listing[]>();
+  const neighborhoodScopes = storedNeighborhoodScopes(scope.neighborhoods);
+
+  for (const neighborhoods of neighborhoodScopes) {
+    const key = neighborhoods.length === scope.neighborhoods.length
+      ? normalizedKey
+      : normalizedListingsKey(
+          scope.cityId,
+          scope.section,
+          scope.language,
+          neighborhoods,
+          scope.businessCategories,
+        );
+    const exact = await loadStoredProviderResults(key, providers);
+    mergeStoredProviderResults(combined, exact);
+
+    if (scope.section !== "businesses" || scope.businessCategories.length === 0) continue;
+    const broadKey = normalizedListingsKey(
+      scope.cityId,
+      scope.section,
+      scope.language,
+      neighborhoods,
+      [],
+    );
+    const broad = await loadStoredProviderResults(broadKey, providers);
+    const narrowed = new Map(
+      [...broad].map(([provider, listings]) => [
+        provider,
+        filterListingsByBusinessCategories(listings, scope.businessCategories),
+      ]),
+    );
+    mergeStoredProviderResults(combined, narrowed);
   }
-  return exact;
+  return combined;
 }
 
 export interface ListingsRouterDependencies {
@@ -2269,10 +2314,14 @@ export function createListingsRouter(
         : ["openstreetmap"];
       if (!allowsExternalQueries(mode)) {
         const stored = await loadStoredBusinessResults(normalizedKey, providers, { cityId, section: listingSection, language, neighborhoods: requestedNeighborhoods, businessCategories: requestedBusinessCategories });
-        const googleListings = dependencies.googlePlacesEnabled
+        const filterToSearchArea = (listings: Listing[]) => searchArea.neighborhoods.length > 0
+          ? listings.filter((listing) =>
+            isPointInsideNeighborhoods(listing.lat, listing.lng, searchArea.neighborhoods))
+          : listings;
+        const googleListings = filterToSearchArea(dependencies.googlePlacesEnabled
           ? stored.get("google_places") ?? []
-          : [];
-        const osmListings = stored.get("openstreetmap") ?? [];
+          : []);
+        const osmListings = filterToSearchArea(stored.get("openstreetmap") ?? []);
         const hit = stored.size > 0;
         await finalizeListingsQuery(queryId, hit && stored.size < providers.length ? "partial" : "succeeded");
         res.json({
