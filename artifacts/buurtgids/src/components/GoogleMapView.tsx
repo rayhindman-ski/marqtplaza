@@ -2097,28 +2097,7 @@ export function GoogleMapView(props: GoogleMapViewProps) {
   }, []);
   let content;
 
-  if (
-    props.markers.length === 0
-    && props.selectedNeighborhoods.length === 0
-    && !props.showAllNeighborhoods
-  ) {
-    return (
-      <div
-        className="absolute inset-0 grid place-items-center bg-muted/40 p-6 text-center"
-        role="status"
-        aria-label={MAP_COPY[props.language].interactiveMap}
-      >
-        <div className="max-w-xs">
-          <p className="text-sm font-extrabold text-foreground">
-            {translations[props.language].noDiscoveries}
-          </p>
-          <p className="mt-1 text-sm font-semibold text-muted-foreground">
-            {translations[props.language].noDiscoveriesDescription}
-          </p>
-        </div>
-      </div>
-    );
-  } else if (provider === 'fallback') {
+  if (provider === 'fallback') {
     content = (
       <CoordinateMapFallback
         {...props}
