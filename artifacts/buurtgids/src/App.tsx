@@ -2167,18 +2167,20 @@ function DiscoveryState({
     setSelectedMarker(null);
   };
 
-  const selectAllSubcategories = () => {
+  const selectAllSubcategories = (section: ListingSection) => {
+    const sectionSubcategories = subcategoriesForTopLevel(section);
     setSubcategories((previous) => ({
       ...previous,
-      ...Object.fromEntries(visibleSubcategories.map((subcategory) => [subcategory, true])),
+      ...Object.fromEntries(sectionSubcategories.map((subcategory) => [subcategory, true])),
     }));
     setSelectedMarker(null);
   };
 
-  const deselectAllSubcategories = () => {
+  const deselectAllSubcategories = (section: ListingSection) => {
+    const sectionSubcategories = subcategoriesForTopLevel(section);
     setSubcategories((previous) => ({
       ...previous,
-      ...Object.fromEntries(visibleSubcategories.map((subcategory) => [subcategory, false])),
+      ...Object.fromEntries(sectionSubcategories.map((subcategory) => [subcategory, false])),
     }));
     setSelectedMarker(null);
   };
@@ -2689,56 +2691,66 @@ function DiscoveryState({
                   );
                 })}
               </div>
-              {visibleSubcategories.length > 0 && (
-                <div className="mt-3 border-t border-border/70 pt-3">
-                  <div className="mb-2 flex items-center justify-between gap-2">
-                    <p className="text-[10px] font-black uppercase tracking-[0.14em] text-muted-foreground">
-                      {t.subcategories}
-                    </p>
-                    {refreshingIndicator}
+              {selectedTopLevelSections.map((section) => {
+                const sectionSubcategories = subcategoriesForTopLevel(section);
+                const sectionLabel = section === 'events'
+                  ? (language === 'nl' ? 'Evenementen' : 'Events')
+                  : section === 'businesses'
+                    ? t.categories.Businesses
+                    : section === 'social-map'
+                      ? t.categories['Social map']
+                      : t.categories['Food & Drink'];
+                return (
+                  <div key={section} className="mt-3 border-t border-border/70 pt-3">
+                    <div className="mb-2 flex items-center justify-between gap-2">
+                      <p className="text-[10px] font-black uppercase tracking-[0.14em] text-muted-foreground">
+                        {sectionLabel} · {t.subcategories}
+                      </p>
+                      {refreshingIndicator}
+                    </div>
+                    <div className="mb-2">
+                      <CategoryActionButtons
+                        language={language}
+                        onSelectAll={() => selectAllSubcategories(section)}
+                        onDeselectAll={() => deselectAllSubcategories(section)}
+                        selectLabel={language === 'nl' ? `Alle ${sectionLabel}` : `All ${sectionLabel}`}
+                        deselectLabel={language === 'nl' ? `Geen ${sectionLabel}` : `No ${sectionLabel}`}
+                      />
+                    </div>
+                    <div
+                      role="group"
+                      aria-label={`${sectionLabel} ${t.subcategories}`}
+                      aria-busy={isRefreshing}
+                      className={cn("grid grid-cols-2 gap-1 transition-opacity", isRefreshing && "opacity-70")}
+                    >
+                      {sectionSubcategories.map((subcategory) => {
+                        const isChecked = subcategories[subcategory];
+                        const color = getSubcategoryColor(subcategory);
+                        return (
+                          <label
+                            key={subcategory}
+                            className="flex min-h-8 cursor-pointer items-center gap-1.5 rounded-lg border px-2 py-1.5 text-[10px] font-semibold transition-all hover:brightness-95"
+                            style={{
+                              backgroundColor: isChecked ? color : `${color}1f`,
+                              borderColor: isChecked ? color : `${color}66`,
+                              color: isChecked ? '#ffffff' : color,
+                              boxShadow: isChecked ? `0 3px 10px -6px ${color}` : undefined,
+                            }}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={() => toggleSubcategory(subcategory)}
+                              className="h-3.5 w-3.5 shrink-0 accent-white"
+                            />
+                            <span>{subcategoryLabelFor(subcategory, language)}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
                   </div>
-                  <div className="mb-2">
-                  <CategoryActionButtons
-                    language={language}
-                    onSelectAll={selectAllSubcategories}
-                    onDeselectAll={deselectAllSubcategories}
-                    selectLabel={language === 'nl' ? 'Alle subcategorieën' : 'All subcategories'}
-                    deselectLabel={language === 'nl' ? 'Geen subcategorieën' : 'No subcategories'}
-                  />
-                  </div>
-                  <div
-                    role="group"
-                    aria-label={t.subcategories}
-                    aria-busy={isRefreshing}
-                    className={cn("grid grid-cols-2 gap-1 transition-opacity", isRefreshing && "opacity-70")}
-                  >
-                    {visibleSubcategories.map((subcategory) => {
-                      const isChecked = subcategories[subcategory];
-                      const color = getSubcategoryColor(subcategory);
-                      return (
-                        <label
-                          key={subcategory}
-                          className="flex min-h-8 cursor-pointer items-center gap-1.5 rounded-lg border px-2 py-1.5 text-[10px] font-semibold transition-all hover:brightness-95"
-                          style={{
-                            backgroundColor: isChecked ? color : `${color}1f`,
-                            borderColor: isChecked ? color : `${color}66`,
-                            color: isChecked ? '#ffffff' : color,
-                            boxShadow: isChecked ? `0 3px 10px -6px ${color}` : undefined,
-                          }}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={isChecked}
-                            onChange={() => toggleSubcategory(subcategory)}
-                            className="h-3.5 w-3.5 shrink-0 accent-white"
-                          />
-                          <span>{subcategoryLabelFor(subcategory, language)}</span>
-                        </label>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
+                );
+              })}
             </FilterFrame>
           <FilterFrame
             title={language === 'nl' ? 'Kies meerdere buurten / postcode' : 'Select multiple neighborhoods / postcode'}

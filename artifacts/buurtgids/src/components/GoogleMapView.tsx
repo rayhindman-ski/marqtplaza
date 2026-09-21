@@ -120,17 +120,23 @@ function getMarkerVisualLabel(
 }
 
 function getClusterVisual(points: MapPoint[]) {
-  const counts = new Map<string, { count: number; marker: MapPoint }>();
+  const counts = new Map<string, { count: number; marker: MapPoint; label: string }>();
   for (const point of points) {
     const key = getMarkerVisualKey(point);
     const current = counts.get(key);
-    counts.set(key, { count: (current?.count ?? 0) + 1, marker: current?.marker ?? point });
+    counts.set(key, {
+      count: (current?.count ?? 0) + 1,
+      marker: current?.marker ?? point,
+      label: current?.label ?? getMarkerVisualLabel(point),
+    });
   }
   const ranked = [...counts.values()].sort((a, b) => b.count - a.count);
   const dominantMarker = ranked[0]?.marker ?? points[0]!;
-  const segments = ranked.map(({ count, marker }) => ({
+  const segments = ranked.map(({ count, marker, label }) => ({
     count,
+    label,
     color: getMapMarkerColor(marker),
+    percentage: (count / points.length) * 100,
   }));
   let completed = 0;
   const background = segments.length <= 1
@@ -148,6 +154,7 @@ function getClusterVisual(points: MapPoint[]) {
     background,
     dominantColor: getMapMarkerColor(dominantMarker),
     colors: [...new Set(segments.map(({ color }) => color))].slice(0, 4),
+    segments,
   };
 }
 
@@ -603,6 +610,7 @@ function ClusterSummaryMarker({
   onClick?: () => void;
 }) {
   const count = cluster.points.length;
+  const visual = getClusterVisual(cluster.points);
   const size = count >= 100 ? 62 : count >= 10 ? 56 : 50;
   const isInteractive = Boolean(onClick);
   const downRef = useRef<{ x: number; y: number } | null>(null);
@@ -610,6 +618,9 @@ function ClusterSummaryMarker({
   const label = isInteractive
     ? `${count} listings in this area. Zoom in to expand.`
     : `${count} listings in this area`;
+  const breakdown = visual.segments
+    .map((segment) => `${segment.label}: ${Math.round(segment.percentage)}%`)
+    .join(', ');
 
   return (
     <div
@@ -619,6 +630,8 @@ function ClusterSummaryMarker({
       tabIndex={isInteractive ? 0 : undefined}
       aria-label={label}
       title={`${count} listings in this area`}
+      data-cluster-breakdown={breakdown}
+      data-cluster-mixed={visual.isMixed ? 'true' : 'false'}
       className="absolute z-30 -translate-x-1/2 -translate-y-1/2"
       style={style}
       onPointerDown={(event) => {
@@ -652,11 +665,12 @@ function ClusterSummaryMarker({
       }}
     >
       <span
-        className="flex items-center justify-center rounded-full border-[3px] border-white bg-[linear-gradient(135deg,#ff9a52_0%,#f36c21_48%,#c94d12_100%)] font-black text-white shadow-[0_7px_16px_-5px_rgba(23,34,53,0.5),0_0_0_2px_rgba(243,108,33,0.3)]"
+        className="flex items-center justify-center rounded-full border-[3px] border-white font-black text-white shadow-[0_7px_16px_-5px_rgba(23,34,53,0.5),0_0_0_2px_rgba(23,34,53,0.18)]"
         style={{
           width: size,
           height: size,
           fontSize: count >= 100 ? 14 : 16,
+          background: visual.background,
         }}
       >
         {count}
@@ -670,10 +684,16 @@ function createHtmlClusterElement(
   onClick: () => void,
 ): HTMLElement {
   const count = cluster.points.length;
+  const visual = getClusterVisual(cluster.points);
+  const breakdown = visual.segments
+    .map((segment) => `${segment.label}: ${Math.round(segment.percentage)}%`)
+    .join(', ');
   const size = count >= 100 ? 62 : count >= 10 ? 56 : 50;
   const button = document.createElement('button');
   button.type = 'button';
   button.setAttribute('data-map-cluster', '');
+  button.setAttribute('data-cluster-breakdown', breakdown);
+  button.setAttribute('data-cluster-mixed', visual.isMixed ? 'true' : 'false');
   button.setAttribute('aria-label', `${count} listings in this area. Zoom in to expand.`);
   button.title = `${count} listings in this area`;
   button.style.cssText = [
@@ -686,8 +706,8 @@ function createHtmlClusterElement(
     `height:${size}px`,
     'border:3px solid #fff',
     'border-radius:50%',
-    'background:linear-gradient(135deg,#ff9a52 0%,#f36c21 48%,#c94d12 100%)',
-    'box-shadow:0 7px 16px -5px rgba(23,34,53,0.5),0 0 0 2px rgba(243,108,33,0.3)',
+    `background:${visual.background}`,
+    'box-shadow:0 7px 16px -5px rgba(23,34,53,0.5),0 0 0 2px rgba(23,34,53,0.18)',
     'color:#fff',
     `font:${count >= 100 ? 14 : 16}px/1 ui-sans-serif,system-ui,sans-serif`,
     'font-weight:900',
@@ -1759,6 +1779,8 @@ function GoogleMapCanvas({
           zoom: location.zoom,
           styles: MAP_STYLES,
           zoomControl: true,
+           gestureHandling: 'greedy',
+           scrollwheel: true,
           mapTypeControl: false,
           streetViewControl: false,
           fullscreenControl: false,
