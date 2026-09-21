@@ -172,6 +172,7 @@ const TILE_SIZE = 256;
 const MIN_TILE_ZOOM = 10;
 const MAX_TILE_ZOOM = 18;
 const MAP_CLUSTER_RADIUS_PX = 56;
+const MAX_CLUSTER_ZOOM = 16;
 const CLUSTER_DRAG_THRESHOLD_PX = 6;
 const GOOGLE_MAPS_LOAD_TIMEOUT_MS = 4_000;
 const googleMapsApiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string | undefined;
@@ -1276,7 +1277,7 @@ function TileMapView({
       const world = latLngToWorld({ lat: point.lat, lng: point.lng }, viewport.zoom);
       return { x: world.x - mapLeft, y: world.y - mapTop };
     },
-    MAP_CLUSTER_RADIUS_PX,
+    viewport.zoom >= MAX_CLUSTER_ZOOM ? -1 : MAP_CLUSTER_RADIUS_PX,
     selectedMarkerId,
   );
 
@@ -1986,7 +1987,7 @@ function GoogleMapCanvas({
         const world = latLngToWorld({ lat: marker.lat, lng: marker.lng }, mapZoom);
         return { x: world.x, y: world.y };
       },
-      MAP_CLUSTER_RADIUS_PX,
+      mapZoom >= MAX_CLUSTER_ZOOM ? -1 : MAP_CLUSTER_RADIUS_PX,
       selectedMarkerId,
     );
     const newIds = new Set(pointClusters.map((cluster) => cluster.id));

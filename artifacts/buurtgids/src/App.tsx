@@ -1193,6 +1193,7 @@ function SearchState({
                 language={language}
                 locationId={mapLocation.id}
                 selectedNeighborhoods={selectedMapNeighborhoods}
+                showAllNeighborhoods
                 showNeighborhoodLabels={false}
                 highlightedNeighborhood={hoveredMapNeighborhood}
                 onNeighborhoodClick={(neighborhood) => {
@@ -3077,7 +3078,6 @@ function DiscoveryState({
             language={language}
             locationId={location.id}
             selectedNeighborhoods={selectedNeighborhoods}
-            showAllNeighborhoods
             highlightedNeighborhood={selectedNeighborhoods.length === 1 ? selectedNeighborhoods[0] : null}
             isDataLoading={topLevelCategories.businesses && businessesQuery.isFetching}
             onNeighborhoodClick={toggleNeighborhood}
