@@ -183,7 +183,7 @@ function mapClassNames(...classes: Array<string | false | undefined>) {
   return classes.filter(Boolean).join(' ');
 }
 
-interface GoogleMapViewProps {
+export interface MapRendererProps {
   language: Language;
   locationId: string;
   selectedNeighborhoods: string[];
@@ -858,7 +858,7 @@ function CoordinateMapFallback({
   onClusterClick,
   onClusterLeave,
 }: Pick<
-  GoogleMapViewProps,
+  MapRendererProps,
   | 'language'
   | 'locationId'
   | 'selectedNeighborhoods'
@@ -1111,7 +1111,7 @@ function TileMapView({
   onUnavailable,
   onClusterClick,
   onClusterLeave,
-}: GoogleMapViewProps & {
+}: MapRendererProps & {
   onUnavailable: () => void;
   onClusterClick?: (cluster: MapPointCluster) => void;
   onClusterLeave?: () => void;
@@ -1565,7 +1565,7 @@ function GoogleMapCanvas({
   onUnavailable,
   onClusterClick,
   onClusterLeave,
-}: GoogleMapViewProps & {
+}: MapRendererProps & {
   onUnavailable: () => void;
   onClusterClick?: (cluster: MapPointCluster) => void;
   onClusterLeave?: () => void;
@@ -2067,7 +2067,7 @@ function GoogleMapCanvas({
 
 type MapProvider = 'google' | 'tiles' | 'fallback';
 
-export function GoogleMapView(props: GoogleMapViewProps) {
+export function MapRenderer(props: MapRendererProps) {
   const [provider, setProvider] = useState<MapProvider>(
     hasGoogleMapsApiKey ? 'google' : 'tiles',
   );

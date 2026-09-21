@@ -9,6 +9,7 @@
 - [Map marker anchoring](map-marker-anchoring.md) — custom pin wrappers own coordinates once; multi-neighborhood tile viewports must use live canvas dimensions.
 - [Neighborhood boundaries](neighborhood-highlight-radius.md) — use official polygon geometry for visual neighborhood selection; never represent administrative areas with centroid circles.
 - [Homepage map contract](homepage-map-contract.md) — the main page is map-first: populated pins, hover previews, and multi-neighborhood selection are required.
+- [Map surface separation](map-surface-separation.md) — homepage neighborhood selection and drill-down discovery are distinct maps with different boundary and marker rules.
 - [Current product scope](current-product-scope.md) — prioritize the desktop web app; responsive checks prevent breakage but do not authorize mobile-first redesigns.
 - [Business filter hierarchy](business-filter-hierarchy.md) — Businesses owns non-food subcategories; Food & Drink owns its matching one, and children only show when their parent is selected.
 - [Google Places discovery](google-places-discovery.md) — follow bounded next-page results; a first-page-only search makes the business inventory look incomplete.

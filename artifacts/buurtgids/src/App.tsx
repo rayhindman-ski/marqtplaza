@@ -45,7 +45,8 @@ import {
   type SocialMapReviewStatus,
   type FoodType,
 } from './lib/data';
-import { GoogleMapView } from './components/GoogleMapView';
+import { DiscoveryResultsMap } from './components/DiscoveryResultsMap';
+import { NeighborhoodSelectionMap } from './components/NeighborhoodSelectionMap';
 import { getSubcategoryColor } from './lib/mapColors';
 import CaptureView from './pages/CaptureView';
 import SourceDirectoryView from './pages/SourceDirectoryView';
@@ -1046,21 +1047,6 @@ function SearchState({
   const [includeExternalSources, setIncludeExternalSources] = useState(readIncludeExternalSources);
   const t = translations[language];
   const mapLocation = LOCATIONS.find((location) => location.id === selectedCityId) ?? LOCATIONS[0];
-  const homepageListingsQuery = useGetListings(
-    { cityId: mapLocation.id, section: 'events', language, mode: 'stored_only' },
-    {
-      query: {
-        queryKey: getGetListingsQueryKey({
-          cityId: mapLocation.id,
-          section: 'events',
-          language,
-          mode: 'stored_only',
-        }),
-      },
-    },
-  );
-  const homepageMarkers = homepageListingsQuery.data?.listings ?? [];
-
   useEffect(() => {
     setSelectedMapNeighborhoods((current) => current.filter((name) => mapLocation.neighborhoods.includes(name)));
     if (!mapLocation.neighborhoods.includes(hoveredMapNeighborhood ?? '')) {
@@ -1189,12 +1175,10 @@ function SearchState({
         <div className="w-full pt-6">
           <div className="grid gap-6 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)] lg:items-start">
             <section className="relative h-[31rem] overflow-hidden rounded-3xl border border-border/70 bg-card/80 text-left shadow-xl backdrop-blur-sm sm:h-[38rem]">
-              <GoogleMapView
+              <NeighborhoodSelectionMap
                 language={language}
                 locationId={mapLocation.id}
                 selectedNeighborhoods={selectedMapNeighborhoods}
-                showAllNeighborhoods
-                showNeighborhoodLabels={false}
                 highlightedNeighborhood={hoveredMapNeighborhood}
                 onNeighborhoodClick={(neighborhood) => {
                   setSelectedMapNeighborhoods((current) => current.includes(neighborhood)
@@ -1202,10 +1186,6 @@ function SearchState({
                     : [...current, neighborhood]);
                 }}
                 onNeighborhoodHover={setHoveredMapNeighborhood}
-                markers={homepageMarkers}
-                selectedMarkerId={null}
-                savedIds={new Set()}
-                onMarkerClick={() => undefined}
               />
               <div className="pointer-events-none absolute left-4 top-4 z-10 max-w-[calc(100%-2rem)] rounded-2xl border border-border/70 bg-card/90 px-4 py-3 shadow-lg backdrop-blur-sm">
                 <p className="text-sm font-extrabold text-foreground">
@@ -3074,7 +3054,7 @@ function DiscoveryState({
         />
         <WeatherCard cityId={locationId} language={language} />
         <div className="relative min-h-0 flex-1">
-          <GoogleMapView
+          <DiscoveryResultsMap
             language={language}
             locationId={location.id}
             selectedNeighborhoods={selectedNeighborhoods}
