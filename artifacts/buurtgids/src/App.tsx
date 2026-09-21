@@ -1011,6 +1011,7 @@ function SearchState({
   onUserRoleChange,
   onLanguageChange,
   onSearch,
+  onSearchNeighborhoods,
   savedCount,
   onViewSaved,
 }: {
@@ -1019,6 +1020,7 @@ function SearchState({
   onUserRoleChange: (userRole: UserRole) => void;
   onLanguageChange: (language: Language) => void;
   onSearch: (locId: string, neighborhood?: string, section?: ListingSection, postcode?: string) => void;
+  onSearchNeighborhoods: (locId: string, neighborhoods: string[], section?: ListingSection) => void;
   savedCount: number;
   onViewSaved: () => void;
 }) {
@@ -1043,29 +1045,32 @@ function SearchState({
   const [query, setQuery] = useState('');
   const [error, setError] = useState('');
   const [selectedCityId, setSelectedCityId] = useState<string | null>(null);
-  const [selectedMapNeighborhood, setSelectedMapNeighborhood] = useState<string | null>(null);
+  const [selectedMapNeighborhoods, setSelectedMapNeighborhoods] = useState<string[]>([]);
   const [hoveredMapNeighborhood, setHoveredMapNeighborhood] = useState<string | null>(null);
   const [includeExternalSources, setIncludeExternalSources] = useState(readIncludeExternalSources);
   const t = translations[language];
   const mapLocation = LOCATIONS.find((location) => location.id === selectedCityId) ?? LOCATIONS[0];
+  const homepageListingsQuery = useGetListings(
+    { cityId: mapLocation.id, section: 'events', language, mode: 'stored_only' },
+    {
+      query: {
+        queryKey: getGetListingsQueryKey({
+          cityId: mapLocation.id,
+          section: 'events',
+          language,
+          mode: 'stored_only',
+        }),
+      },
+    },
+  );
+  const homepageMarkers = homepageListingsQuery.data?.listings ?? [];
 
   useEffect(() => {
-    if (!mapLocation.neighborhoods.includes(selectedMapNeighborhood ?? '')) {
-      setSelectedMapNeighborhood(null);
-    }
+    setSelectedMapNeighborhoods((current) => current.filter((name) => mapLocation.neighborhoods.includes(name)));
     if (!mapLocation.neighborhoods.includes(hoveredMapNeighborhood ?? '')) {
       setHoveredMapNeighborhood(null);
     }
-  }, [hoveredMapNeighborhood, mapLocation, selectedMapNeighborhood]);
-
-  useEffect(() => {
-    if (!mapLocation.neighborhoods.includes(selectedMapNeighborhood ?? '')) {
-      setSelectedMapNeighborhood(null);
-    }
-    if (!mapLocation.neighborhoods.includes(hoveredMapNeighborhood ?? '')) {
-      setHoveredMapNeighborhood(null);
-    }
-  }, [hoveredMapNeighborhood, mapLocation, selectedMapNeighborhood]);
+  }, [hoveredMapNeighborhood, mapLocation]);
 
   useEffect(() => {
     window.sessionStorage.setItem(
@@ -1191,31 +1196,58 @@ function SearchState({
         </form>
 
         <div className="w-full pt-6">
-          <div className="grid gap-6 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1.35fr)] lg:items-start">
-            <section className="flex min-h-[18rem] flex-col justify-between rounded-3xl border border-border/70 bg-card/90 p-6 text-left shadow-xl backdrop-blur-sm sm:p-8">
-              <div>
-                <p className="text-xs font-black uppercase tracking-[0.18em] text-primary">
-                  {language === 'nl' ? 'Jij houdt de regie' : 'You stay in control'}
+          <div className="grid gap-6 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)] lg:items-start">
+            <section className="relative h-[31rem] overflow-hidden rounded-3xl border border-border/70 bg-card/80 text-left shadow-xl backdrop-blur-sm sm:h-[38rem]">
+              <GoogleMapView
+                language={language}
+                locationId={mapLocation.id}
+                selectedNeighborhoods={selectedMapNeighborhoods}
+                showNeighborhoodLabels={false}
+                highlightedNeighborhood={hoveredMapNeighborhood}
+                onNeighborhoodClick={(neighborhood) => {
+                  setSelectedMapNeighborhoods((current) => current.includes(neighborhood)
+                    ? current.filter((name) => name !== neighborhood)
+                    : [...current, neighborhood]);
+                }}
+                onNeighborhoodHover={setHoveredMapNeighborhood}
+                markers={homepageMarkers}
+                selectedMarkerId={null}
+                savedIds={new Set()}
+                onMarkerClick={() => undefined}
+              />
+              <div className="pointer-events-none absolute left-4 top-4 z-10 max-w-[calc(100%-2rem)] rounded-2xl border border-border/70 bg-card/90 px-4 py-3 shadow-lg backdrop-blur-sm">
+                <p className="text-sm font-extrabold text-foreground">
+                  {language === 'nl' ? 'Buurten op de kaart' : 'Neighborhoods on the map'}
                 </p>
-                <h2 className="mt-3 text-2xl font-black tracking-tight text-foreground">
-                  {language === 'nl' ? 'Begin met de lijst. Kies zelf of je meer deelt.' : 'Start with the list. Choose if you want to share more.'}
-                </h2>
-                <p className="mt-3 text-sm font-medium leading-relaxed text-muted-foreground">
+                <p className="mt-1 text-xs font-semibold text-muted-foreground">
+                  {getLocationName(mapLocation, language)}
+                  {' · '}
                   {language === 'nl'
-                    ? 'We laden geen kaart, vragen geen locatie en zoeken niet op het web voordat jij daar bewust voor kiest.'
-                    : 'We do not load a map, request your location, or search the web until you explicitly choose to.'}
+                    ? 'Selecteer een buurt op de kaart of typ de naam hierboven.'
+                    : 'Select a neighborhood on the map or type its name above.'}
                 </p>
               </div>
-              <details className="mt-6 rounded-2xl border border-border/70 bg-muted/30 p-4">
-                <summary className="cursor-pointer font-extrabold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
-                  {language === 'nl' ? 'Hoe lokaal en web zoeken verschillen' : 'How local and web search differ'}
-                </summary>
-                <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
-                  {language === 'nl'
-                    ? 'Lokaal zoeken gebruikt de bestaande catalogus. Aanvullende webresultaten delen alleen je gekozen zoekgebied met externe aanbieders en zijn geen verificatie door MarqtPlaza.'
-                    : 'Local search uses the established catalogue. Additional web results share only your chosen search area with external providers and are not verified by MarqtPlaza.'}
-                </p>
-              </details>
+              {selectedMapNeighborhoods.length > 0 && (
+                <div className="absolute bottom-4 left-4 right-4 z-10 flex items-center justify-between gap-3 rounded-2xl border border-primary/30 bg-card/95 px-4 py-3 text-left shadow-lg backdrop-blur-sm">
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-muted-foreground">
+                      {language === 'nl' ? 'Geselecteerde buurt' : 'Selected neighborhood'}
+                    </p>
+                    <p className="truncate text-sm font-extrabold text-foreground">
+                      {language === 'nl'
+                        ? `${selectedMapNeighborhoods.length} buurten geselecteerd`
+                        : `${selectedMapNeighborhoods.length} neighborhoods selected`}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => onSearchNeighborhoods(mapLocation.id, selectedMapNeighborhoods, DEFAULT_START_SECTION)}
+                    className="shrink-0 rounded-xl bg-primary px-3 py-2 text-xs font-extrabold text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  >
+                    {language === 'nl' ? 'Selecteer buurt' : 'Select neighborhood'}
+                  </button>
+                </div>
+              )}
             </section>
 
             <div>
@@ -1239,7 +1271,7 @@ function SearchState({
                       aria-pressed={selectedCityId === loc.id}
                       onClick={() => {
                         setSelectedCityId(loc.id);
-                        setSelectedMapNeighborhood(null);
+                        setSelectedMapNeighborhoods([]);
                         setHoveredMapNeighborhood(null);
                       }}
                       className={cn(
@@ -1909,6 +1941,7 @@ function DiscoveryState({
   locationId,
   listingSection,
   initialNeighborhood,
+  initialNeighborhoods,
   initialPostcode,
   initialScope = 'local',
   urlErrors = [],
@@ -1926,6 +1959,7 @@ function DiscoveryState({
   locationId: string;
   listingSection: ListingSection;
   initialNeighborhood?: string;
+  initialNeighborhoods?: string[];
   initialPostcode?: string;
   initialScope?: 'local' | 'web';
   urlErrors?: readonly { code: string; parameter: string }[];
@@ -1950,10 +1984,10 @@ function DiscoveryState({
     () => restoredState?.subcategories ?? (initialPostcode ? allSubcategoryState() : subcategoryStateFor(listingSection)),
   );
   const [selectedNeighborhoods, setSelectedNeighborhoods] = useState<string[]>(
-    restoredState?.selectedNeighborhoods ?? (initialNeighborhood ? [initialNeighborhood] : []),
+    restoredState?.selectedNeighborhoods ?? initialNeighborhoods ?? (initialNeighborhood ? [initialNeighborhood] : []),
   );
   const [neighborhoodSelection, setNeighborhoodSelection] = useState<'all' | 'some' | 'none'>(
-    restoredState?.neighborhoodSelection ?? (initialNeighborhood ? 'some' : 'all'),
+    restoredState?.neighborhoodSelection ?? (initialNeighborhoods?.length || initialNeighborhood ? 'some' : 'all'),
   );
   const [postcodeFilter, setPostcodeFilter] = useState(restoredState?.postcodeFilter ?? initialPostcode ?? '');
   const [neighborhoodSearch, setNeighborhoodSearch] = useState('');
@@ -1975,6 +2009,7 @@ function DiscoveryState({
   const hasSearchArea = Boolean(
     initialPostcode?.trim()
     || initialNeighborhood?.trim()
+    || initialNeighborhoods?.length
     || selectedNeighborhoods.length > 0
     || postcodeFilter.trim().length >= 4,
   );
@@ -2186,10 +2221,10 @@ function DiscoveryState({
     }
     setTopLevelCategories(initialPostcode ? allTopLevelState() : topLevelStateFor(listingSection));
     setSubcategories(initialPostcode ? allSubcategoryState() : subcategoryStateFor(listingSection));
-    setSelectedNeighborhoods(initialNeighborhood ? [initialNeighborhood] : []);
-    setNeighborhoodSelection(initialNeighborhood ? 'some' : 'all');
+    setSelectedNeighborhoods(initialNeighborhoods ?? (initialNeighborhood ? [initialNeighborhood] : []));
+    setNeighborhoodSelection(initialNeighborhoods?.length || initialNeighborhood ? 'some' : 'all');
     setSelectedMarker(null);
-  }, [initialNeighborhood, initialPostcode, listingSection, restoredState]);
+  }, [initialNeighborhood, initialNeighborhoods, initialPostcode, listingSection, restoredState]);
 
   useEffect(() => {
     const returnState: DiscoveryReturnState = {
@@ -3455,7 +3490,7 @@ function NotFoundRoute() {
 
 type AppScreen =
   | { kind: 'search' }
-  | { kind: 'discovery'; locationId: string; neighborhood?: string; postcode?: string; listingSection: ListingSection }
+  | { kind: 'discovery'; locationId: string; neighborhood?: string; neighborhoods?: string[]; postcode?: string; listingSection: ListingSection }
   | { kind: 'saved' };
 
 function getInitialListingSection(): ListingSection {
@@ -3556,6 +3591,7 @@ function MainApp({ initialLocationId }: { initialLocationId?: string } = {}) {
         locationId={screen.locationId}
         listingSection={screen.listingSection}
         initialNeighborhood={screen.neighborhood}
+        initialNeighborhoods={screen.neighborhoods}
         initialPostcode={screen.postcode}
         initialScope={parsedUrlState.scope}
         urlErrors={initialUrlErrors.current}
@@ -3601,6 +3637,15 @@ function MainApp({ initialLocationId }: { initialLocationId?: string } = {}) {
           });
           navigate(`/activiteiten/den-haag${query ? `?${query}` : ''}`);
         }
+      }}
+      onSearchNeighborhoods={(locId, neighborhoods, listingSection = DEFAULT_START_SECTION) => {
+        setScreen({
+          kind: 'discovery',
+          locationId: locId,
+          neighborhoods,
+          listingSection,
+        });
+        navigate(`/activiteiten/den-haag?section=${listingSection}`);
       }}
       savedCount={savedCount}
       onViewSaved={() => setScreen({ kind: 'saved' })}
