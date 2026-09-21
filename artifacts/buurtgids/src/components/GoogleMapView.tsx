@@ -1171,7 +1171,7 @@ function TileMapView({
 
   useEffect(() => {
     const selected = selectedNeighborhoodsRef.current;
-    const viewportNeighborhoods = showAllNeighborhoods && selected.length === 0
+    const viewportNeighborhoods = showAllNeighborhoods
       ? (getLocation(locationId)?.neighborhoods ?? selected)
       : selected;
     setViewport(
@@ -1823,7 +1823,7 @@ function GoogleMapCanvas({
     const selectedNeighborhoods = viewportNeighborhoodsRef.current;
     const neighborhoods = getNeighborhoodAreas(
       locationId,
-      showAllNeighborhoods && selectedNeighborhoods.length === 0
+      showAllNeighborhoods
         ? (location.neighborhoods ?? selectedNeighborhoods)
         : selectedNeighborhoods,
     );
