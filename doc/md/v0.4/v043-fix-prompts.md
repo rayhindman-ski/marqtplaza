@@ -16,7 +16,7 @@
 
 **Timestamp:** 2026-09-21; exact message time unavailable
 
-> ok so for now lets re-tackle the multi-neighborhood select - icons disapearing problem described above ....  
+> ok so for now lets re-tackle the multi-neighborhood select - icons disapearing problem described above ....
 > can you remember that or do i need to repaste the evidence?
 
 **Resulting implementation commit:** `85981521723b2663c2c13e90a02dc6a67d6526eb`
@@ -57,8 +57,8 @@
 
 **Timestamp:** 2026-09-21; exact message time unavailable
 
-> ok that shows the problem , correct ? adding a neighborhood does NOT increase the visible results.  
-> even when an independent selection of that 2nd nieighborhood DOES SHOW results.  
+> ok that shows the problem , correct ? adding a neighborhood does NOT increase the visible results.
+> even when an independent selection of that 2nd nieighborhood DOES SHOW results.
 > so they are ommitted
 
 **Resulting implementation commit:** `85981521723b2663c2c13e90a02dc6a67d6526eb`
@@ -75,9 +75,9 @@
 
 **Timestamp:** 2026-09-21; exact message time unavailable
 
-> get the fuck out  
-> less than 1 hour ago i instructed you to REMOVE the google places API  
->   
+> get the fuck out
+> less than 1 hour ago i instructed you to REMOVE the google places API
+>
 > was that reverted somehow?
 
 **Resulting implementation commit:** No code change from this prompt; repository history was inspected.
@@ -94,7 +94,7 @@
 
 **Timestamp:** 2026-09-21; exact message time unavailable
 
-> record the prompt instructions sime we restarted into a file doc/md/v043-fix-prompts.md  
+> record the prompt instructions sime we restarted into a file doc/md/v043-fix-prompts.md
 > include timestamp, prompt text and commit hash after changes were made in the file
 
 **Correction:**
@@ -129,3 +129,16 @@
 **Resulting correction:** Removed the unrequested mobile exception. Header navigation labels are removed on all viewport sizes; labels remain only as accessible names and hover/focus overlays.
 
 **Resulting implementation commit:** `154cd9f2f2cb2dd64546a4a5d47749c4f4a5543e`
+
+### Prompt 13
+
+**Timestamp:** 2026-09-21; exact message time unavailable
+**Recorded at:** 2026-09-21T22:00:01+02:00
+
+> ok move the file doc/md/v043-fix-prompts.md to doc/md/v0.4/v043-fix-prompts.md
+>
+> continue to record prompts to that file
+
+**Resulting change:** Moved the prompt record to `doc/md/v0.4/v043-fix-prompts.md`. Future prompts are recorded at this path.
+
+**Resulting documentation commit:** Reported after the commit is created because a commit cannot contain its own final hash.
