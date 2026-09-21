@@ -102,3 +102,30 @@
 > sime=> Since
 
 **Resulting implementation commit:** This prompt created this record. Its documentation commit is reported after the commit is created because a commit cannot contain its own final hash.
+
+### Prompt 11
+
+**Timestamp:** 2026-09-21; exact message time unavailable
+**Recorded at:** 2026-09-21T21:57:35+02:00
+
+> continute to record to the v043-fix-prompts.md file
+> - do you remember the instruction to simplify the header row icons ( remove the text label , make is a mouseover overlay )
+> if not now you have the instruction again.
+> make it so.
+
+**Attached reference:** `attached_assets/image_1790020516559.png`
+
+**Resulting implementation commit:** `154cd9f2f2cb2dd64546a4a5d47749c4f4a5543e`
+
+### Prompt 12
+
+**Timestamp:** 2026-09-21; exact message time unavailable
+**Recorded at:** 2026-09-21T21:57:35+02:00
+
+> WTF - did i say that !!!
+>
+> I’ll keep labels visible inside the mobile menu
+
+**Resulting correction:** Removed the unrequested mobile exception. Header navigation labels are removed on all viewport sizes; labels remain only as accessible names and hover/focus overlays.
+
+**Resulting implementation commit:** `154cd9f2f2cb2dd64546a4a5d47749c4f4a5543e`
