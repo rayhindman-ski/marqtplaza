@@ -2753,15 +2753,8 @@ function DiscoveryState({
               })}
             </FilterFrame>
           <FilterFrame
-            title={language === 'nl' ? 'Kies meerdere buurten / postcode' : 'Select multiple neighborhoods / postcode'}
+            title={t.neighborhoods}
             defaultOpen
-            status={(
-              <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-extrabold normal-case tracking-normal text-primary">
-                {neighborhoodSelection === 'all'
-                  ? t.allNeighborhoods
-                  : t.neighborhoodsSelected(selectedNeighborhoods.length)}
-              </span>
-            )}
           >
             <label className="block">
               <span className="mb-1 block text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
