@@ -1403,7 +1403,7 @@ function CategoryActionButtons({
 function FilterFrame({
   title,
   children,
-  defaultOpen = true,
+  defaultOpen = false,
   status,
 }: {
   title: string;
@@ -1606,7 +1606,7 @@ function MarkerCard({
   return (
     <div
       className={cn(
-        "w-full text-left p-4 rounded-2xl border transition-all duration-300 relative group",
+        "group relative w-full rounded-xl border p-3 text-left transition-all duration-300",
         isSelected
           ? "bg-primary/5 border-primary shadow-[0_4px_20px_-4px_rgba(243,108,33,0.15)]"
           : "bg-card border-border hover:border-primary/40 hover:shadow-md"
@@ -1615,26 +1615,26 @@ function MarkerCard({
       {isSelected && (
         <div className="absolute top-0 left-0 w-1.5 h-full bg-primary rounded-l-2xl" />
       )}
-      <div className="flex items-start gap-4">
+      <div className="flex items-start gap-2.5">
         <button
           type="button"
           onClick={toggleExpanded}
           aria-expanded={isExpanded}
           aria-controls={`marker-details-${marker.id}`}
-          className="flex min-w-0 flex-1 items-start gap-4 rounded-xl text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          className="flex min-w-0 flex-1 items-start gap-2.5 rounded-lg text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
         >
           <span className={cn(
-            "p-3 rounded-xl shrink-0 transition-colors",
+            "shrink-0 rounded-lg p-2 transition-colors",
             isSelected ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20" : "bg-muted text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary"
           )}>
-            <Icon className="w-5 h-5" />
+            <Icon className="h-4 w-4" />
           </span>
           <span className="min-w-0 flex-1 py-0.5">
             <span className="mb-1 flex items-start justify-between gap-2">
               <span
                 data-testid={`listing-title-${marker.id}`}
                 className={cn(
-                  "min-w-0 flex-1 line-clamp-2 text-sm font-bold leading-snug transition-colors sm:text-base",
+                  "min-w-0 flex-1 line-clamp-1 text-sm font-bold leading-snug transition-colors",
                   isSelected ? "text-primary" : "text-foreground group-hover:text-primary",
                 )}
               >
@@ -1649,10 +1649,10 @@ function MarkerCard({
         </button>
         <SaveButton language={language} saved={isSaved} onToggle={onSave} />
       </div>
-      <div className="ml-16 min-w-0 py-0.5">
+      <div className="ml-11 min-w-0">
           {isEvent && (
-            <div className="mb-3">
-              <div className="flex flex-wrap items-center gap-3 text-xs font-bold">
+            <div className="mb-2">
+              <div className="flex flex-wrap items-center gap-1.5 text-[11px] font-bold">
                 {timing && (
                   <span data-testid={`event-timing-${marker.id}`} className="inline-flex items-center gap-1.5 rounded-md bg-primary/10 px-2 py-1 text-primary">
                     <Clock className="h-3.5 w-3.5" aria-hidden="true" />
@@ -1680,8 +1680,8 @@ function MarkerCard({
           <p
             data-testid={`listing-summary-${marker.id}`}
             className={cn(
-              "mb-3 text-sm leading-relaxed text-muted-foreground",
-              !isExpanded && "line-clamp-2",
+              "mb-2 text-xs leading-relaxed text-muted-foreground",
+              !isExpanded && "hidden",
             )}
           >
             {copy.description}
@@ -2001,7 +2001,7 @@ function DiscoveryState({
   );
   const [nearbyPosition, setNearbyPosition] = useState<{ lat: number; lng: number } | null>(null);
   const [nearbyStatus, setNearbyStatus] = useState<'idle' | 'locating' | 'ready' | 'fallback'>('idle');
-  const [showMap, setShowMap] = useState(false);
+  const [showMap, setShowMap] = useState(true);
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState(420);
   const sidebarResizeRef = useRef<{ pointerId: number; startX: number; startWidth: number } | null>(null);
@@ -2490,7 +2490,7 @@ function DiscoveryState({
       <div
       className={cn(
         "relative z-20 flex min-h-screen w-full flex-col overflow-y-auto border-r border-border bg-card/95 shadow-2xl backdrop-blur-xl md:h-full md:min-h-0 md:bg-card",
-        showMap ? "h-[70vh] md:w-[var(--sidebar-width)]" : "md:w-full",
+        showMap ? "hidden md:flex md:w-[min(var(--sidebar-width),30vw)] md:max-w-[30vw]" : "md:w-full",
       )}
       style={{ '--sidebar-width': `${sidebarWidth}px` } as React.CSSProperties}
       >
@@ -3034,6 +3034,7 @@ function DiscoveryState({
         <div data-event-list className="shrink-0 p-4 scroll-smooth">
           <FilterFrame
             title={`${language === 'nl' ? 'Resultaten' : 'Results'} (${filteredMarkers.length})`}
+            defaultOpen
           >
           <div className="flex flex-col gap-4 pb-20 md:pb-0">
             {!hasSearchArea && (topLevelCategories.businesses || topLevelCategories['food-drink']) && (
@@ -3141,7 +3142,7 @@ function DiscoveryState({
           onPointerMove={(event) => {
             const resize = sidebarResizeRef.current;
             if (!resize || resize.pointerId !== event.pointerId) return;
-            setSidebarWidth(Math.min(640, Math.max(320, resize.startWidth + event.clientX - resize.startX)));
+            setSidebarWidth(Math.min(window.innerWidth * 0.3, Math.max(280, resize.startWidth + event.clientX - resize.startX)));
           }}
           onPointerUp={(event) => {
             if (sidebarResizeRef.current?.pointerId === event.pointerId) {
@@ -3150,14 +3151,25 @@ function DiscoveryState({
             }
           }}
           onKeyDown={(event) => {
-            if (event.key === 'ArrowLeft') setSidebarWidth((width) => Math.max(320, width - 16));
-            if (event.key === 'ArrowRight') setSidebarWidth((width) => Math.min(640, width + 16));
+            if (event.key === 'ArrowLeft') setSidebarWidth((width) => Math.max(280, width - 16));
+            if (event.key === 'ArrowRight') setSidebarWidth((width) => Math.min(window.innerWidth * 0.3, width + 16));
           }}
         />
       </div>
 
       {/* Map Area: mounted only after an explicit user action. */}
-      {showMap && <div className="flex h-[70vh] min-h-[32rem] w-full flex-1 flex-col overflow-hidden bg-background md:h-full md:min-h-0">
+      {showMap && <div className="flex h-[100dvh] min-h-[32rem] w-full flex-1 flex-col overflow-hidden bg-background md:h-full md:min-h-0">
+        <div className="flex shrink-0 items-center justify-between border-b border-border bg-card px-4 py-3 md:hidden">
+          <strong className="text-sm">{getLocationName(location, language)}</strong>
+          <button
+            type="button"
+            onClick={() => setShowMap(false)}
+            className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-primary/35 bg-primary/10 px-4 text-sm font-extrabold text-foreground"
+          >
+            <Search className="h-4 w-4" aria-hidden="true" />
+            {language === 'nl' ? 'Toon lijst' : 'Show list'}
+          </button>
+        </div>
         <ReferenceCategoryNav
           embedded
           language={language}
@@ -3167,7 +3179,7 @@ function DiscoveryState({
           onSectionSelect={selectTopLevelSection}
         />
         <WeatherCard cityId={locationId} language={language} />
-        <div className="relative min-h-0 flex-1">
+        <div className="relative h-[calc(100dvh-11.125rem)] min-h-[24rem] flex-none md:h-auto md:min-h-0 md:flex-1">
           <GoogleMapView
             language={language}
             locationId={location.id}

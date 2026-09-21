@@ -348,6 +348,30 @@ test('discovery map keeps the user zoom level when hovering neighborhoods', asyn
   expect(await tileZoom()).toBe(initialZoom + 2);
 });
 
+test('mobile discovery opens on a visible map and can round-trip to compact results', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await stubBoundaryDiscovery(page, true);
+
+  const showList = page.getByRole('button', { name: 'Show list' });
+  await expect(showList).toBeVisible();
+  const mapRegion = page.getByLabel('Interactive activity map');
+  await expect(mapRegion).toBeVisible();
+  const mapBox = await mapRegion.boundingBox();
+  expect(mapBox).not.toBeNull();
+  expect(mapBox!.height).toBeGreaterThan(300);
+  expect(mapBox!.y).toBeLessThan(844);
+  await expect(page.getByRole('button', { name: 'Zoom in' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Select neighborhood: Centrum', exact: true })).toBeVisible();
+
+  await showList.click();
+  await expect(page.getByRole('button', { name: 'Show map' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Filters and search area' })).toHaveAttribute('aria-expanded', 'false');
+  await expect(page.getByRole('button', { name: /Results/ })).toBeVisible();
+
+  await page.getByRole('button', { name: 'Show map' }).click();
+  await expect(mapRegion).toBeVisible();
+});
+
 test('main search external-source setting controls discovery mode and persists', async ({ page }) => {
   let listingsRequests: URL[] = [];
 
@@ -398,18 +422,23 @@ test('main search external-source setting controls discovery mode and persists',
 
   await page.goto('/');
 
-  // Fresh sessions default to stored/local data until the user opts in.
-  await expect(page.getByText('We do not load a map, request your location, or search the web until you explicitly choose to.')).toBeVisible();
+  // The map-first homepage remains visible while fresh sessions still default
+  // to stored/local listing data until the user opts into web results.
+  await expect(page.getByText('Neighborhoods on the map')).toBeVisible();
+  await expect(page.locator('[data-map-pin]').first()).toBeVisible();
   await page.getByRole('textbox').fill('2511');
   await page.getByRole('button', { name: 'Explore' }).click();
+  await page.getByRole('button', { name: 'Search scope' }).click();
   const toggle = page.getByRole('checkbox', { name: 'Include web results' });
   await expect(toggle).not.toBeChecked();
 
   await expect(async () => {
     expect(listingsRequests.length).toBeGreaterThan(0);
   }).toPass();
-  expect(listingsRequests[0].searchParams.get('mode')).toBe('stored_only');
-  const anonId = listingsRequests[0].searchParams.get('anonymousId');
+  const discoveryRequest = listingsRequests.find((request) => request.searchParams.has('anonymousId'));
+  expect(discoveryRequest).toBeDefined();
+  expect(discoveryRequest!.searchParams.get('mode')).toBe('stored_only');
+  const anonId = discoveryRequest!.searchParams.get('anonymousId');
   expect(anonId).toBeTruthy();
   expect(anonId).toMatch(/^anon_|^[0-9a-f-]{36}$/i);
   await expect(page.getByText('Stored postcode result').first()).toBeVisible();
@@ -426,7 +455,7 @@ test('main search external-source setting controls discovery mode and persists',
     'href',
     'https://www.instagram.com/stored-postcode-result',
   );
-  await page.getByRole('button', { name: /Stored postcode result/ }).click();
+  await page.getByRole('button', { name: 'Stored postcode result', exact: true }).click();
   const carRoute = page.getByRole('link', { name: 'Directions by Car: Stored postcode result' });
   await expect(carRoute).toBeVisible();
   await expect(carRoute).toHaveText('');
@@ -457,6 +486,7 @@ test('main search external-source setting controls discovery mode and persists',
 
   // The discovery source mode persists across navigation.
   await page.goto('/activiteiten/den-haag?postcode=2511');
+  await page.getByRole('button', { name: 'Search scope' }).click();
   await expect(page.getByRole('checkbox', { name: 'Include web results' })).toBeChecked();
 });
 
