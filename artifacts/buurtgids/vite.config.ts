@@ -69,10 +69,6 @@ export default defineConfig({
     strictPort: true,
     host: '0.0.0.0',
     allowedHosts: true,
-    headers: {
-      'Cache-Control': 'no-store, max-age=0',
-      'Clear-Site-Data': '"cache"',
-    },
     fs: {
       strict: true,
     },
