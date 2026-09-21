@@ -1176,6 +1176,7 @@ function SearchState({
           <div className="grid gap-6 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)] lg:items-start">
             <section className="relative h-[31rem] overflow-hidden rounded-3xl border border-border/70 bg-card/80 text-left shadow-xl backdrop-blur-sm sm:h-[38rem]">
               <NeighborhoodSelectionMap
+                key="homepage-neighborhood-selection-map"
                 language={language}
                 locationId={mapLocation.id}
                 selectedNeighborhoods={selectedMapNeighborhoods}
