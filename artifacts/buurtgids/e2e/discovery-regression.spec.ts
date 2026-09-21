@@ -234,9 +234,10 @@ test('keeps discovery filters, map pins, routes, and translations in sync', asyn
   await expect(approximateCard.getByText('Directions unavailable: this map point is approximate.')).toBeVisible();
 
   await page.getByLabel('Language').selectOption('nl');
-  for (const label of ['Snel kiezen', 'Dichtbij', 'Binnen', 'Activiteitenkalender', 'Vandaag', 'Gratis']) {
+  for (const label of ['Snelle filters', 'Dichtbij', 'Binnen', 'Vandaag', 'Dit weekend', 'Deze week', 'Gratis', 'Laag tarief', 'Maaltijden']) {
     await expect(page.getByText(label, { exact: true }).first()).toBeVisible();
   }
+  await expect(page.getByText('Activiteitenkalender', { exact: true })).toHaveCount(0);
   await expect(page.getByText('Route niet beschikbaar: dit kaartpunt is een benadering.')).toBeVisible();
 });
 

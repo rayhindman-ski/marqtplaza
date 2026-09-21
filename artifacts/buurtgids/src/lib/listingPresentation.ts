@@ -7,6 +7,8 @@ export type DiscoveryQuickFilter =
   | 'weekend'
   | 'nearby'
   | 'free'
+  | 'low-cost'
+  | 'meal'
   | 'family'
   | 'indoor'
   | 'open-now';
@@ -150,7 +152,12 @@ export function matchesDiscoveryQuickFilters(
   if (filters.has('today') && (!isEvent(marker) || !isEventInDateWindow(marker.startsAt, 'today', now))) return false;
   if (filters.has('week') && (!isEvent(marker) || !isEventInDateWindow(marker.startsAt, 'week', now))) return false;
   if (filters.has('weekend') && (!isEvent(marker) || !isEventInDateWindow(marker.startsAt, 'weekend', now))) return false;
-  if (filters.has('free') && (!isEvent(marker) || marker.priceType !== 'free')) return false;
+  const selectedPriceFilters = (['free', 'low-cost'] as const).filter((price) => filters.has(price));
+  if (
+    selectedPriceFilters.length > 0
+    && (!isEvent(marker) || !selectedPriceFilters.includes(marker.priceType as 'free' | 'low-cost'))
+  ) return false;
+  if (filters.has('meal') && (!isEvent(marker) || !marker.mealType)) return false;
   if (filters.has('family') && (!isEvent(marker) || !isFamilyFriendly(marker))) return false;
   if (filters.has('indoor') && marker.isIndoor !== true) return false;
   if (filters.has('open-now') && marker.openNow !== true) return false;

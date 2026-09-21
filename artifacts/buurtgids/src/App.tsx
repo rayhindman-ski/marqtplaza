@@ -488,8 +488,6 @@ type ListingSection = 'events' | 'businesses' | 'food-drink' | 'social-map';
 type FilterSubcategory = Exclude<Category, 'Businesses' | 'Social map' | 'Food & Drink'> | BusinessCategory | SocialMapCategory | FoodType;
 const TOP_LEVEL_SECTIONS: ListingSection[] = ['events', 'food-drink', 'social-map', 'businesses'];
 const DEFAULT_START_SECTION = 'events' satisfies ListingSection;
-type AgendaTimeFilter = 'all' | 'today' | 'week' | 'weekend';
-type AgendaPriceFilter = 'all' | 'free' | 'low-cost';
 type DiscoveryReturnState = {
   savedAt: number;
   locationId: string;
@@ -498,9 +496,6 @@ type DiscoveryReturnState = {
   selectedNeighborhoods: string[];
   neighborhoodSelection: 'all' | 'some' | 'none';
   postcodeFilter: string;
-  agendaTime: AgendaTimeFilter;
-  agendaPrice: AgendaPriceFilter;
-  mealOnly: boolean;
   quickFilters: DiscoveryQuickFilter[];
 };
 
@@ -2031,9 +2026,6 @@ function DiscoveryState({
   const [neighborhoodSearch, setNeighborhoodSearch] = useState('');
   const [selectedMarker, setSelectedMarker] = useState<string | null>(null);
   const [viewportPreservingSelection, setViewportPreservingSelection] = useState<string | null>(null);
-  const [agendaTime, setAgendaTime] = useState<AgendaTimeFilter>(restoredState?.agendaTime ?? 'all');
-  const [agendaPrice, setAgendaPrice] = useState<AgendaPriceFilter>(restoredState?.agendaPrice ?? 'all');
-  const [mealOnly, setMealOnly] = useState(restoredState?.mealOnly ?? false);
   const [quickFilters, setQuickFilters] = useState<Set<DiscoveryQuickFilter>>(
     () => new Set(restoredState?.quickFilters ?? []),
   );
@@ -2228,7 +2220,7 @@ function DiscoveryState({
 
   const toggleQuickFilter = (filter: DiscoveryQuickFilter) => {
     const isActivating = !quickFilters.has(filter);
-    if (isActivating && ['today', 'week', 'weekend', 'free', 'family', 'indoor'].includes(filter)) {
+    if (isActivating && ['today', 'week', 'weekend', 'free', 'low-cost', 'meal', 'family', 'indoor'].includes(filter)) {
       setTopLevelCategories((current) => ({ ...current, events: true }));
     }
     setQuickFilters((previous) => {
@@ -2275,17 +2267,11 @@ function DiscoveryState({
       selectedNeighborhoods,
       neighborhoodSelection,
       postcodeFilter,
-      agendaTime,
-      agendaPrice,
-      mealOnly,
       quickFilters: [...quickFilters],
     };
     window.localStorage.setItem(DISCOVERY_RETURN_STATE_KEY, JSON.stringify(returnState));
   }, [
-    agendaPrice,
-    agendaTime,
     locationId,
-    mealOnly,
     neighborhoodSelection,
     postcodeFilter,
     quickFilters,
@@ -2422,8 +2408,6 @@ function DiscoveryState({
     .map((neighborhood) => location.neighborhoodCoords[neighborhood])
     .filter((area): area is { lat: number; lng: number; zoom: number } => Boolean(area));
   const activeQuickFilters = new Set(quickFilters);
-  if (agendaTime !== 'all') activeQuickFilters.add(agendaTime);
-  if (agendaPrice === 'free') activeQuickFilters.add('free');
   const nearbyOrigin = nearbyPosition
     ?? selectedAreas[0]
     ?? { lat: location.lat, lng: location.lng };
@@ -2453,10 +2437,6 @@ function DiscoveryState({
     }
     if (markerTopLevel === 'events' && markerSubcategory && !subcategories[markerSubcategory]) {
       return false;
-    }
-    if (markerTopLevel === 'events') {
-      if (agendaPrice === 'low-cost' && marker.priceType !== 'low-cost') return false;
-      if (mealOnly && !marker.mealType) return false;
     }
     if (!matchesDiscoveryQuickFilters(marker, activeQuickFilters, { nearbyOrigin, nearbyRadiusKm: 2.5 })) return false;
     const normalizedPostcode = postcodeFilter.trim().toUpperCase().replace(/\s/g, '');
@@ -2612,9 +2592,12 @@ function DiscoveryState({
                   ['nearby', language === 'nl' ? 'Dichtbij' : 'Nearby'],
                   ['today', language === 'nl' ? 'Vandaag' : 'Today'],
                   ['weekend', language === 'nl' ? 'Dit weekend' : 'This weekend'],
+                  ['week', language === 'nl' ? 'Deze week' : 'This week'],
                   ['family', language === 'nl' ? 'Gezin' : 'Family'],
                   ['indoor', language === 'nl' ? 'Binnen' : 'Indoor'],
                   ['free', language === 'nl' ? 'Gratis' : 'Free'],
+                  ['low-cost', language === 'nl' ? 'Laag tarief' : 'Low cost'],
+                  ['meal', language === 'nl' ? 'Maaltijden' : 'Meals'],
                   ['open-now', language === 'nl' ? 'Nu open' : 'Open now'],
                 ] as Array<[DiscoveryQuickFilter, string]>).map(([value, label]) => (
                   <label
@@ -2653,6 +2636,13 @@ function DiscoveryState({
                   {language === 'nl'
                     ? 'Binnen en nu open worden alleen getoond bij expliciete, gestructureerde broninformatie.'
                     : 'Indoor and open-now results only appear with explicit, structured source information.'}
+                </p>
+              )}
+              {(quickFilters.has('free') || quickFilters.has('low-cost') || quickFilters.has('meal')) && (
+                <p className="mt-2 text-[10px] leading-relaxed text-muted-foreground">
+                  {language === 'nl'
+                    ? 'Gratis, laag tarief en maaltijden worden alleen gefilterd wanneer de bron dit expliciet vermeldt.'
+                    : 'Free, low-cost, and meal filters only use explicit source information.'}
                 </p>
               )}
             </FilterFrame>
@@ -2699,10 +2689,15 @@ function DiscoveryState({
                   );
                 })}
               </div>
-            </FilterFrame>
-            {visibleSubcategories.length > 0 && (
-              <FilterFrame title={t.subcategories} status={refreshingIndicator}>
-                <div className="mb-2">
+              {visibleSubcategories.length > 0 && (
+                <div className="mt-3 border-t border-border/70 pt-3">
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <p className="text-[10px] font-black uppercase tracking-[0.14em] text-muted-foreground">
+                      {t.subcategories}
+                    </p>
+                    {refreshingIndicator}
+                  </div>
+                  <div className="mb-2">
                   <CategoryActionButtons
                     language={language}
                     onSelectAll={selectAllSubcategories}
@@ -2710,98 +2705,41 @@ function DiscoveryState({
                     selectLabel={language === 'nl' ? 'Alle subcategorieën' : 'All subcategories'}
                     deselectLabel={language === 'nl' ? 'Geen subcategorieën' : 'No subcategories'}
                   />
-                </div>
-                <div
-                  role="group"
-                  aria-label={t.subcategories}
-                  aria-busy={isRefreshing}
-                  className={cn("grid grid-cols-2 gap-1 transition-opacity", isRefreshing && "opacity-70")}
-                >
-                  {visibleSubcategories.map((subcategory) => {
-                    const isChecked = subcategories[subcategory];
-                    const color = getSubcategoryColor(subcategory);
-                    return (
-                      <label
-                        key={subcategory}
-                        className="flex min-h-8 cursor-pointer items-center gap-1.5 rounded-lg border px-2 py-1.5 text-[10px] font-semibold transition-all hover:brightness-95"
-                        style={{
-                          backgroundColor: isChecked ? color : `${color}1f`,
-                          borderColor: isChecked ? color : `${color}66`,
-                          color: isChecked ? '#ffffff' : color,
-                          boxShadow: isChecked ? `0 3px 10px -6px ${color}` : undefined,
-                        }}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={isChecked}
-                          onChange={() => toggleSubcategory(subcategory)}
-                          className="h-3.5 w-3.5 shrink-0 accent-white"
-                        />
-                        <span>{subcategoryLabelFor(subcategory, language)}</span>
-                      </label>
-                    );
-                  })}
-                </div>
-              </FilterFrame>
-            )}
-
-          {topLevelCategories.events && (
-            <FilterFrame title={language === 'nl' ? 'Activiteitenkalender' : 'Activity calendar'}>
-              <div className="flex flex-wrap gap-1.5" role="group" aria-label={language === 'nl' ? 'Agenda filters' : 'Calendar filters'}>
-                {([
-                  ['all', language === 'nl' ? 'Alle data' : 'All dates'],
-                  ['today', language === 'nl' ? 'Vandaag' : 'Today'],
-                  ['weekend', language === 'nl' ? 'Dit weekend' : 'This weekend'],
-                  ['week', language === 'nl' ? 'Deze week' : 'This week'],
-                ] as Array<[AgendaTimeFilter, string]>).map(([value, label]) => (
-                  <button
-                    type="button"
-                    key={value}
-                    onClick={() => { setAgendaTime(value); setSelectedMarker(null); }}
-                    className={cn(
-                      'min-h-8 rounded-lg border px-2.5 py-1.5 text-[11px] font-bold transition-colors',
-                      agendaTime === value ? 'border-primary/50 bg-primary/10 text-foreground' : 'border-border/70 bg-card text-muted-foreground hover:border-primary/40',
-                    )}
+                  </div>
+                  <div
+                    role="group"
+                    aria-label={t.subcategories}
+                    aria-busy={isRefreshing}
+                    className={cn("grid grid-cols-2 gap-1 transition-opacity", isRefreshing && "opacity-70")}
                   >
-                    {label}
-                  </button>
-                ))}
-                {([
-                  ['free', language === 'nl' ? 'Gratis' : 'Free'],
-                  ['low-cost', language === 'nl' ? 'Laag tarief' : 'Low cost'],
-                ] as Array<[Exclude<AgendaPriceFilter, 'all'>, string]>).map(([value, label]) => (
-                  <button
-                    type="button"
-                    key={value}
-                    onClick={() => { setAgendaPrice(current => current === value ? 'all' : value); setSelectedMarker(null); }}
-                    aria-pressed={agendaPrice === value}
-                    className={cn(
-                      'min-h-8 rounded-lg border px-2.5 py-1.5 text-[11px] font-bold transition-colors',
-                      agendaPrice === value ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-900' : 'border-border/70 bg-card text-muted-foreground hover:border-primary/40',
-                    )}
-                  >
-                    {label}
-                  </button>
-                ))}
-                <button
-                  type="button"
-                  onClick={() => { setMealOnly(current => !current); setSelectedMarker(null); }}
-                  aria-pressed={mealOnly}
-                  className={cn(
-                    'min-h-8 rounded-lg border px-2.5 py-1.5 text-[11px] font-bold transition-colors',
-                    mealOnly ? 'border-orange-500/50 bg-orange-500/10 text-orange-900' : 'border-border/70 bg-card text-muted-foreground hover:border-primary/40',
-                  )}
-                >
-                  {language === 'nl' ? 'Maaltijden' : 'Meals'}
-                </button>
-              </div>
-              <p className="mt-2 text-[10px] leading-relaxed text-muted-foreground">
-                {language === 'nl'
-                  ? 'Gratis, laag tarief en maaltijd worden alleen getoond als de bron dit expliciet vermeldt.'
-                  : 'Free, low-cost, and meal labels appear only when the source states them explicitly.'}
-              </p>
+                    {visibleSubcategories.map((subcategory) => {
+                      const isChecked = subcategories[subcategory];
+                      const color = getSubcategoryColor(subcategory);
+                      return (
+                        <label
+                          key={subcategory}
+                          className="flex min-h-8 cursor-pointer items-center gap-1.5 rounded-lg border px-2 py-1.5 text-[10px] font-semibold transition-all hover:brightness-95"
+                          style={{
+                            backgroundColor: isChecked ? color : `${color}1f`,
+                            borderColor: isChecked ? color : `${color}66`,
+                            color: isChecked ? '#ffffff' : color,
+                            boxShadow: isChecked ? `0 3px 10px -6px ${color}` : undefined,
+                          }}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={() => toggleSubcategory(subcategory)}
+                            className="h-3.5 w-3.5 shrink-0 accent-white"
+                          />
+                          <span>{subcategoryLabelFor(subcategory, language)}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </FilterFrame>
-          )}
           <FilterFrame
             title={language === 'nl' ? 'Kies meerdere buurten / postcode' : 'Select multiple neighborhoods / postcode'}
             defaultOpen
