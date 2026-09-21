@@ -910,11 +910,9 @@ function ReferenceCategoryNav({
                 <Link
                   href="/nieuws"
                   aria-label={category.label}
-                  title={category.label}
-                  className="inline-flex min-h-11 items-center gap-2 rounded-lg px-3 text-sm font-bold text-foreground transition-colors hover:bg-primary/10 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  className="inline-flex min-h-11 items-center gap-2 rounded-lg px-3 text-sm font-bold text-foreground transition-colors hover:bg-primary/10 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary lg:min-w-11 lg:justify-center"
                 >
                   <Icon className="h-5 w-5" aria-hidden="true" />
-                  <span>{category.label}</span>
                 </Link>
                 <span className={tooltipClass}>{category.label}</span>
               </span>
@@ -932,11 +930,9 @@ function ReferenceCategoryNav({
                 }}
                 aria-label={category.label}
                 aria-haspopup={category.id === 'things-to-do' ? 'dialog' : undefined}
-                title={category.label}
-                className="inline-flex min-h-11 items-center gap-2 rounded-lg px-3 text-sm font-bold text-foreground transition-colors hover:bg-primary/10 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                 className="inline-flex min-h-11 items-center gap-2 rounded-lg px-3 text-sm font-bold text-foreground transition-colors hover:bg-primary/10 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary lg:min-w-11 lg:justify-center"
               >
                 <Icon className="h-5 w-5" aria-hidden="true" />
-                <span>{category.label}</span>
               </button>
               <span className={tooltipClass}>{category.label}</span>
             </span>
@@ -956,11 +952,9 @@ function ReferenceCategoryNav({
             <Link
               href={href}
               aria-label={label}
-              title={label}
-              className="inline-flex min-h-11 items-center gap-2 rounded-lg px-3 text-sm font-bold text-foreground transition-colors hover:bg-primary/10 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+               className="inline-flex min-h-11 items-center gap-2 rounded-lg px-3 text-sm font-bold text-foreground transition-colors hover:bg-primary/10 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary lg:min-w-11 lg:justify-center"
             >
               <Icon className="h-5 w-5" aria-hidden="true" />
-              <span>{label}</span>
             </Link>
             <span className={tooltipClass}>{label}</span>
           </span>
