@@ -264,6 +264,9 @@ for (const [mapPath, tilesAvailable] of [['tile map', true], ['coordinate fallba
     const boundary = page.getByRole('button', { name: 'Select neighborhood: Centrum', exact: true });
     await expect(boundary).toHaveCount(1);
     await expect(boundary).toBeVisible();
+    const bezuidenhoutBoundary = page.getByRole('button', { name: 'Select neighborhood: Bezuidenhout', exact: true });
+    await expect(bezuidenhoutBoundary).toBeVisible();
+    await expect(bezuidenhoutBoundary).toHaveCSS('stroke-opacity', '0.72');
 
     const geometry = await boundary.evaluate((node) => {
       const polygon = node as SVGPolygonElement;
@@ -303,12 +306,20 @@ for (const [mapPath, tilesAvailable] of [['tile map', true], ['coordinate fallba
     await bezuidenhoutControl.click();
     await expect(neighborhoodControl).toHaveAttribute('aria-pressed', 'true');
     await expect(bezuidenhoutControl).toHaveAttribute('aria-pressed', 'true');
+    await expect(bezuidenhoutBoundary).toHaveCSS('stroke-opacity', '1');
     await expect(page.getByRole('button', { name: 'Select neighborhood: Centrum', exact: true })).toHaveCSS('stroke-opacity', '1');
     await expect(page.getByRole('button', { name: 'Select neighborhood: Bezuidenhout', exact: true })).toHaveCSS('stroke-opacity', '1');
-    await expect(page.getByRole('button', { name: 'Select neighborhood: Centrum', exact: true })).toHaveCSS('stroke-width', '5px');
-    await expect(page.getByRole('button', { name: 'Select neighborhood: Bezuidenhout', exact: true })).toHaveCSS('stroke-width', '5px');
   });
 }
+
+test('homepage neighborhood picker keeps every boundary visible', async ({ page }) => {
+  await stubBoundaryDiscovery(page, true);
+  await page.goto('/');
+
+  await expect(page.getByRole('button', { name: 'Select neighborhood: Centrum', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Select neighborhood: Bezuidenhout', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Select neighborhood: Scheveningen', exact: true })).toBeVisible();
+});
 
 test('discovery map keeps the user zoom level when hovering neighborhoods', async ({ page }) => {
   await stubBoundaryDiscovery(page, true);
