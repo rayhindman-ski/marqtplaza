@@ -191,7 +191,7 @@ export interface MapRendererProps {
   showNeighborhoodLabels?: boolean;
   highlightedNeighborhood?: string | null;
   isDataLoading?: boolean;
-  onNeighborhoodClick?: (name: string) => void;
+  onNeighborhoodClick?: (name: string, options: { additive: boolean }) => void;
   onNeighborhoodHover?: (name: string | null) => void;
   markers: MarkerData[];
   selectedMarkerId: string | null;
@@ -833,11 +833,11 @@ function isNeighborhoodSelected(
 function handleNeighborhoodKeyDown(
   event: React.KeyboardEvent<SVGPolygonElement>,
   name: string,
-  onNeighborhoodClick?: (name: string) => void,
+  onNeighborhoodClick?: (name: string, options: { additive: boolean }) => void,
 ) {
   if (onNeighborhoodClick && (event.key === 'Enter' || event.key === ' ')) {
     event.preventDefault();
-    onNeighborhoodClick(name);
+    onNeighborhoodClick(name, { additive: event.shiftKey });
   }
 }
 
@@ -975,7 +975,7 @@ function CoordinateMapFallback({
                     const projected = projectCoordinatePoint(point, bounds);
                     return `${projected.x},${projected.y}`;
                   }).join(' ')}
-                  onClick={() => onNeighborhoodClick?.(area.name)}
+                  onClick={(event) => onNeighborhoodClick?.(area.name, { additive: event.shiftKey })}
                    onMouseEnter={() => onNeighborhoodHover?.(area.name)}
                    onMouseLeave={() => onNeighborhoodHover?.(null)}
                    onFocus={() => onNeighborhoodHover?.(area.name)}
@@ -1163,7 +1163,9 @@ function TileMapView({
 
   // Only refit the camera when the content actually changes; parent re-renders
   // (e.g. hover state) that pass equivalent props must never reset user zoom.
-  const viewportSignature = getViewportSignature(markers, selectedNeighborhoods);
+  const viewportSignature = showAllNeighborhoods
+    ? 'all-neighborhoods'
+    : getViewportSignature(markers, selectedNeighborhoods);
   const markersRef = useRef(markers);
   markersRef.current = markers;
   const selectedNeighborhoodsRef = useRef(selectedNeighborhoods);
@@ -1376,7 +1378,7 @@ function TileMapView({
                 return `${world.x - mapLeft},${world.y - mapTop}`;
               }).join(' ')}
               onPointerDown={(event) => event.stopPropagation()}
-              onClick={() => onNeighborhoodClick?.(area.name)}
+              onClick={(event) => onNeighborhoodClick?.(area.name, { additive: event.shiftKey })}
               onMouseEnter={() => onNeighborhoodHover?.(area.name)}
               onMouseLeave={() => onNeighborhoodHover?.(null)}
               onFocus={() => onNeighborhoodHover?.(area.name)}
@@ -1811,7 +1813,9 @@ function GoogleMapCanvas({
 
   // Only refit the camera when the content actually changes; parent re-renders
   // (e.g. hover state) that pass equivalent props must never reset user zoom.
-  const viewportSignature = getViewportSignature(markers, selectedNeighborhoods);
+  const viewportSignature = showAllNeighborhoods
+    ? 'all-neighborhoods'
+    : getViewportSignature(markers, selectedNeighborhoods);
   const viewportMarkersRef = useRef(markers);
   viewportMarkersRef.current = markers;
   const viewportNeighborhoodsRef = useRef(selectedNeighborhoods);
@@ -1912,7 +1916,12 @@ function GoogleMapCanvas({
         zIndex: 1,
       });
       if (onNeighborhoodClick) {
-        polygon.addListener('click', () => neighborhoodClickRef.current?.(area.name));
+        polygon.addListener('click', (event: google.maps.PolyMouseEvent) => {
+          const domEvent = event.domEvent;
+          neighborhoodClickRef.current?.(area.name, {
+            additive: Boolean(domEvent && 'shiftKey' in domEvent && domEvent.shiftKey),
+          });
+        });
       }
       if (onNeighborhoodHover) {
         polygon.addListener('mouseover', () => neighborhoodHoverRef.current?.(area.name));

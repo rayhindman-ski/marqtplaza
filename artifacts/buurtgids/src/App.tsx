@@ -1181,10 +1181,13 @@ function SearchState({
                 locationId={mapLocation.id}
                 selectedNeighborhoods={selectedMapNeighborhoods}
                 highlightedNeighborhood={hoveredMapNeighborhood}
-                onNeighborhoodClick={(neighborhood) => {
-                  setSelectedMapNeighborhoods((current) => current.includes(neighborhood)
-                    ? current.filter((name) => name !== neighborhood)
-                    : [...current, neighborhood]);
+                onNeighborhoodClick={(neighborhood, { additive }) => {
+                  setSelectedMapNeighborhoods((current) => {
+                    if (!additive) return [neighborhood];
+                    return current.includes(neighborhood)
+                      ? current.filter((name) => name !== neighborhood)
+                      : [...current, neighborhood];
+                  });
                 }}
                 onNeighborhoodHover={setHoveredMapNeighborhood}
               />
@@ -2179,11 +2182,13 @@ function DiscoveryState({
   };
   const handleClusterMarkerClick = handleMarkerClick;
 
-  const toggleNeighborhood = (neighborhood: string) => {
+  const toggleNeighborhood = (neighborhood: string, additive = false) => {
     setSelectedNeighborhoods((current) => {
-      const next = current.includes(neighborhood)
-        ? current.filter((name) => name !== neighborhood)
-        : [...current, neighborhood];
+      const next = additive
+        ? current.includes(neighborhood)
+          ? current.filter((name) => name !== neighborhood)
+          : [...current, neighborhood]
+        : [neighborhood];
       setNeighborhoodSelection(next.length > 0 ? 'some' : 'none');
       return next;
     });
@@ -2783,7 +2788,7 @@ function DiscoveryState({
                       key={neighborhood}
                       type="button"
                       aria-pressed={isChecked}
-                      onClick={() => toggleNeighborhood(neighborhood)}
+                      onClick={() => toggleNeighborhood(neighborhood, true)}
                       className={cn(
                         "flex min-h-9 min-w-0 items-center justify-between gap-1.5 rounded-lg border-2 px-2 py-1.5 text-left text-[10px] font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
                         isChecked
@@ -3061,7 +3066,7 @@ function DiscoveryState({
             selectedNeighborhoods={selectedNeighborhoods}
             highlightedNeighborhood={selectedNeighborhoods.length === 1 ? selectedNeighborhoods[0] : null}
             isDataLoading={topLevelCategories.businesses && businessesQuery.isFetching}
-            onNeighborhoodClick={toggleNeighborhood}
+            onNeighborhoodClick={(neighborhood, { additive }) => toggleNeighborhood(neighborhood, additive)}
             markers={filteredMarkers}
             selectedMarkerId={selectedMarker}
             recenterSelectedMarker={selectedMarker !== viewportPreservingSelection}

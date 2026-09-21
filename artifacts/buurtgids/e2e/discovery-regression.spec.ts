@@ -179,7 +179,7 @@ test('keeps discovery filters, map pins, routes, and translations in sync', asyn
 
   await page.goto('/activiteiten/den-haag');
   await expect(page.getByText('Quick filters')).toBeVisible();
-  await page.getByRole('checkbox', { name: 'Centrum', exact: true }).check();
+  await page.locator('[data-neighborhood-list]').getByRole('button', { name: 'Centrum', exact: true }).click();
   await expect.poll(() => listingsRequests.some((request) => request.searchParams.get('neighborhoods') === 'Centrum')).toBe(true);
   for (const label of ['Family', 'Indoor', 'Today', 'Free']) {
     await page.getByRole('checkbox', { name: label, exact: true }).check();
@@ -294,16 +294,14 @@ for (const [mapPath, tilesAvailable] of [['tile map', true], ['coordinate fallba
     expect(geometry.minY).toBeGreaterThanOrEqual((geometry.viewBox?.y ?? 0) - 1);
     expect(geometry.maxY).toBeLessThanOrEqual((geometry.viewBox?.y ?? 0) + (geometry.viewBox?.height ?? 0) + 1);
 
-    await boundary.click();
-    await expect(neighborhoodControl).toHaveAttribute('aria-pressed', 'false');
-    await expect(page.getByRole('button', { name: 'Select neighborhood: Centrum', exact: true })).toHaveCount(1);
-    await expect(boundary).toHaveCSS('stroke-opacity', '0.72');
-    await neighborhoodControl.click();
-    await expect(neighborhoodControl).toHaveAttribute('aria-pressed', 'true');
-    await expect(page.getByRole('button', { name: 'Select neighborhood: Centrum', exact: true })).toHaveCount(1);
-
     const bezuidenhoutControl = page.locator('[data-neighborhood-list]').getByRole('button', { name: 'Bezuidenhout', exact: true });
-    await bezuidenhoutControl.click();
+    await bezuidenhoutBoundary.click();
+    await expect(neighborhoodControl).toHaveAttribute('aria-pressed', 'false');
+    await expect(bezuidenhoutControl).toHaveAttribute('aria-pressed', 'true');
+    await expect(boundary).toHaveCSS('stroke-opacity', '0.72');
+    await expect(bezuidenhoutBoundary).toHaveCSS('stroke-opacity', '1');
+
+    await boundary.dispatchEvent('click', { shiftKey: true });
     await expect(neighborhoodControl).toHaveAttribute('aria-pressed', 'true');
     await expect(bezuidenhoutControl).toHaveAttribute('aria-pressed', 'true');
     await expect(bezuidenhoutBoundary).toHaveCSS('stroke-opacity', '1');
@@ -359,6 +357,15 @@ test('discovery map keeps the user zoom level when hovering neighborhoods', asyn
   await page.mouse.move(720, 320);
   await flushFrames();
   expect(await tileZoom(), 'leaving a neighborhood must not refit the camera').toBe(initialZoom + 2);
+
+  await page.getByRole('checkbox', { name: 'Family', exact: true }).check();
+  await flushFrames();
+  expect(await tileZoom(), 'changing a non-neighborhood filter must not refit the camera').toBe(initialZoom + 2);
+
+  await page.getByRole('button', { name: 'Select neighborhood: Bezuidenhout', exact: true }).click();
+  await flushFrames();
+  expect(await tileZoom(), 'changing neighborhood selection must not refit the camera').toBe(initialZoom + 2);
+
   await expect.poll(zoomIsSettled).toBe(true);
   expect(await tileZoom()).toBe(initialZoom + 2);
 });
@@ -385,6 +392,9 @@ test('mobile discovery keeps the map and compact results visible together', asyn
 test('main search external-source setting controls discovery mode and persists', async ({ page }) => {
   let listingsRequests: URL[] = [];
 
+  await page.route('https://maps.googleapis.com/**', async (route) => {
+    await route.abort('failed');
+  });
   await page.route('**/api/listings*', async (route) => {
     const url = new URL(route.request().url());
     listingsRequests.push(url);
@@ -432,10 +442,11 @@ test('main search external-source setting controls discovery mode and persists',
 
   await page.goto('/');
 
-  // The map-first homepage remains visible while fresh sessions still default
-  // to stored/local listing data until the user opts into web results.
+  // The homepage map is independent from discovery listings: it always shows
+  // neighborhood boundaries and never listing pins.
   await expect(page.getByText('Neighborhoods on the map')).toBeVisible();
-  await expect(page.locator('[data-map-pin]').first()).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Select neighborhood: Centrum', exact: true })).toBeVisible();
+  await expect(page.locator('[data-map-pin]')).toHaveCount(0);
   await page.getByRole('textbox').fill('2511');
   await page.getByRole('button', { name: 'Explore' }).click();
   await page.getByRole('button', { name: 'Search scope' }).click();
