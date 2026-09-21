@@ -488,7 +488,7 @@ type ListingSection = 'events' | 'businesses' | 'food-drink' | 'social-map';
 type FilterSubcategory = Exclude<Category, 'Businesses' | 'Social map' | 'Food & Drink'> | BusinessCategory | SocialMapCategory | FoodType;
 const TOP_LEVEL_SECTIONS: ListingSection[] = ['events', 'food-drink', 'social-map', 'businesses'];
 const DEFAULT_START_SECTION = 'events' satisfies ListingSection;
-type AgendaTimeFilter = 'all' | 'today' | 'week';
+type AgendaTimeFilter = 'all' | 'today' | 'week' | 'weekend';
 type AgendaPriceFilter = 'all' | 'free' | 'low-cost';
 type DiscoveryReturnState = {
   savedAt: number;
@@ -1044,9 +1044,10 @@ function SearchState({
   const popularNeighborhoods: Record<string, string[]> = {};
   const [query, setQuery] = useState('');
   const [error, setError] = useState('');
-  const [selectedCityId, setSelectedCityId] = useState<string | null>(null);
+  const [selectedCityId, setSelectedCityId] = useState<string | null>(LOCATIONS[0]?.id ?? null);
   const [selectedMapNeighborhoods, setSelectedMapNeighborhoods] = useState<string[]>([]);
   const [hoveredMapNeighborhood, setHoveredMapNeighborhood] = useState<string | null>(null);
+  const [neighborhoodPickerSearch, setNeighborhoodPickerSearch] = useState('');
   const [includeExternalSources, setIncludeExternalSources] = useState(readIncludeExternalSources);
   const t = translations[language];
   const mapLocation = LOCATIONS.find((location) => location.id === selectedCityId) ?? LOCATIONS[0];
@@ -1157,11 +1158,6 @@ function SearchState({
               ? 'Vind activiteiten, bedrijven, eten en buurthulp vanuit één rustige, privacyvriendelijke plek.'
               : 'Find activities, businesses, food, and community support from one calm, privacy-friendly place.'}
           </p>
-          <p className="mx-auto inline-flex rounded-full border border-primary/25 bg-primary/10 px-4 py-2 text-sm font-extrabold text-foreground">
-            {language === 'nl'
-              ? 'Nu beschikbaar voor heel Den Haag'
-              : 'Currently available across The Hague'}
-          </p>
         </div>
 
         <form onSubmit={handleSubmit} className="relative group w-full max-w-lg mx-auto">
@@ -1255,7 +1251,9 @@ function SearchState({
               <div className="flex flex-wrap justify-center gap-2.5">
                 {LOCATIONS.map(loc => {
                   const neighborhoodOptions = selectedCityId === loc.id
-                    ? loc.neighborhoods
+                    ? loc.neighborhoods.filter((neighborhood) => neighborhood
+                      .toLocaleLowerCase(language === 'nl' ? 'nl-NL' : 'en-GB')
+                      .includes(neighborhoodPickerSearch.trim().toLocaleLowerCase(language === 'nl' ? 'nl-NL' : 'en-GB')))
                     : (popularNeighborhoods[loc.id] ?? loc.neighborhoods.slice(0, 8));
 
                   return (
@@ -1273,6 +1271,7 @@ function SearchState({
                         setSelectedCityId(loc.id);
                         setSelectedMapNeighborhoods([]);
                         setHoveredMapNeighborhood(null);
+                        setNeighborhoodPickerSearch('');
                       }}
                       className={cn(
                         "px-4 py-2 backdrop-blur-sm border rounded-full text-sm font-semibold transition-all shadow-sm hover:shadow-md",
@@ -1284,42 +1283,81 @@ function SearchState({
                       {getLocationName(loc, language)}
                     </button>
                     <div className="w-full text-left">
-                      <p className="mb-2 text-center text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
-                        {selectedCityId === loc.id
-                          ? t.chooseNeighborhood(getLocationName(loc, language))
-                          : t.popularNeighborhoods}
-                      </p>
-                      <div className="mb-3 flex flex-wrap justify-center gap-2">
+                      <div className="mb-3 flex items-center justify-between gap-3">
+                        <div>
+                          <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
+                            {language === 'nl' ? 'Kies meerdere buurten' : 'Select multiple neighborhoods'}
+                          </p>
+                          <p className="mt-1 text-xs font-extrabold text-foreground" aria-live="polite">
+                            {language === 'nl'
+                              ? `${selectedMapNeighborhoods.length} geselecteerd`
+                              : `${selectedMapNeighborhoods.length} selected`}
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap justify-end gap-2">
                         <button
                           type="button"
-                          onClick={() => onSearch(loc.id, undefined, DEFAULT_START_SECTION)}
+                          onClick={() => setSelectedMapNeighborhoods([...loc.neighborhoods])}
                           className="rounded-full border border-primary/40 bg-primary/10 px-3 py-1.5 text-[11px] font-extrabold text-primary transition-colors hover:bg-primary/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                         >
                           {t.selectAllNeighborhoods}
                         </button>
                         <button
                           type="button"
-                          onClick={() => setSelectedCityId(null)}
+                          onClick={() => setSelectedMapNeighborhoods([])}
                           className="rounded-full border border-border/70 bg-card/80 px-3 py-1.5 text-[11px] font-extrabold text-muted-foreground transition-colors hover:border-primary/40 hover:bg-primary/5 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                         >
                           {t.clearNeighborhoodSelection}
                         </button>
+                        </div>
                       </div>
+                      <label className="relative mb-3 block">
+                        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+                        <span className="sr-only">
+                          {language === 'nl' ? 'Zoek buurten' : 'Search neighborhoods'}
+                        </span>
+                        <input
+                          type="search"
+                          value={neighborhoodPickerSearch}
+                          onChange={(event) => setNeighborhoodPickerSearch(event.target.value)}
+                          placeholder={language === 'nl' ? 'Zoek buurten' : 'Search neighborhoods'}
+                          className="h-10 w-full rounded-xl border border-border bg-card pl-9 pr-3 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-primary focus:ring-2 focus:ring-primary/20"
+                        />
+                      </label>
                       <div className="grid w-full grid-cols-2 gap-2 animate-in fade-in slide-in-from-top-1 duration-300 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-2 xl:grid-cols-3">
-                        {neighborhoodOptions.map((neighborhood) => (
+                        {neighborhoodOptions.map((neighborhood) => {
+                          const isSelected = selectedMapNeighborhoods.includes(neighborhood);
+                          return (
                           <button
                             key={neighborhood}
                             type="button"
-                            onClick={() => onSearch(loc.id, neighborhood, DEFAULT_START_SECTION)}
+                            aria-pressed={isSelected}
+                            onClick={() => setSelectedMapNeighborhoods((current) => current.includes(neighborhood)
+                              ? current.filter((name) => name !== neighborhood)
+                              : [...current, neighborhood])}
                             onMouseEnter={() => selectedCityId === loc.id && setHoveredMapNeighborhood(neighborhood)}
                             onMouseLeave={() => setHoveredMapNeighborhood(null)}
                             onFocus={() => selectedCityId === loc.id && setHoveredMapNeighborhood(neighborhood)}
                             onBlur={() => setHoveredMapNeighborhood(null)}
-                            className="min-h-10 rounded-xl border border-border/50 bg-card/80 px-3 py-2 text-left text-xs font-semibold text-muted-foreground transition-all hover:border-primary/50 hover:bg-primary/5 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                            className={cn(
+                              "min-h-10 rounded-xl border px-3 py-2 text-left text-xs font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+                              isSelected
+                                ? "border-primary bg-primary text-primary-foreground shadow-sm"
+                                : "border-border/50 bg-card/80 text-muted-foreground hover:border-primary/50 hover:bg-primary/5 hover:text-primary",
+                            )}
                           >
-                            {neighborhood}
+                            <span className="flex items-center justify-between gap-2">
+                              <span>{neighborhood}</span>
+                              <span aria-hidden="true" className={cn(
+                                "grid h-4 w-4 shrink-0 place-items-center rounded-full border text-[10px]",
+                                isSelected ? "border-primary-foreground/70" : "border-border",
+                              )}>
+                                {isSelected ? '✓' : ''}
+                              </span>
+                            </span>
                           </button>
-                        ))}
+                          );
+                        })}
                       </div>
                     </div>
                   </div>
@@ -2001,7 +2039,6 @@ function DiscoveryState({
   );
   const [nearbyPosition, setNearbyPosition] = useState<{ lat: number; lng: number } | null>(null);
   const [nearbyStatus, setNearbyStatus] = useState<'idle' | 'locating' | 'ready' | 'fallback'>('idle');
-  const [showMap, setShowMap] = useState(true);
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState(420);
   const sidebarResizeRef = useRef<{ pointerId: number; startX: number; startWidth: number } | null>(null);
@@ -2191,6 +2228,9 @@ function DiscoveryState({
 
   const toggleQuickFilter = (filter: DiscoveryQuickFilter) => {
     const isActivating = !quickFilters.has(filter);
+    if (isActivating && ['today', 'week', 'weekend', 'free', 'family', 'indoor'].includes(filter)) {
+      setTopLevelCategories((current) => ({ ...current, events: true }));
+    }
     setQuickFilters((previous) => {
       const next = new Set(previous);
       if (next.has(filter)) next.delete(filter);
@@ -2465,14 +2505,6 @@ function DiscoveryState({
   const eventEvidence = topLevelCategories.events
     ? selectedData.find((result) => result.evidence)?.evidence
     : undefined;
-  const evidenceStatus = eventEvidence?.status;
-  const evidenceTone = evidenceStatus === 'verified'
-    ? 'border-emerald-200 bg-emerald-50 text-emerald-950'
-    : evidenceStatus === 'empty'
-      ? 'border-slate-200 bg-slate-50 text-slate-900'
-      : evidenceStatus === 'stale'
-        ? 'border-amber-200 bg-amber-50 text-amber-950'
-        : 'border-rose-200 bg-rose-50 text-rose-950';
 
   const savedCount = savedIds.size;
   const normalizedNeighborhoodSearch = neighborhoodSearch.trim().toLocaleLowerCase(language === 'nl' ? 'nl-NL' : 'en-GB');
@@ -2483,15 +2515,12 @@ function DiscoveryState({
     : location.neighborhoods;
 
   return (
-    <div className="flex min-h-screen w-full flex-col bg-background md:h-screen md:flex-row md:overflow-hidden">
+    <div className="flex h-[100dvh] w-full flex-col overflow-hidden bg-background md:flex-row">
       <LanguageSelector language={language} onLanguageChange={onLanguageChange} />
 
       {/* Sidebar List */}
       <div
-      className={cn(
-        "relative z-20 flex min-h-screen w-full flex-col overflow-y-auto border-r border-border bg-card/95 shadow-2xl backdrop-blur-xl md:h-full md:min-h-0 md:bg-card",
-        showMap ? "hidden md:flex md:w-[min(var(--sidebar-width),30vw)] md:max-w-[30vw]" : "md:w-full",
-      )}
+      className="relative z-20 order-2 flex h-[40dvh] min-h-0 w-full flex-col overflow-y-auto border-r border-border bg-card/95 shadow-2xl backdrop-blur-xl md:order-1 md:h-full md:w-[min(var(--sidebar-width),30vw)] md:max-w-[30vw] md:bg-card"
       style={{ '--sidebar-width': `${sidebarWidth}px` } as React.CSSProperties}
       >
         <div className="shrink-0 border-b border-border bg-card p-4">
@@ -2527,26 +2556,6 @@ function DiscoveryState({
                 </span>
               )}
             </button>
-          </div>
-          <div className="mb-3 flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setShowMap((visible) => !visible)}
-              aria-pressed={showMap}
-              className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-primary/35 bg-primary/10 px-4 text-sm font-extrabold text-foreground transition-colors hover:bg-primary/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-            >
-              {showMap ? <Search className="h-4 w-4" aria-hidden="true" /> : <MapIcon className="h-4 w-4" aria-hidden="true" />}
-              {showMap
-                ? (language === 'nl' ? 'Toon lijst' : 'Show list')
-                : (language === 'nl' ? 'Toon kaart' : 'Show map')}
-            </button>
-            {!showMap && (
-              <p className="text-xs font-semibold text-muted-foreground">
-                {language === 'nl'
-                  ? 'De kaart wordt pas geladen als je hiervoor kiest.'
-                  : 'The map loads only when you choose to show it.'}
-              </p>
-            )}
           </div>
           <button
             type="button"
@@ -2597,35 +2606,35 @@ function DiscoveryState({
                 </div>
               </details>
             </FilterFrame>
-            <FilterFrame title={language === 'nl' ? 'Snel kiezen' : 'Quick choices'}>
+            <FilterFrame title={language === 'nl' ? 'Snelle filters' : 'Quick filters'} defaultOpen>
               <div className="flex flex-wrap gap-1.5" role="group" aria-label={language === 'nl' ? 'Snelle filters' : 'Quick filters'}>
                 {([
                   ['nearby', language === 'nl' ? 'Dichtbij' : 'Nearby'],
-                  ...(topLevelCategories.events
-                    ? [
-                      ['family', language === 'nl' ? 'Gezin' : 'Family'],
-                      ['indoor', language === 'nl' ? 'Binnen' : 'Indoor'],
-                    ] as Array<[DiscoveryQuickFilter, string]>
-                    : []),
-                  ...(topLevelCategories.businesses || topLevelCategories['food-drink']
-                    ? [['open-now', language === 'nl' ? 'Nu open' : 'Open now'] as [DiscoveryQuickFilter, string]]
-                    : []),
+                  ['today', language === 'nl' ? 'Vandaag' : 'Today'],
+                  ['weekend', language === 'nl' ? 'Dit weekend' : 'This weekend'],
+                  ['family', language === 'nl' ? 'Gezin' : 'Family'],
+                  ['indoor', language === 'nl' ? 'Binnen' : 'Indoor'],
+                  ['free', language === 'nl' ? 'Gratis' : 'Free'],
+                  ['open-now', language === 'nl' ? 'Nu open' : 'Open now'],
                 ] as Array<[DiscoveryQuickFilter, string]>).map(([value, label]) => (
-                  <button
-                    type="button"
+                  <label
                     key={value}
-                    onClick={() => toggleQuickFilter(value)}
-                    aria-pressed={quickFilters.has(value)}
                     className={cn(
-                      'inline-flex min-h-8 items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-bold transition-colors',
+                      'inline-flex min-h-9 cursor-pointer items-center gap-2 rounded-lg border px-2.5 py-1.5 text-[11px] font-bold transition-colors',
                       quickFilters.has(value)
                         ? 'border-primary/50 bg-primary/10 text-foreground'
                         : 'border-border/70 bg-card text-muted-foreground hover:border-primary/40',
                     )}
                   >
+                    <input
+                      type="checkbox"
+                      checked={quickFilters.has(value)}
+                      onChange={() => toggleQuickFilter(value)}
+                      className="h-4 w-4 shrink-0 accent-primary"
+                    />
                     {value === 'nearby' && <Navigation className="h-3.5 w-3.5" aria-hidden="true" />}
                     {label}
-                  </button>
+                  </label>
                 ))}
               </div>
               {quickFilters.has('nearby') && (
@@ -2742,6 +2751,7 @@ function DiscoveryState({
                 {([
                   ['all', language === 'nl' ? 'Alle data' : 'All dates'],
                   ['today', language === 'nl' ? 'Vandaag' : 'Today'],
+                  ['weekend', language === 'nl' ? 'Dit weekend' : 'This weekend'],
                   ['week', language === 'nl' ? 'Deze week' : 'This week'],
                 ] as Array<[AgendaTimeFilter, string]>).map(([value, label]) => (
                   <button
@@ -2792,7 +2802,17 @@ function DiscoveryState({
               </p>
             </FilterFrame>
           )}
-          <FilterFrame title={`${t.neighborhoods} / ${t.postcodeFilterLabel}`}>
+          <FilterFrame
+            title={language === 'nl' ? 'Kies meerdere buurten / postcode' : 'Select multiple neighborhoods / postcode'}
+            defaultOpen
+            status={(
+              <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-extrabold normal-case tracking-normal text-primary">
+                {neighborhoodSelection === 'all'
+                  ? t.allNeighborhoods
+                  : t.neighborhoodsSelected(selectedNeighborhoods.length)}
+              </span>
+            )}
+          >
             <label className="block">
               <span className="mb-1 block text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
                 {t.postcodeFilterLabel}
@@ -2831,49 +2851,33 @@ function DiscoveryState({
               className="max-h-44 overflow-y-auto overflow-x-hidden rounded-lg border border-border/50 bg-muted/20 p-1 pr-1.5"
             >
               <div className="grid min-w-0 grid-cols-2 gap-1">
-                <label
-                  className={cn(
-                    "flex min-h-9 min-w-0 cursor-pointer items-center gap-1.5 rounded-lg border-2 px-2 py-1.5 text-[10px] font-bold transition-all",
-                    neighborhoodSelection === 'all'
-                       ? "border-primary/50 bg-primary/10 text-foreground shadow-[0_3px_10px_-6px_rgba(243,108,33,0.8)]"
-                       : "border-border/70 bg-card/70 text-muted-foreground hover:border-primary/50 hover:bg-primary/5 hover:text-foreground",
-                  )}
-                >
-                  <input
-                    type="checkbox"
-                    checked={neighborhoodSelection === 'all'}
-                    onChange={() => {
-                      if (neighborhoodSelection === 'all') deselectAllNeighborhoods();
-                      else selectAllNeighborhoods();
-                    }}
-                    className="h-4 w-4 shrink-0 accent-primary"
-                  />
-                   <span className="min-w-0 truncate whitespace-nowrap">{t.allNeighborhoods}</span>
-                </label>
                 {visibleNeighborhoods.map((neighborhood) => {
                   const isChecked = selectedNeighborhoods.includes(neighborhood);
                   return (
-                    <label
+                    <button
                       key={neighborhood}
+                      type="button"
+                      aria-pressed={isChecked}
+                      onClick={() => toggleNeighborhood(neighborhood)}
                       className={cn(
-                        "flex min-h-9 min-w-0 cursor-pointer items-center gap-1.5 rounded-lg border-2 px-2 py-1.5 text-[10px] font-semibold transition-all",
+                        "flex min-h-9 min-w-0 items-center justify-between gap-1.5 rounded-lg border-2 px-2 py-1.5 text-left text-[10px] font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
                         isChecked
-                          ? "border-primary/50 bg-primary/10 text-foreground shadow-[0_3px_10px_-6px_rgba(243,108,33,0.8)]"
+                          ? "border-primary bg-primary text-primary-foreground shadow-[0_3px_10px_-6px_rgba(243,108,33,0.8)]"
                           : "border-border/70 bg-card/70 text-muted-foreground hover:border-primary/50 hover:bg-primary/5 hover:text-foreground",
                       )}
                       title={`${t.neighborhoodLabel}: ${neighborhood}`}
                     >
-                      <input
-                        type="checkbox"
-                        checked={isChecked}
-                        onChange={(event) => {
-                          const nativeEvent = event.nativeEvent as MouseEvent;
-                           toggleNeighborhood(neighborhood);
-                        }}
-                        className="h-4 w-4 shrink-0 accent-primary"
-                      />
                       <span className="min-w-0 truncate whitespace-nowrap">{neighborhood}</span>
-                    </label>
+                      <span
+                        aria-hidden="true"
+                        className={cn(
+                          "grid h-4 w-4 shrink-0 place-items-center rounded-full border text-[10px]",
+                          isChecked ? "border-primary-foreground/70" : "border-border",
+                        )}
+                      >
+                        {isChecked ? '✓' : ''}
+                      </span>
+                    </button>
                   );
                 })}
               </div>
@@ -2889,11 +2893,6 @@ function DiscoveryState({
                 : neighborhoodSelection === 'none'
                   ? t.noNeighborhoodsSelected
                   : t.allNeighborhoods}
-            </p>
-            <p className="mt-1 text-[10px] text-muted-foreground">
-              {language === 'nl'
-                ? 'Shift+klik om extra buurten toe te voegen of te verwijderen.'
-                : 'Shift+click to add or remove additional neighborhoods.'}
             </p>
           </FilterFrame>
           </div>
@@ -2973,46 +2972,6 @@ function DiscoveryState({
               <p className="w-full text-xs leading-relaxed text-muted-foreground">
                 {selectedTopLevelSections.includes('social-map') ? t.socialMapCoverageNote : t.listingsCoverageNote}
               </p>
-            )}
-            {eventEvidence && evidenceStatus && (
-              <div
-                data-testid="event-evidence-summary"
-                role="status"
-                aria-live="polite"
-                className={cn('w-full rounded-xl border px-3 py-2.5', evidenceTone)}
-              >
-                <div className="flex items-start gap-2">
-                  <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                      <span className="text-[10px] font-black uppercase tracking-[0.14em]">
-                        {t.eventEvidenceTitle}
-                      </span>
-                      <span data-testid="event-evidence-status" className="text-xs font-bold">
-                        {t.eventEvidenceStatus[evidenceStatus]}
-                      </span>
-                    </div>
-                    <p className="mt-1 text-xs leading-relaxed">{eventEvidence.message}</p>
-                    {eventEvidence.lastCheckedAt && (
-                      <p className="mt-1 text-[10px] opacity-75">
-                        {t.eventEvidenceLastChecked(formatEvidenceCheckedAt(eventEvidence.lastCheckedAt, language))}
-                      </p>
-                    )}
-                    {eventEvidence.sources.length > 0 && (
-                      <ul className="mt-2 flex flex-wrap gap-1.5" aria-label={t.eventEvidenceTitle}>
-                        {eventEvidence.sources.slice(0, 6).map((source) => (
-                          <li
-                            key={source.id}
-                            className="rounded-full border border-current/15 bg-white/50 px-2 py-0.5 text-[10px] font-semibold"
-                          >
-                            {source.name}: {t.eventEvidenceSourceStatus[source.status]}
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
-                </div>
-              </div>
             )}
             {selectedTopLevelSections.includes('social-map') && socialMapSnapshotDate && (
               <span data-testid="text-social-map-public-snapshot-date" className="w-full text-xs text-muted-foreground">
@@ -3157,19 +3116,8 @@ function DiscoveryState({
         />
       </div>
 
-      {/* Map Area: mounted only after an explicit user action. */}
-      {showMap && <div className="flex h-[100dvh] min-h-[32rem] w-full flex-1 flex-col overflow-hidden bg-background md:h-full md:min-h-0">
-        <div className="flex shrink-0 items-center justify-between border-b border-border bg-card px-4 py-3 md:hidden">
-          <strong className="text-sm">{getLocationName(location, language)}</strong>
-          <button
-            type="button"
-            onClick={() => setShowMap(false)}
-            className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-primary/35 bg-primary/10 px-4 text-sm font-extrabold text-foreground"
-          >
-            <Search className="h-4 w-4" aria-hidden="true" />
-            {language === 'nl' ? 'Toon lijst' : 'Show list'}
-          </button>
-        </div>
+      {/* Map and list are always visible together. */}
+      <div className="order-1 flex h-[60dvh] min-h-0 w-full flex-none flex-col overflow-hidden bg-background md:order-2 md:h-full md:flex-1">
         <ReferenceCategoryNav
           embedded
           language={language}
@@ -3179,7 +3127,7 @@ function DiscoveryState({
           onSectionSelect={selectTopLevelSection}
         />
         <WeatherCard cityId={locationId} language={language} />
-        <div className="relative h-[calc(100dvh-11.125rem)] min-h-[24rem] flex-none md:h-auto md:min-h-0 md:flex-1">
+        <div className="relative min-h-0 flex-1">
           <GoogleMapView
             language={language}
             locationId={location.id}
@@ -3197,7 +3145,7 @@ function DiscoveryState({
           />
 
         </div>
-      </div>}
+      </div>
     </div>
   );
 }
@@ -3468,18 +3416,18 @@ function UnsupportedCityRoute() {
       <section className="w-full max-w-xl rounded-3xl border border-border bg-card p-8 text-center shadow-xl">
         <MapPinOff className="mx-auto h-10 w-10 text-primary" aria-hidden="true" />
         <h1 className="mt-5 text-3xl font-extrabold text-foreground">
-          {language === 'nl' ? 'Deze stad wordt nog niet ondersteund' : 'This city is not supported yet'}
+          {language === 'nl' ? 'Deze locatie is nog niet beschikbaar' : 'This location is not available yet'}
         </h1>
         <p className="mt-3 leading-7 text-muted-foreground">
           {language === 'nl'
-            ? `De huidige gecontroleerde dekking is beperkt tot Den Haag. “${params?.citySlug ?? ''}” is niet stilzwijgend vervangen.`
-            : `Current checked coverage is limited to The Hague. “${params?.citySlug ?? ''}” was not silently substituted.`}
+            ? `We konden “${params?.citySlug ?? ''}” niet openen in deze ontwikkelversie. Kies een andere locatie om verder te gaan.`
+            : `We could not open “${params?.citySlug ?? ''}” in this development build. Choose another location to continue.`}
         </p>
         <Link
           href={`/activiteiten/den-haag${language === 'nl' ? '?locale=nl' : ''}`}
           className="mt-6 inline-flex min-h-11 items-center rounded-full bg-primary px-5 py-3 font-bold text-primary-foreground"
         >
-          {language === 'nl' ? 'Ontdek Den Haag' : 'Discover The Hague'}
+          {language === 'nl' ? 'Terug naar ontdekken' : 'Return to discovery'}
         </Link>
       </section>
     </main>

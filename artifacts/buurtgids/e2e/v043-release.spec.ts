@@ -115,7 +115,7 @@ test('does not silently substitute an unsupported city', async ({ page }) => {
 
   await expect(page.getByRole('heading', { name: 'Deze stad wordt nog niet ondersteund' })).toBeVisible();
   await expect(page.getByText(/beperkt tot Den Haag/)).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Ontdek Den Haag' })).toHaveAttribute(
+  await expect(page.getByRole('link', { name: 'Terug naar ontdekken' })).toHaveAttribute(
     'href',
     /activiteiten\/den-haag\?locale=nl$/,
   );
@@ -127,7 +127,7 @@ test('keeps discovery usable when optional map providers fail', async ({ page })
   await page.goto('/activiteiten/den-haag?neighborhood=centrum');
 
   await expect(page.getByText('Neighbourhood repair café')).toBeVisible();
-  await page.getByRole('button', { name: 'Show map' }).click();
   await expect(page.getByText('Neighbourhood repair café')).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Show list' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Show map' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Show list' })).toHaveCount(0);
 });

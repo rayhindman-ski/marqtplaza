@@ -18,7 +18,8 @@
 
 ## Inclusion rationale
 
-- BR-01 makes the global proposition and current Hague availability understandable without implying worldwide coverage.
+- BR-01 keeps the proposition location-independent. The Hague dataset is a
+  development fixture and must not appear as a customer-facing availability feature.
 - BR-02 completes broad desktop/mobile navigation, routing context, account entry, locale behavior, and responsive hierarchy.
 - BR-09 completes the broad mobile-first journey, disclosures, state persistence, device behavior, and map/list resilience.
 - v0.41 necessarily shipped minimum labelled navigation/accessibility and minimum lazy-map/reflow behavior to satisfy its own P0 acceptance.
@@ -39,7 +40,8 @@
 - Its list-first/manual-neighbourhood path, explicit search scope, WCAG 2.2 AA gate, trust caveats, and privacy controls are regression baselines.
 - Its minimum labelled controls, accessible navigation path, narrow reflow, and map lazy-loading contract are identified for extension rather than replacement.
 - Live routes, components, localization, authentication, search/map contracts, analytics, and release-control mechanisms have been inspected.
-- Supported browser/device matrix, current Hague availability source, bilingual copy authority, privacy-approved telemetry, and representative test data are available.
+- Supported browser/device matrix, Hague development-fixture source, bilingual
+  copy authority, privacy-approved telemetry, and representative test data are available.
 - Any incompatibility in assumed contracts is surfaced for re-estimation before implementation proceeds.
 
 ## Staged implementation order

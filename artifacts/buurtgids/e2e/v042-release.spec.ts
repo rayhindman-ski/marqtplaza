@@ -56,7 +56,8 @@ test('states a global proposition and current availability without eager map acc
     level: 1,
     name: 'Discover what is happening locally, wherever you are',
   })).toBeVisible();
-  await expect(page.getByText('Currently available across The Hague')).toBeVisible();
+  await expect(page.getByText('Currently available across The Hague')).toHaveCount(0);
+  await expect(page.getByText('Discover what is happening locally, wherever you are')).toBeVisible();
   await expect(page.getByText('Start with the list. Choose if you want to share more.')).toBeVisible();
   expect(mapRequests).toBe(0);
 });
@@ -77,7 +78,7 @@ test('keeps labelled navigation destinations in the mobile menu', async ({ page 
   await expect(page.getByRole('button', { name: 'Open menu' })).toBeFocused();
 });
 
-test('starts discovery with a list and mounts the map only after explicit action', async ({ page }) => {
+test('keeps discovery map and list visible together', async ({ page }) => {
   let mapRequests = 0;
   await page.route(/(maps\.googleapis\.com|tile\.openstreetmap\.org)/, async (route) => {
     mapRequests += 1;
@@ -87,11 +88,9 @@ test('starts discovery with a list and mounts the map only after explicit action
   await page.goto('/activiteiten/den-haag?neighborhood=Centrum');
 
   await expect(page.getByRole('heading', { level: 1, name: 'The Hague' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Show map' })).toBeVisible();
-  expect(mapRequests).toBe(0);
-
-  await page.getByRole('button', { name: 'Show map' }).click();
-  await expect(page.getByRole('button', { name: 'Show list' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Show map' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Show list' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /Neighbourhood repair café/ }).first()).toBeVisible();
   await expect.poll(() => mapRequests).toBeGreaterThan(0);
 });
 

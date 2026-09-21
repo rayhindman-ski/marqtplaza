@@ -11,14 +11,15 @@
 MarqtPlaza currently has a usable Hague discovery flow, but its proposition, global
 navigation, and discovery composition do not yet explain the global product
 vision or preserve the approved map-first desktop web journey. The
-current implementation is a Hague availability baseline, not evidence of global
-coverage. The primary user is a signed-out or signed-in resident or visitor
+current implementation uses Hague data as a development and assessment fixture,
+not as a customer-facing availability feature or permanent product boundary.
+The primary user is a signed-out or signed-in resident or visitor
 discovering local places, events, food, social support, and community activity.
 
 ### In scope
 
 - A bilingual, location-independent proposition with a separate current-availability
-  notice (currently The Hague/Den Haag).
+  notice without presenting the development dataset as product availability.
 - A labelled, typed global navigation model shared by desktop and mobile.
 - Clear account and language entry points, current-page semantics, titles, headings,
   safe return paths, focus behavior, and browser history.
@@ -70,7 +71,7 @@ discover, where it is currently available, and how local versus optional web
 results work, while retaining the primary map without granting location permission.
 
 **Independent acceptance**: Fresh English and Dutch homepages show one semantic
-`h1`, a location-independent benefit, a separate The Hague availability notice,
+`h1`, a location-independent benefit, no development-dataset availability claim,
 one primary search action, local-only scope, and a keyboard-operable explanation.
 Search and manual neighborhood browsing work with the populated map visible;
 geolocation requests remain absent until explicitly requested.
@@ -99,9 +100,10 @@ Narrow viewports retain essential controls without becoming the product baseline
 
 ## Functional requirements
 
-- **FR-001 Proposition**: Render an explicit global discovery proposition and
-  chosen-location benefit before search; keep current The Hague availability in a
-  separate configurable notice.
+- **FR-001 Proposition**: Render an explicit location-independent discovery
+  proposition and chosen-location benefit before search. Never present the
+  current Hague development dataset as a feature, launch market, availability
+  promise, or permanent product boundary.
 - **FR-002 Scope**: Fresh state is local-only. “Include web results” is an explicit,
   labelled opt-in and local/web source groups remain distinct.
 - **FR-003 Evidence language**: Explain source/date/status fields as aids to
@@ -164,7 +166,7 @@ Narrow viewports retain essential controls without becoming the product baseline
 
 | Criterion | Required evidence |
 |---|---|
-| AC-01 | Fresh EN/NL hero has global proposition, separate current availability, one primary action, and no Hague-only identity. |
+| AC-01 | Fresh EN/NL hero has a location-independent proposition, one primary action, and no Hague availability badge or Hague-only product identity. |
 | AC-02 | Fresh storage shows local-only; explicit web opt-in is required. |
 | AC-03 | Explanation distinguishes local/web sources and evidence limits without unsupported claims. |
 | AC-04 | Map/search/manual browse pass with the populated map visible and geolocation not requested. |
@@ -210,7 +212,7 @@ Narrow viewports retain essential controls without becoming the product baseline
 | AC-10 | Zoom and narrow viewports retain essential controls without replacing the desktop map-first baseline. |
 | AC-11 | Guest browse/favorite explanation and safe account context work. |
 | AC-12 | All new mobile copy has EN/NL parity and correct Hague terminology. |
-| AC-13 | Current Hague-only availability is clear without unsupported coverage. |
+| AC-13 | Hague data remains an internal development fixture and is not presented as a customer-facing availability feature. |
 | AC-14 | Map failure leaves list discovery intact and actionable. |
 | AC-15 | Homepage and discovery neighborhood polygons visibly change on hover/focus, persist while selected, support simultaneous multi-selection highlights, and return to the normal state when deselected. |
 

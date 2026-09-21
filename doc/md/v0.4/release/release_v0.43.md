@@ -5,7 +5,8 @@
 - **Status:** Proposed plan; no behavior in this plan is claimed implemented, verified, scheduled, or committed.
 - **Goal:** Complete BR-05, BR-10, BR-11, and BR-12 after acceptance of [v0.42](./release_v0.42.md), while preserving every applicable v0.41 critical/P0 gate.
 - [v0.41](./release_v0.41.md) is the critical-foundation release; v0.42 supplies accepted value, navigation, and mobile foundations; this release completes its four assigned BRs exactly once.
-- MarqtPlaza has a global product vision, but the implementation and evidence baseline here is the current Hague dataset only.
+- The current Hague dataset is a development and evidence fixture only. It is
+  never presented as a customer-facing availability feature or product boundary.
 - “The Hague”/“Den Haag” describes present supported coverage, not a permanent product boundary or a claim of global rollout.
 - Present localization scope is bilingual English/Dutch; additional global locales and datasets remain future work.
 
@@ -63,7 +64,9 @@
 
 1. **Reconcile:** inventory live contracts, Hague records, provenance, URLs/history, identity/privacy operations, localization resources, and existing tests.
 2. **Define shared state:** stable public IDs, validated criteria, locale, source groups, field evidence, Unknown, safe actions, errors, and private-field exclusions.
-3. **BR-05 context:** implement Hague-only statement, neighbourhood/category browse, real dated examples, unsupported-city recovery, and optional lazy map.
+3. **BR-05 context:** keep the proposition location-independent, retain
+   neighbourhood/category browse and real dated examples, provide generic
+   unsupported-location recovery, and never advertise the Hague fixture as a feature.
 4. **BR-10 results:** implement status, contract-backed filters, semantic cards, source groups, details, safe public actions, progressive loading, and non-destructive recovery.
 5. **BR-10/11 seam:** add favourite detour with safe return context; keep guest discovery complete and never present an unconfirmed save.
 6. **BR-11 accounts:** complete truthful account value, auth/registration/session states, confirmed favourites, sign-out, and policy-aligned deletion lifecycle.

@@ -178,13 +178,13 @@ test('keeps discovery filters, map pins, routes, and translations in sync', asyn
   });
 
   await page.goto('/activiteiten/den-haag');
-  await expect(page.getByText('Quick choices')).toBeVisible();
+  await expect(page.getByText('Quick filters')).toBeVisible();
   await page.getByRole('checkbox', { name: 'Centrum', exact: true }).check();
   await expect.poll(() => listingsRequests.some((request) => request.searchParams.get('neighborhoods') === 'Centrum')).toBe(true);
   for (const label of ['Family', 'Indoor', 'Today', 'Free']) {
-    await page.getByRole('button', { name: label, exact: true }).click();
+    await page.getByRole('checkbox', { name: label, exact: true }).check();
   }
-  await page.getByRole('button', { name: 'Nearby', exact: true }).click();
+  await page.getByRole('checkbox', { name: 'Nearby', exact: true }).check();
   await expect(page.getByText('Finding your location…')).toBeVisible();
   await expect(page.getByText('Within 2.5 km of the selected neighborhood or city centre.')).toBeVisible({ timeout: 7_000 });
 
@@ -201,8 +201,8 @@ test('keeps discovery filters, map pins, routes, and translations in sync', asyn
   const listIds = (await eventList.locator('[data-event-id]').evaluateAll(
     (nodes) => nodes.map((node) => node.getAttribute('data-event-id')).sort(),
   ));
-  await page.getByRole('button', { name: 'Show map' }).click();
-  await expect(page.getByRole('button', { name: 'Show list' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Show map' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Show list' })).toHaveCount(0);
   await expect(page.locator('[data-map-cluster]')).toHaveCount(1, { timeout: 10_000 });
   await expect(page.locator('[data-map-cluster]')).toHaveText('2');
   await expect(page.locator('[data-map-cluster]')).toHaveAttribute(
@@ -248,21 +248,17 @@ test('does not mount a map provider on the homepage', async ({ page }) => {
   });
 
   await page.goto('/');
-  await expect(page.getByText('Start with the list. Choose if you want to share more.')).toBeVisible();
-  await expect(page.locator('[data-neighborhood-boundary]')).toHaveCount(0);
-  expect(mapRequests).toBe(0);
+  await expect(page.getByText('Neighborhoods on the map')).toBeVisible();
+  await expect.poll(() => mapRequests).toBeGreaterThan(0);
 });
 
 for (const [mapPath, tilesAvailable] of [['tile map', true], ['coordinate fallback', false]] as const) {
 
   test(`keeps neighborhood polygon selection aligned in the ${mapPath}`, async ({ page }) => {
     await stubBoundaryDiscovery(page, tilesAvailable);
-    await expect(page.locator('[data-neighborhood-boundary]')).toHaveCount(0);
-    await page.getByRole('button', { name: 'Show map' }).click();
-    await expect(page.getByRole('button', { name: 'Show list' })).toBeVisible();
 
-    const neighborhoodControl = page.getByRole('checkbox', { name: 'Centrum', exact: true });
-    await expect(neighborhoodControl).toBeChecked();
+    const neighborhoodControl = page.locator('[data-neighborhood-list]').getByRole('button', { name: 'Centrum', exact: true });
+    await expect(neighborhoodControl).toHaveAttribute('aria-pressed', 'true');
 
     const boundary = page.getByRole('button', { name: 'Select neighborhood: Centrum', exact: true });
     await expect(boundary).toHaveCount(1);
@@ -295,19 +291,17 @@ for (const [mapPath, tilesAvailable] of [['tile map', true], ['coordinate fallba
     expect(geometry.maxY).toBeLessThanOrEqual((geometry.viewBox?.y ?? 0) + (geometry.viewBox?.height ?? 0) + 1);
 
     await boundary.click();
-    await expect(neighborhoodControl).not.toBeChecked();
+    await expect(neighborhoodControl).toHaveAttribute('aria-pressed', 'false');
     await expect(page.getByRole('button', { name: 'Select neighborhood: Centrum', exact: true })).toHaveCount(1);
-    await expect(boundary).toHaveCSS('stroke-opacity', '0.2');
-    await neighborhoodControl.check();
-    await expect(neighborhoodControl).toBeChecked();
+    await expect(boundary).toHaveCSS('stroke-opacity', '0.72');
+    await neighborhoodControl.click();
+    await expect(neighborhoodControl).toHaveAttribute('aria-pressed', 'true');
     await expect(page.getByRole('button', { name: 'Select neighborhood: Centrum', exact: true })).toHaveCount(1);
   });
 }
 
 test('discovery map keeps the user zoom level when hovering neighborhoods', async ({ page }) => {
   await stubBoundaryDiscovery(page, true);
-  await page.getByRole('button', { name: 'Show map' }).click();
-  await expect(page.getByRole('button', { name: 'Show list' })).toBeVisible();
   // The map legitimately refits its camera when data arrives or the container
   // is resized. Under a loaded full run those refits can land after the user
   // zoom below, so wait for them to finish before touching the zoom.
@@ -348,12 +342,12 @@ test('discovery map keeps the user zoom level when hovering neighborhoods', asyn
   expect(await tileZoom()).toBe(initialZoom + 2);
 });
 
-test('mobile discovery opens on a visible map and can round-trip to compact results', async ({ page }) => {
+test('mobile discovery keeps the map and compact results visible together', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await stubBoundaryDiscovery(page, true);
 
-  const showList = page.getByRole('button', { name: 'Show list' });
-  await expect(showList).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Show list' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Show map' })).toHaveCount(0);
   const mapRegion = page.getByLabel('Interactive activity map');
   await expect(mapRegion).toBeVisible();
   const mapBox = await mapRegion.boundingBox();
@@ -363,13 +357,8 @@ test('mobile discovery opens on a visible map and can round-trip to compact resu
   await expect(page.getByRole('button', { name: 'Zoom in' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Select neighborhood: Centrum', exact: true })).toBeVisible();
 
-  await showList.click();
-  await expect(page.getByRole('button', { name: 'Show map' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Filters and search area' })).toHaveAttribute('aria-expanded', 'false');
   await expect(page.getByRole('button', { name: /Results/ })).toBeVisible();
-
-  await page.getByRole('button', { name: 'Show map' }).click();
-  await expect(mapRegion).toBeVisible();
 });
 
 test('main search external-source setting controls discovery mode and persists', async ({ page }) => {
@@ -555,23 +544,23 @@ test('keeps every selected neighborhood free of out-of-boundary listings', async
   let previousName: string | null = null;
   for (const name of neighborhoodNames) {
     if (previousName) {
-      const previousCheckbox = page.getByRole('checkbox', { name: previousName, exact: true });
-      await previousCheckbox.uncheck();
+      const previousButton = page.locator('[data-neighborhood-list]').getByRole('button', { name: previousName, exact: true });
+      await previousButton.click();
     }
 
-    const checkbox = page.getByRole('checkbox', { name, exact: true });
+    const neighborhoodButton = page.locator('[data-neighborhood-list]').getByRole('button', { name, exact: true });
     const responsePromise = page.waitForResponse((response) => {
       const url = new URL(response.url());
       return url.pathname.includes('/api/listings') && url.searchParams.get('neighborhoods') === name;
     });
-    await checkbox.check();
+    await neighborhoodButton.click();
     await responsePromise;
     await expect(page.locator('[data-event-list]')).toBeVisible();
     await expect(page.locator('[data-event-id="outside-boundary-event"]')).toHaveCount(0);
     previousName = name;
   }
 
-  await page.getByRole('button', { name: 'Show map' }).click();
-  await expect(page.getByRole('button', { name: 'Show list' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Show map' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Show list' })).toHaveCount(0);
   await expect(page.locator('[data-map-pin][data-event-id="outside-boundary-event"]')).toHaveCount(0);
 });

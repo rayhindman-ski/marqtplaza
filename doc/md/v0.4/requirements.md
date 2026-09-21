@@ -51,6 +51,9 @@ These are proposed planning assessments, not verified production severity rating
 - Shared work is counted within each standalone BR estimate. **Do not sum the ranges as a project total** without removing overlap in navigation, search/list state, accessibility, privacy, localization, and testing.
 - Estimates exclude global rollout, acquisition or verification of new datasets, ongoing verification operations, infrastructure/vendor charges, third-party approval waits, and legal review lead times.
 - MarqtPlaza's product vision is global; the current Hague implementation is the assessment baseline, not a permanent geographic limit.
+- The Hague restriction exists for development and assessment only. It MUST NOT
+  be presented in customer-facing copy as a feature, current market,
+  availability promise, launch geography, or permanent product boundary.
 - Inspect the live application's code, contracts, coverage, and existing tests before committing to a schedule. Re-estimate if core capabilities are missing, scope changes, or integration risks exceed these assumptions.
 
 ## BR-01 — Clear value proposition

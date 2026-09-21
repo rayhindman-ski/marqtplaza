@@ -75,6 +75,12 @@ conflicts with an existing acceptance test, resolve the conflict against the
 approved product requirement; do not label the protection “stale” and rewrite
 the test merely to make the new plan pass.
 
+Development fixtures, seeded cities, test datasets, provider limits, and
+assessment baselines are implementation constraints, not product features.
+Never advertise them as customer-facing availability, launch geography, market
+positioning, or a permanent product boundary unless the user explicitly defines
+that product requirement.
+
 ## Required quality gates
 
 Before implementation:

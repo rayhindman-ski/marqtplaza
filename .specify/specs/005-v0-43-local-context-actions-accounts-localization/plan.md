@@ -17,7 +17,7 @@ privacy/accessibility regressions.
 | Principle | How this plan complies | Evidence or exception |
 | --- | --- | --- |
 | User value is a vertical slice | Four independently testable user journeys | BR-05/10/11/12 scenarios |
-| Local truth beats invented completeness | Hague-only records and existing listing fields | No new data/provider |
+| Local truth beats invented completeness | Hague fixture records remain factual without advertising the fixture as product availability | No new data/provider |
 | Contracts are the shared language | Existing OpenAPI hooks inspected first | Codegen only if contract changes |
 | Privacy, moderation, and ownership are explicit | Public-state allowlist and server-owned favourites | No private URL state |
 | External integrations fail independently | Map, listing providers and Clerk retain recovery | Partial data preserved |
@@ -62,7 +62,7 @@ privacy/accessibility regressions.
 
 ### UX and content
 
-- Hague-only context, shareable criteria, map-first rendering, interactive
+- Location-independent product context, shareable criteria, map-first rendering, interactive
   neighborhood polygon highlighting, and provider-failure recovery.
 - Semantic cards/details and safe actions derived only from available fields.
 - Optional account prompts, confirmed favourites and safe auth return context.
@@ -97,7 +97,8 @@ privacy/accessibility regressions.
 
 ### Phase 3 — BR-05 local context
 
-- [ ] Complete Hague-only context and real-record example presentation.
+- [ ] Keep Hague data as a development fixture and remove customer-facing
+  availability or product-boundary claims.
 - [ ] Preserve the populated map-first homepage/discovery surfaces and add
   unsupported-city and map-provider failure recovery.
 - [ ] Verify official neighborhood polygons visibly highlight on hover/focus,

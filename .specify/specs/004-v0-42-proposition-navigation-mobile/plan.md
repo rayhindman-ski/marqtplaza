@@ -23,7 +23,7 @@ proves an existing contract cannot express validated public state.
 | Principle | How this plan complies | Evidence |
 |---|---|---|
 | User value is vertical | Each BR is independently testable: understand, navigate, discover in the web app. | US1–US3 and focused E2E suites. |
-| Local truth | Hague is labelled current availability; no global coverage or trust claims are invented. | Copy fixture and prohibited-claim tests. |
+| Local truth | Hague data is a development fixture, never a customer-facing availability feature; no unsupported coverage or trust claim is invented. | Copy fixture and prohibited-claim tests. |
 | Contracts shared | Existing API/client contracts are reused; any change is OpenAPI-first and regenerated. | Contract audit task T004. |
 | Privacy/ownership explicit | Safe return paths remain; no public private state; favorites/account boundaries unchanged. | URL/security and account E2E tasks. |
 | Integrations fail independently | Map/location/search errors have distinct list-preserving recovery. | Failure matrix and blocked-provider tests. |
@@ -53,7 +53,7 @@ proves an existing contract cannot express validated public state.
 
 ### Planned frontend surfaces
 
-- `artifacts/buurtgids/src/App.tsx`: semantic proposition, current availability,
+- `artifacts/buurtgids/src/App.tsx`: semantic proposition, location-independent copy,
   shared route-state parser/serializer integration, results context, discovery
   compact filters, map-first desktop layout, navigation and detail/account context.
 - `artifacts/buurtgids/src/lib/i18n.ts`: all new EN/NL proposition, navigation,

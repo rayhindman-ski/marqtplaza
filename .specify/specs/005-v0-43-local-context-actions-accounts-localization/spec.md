@@ -9,18 +9,20 @@
 
 ### Problem
 
-The Hague discovery experience has strong privacy-first list and map foundations,
+The current development build uses Hague data and has strong list and map foundations,
 but public discovery state is only partly shareable, result actions and failure
 recovery are inconsistent, account value is not always tied to working benefits,
 and consumer routes do not yet prove atomic Dutch/English parity.
 
 ### Users and scope
 
-- **Primary users**: Hague residents and visitors; guests and signed-in members.
+- **Primary users**: local residents and visitors; guests and signed-in members.
 - **Product areas**: local discovery, details/actions, favourites, accounts,
   privacy, and consumer localization.
 - **In scope**: BR-05, BR-10, BR-11, BR-12; all applicable v0.41/v0.42 gates.
-- **Out of scope**: non-Hague datasets, additional languages, invented listings
+- **Development boundary**: the current fixture data is Hague-based, but that
+  restriction is not a feature, market promise, or customer-facing product claim.
+- **Out of scope**: additional production datasets, additional languages, invented listings
   or actions, transactions, mandatory location/map use, analytics, and unsupported
   quality/verification/opening-hours/accessibility claims.
 
@@ -39,8 +41,8 @@ unsupported city or failed optional map.
 
 **Acceptance scenarios**:
 
-1. Fresh guests see explicit Hague-only availability and can browse stable
-   neighbourhood/category choices without map or location access.
+1. Fresh guests see a location-independent proposition with no Hague-only
+   availability claim and can browse stable neighbourhood/category choices.
 2. Public criteria and locale survive reload, Back/Forward, and sharing; unknown
    or sensitive parameters are rejected.
 3. Unsupported cities and optional map/provider failures show named bilingual

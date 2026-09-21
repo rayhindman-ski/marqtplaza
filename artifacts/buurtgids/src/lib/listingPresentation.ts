@@ -4,6 +4,7 @@ import type { Marker } from './data';
 export type DiscoveryQuickFilter =
   | 'today'
   | 'week'
+  | 'weekend'
   | 'nearby'
   | 'free'
   | 'family'
@@ -96,12 +97,20 @@ export function formatEventTiming(
 
 export function isEventInDateWindow(
   startsAt: string | null | undefined,
-  window: 'today' | 'week',
+  window: 'today' | 'week' | 'weekend',
   now = new Date(),
 ): boolean {
   const start = validDate(startsAt);
   if (!start) return false;
   const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  if (window === 'weekend') {
+    const currentDay = dayStart.getDay();
+    const weekendStart = currentDay === 0
+      ? dayStart
+      : addDays(dayStart, (6 - currentDay + 7) % 7);
+    const weekendEnd = currentDay === 0 ? addDays(dayStart, 1) : addDays(weekendStart, 2);
+    return start >= weekendStart && start < weekendEnd;
+  }
   const dayEnd = addDays(dayStart, window === 'today' ? 1 : 7);
   return start >= dayStart && start < dayEnd;
 }
@@ -140,6 +149,7 @@ export function matchesDiscoveryQuickFilters(
   const now = options.now ?? new Date();
   if (filters.has('today') && (!isEvent(marker) || !isEventInDateWindow(marker.startsAt, 'today', now))) return false;
   if (filters.has('week') && (!isEvent(marker) || !isEventInDateWindow(marker.startsAt, 'week', now))) return false;
+  if (filters.has('weekend') && (!isEvent(marker) || !isEventInDateWindow(marker.startsAt, 'weekend', now))) return false;
   if (filters.has('free') && (!isEvent(marker) || marker.priceType !== 'free')) return false;
   if (filters.has('family') && (!isEvent(marker) || !isFamilyFriendly(marker))) return false;
   if (filters.has('indoor') && marker.isIndoor !== true) return false;

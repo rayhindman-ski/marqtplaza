@@ -658,8 +658,8 @@ export function getNewsCategoryName(category: NewsSubcategory, language: Languag
 export const translations = {
   nl: {
     languageLabel: 'Taal',
-    searchDescription: 'Zoek lokaal in Den Haag en ontdek verborgen plekken in jouw buurt.',
-    placeholder: 'Zoek lokaal in Den Haag (bijv. 2511 AB)',
+    searchDescription: 'Ontdek activiteiten, bedrijven en lokale plekken in jouw buurt.',
+    placeholder: 'Zoek op plaats, buurt of postcode',
     explore: 'Ontdek',
     popularDestinations: 'Populaire bestemmingen',
     popularNeighborhoods: 'Populaire buurten',
@@ -673,9 +673,9 @@ export const translations = {
     neighborhoodsSelected: (count: number) => `${count} ${count === 1 ? 'buurt' : 'buurten'} geselecteerd`,
     noNeighborhoodsSelected: 'Geen buurten geselecteerd',
     chooseNeighborhood: (city: string) => `Kies een buurt in ${city}`,
-    emptySearch: 'Vul een stad of Haagse postcode in.',
+    emptySearch: 'Vul een plaats, buurt of postcode in.',
     locationNotFound:
-      'Locatie niet gevonden. Probeer Den Haag of een Haagse postcode, zoals 2511 AB.',
+      'Locatie niet gevonden. Controleer de plaats, buurt of postcode en probeer opnieuw.',
     categories: {
       Museums: 'Musea',
       Tours: 'Rondleidingen',
@@ -826,8 +826,8 @@ export const translations = {
   },
   en: {
     languageLabel: 'Language',
-    searchDescription: 'Search locally in The Hague and discover hidden places in your neighbourhood.',
-    placeholder: 'Search locally in The Hague (e.g. 2511 AB)',
+    searchDescription: 'Discover activities, businesses, and local places in your neighborhood.',
+    placeholder: 'Search by city, neighborhood, or postcode',
     explore: 'Explore',
     popularDestinations: 'Popular destinations',
     popularNeighborhoods: 'Popular neighborhoods',
@@ -841,9 +841,9 @@ export const translations = {
     neighborhoodsSelected: (count: number) => `${count} ${count === 1 ? 'neighborhood' : 'neighborhoods'} selected`,
     noNeighborhoodsSelected: 'No neighborhoods selected',
     chooseNeighborhood: (city: string) => `Choose a neighborhood in ${city}`,
-    emptySearch: 'Please enter a city or Hague postcode.',
+    emptySearch: 'Please enter a city, neighborhood, or postcode.',
     locationNotFound:
-      'Location not found. Try The Hague or a Hague postcode, such as 2511 AB.',
+      'Location not found. Check the city, neighborhood, or postcode and try again.',
     categories: {
       Museums: 'Museums',
       Tours: 'Tours',
