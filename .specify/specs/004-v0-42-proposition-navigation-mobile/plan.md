@@ -1,16 +1,19 @@
-# Implementation Plan: v0.42 proposition, navigation, and mobile discovery
+# Implementation Plan: v0.42 proposition, navigation, and web discovery
 
 **Spec**: `.specify/specs/004-v0-42-proposition-navigation-mobile/spec.md`  
 **Source**: `doc/md/v0.4/release/release_v0.42.md`  
-**Status**: Ready for implementation  
+**Status**: Corrected product baseline
 **Date**: 2026-09-20
 
 ## Summary
 
 Deliver v0.42 as three coordinated vertical slices: proposition and scope
-clarity (BR-01), a shared labelled navigation model (BR-02), and a mobile-first
-discovery journey (BR-09). Start from the accepted v0.41 list-first, local-only,
-privacy, trust, accessibility, and lazy-map contracts. Prefer existing routes,
+clarity (BR-01), a shared labelled navigation model (BR-02), and a desktop
+web-app discovery journey with responsive safety checks (BR-09). Preserve the
+approved map-first product baseline: the homepage and discovery surface show a
+populated map without requiring a Show map opt-in, discovery keeps the list and
+filters to at most 30% of desktop width, and the map owns the remaining space.
+Geolocation remains explicit and permission-gated. Prefer existing routes,
 components, translations, return-path helpers, and generated clients. This plan
 assumes no backend, OpenAPI, or schema change; stop and re-plan if inspection
 proves an existing contract cannot express validated public state.
@@ -19,12 +22,12 @@ proves an existing contract cannot express validated public state.
 
 | Principle | How this plan complies | Evidence |
 |---|---|---|
-| User value is vertical | Each BR is independently testable: understand, navigate, discover on mobile. | US1–US3 and focused E2E suites. |
+| User value is vertical | Each BR is independently testable: understand, navigate, discover in the web app. | US1–US3 and focused E2E suites. |
 | Local truth | Hague is labelled current availability; no global coverage or trust claims are invented. | Copy fixture and prohibited-claim tests. |
 | Contracts shared | Existing API/client contracts are reused; any change is OpenAPI-first and regenerated. | Contract audit task T004. |
 | Privacy/ownership explicit | Safe return paths remain; no public private state; favorites/account boundaries unchanged. | URL/security and account E2E tasks. |
 | Integrations fail independently | Map/location/search errors have distinct list-preserving recovery. | Failure matrix and blocked-provider tests. |
-| Accessible/localized/responsive | Semantic landmarks, focus, EN/NL parity, 320px/400%/landscape coverage are required. | Accessibility and responsive tasks. |
+| Accessible/localized/responsive | Semantic landmarks, focus, EN/NL parity, desktop viewport checks, and responsive breakage checks are required. | Accessibility and responsive tasks. |
 | Operational clarity | No new dependency, provider, flag, schema, or root workflow; existing packages remain. | Architecture decision AD-01. |
 
 ## Technical context and current-code baseline
@@ -52,18 +55,19 @@ proves an existing contract cannot express validated public state.
 
 - `artifacts/buurtgids/src/App.tsx`: semantic proposition, current availability,
   shared route-state parser/serializer integration, results context, discovery
-  mobile disclosures, navigation and detail/account context.
+  compact filters, map-first desktop layout, navigation and detail/account context.
 - `artifacts/buurtgids/src/lib/i18n.ts`: all new EN/NL proposition, navigation,
   filter, status, recovery, map/location, and availability strings.
 - `artifacts/buurtgids/src/lib/returnPath.ts`: only if current allow-list cannot
   preserve the existing validated discovery routes; add tests before changes.
-- `artifacts/buurtgids/src/components/GoogleMapView.tsx`: explicit-load/failure
-  presentation only if audit finds a gap; do not alter cluster camera behavior.
+- `artifacts/buurtgids/src/components/GoogleMapView.tsx`: map-first rendering and
+  provider-failure presentation only if audit finds a gap; do not alter cluster
+  camera behavior.
 - New extracted components are allowed only when they reduce coupling: e.g.
-  `GlobalNavigation.tsx`, `DiscoveryProposition.tsx`, `MobileFilterSheet.tsx`,
+  `GlobalNavigation.tsx`, `DiscoveryProposition.tsx`,
   `publicDiscoveryState.ts`. Each must have a focused test boundary.
-- `artifacts/buurtgids/src/index.css` and relevant component styles: mobile-first
-  DOM/layout, safe areas, focus, reduced motion, target size, and overflow.
+- `artifacts/buurtgids/src/index.css` and relevant component styles: desktop
+  map/list proportions, responsive safety, focus, reduced motion, and overflow.
 
 ### Planned test surfaces
 
@@ -83,7 +87,7 @@ proves an existing contract cannot express validated public state.
 | AD-02 | Homepage/discovery and header are coupled in `App.tsx`; map provider has sensitive lifecycle. | Extract only stable, independently testable UI/state boundaries. | Reduce drift without broad rewrite. |
 | AD-03 | No analytics implementation was found in current web source. | Do not add telemetry; document manual privacy boundary unless approved mechanism appears. | No unapproved collection or dependency. |
 | AD-04 | Detail returns via restore snapshot and route; public state must not rely on hidden state. | Preserve existing behavior, add validated URL/history state where safe. | Shared links and browser Back must work across tabs. |
-| AD-05 | Existing local-only scope is session-backed and list-first; map can fallback. | Make scope visible and explicit while retaining old storage compatibility. | Meets BR-01/04 without silently changing provider behavior. |
+| AD-05 | Existing local-only search scope is session-backed; this does not require hiding the public map UI. | Keep search scope visible while preserving the approved map-first layout and list fallback. | Privacy applies to data/search permissions, not to removing the primary map surface. |
 | AD-06 | “UserRole user” is an internal role string. | Replace consumer copy with account-purpose label and keep role only for authorization logic. | Meets BR-02-AC-03 without changing permissions. |
 
 ## Phased implementation
@@ -105,7 +109,8 @@ proves an existing contract cannot express validated public state.
    groups visibly distinct.
 3. Implement allow-listed, bounded public state parsing/serialization and
    meaningful history updates without coordinates/private data.
-4. Preserve list-first and explicit map/location activation; add request assertions.
+4. Preserve map-first rendering and explicit location activation; add assertions
+   that the map and populated markers are visible on initial desktop render.
 5. Cover BR-01 AC-01–11 and BR-09 AC-05–08 with unit/integration/E2E tests.
 
 ### Phase 2 — Navigation hierarchy
@@ -120,19 +125,27 @@ proves an existing contract cannot express validated public state.
 5. Verify safe account cancel/success return and EN/NL criteria preservation.
 6. Cover BR-02 AC-01–12 and inherited account/navigation regressions.
 
-### Phase 3 — Mobile-first discovery
+### Phase 3 — Desktop map-first web discovery
 
-1. Reorder/resize home and discovery DOM for one-column task order at 320px.
-2. Add progressive filter disclosure with draft/apply/cancel semantics and
-   focus/status restoration; keep desktop controls equivalent.
-3. Ensure result cards/details expose essential facts first and do not require
-   map pins; retain detail snapshot behavior and safe Back.
-4. Add explicit pre-map explanation/loading/failure and Show list/list fallback.
-5. Keep Use my location purpose, denial/timeout recovery, manual neighborhoods,
-   and no repeated prompting.
-6. Test keyboard, touch, reduced motion, safe area, virtual keyboard, 200–400%
-   zoom, portrait/landscape, map blocked, slow/error/empty paths.
-7. Cover BR-09 AC-01–14 and rerun inherited v0.41 tests.
+1. Keep the discovery list/filter column at no more than 30% of the desktop
+   viewport and reserve at least 70% for the map.
+2. Show the populated homepage and discovery map by default, including markers,
+   clusters, boundaries, and provider attribution.
+3. Render official neighborhood polygons as visibly interactive regions:
+   hover/focus uses a clear fill/stroke highlight; selected polygons stay
+   highlighted after pointer exit; all selected polygons remain highlighted
+   during multi-selection; deselection restores the normal state. Do not use
+   centroid circles or count faint unchanged outlines as highlighting.
+4. Collapse secondary filters by default and keep result cards compact enough
+   that multiple results are visible without excessive scrolling.
+5. Keep the list usable as a provider-failure fallback; do not turn fallback
+   resilience into a reason to hide or defer the map.
+6. Keep Use my location explicit, explain its purpose, and preserve denial,
+   timeout, and manual-neighborhood recovery without repeated prompting.
+7. Test desktop interaction at representative web viewports first. Check a
+   narrow viewport only for breakage and access to map/list controls; do not
+   introduce a mobile-first product redesign without an explicit request.
+8. Cover corrected BR-09 AC-01–15 and rerun inherited map-first regressions.
 
 ### Phase 4 — Convergence and evidence
 
@@ -144,7 +157,8 @@ proves an existing contract cannot express validated public state.
    accessibility boundaries in `convergence.md`.
 4. Inspect diff for secrets, unsupported claims, coordinate/private URL leakage,
    generated artifacts, unrelated files, and accidental API/schema changes.
-5. Commit/push the branch; publish only after release go/no-go criteria pass.
+5. Leave release actions outside this implementation plan; they require an
+   explicit user request.
 
 ## Test matrix
 
@@ -153,9 +167,9 @@ proves an existing contract cannot express validated public state.
 | Proposition | Fresh EN/NL, explanation open/close/focus, availability fixture, prohibited claims, local/web opt-in. |
 | URL/state | valid round trip, unknown/duplicate/overlong/malformed values, sensitive-value exclusion, Back/Forward, detail/account return. |
 | Navigation | desktop/mobile destination parity, labels/accessibility names, current state, titles/h1/routes, menu keyboard/touch/Escape/focus. |
-| Discovery | guest search/browse, empty/error/loading/retry, stale/cancel latest response, cards/detail, map/list. |
-| Map/location | provider/tile/data blocked before Show map, map success/failure, list fallback, geolocation only after Use my location, denial/timeout/manual browse. |
-| Responsive | 320px, 390×844, 844×390, desktop, 200–400% zoom, long Dutch labels, safe area, reduced motion, keyboard. |
+| Discovery | map-first guest search/browse, empty/error/loading/retry, stale/cancel latest response, compact cards/detail, map/list fallback. |
+| Map/location | map and populated markers visible by default; official polygons visibly highlight on hover/focus and persist for every selected neighborhood; map success/failure; list fallback; geolocation only after Use my location; denial/timeout/manual browse. |
+| Responsive | desktop 30/70 list/map proportion is primary; narrower viewports are checked for breakage, map visibility, and accessible map/list controls without authorizing a mobile-first redesign. |
 | Account | guest favorites explanation, sign-in cancel/success safe return, no account/token data in URL. |
 | Regression | existing discovery, cluster/no-recenter, neighborhood polygon, saved events, account preferences, return path, source/freshness/trust tests. |
 
@@ -165,10 +179,11 @@ proves an existing contract cannot express validated public state.
 - **Navigation drift** — one typed model and desktop/mobile parity test.
 - **URL/privacy leak** — parser allow-list, property tests, URL scans, safe
   `returnPath.ts`; never put coordinates or account/session state in URLs.
-- **Map eager load/regression** — request interception before/after explicit
-  action and blocked-provider list fallback.
-- **Focus/reflow regressions** — keyboard tests, mobile snapshots, 320px/400%
-  checks, and manual screen-reader boundary documented.
+- **Map hidden/deferred or visually inert regression** — assert initial map
+  visibility, populated markers/clusters, a maximum 30% desktop list width, and
+  perceptible polygon hover/focus/selected/multi-selected states.
+- **Focus/reflow regressions** — keyboard tests, representative desktop checks,
+  narrow-viewport breakage checks, and manual screen-reader boundary documented.
 - **Copy claims** — bilingual content review and prohibited-term fixture.
 - **Stale async response** — request identity/cancellation test; latest criteria
   owns the rendered response.

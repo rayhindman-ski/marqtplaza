@@ -1,5 +1,14 @@
 # Convergence: v0.42 proposition, navigation, and mobile discovery
 
+> **Superseded product assumptions (corrected 2026-09-21):** This is a
+> historical execution record, not the current product contract. Its list-first,
+> explicit Show map, no-eager-map, and mobile-first conclusions came from an
+> agent-authored scope expansion that the user did not request. Current work must
+> follow the corrected `spec.md` and `plan.md`: desktop web app first, populated
+> map visible by default, list/filter column capped at 30%, and official
+> neighborhood polygons with perceptible hover/focus/selected/multi-selected
+> highlighting.
+
 **Date**: 2026-09-20  
 **Branch**: `feature/v042-enhancements`
 

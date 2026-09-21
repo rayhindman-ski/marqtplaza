@@ -21,7 +21,7 @@ privacy/accessibility regressions.
 | Contracts are the shared language | Existing OpenAPI hooks inspected first | Codegen only if contract changes |
 | Privacy, moderation, and ownership are explicit | Public-state allowlist and server-owned favourites | No private URL state |
 | External integrations fail independently | Map, listing providers and Clerk retain recovery | Partial data preserved |
-| Accessible, localized, responsive by default | EN/NL, keyboard, 320px/400% planned together | Manual SR audit not claimed |
+| Accessible, localized, responsive by default | EN/NL, keyboard, desktop-first layout and responsive breakage checks planned together | Manual SR audit not claimed |
 | Small changes preserve operational clarity | Shared helpers plus focused route integration | No broad library replacement |
 
 ## Technical context
@@ -62,7 +62,8 @@ privacy/accessibility regressions.
 
 ### UX and content
 
-- Hague-only context, shareable criteria, unsupported-city and optional-map recovery.
+- Hague-only context, shareable criteria, map-first rendering, interactive
+  neighborhood polygon highlighting, and provider-failure recovery.
 - Semantic cards/details and safe actions derived only from available fields.
 - Optional account prompts, confirmed favourites and safe auth return context.
 - Atomic locale switching, localized 404/errors/statuses, document language,
@@ -97,7 +98,10 @@ privacy/accessibility regressions.
 ### Phase 3 — BR-05 local context
 
 - [ ] Complete Hague-only context and real-record example presentation.
-- [ ] Add unsupported-city and optional-map failure recovery.
+- [ ] Preserve the populated map-first homepage/discovery surfaces and add
+  unsupported-city and map-provider failure recovery.
+- [ ] Verify official neighborhood polygons visibly highlight on hover/focus,
+  persist while selected, and remain simultaneously highlighted in multi-select.
 - [ ] Preserve unaffected criteria/list usability through clear, cancel and retry.
 
 ### Phase 4 — BR-10 result-to-action
@@ -116,7 +120,8 @@ privacy/accessibility regressions.
 
 - [ ] Localize route fallback, errors, statuses, account and action copy.
 - [ ] Validate equal resource trees/placeholders and source-content attribution.
-- [ ] Verify atomic switch, document language, focus, 320px and 400% reflow.
+- [ ] Verify atomic switch, document language, focus, desktop web layout, and
+  responsive breakage safety without introducing a mobile-first redesign.
 
 ### Phase 7 — Convergence
 
@@ -133,8 +138,10 @@ privacy/accessibility regressions.
   return-path allowlist and serialize public criteria only.
 - **Risk**: locale switch creates mixed frames — **Mitigation**: synchronous
   catalog state with atomic URL/language update and parity tests.
-- **Risk**: inherited map privacy regresses — **Mitigation**: retain explicit
-  Show map/Use location actions and network assertions.
+- **Risk**: inherited map-first behavior or neighborhood interaction regresses —
+  **Mitigation**: assert initial populated map visibility, a maximum 30% desktop
+  list width, visible polygon hover/focus/selection/multi-selection states, and
+  explicit permission-gated Use location behavior.
 - **Rollback**: revert web rendering/helpers together; no schema/data rollback.
 
 ## Verification plan

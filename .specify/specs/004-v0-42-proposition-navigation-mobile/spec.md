@@ -1,16 +1,16 @@
-# Feature Specification: v0.42 proposition, navigation, and mobile discovery
+# Feature Specification: v0.42 proposition, navigation, and web discovery
 
 **Feature Branch**: `004-v0-42-proposition-navigation-mobile`  
 **Source release**: `doc/md/v0.4/release/release_v0.42.md`  
 **Requirements**: `doc/md/v0.4/BR-01.md`, `doc/md/v0.4/BR-02.md`, `doc/md/v0.4/BR-09.md`  
-**Status**: Ready for implementation  
+**Status**: Corrected product baseline
 **Date**: 2026-09-20
 
 ## Context and users
 
 MarqtPlaza currently has a usable Hague discovery flow, but its proposition, global
-navigation, and narrow-screen composition do not yet explain the global product
-vision or provide a complete, labelled, state-preserving mobile journey. The
+navigation, and discovery composition do not yet explain the global product
+vision or preserve the approved map-first desktop web journey. The
 current implementation is a Hague availability baseline, not evidence of global
 coverage. The primary user is a signed-out or signed-in resident or visitor
 discovering local places, events, food, social support, and community activity.
@@ -22,8 +22,11 @@ discovering local places, events, food, social support, and community activity.
 - A labelled, typed global navigation model shared by desktop and mobile.
 - Clear account and language entry points, current-page semantics, titles, headings,
   safe return paths, focus behavior, and browser history.
-- Mobile-first home, discovery list, filters/disclosures, detail, account detours,
-  explicit map opt-in, optional geolocation, and failure recovery.
+- Desktop-first web discovery with a populated map visible by default, a compact
+  list/filter column capped at 30% of the viewport, optional geolocation, and
+  provider-failure recovery.
+- Responsive checks that prevent breakage without redefining the desktop web
+  product direction.
 - Validated, public route state for supported discovery criteria.
 - Focused unit, integration, browser, responsive, accessibility, localization, and
   privacy tests.
@@ -43,12 +46,12 @@ discovering local places, events, food, social support, and community activity.
 
 The implementation MUST preserve:
 
-1. List-first discovery, with guest browsing and manual neighborhood selection
-   available without a map or geolocation.
+1. Map-first discovery, with populated markers/clusters and neighborhood
+   boundaries visible by default; the list remains available as a fallback.
 2. Local-only search as the fresh-session default; web results require explicit
    opt-in and remain visibly separated.
-3. Explicit map activation and explicit location activation; neither may run on
-   page load or as a search side effect.
+3. The map renders on page load. Location activation remains explicit and must
+   never run on page load or as a search side effect.
 4. Official neighborhood polygon filtering, stored/live/source lineage, unknown
    values, blocked/stale/empty distinctions, and existing trust caveats.
 5. Safe local account return paths via
@@ -64,13 +67,13 @@ The implementation MUST preserve:
 
 As a guest or account user, I want to understand what MarqtPlaza helps me
 discover, where it is currently available, and how local versus optional web
-results work, so that I can choose a useful search without a map or permission.
+results work, while retaining the primary map without granting location permission.
 
 **Independent acceptance**: Fresh English and Dutch homepages show one semantic
 `h1`, a location-independent benefit, a separate The Hague availability notice,
 one primary search action, local-only scope, and a keyboard-operable explanation.
-Search and manual neighborhood browsing work while map and geolocation requests
-remain absent.
+Search and manual neighborhood browsing work with the populated map visible;
+geolocation requests remain absent until explicitly requested.
 
 ### US2 — Navigate by labelled hierarchy (P1)
 
@@ -82,16 +85,17 @@ strings.
 set; mobile menu open/close/Escape/destination/focus restoration work; page title,
 `h1`, route, current state, Dutch/English labels, and safe account return agree.
 
-### US3 — Complete discovery on a phone (P1)
+### US3 — Use desktop web discovery with responsive safety (P1)
 
-As a consumer on a narrow or zoomed viewport, I want search, filters, results,
-details, map opt-in, location recovery, and account detours to remain usable so
-that the map is optional and state is not lost.
+As a consumer using the web app, I want the map to remain the primary discovery
+surface, filters and results to use a compact side column, and narrower or zoomed
+viewports not to break essential controls or lose state.
 
-**Independent acceptance**: At 320 CSS px through desktop there is no page-level
-horizontal overflow or clipped primary action. A fresh user can go list-to-detail
-without map/location access, apply/cancel filters, preserve criteria through
-Back/Forward, switch list/map, recover from errors, and use Dutch or English.
+**Independent acceptance**: At representative desktop widths, the list/filter
+column uses no more than 30% and the populated map uses the rest. A fresh user
+can use map and list together, apply filters, preserve criteria through
+Back/Forward, recover from provider or location errors, and use Dutch or English.
+Narrow viewports retain essential controls without becoming the product baseline.
 
 ## Functional requirements
 
@@ -105,8 +109,8 @@ Back/Forward, switch list/map, recover from errors, and use Dutch or English.
   or safety.
 - **FR-004 List independence**: Home, list search, and manual neighborhood browse
   must function without map SDK, map tiles, or geolocation.
-- **FR-005 Explicit activation**: Only a labelled Show map action starts map
-  loading; only a labelled Use my location action requests geolocation.
+- **FR-005 Map and location activation**: The populated map loads by default.
+  Only a labelled Use my location action requests geolocation.
 - **FR-006 Public route state**: Allow-list and normalize city, neighborhood,
   query, category, filters, scope, locale, and (only if useful) presentation.
   Bound length and reject unknown/malformed/duplicate values safely. Exclude
@@ -125,9 +129,10 @@ Back/Forward, switch list/map, recover from errors, and use Dutch or English.
 - **FR-010 Semantics**: Use header/nav/main/heading/list semantics, skip navigation,
   `aria-current`, visible focus, logical focus movement, and trigger restoration.
   Mobile menus/sheets must be dismissible, keyboard/touch operable, and scroll safe.
-- **FR-011 Responsive hierarchy**: Mobile DOM/order prioritizes proposition, query,
-  neighborhood/category entry, filters, result status/cards, and next actions.
-  Use progressive disclosure for secondary filters/source/privacy/detail content.
+- **FR-011 Web discovery hierarchy**: Desktop discovery reserves at least 70% of
+  the viewport for the map and no more than 30% for compact filters/results.
+  Narrow layouts may use disclosure to prevent breakage but must not redefine
+  the approved desktop product behavior.
 - **FR-012 Responsive resilience**: Preserve input above virtual keyboards and
   through portrait/landscape, 200–400% zoom, safe areas, reduced motion, touch
   targets, and map failure.
@@ -144,6 +149,14 @@ Back/Forward, switch list/map, recover from errors, and use Dutch or English.
   event IDs for explanation opened, search started, scope selected, map requested,
   navigation/menu outcomes; never send query text, coordinates, tokens, account
   IDs, or private preferences. If no approved analytics exists, do not invent one.
+- **FR-017 Neighborhood highlighting**: The homepage and discovery maps use the
+  official neighborhood polygon geometry as interactive regions. Pointer hover
+  and keyboard focus must produce a clearly visible fill/stroke highlight.
+  Selection must remain visibly highlighted after pointer exit, every selected
+  neighborhood must remain highlighted during multi-selection, and deselection
+  must restore the normal boundary state. Centroid circles, invisible hit areas,
+  or boundary-only styling with no perceptible state change do not satisfy this
+  requirement.
 
 ## Acceptance-criteria traceability
 
@@ -154,8 +167,8 @@ Back/Forward, switch list/map, recover from errors, and use Dutch or English.
 | AC-01 | Fresh EN/NL hero has global proposition, separate current availability, one primary action, and no Hague-only identity. |
 | AC-02 | Fresh storage shows local-only; explicit web opt-in is required. |
 | AC-03 | Explanation distinguishes local/web sources and evidence limits without unsupported claims. |
-| AC-04 | List/search/manual browse pass with map and geolocation blocked/not requested. |
-| AC-05 | Map network/import begins only after Show map. |
+| AC-04 | Map/search/manual browse pass with the populated map visible and geolocation not requested. |
+| AC-05 | Initial homepage and discovery render show the map, boundaries, and populated markers/clusters. |
 | AC-06 | Geolocation begins only after Use my location; denial leaves manual browse. |
 | AC-07 | URL round trip includes only validated public criteria and excludes sensitive state. |
 | AC-08 | Empty/error retain criteria and offer relevant recovery. |
@@ -175,30 +188,31 @@ Back/Forward, switch list/map, recover from errors, and use Dutch or English.
 | AC-05 | Mobile menu supports open, close, Escape, destination selection, and focus restoration. |
 | AC-06 | Language switch preserves validated criteria with no mixed new copy. |
 | AC-07 | Guest can reach search/neighborhood browse without sign-in. |
-| AC-08 | Map/location are separate labelled explicit actions. |
+| AC-08 | Map is visible by default; location remains a separate labelled explicit action. |
 | AC-09 | Public URLs are allow-listed and contain no sensitive state. |
 | AC-10 | Back/Forward restore route/criteria while menus stay closed. |
 | AC-11 | Route loading/empty/error/permission states retain global navigation. |
 | AC-12 | EN/NL desktop/mobile/200% checks meet WCAG target. |
 
-### BR-09 — Mobile-first experience
+### BR-09 — Desktop web discovery and responsive safety
 
 | Criterion | Required evidence |
 |---|---|
-| AC-01 | 320 CSS px through supported desktop has no page overflow/clipped primary action. |
-| AC-02 | Fresh list-to-detail works with map SDK/location blocked. |
-| AC-03 | No map SDK/tile/data request before Show map. |
+| AC-01 | Desktop list/filter width is at most 30%; the map owns at least 70%. |
+| AC-02 | Fresh discovery shows a populated map plus compact list results. |
+| AC-03 | Initial homepage and discovery render include map tiles/provider canvas, boundaries, and markers/clusters. |
 | AC-04 | Only Use my location requests permission; denial preserves manual alternative. |
 | AC-05 | Local-only default, explicit opt-in, source grouping. |
 | AC-06 | Validated criteria URL excludes coordinates/private/token state. |
-| AC-07 | Back/Forward, list/map, retry, sign-in cancel preserve criteria/context. |
+| AC-07 | Back/Forward, map/list interaction, retry, and sign-in cancel preserve criteria/context. |
 | AC-08 | Loading/empty/error/denied states are labelled, announced, recoverable. |
-| AC-09 | Focus remains logical and visible through menu/filter/results/map/dialog. |
-| AC-10 | 400% zoom and portrait/landscape remain usable except map panning. |
+| AC-09 | Focus remains logical and visible through navigation, filters, results, map, and dialogs. |
+| AC-10 | Zoom and narrow viewports retain essential controls without replacing the desktop map-first baseline. |
 | AC-11 | Guest browse/favorite explanation and safe account context work. |
 | AC-12 | All new mobile copy has EN/NL parity and correct Hague terminology. |
 | AC-13 | Current Hague-only availability is clear without unsupported coverage. |
 | AC-14 | Map failure leaves list discovery intact and actionable. |
+| AC-15 | Homepage and discovery neighborhood polygons visibly change on hover/focus, persist while selected, support simultaneous multi-selection highlights, and return to the normal state when deselected. |
 
 ## Data, contracts, and persistence
 

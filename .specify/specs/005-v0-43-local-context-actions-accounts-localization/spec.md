@@ -106,8 +106,12 @@ document language, mobile reflow, and no mixed-language frame.
 
 ## Functional requirements
 
-- **FR-001**: The system MUST keep local-only, list-first discovery as the fresh
-  default and require explicit actions for web scope, maps, and location.
+- **FR-001**: The system MUST keep local-only search scope as the fresh default
+  while preserving map-first discovery. The populated homepage and discovery
+  maps load by default; web scope and location remain explicit actions.
+- **FR-001A**: Official neighborhood polygons MUST visibly highlight on
+  hover/focus, remain highlighted while selected, support simultaneous visible
+  multi-selection, and return to the normal state when deselected.
 - **FR-002**: The system MUST parse and serialize only allowlisted public
   discovery criteria, including locale, and MUST exclude tokens, user IDs,
   private coordinates, session state and unsanitized return targets.

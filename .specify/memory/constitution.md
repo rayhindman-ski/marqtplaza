@@ -63,6 +63,18 @@ secrets. Prefer the smallest change that satisfies the specification. New
 dependencies, schema changes, new providers, or broad refactors require an
 explicit rationale in the plan.
 
+### VIII. Approved product behavior is a binding baseline
+
+Feature plans must start from the approved, working product behavior and may not
+silently reinterpret or replace it. Responsive, accessibility, privacy, or
+testing work may strengthen that baseline but does not authorize a different
+product direction. Any change from map-first to list-first, desktop-first to
+mobile-first, always-visible to opt-in, or an equivalent behavioral reversal
+requires an explicit user requirement recorded in the spec. When a new plan
+conflicts with an existing acceptance test, resolve the conflict against the
+approved product requirement; do not label the protection “stale” and rewrite
+the test merely to make the new plan pass.
+
 ## Required quality gates
 
 Before implementation:
@@ -93,6 +105,12 @@ update the constitution when the rule should apply to future work. A change to
 these principles requires a dated rationale, an impact review of active specs,
 and an explicit version increment.
 
-**Version**: 1.0.0  
+**Version**: 1.1.0
 **Ratified**: 2026-09-11  
-**Last Amended**: 2026-09-11
+**Last Amended**: 2026-09-21
+
+**Amendment rationale (1.1.0):** An agent-authored release plan introduced a
+mobile-first, list-first, opt-in-map direction without a user requirement and
+then weakened conflicting map regressions. Principle VIII makes the approved
+product baseline binding. Active v0.42 and v0.43 specs and plans were corrected
+to restore the desktop map-first contract and explicit neighborhood highlighting.

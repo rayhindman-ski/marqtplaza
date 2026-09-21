@@ -1,5 +1,12 @@
 # v0.43 convergence
 
+> **Superseded inherited map assumptions (corrected 2026-09-21):** Browser
+> evidence recorded here used the incorrect v0.42 list-first/explicit Show map
+> contract. It does not prove the current map-first product requirements.
+> Current convergence must verify initial populated map visibility, the desktop
+> 30/70 list-map proportion, and perceptible official-polygon
+> hover/focus/selected/multi-selected neighborhood highlighting.
+
 **Date:** 2026-09-20  
 **Branch:** `feature/v043-enhancements`  
 **Outcome:** Application implementation and browser gates pass; one pre-existing
