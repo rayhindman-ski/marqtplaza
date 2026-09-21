@@ -39,11 +39,6 @@ const neighborhoodEventUrls = [
 ];
 const eventTestUrls = [...scanEventUrls, ...neighborhoodEventUrls];
 const scanSourceIds = ["getyourguide", "denhaag-com", "wearetravelers", "flitz-events", "kidsproof"];
-const queryTriggerName = "listings_test_fail_google_query";
-const queryTriggerFunctionName = "listings_test_reject_google_query";
-const resultTriggerName = "listings_test_fail_google_result";
-const resultTriggerFunctionName = "listings_test_reject_google_result";
-let googleLoaderCalls = 0;
 let osmLoaderCalls = 0;
 const testLogger = pino({ enabled: false });
 
@@ -73,17 +68,6 @@ app.use((req, _res, next) => {
 
 app.use("/api", createListingsRouter({
   getUserId: () => null,
-  googlePlacesEnabled: true,
-  loadGooglePlaces: async () => {
-    googleLoaderCalls += 1;
-    return [{
-      ...osmListing,
-      id: "google-result-that-cannot-be-saved",
-      name: "Unsaved Google Shop",
-      source: "google_maps",
-      sourceName: "Google Maps",
-    }];
-  },
   loadOpenStreetMapBusinesses: async () => {
     osmLoaderCalls += 1;
     return [osmListing];
@@ -135,7 +119,7 @@ async function storeListingSnapshot({
   fetchedAt,
 }: {
   anonymousId: string;
-  provider: "google_places" | "openstreetmap";
+  provider: "openstreetmap";
   section: "businesses" | "food-drink";
   listing: Listing;
   fetchedAt: Date;
@@ -188,24 +172,6 @@ describe("listings route integration (isolated database integration)", () => {
   before(async () => {
     await cleanTestRows();
     await cleanEventRows();
-    await pool.query(`
-      create or replace function ${queryTriggerFunctionName}()
-      returns trigger language plpgsql as $$
-      begin
-        if new.provider = 'google_places' then
-          raise exception 'forced google query persistence failure';
-        end if;
-        return new;
-      end;
-      $$;
-    `);
-    await pool.query(`drop trigger if exists ${queryTriggerName} on "external-queries"`);
-    await pool.query(`
-      create trigger ${queryTriggerName}
-      before insert on "external-queries"
-      for each row execute function ${queryTriggerFunctionName}()
-    `);
-
     await new Promise<void>((resolve) => {
       server = app.listen(0, "127.0.0.1", () => resolve());
     });
@@ -213,10 +179,6 @@ describe("listings route integration (isolated database integration)", () => {
   });
 
   after(async () => {
-    await pool.query(`drop trigger if exists ${queryTriggerName} on "external-queries"`);
-    await pool.query(`drop trigger if exists ${resultTriggerName} on "external-results"`);
-    await pool.query(`drop function if exists ${queryTriggerFunctionName}()`);
-    await pool.query(`drop function if exists ${resultTriggerFunctionName}()`);
     globalThis.fetch = originalFetch;
     await cleanEventRows();
     await cleanTestRows();
@@ -226,12 +188,12 @@ describe("listings route integration (isolated database integration)", () => {
     await pool.end();
   });
 
-  it("returns successful provider listings and finalizes the parent query as partial", async () => {
+  it("returns OpenStreetMap listings and finalizes the parent query", async () => {
     const result = await requestListings(anonymousIds[0], "live");
     assert.equal(result.status, 200);
     assert.equal(result.body.scopeGroup, "web");
-    assert.equal(result.body.groupStatus, "partial");
-    assert.equal(result.body.partial, true);
+    assert.equal(result.body.groupStatus, "success");
+    assert.equal(result.body.partial, false);
     assert.deepEqual(result.body.providers, ["openstreetmap"]);
     assert.equal(result.body.listings.some((listing: { name?: string }) =>
       listing.name === "Reliable Local Shop"), true);
@@ -239,83 +201,20 @@ describe("listings route integration (isolated database integration)", () => {
       listing.name === "Reliable Local Shop");
     assert.equal(reliableShop.evidence.some((item: { field?: string; status?: string }) =>
       item.field === "name" && item.status === "unknown"), true);
-    assert.equal(googleLoaderCalls, 0);
     assert.equal(osmLoaderCalls, 1);
 
     const [query] = await db.select({
       status: userQueriesTable.status,
       completedAt: userQueriesTable.completedAt,
     }).from(userQueriesTable).where(eq(userQueriesTable.id, result.body.queryId));
-    assert.equal(query?.status, "partial");
+    assert.equal(query?.status, "succeeded");
     assert.ok(query?.completedAt);
   });
 
-  it("keeps successful listings when another provider's result cannot be saved", async () => {
-    await pool.query(`drop trigger if exists ${queryTriggerName} on "external-queries"`);
-    await pool.query(`
-      create or replace function ${resultTriggerFunctionName}()
-      returns trigger language plpgsql as $$
-      begin
-        if new.provider = 'google_places' then
-          raise exception 'forced google result persistence failure';
-        end if;
-        return new;
-      end;
-      $$;
-    `);
-    await pool.query(`drop trigger if exists ${resultTriggerName} on "external-results"`);
-    await pool.query(`
-      create trigger ${resultTriggerName}
-      before insert on "external-results"
-      for each row execute function ${resultTriggerFunctionName}()
-    `);
-
-    const result = await requestListings(anonymousIds[1], "live");
-    assert.equal(result.status, 200);
-    assert.equal(result.body.partial, true);
-    assert.deepEqual(result.body.providers, ["openstreetmap"]);
-    assert.equal(result.body.listings.some((listing: { name?: string }) =>
-      listing.name === "Reliable Local Shop"), true);
-    assert.equal(result.body.listings.some((listing: { name?: string }) =>
-      listing.name === "Unsaved Google Shop"), false);
-    assert.equal(googleLoaderCalls, 1);
-    assert.equal(osmLoaderCalls, 2);
-
-    const [query] = await db.select({
-      status: userQueriesTable.status,
-      completedAt: userQueriesTable.completedAt,
-    }).from(userQueriesTable).where(eq(userQueriesTable.id, result.body.queryId));
-    assert.equal(query?.status, "partial");
-    assert.ok(query?.completedAt);
-
-    const [failedExternalQuery] = await db.select({
-      status: externalQueriesTable.status,
-      error: externalQueriesTable.error,
-      completedAt: externalQueriesTable.completedAt,
-    }).from(externalQueriesTable).where(and(
-      eq(externalQueriesTable.userQueryId, result.body.queryId),
-      eq(externalQueriesTable.provider, "google_places"),
-    ));
-    assert.equal(failedExternalQuery?.status, "failed");
-    assert.ok(failedExternalQuery?.error);
-    assert.ok(failedExternalQuery?.completedAt);
-    await pool.query(`drop trigger if exists ${resultTriggerName} on "external-results"`);
-  });
-
-  it("opens the newest stored Google and OSM listing snapshots without live discovery", async () => {
+  it("opens the newest stored OpenStreetMap listing snapshot without live discovery", async () => {
     const olderAt = new Date("2026-01-01T10:00:00.000Z");
     const newerAt = new Date("2026-01-02T10:00:00.000Z");
-    const googleId = `${runId}-google-place`;
     const osmId = `osm-${runId}`;
-    const olderGoogle: Listing = {
-      ...osmListing,
-      id: googleId,
-      category: "Businesses",
-      name: "Older Google Business",
-      source: "google_maps",
-      sourceName: "Google Maps",
-    };
-    const newerGoogle: Listing = { ...olderGoogle, name: "Newest Google Business" };
     const olderOsm: Listing = {
       ...osmListing,
       id: osmId,
@@ -325,20 +224,6 @@ describe("listings route integration (isolated database integration)", () => {
     };
     const newerOsm: Listing = { ...olderOsm, name: "Newest OSM Restaurant" };
 
-    await storeListingSnapshot({
-      anonymousId: anonymousIds[4],
-      provider: "google_places",
-      section: "businesses",
-      listing: olderGoogle,
-      fetchedAt: olderAt,
-    });
-    await storeListingSnapshot({
-      anonymousId: anonymousIds[5],
-      provider: "google_places",
-      section: "businesses",
-      listing: newerGoogle,
-      fetchedAt: newerAt,
-    });
     await storeListingSnapshot({
       anonymousId: anonymousIds[6],
       provider: "openstreetmap",
@@ -354,31 +239,23 @@ describe("listings route integration (isolated database integration)", () => {
       fetchedAt: newerAt,
     });
 
-    const googleCallsBefore = googleLoaderCalls;
     const osmCallsBefore = osmLoaderCalls;
-    const [googleResponse, osmResponse, missingResponse] = await Promise.all([
-      fetch(`${baseUrl}/api/listing?cityId=dhg&section=businesses&language=en&listingId=${encodeURIComponent(googleId)}`),
+    const [osmResponse, missingResponse] = await Promise.all([
       fetch(`${baseUrl}/api/listing?cityId=dhg&section=food-drink&language=en&listingId=${encodeURIComponent(osmId)}`),
       fetch(`${baseUrl}/api/listing?cityId=dhg&section=businesses&language=en&listingId=${runId}-missing`),
     ]);
-    const googleBody = await googleResponse.json() as { listing: Listing; source: string };
     const osmBody = await osmResponse.json() as { listing: Listing; source: string };
     const missingBody = await missingResponse.json() as { message: string };
 
-    assert.equal(googleResponse.status, 200);
-    assert.equal(googleBody.listing.name, "Newest Google Business");
-    assert.equal(googleBody.source, "stored");
     assert.equal(osmResponse.status, 200);
     assert.equal(osmBody.listing.name, "Newest OSM Restaurant");
     assert.equal(osmBody.source, "stored");
     assert.equal(missingResponse.status, 404);
     assert.equal(missingBody.message, "This stored listing was not found.");
-    assert.equal(googleLoaderCalls, googleCallsBefore);
     assert.equal(osmLoaderCalls, osmCallsBefore);
   });
 
   it("never invokes provider loaders for a stored-only cache miss and still returns 200", async () => {
-    const googleCallsBefore = googleLoaderCalls;
     const osmCallsBefore = osmLoaderCalls;
     const result = await requestListings(anonymousIds[2], "stored_only");
     assert.equal(result.status, 200);
@@ -387,7 +264,6 @@ describe("listings route integration (isolated database integration)", () => {
     assert.equal(result.body.cacheMiss, true);
     assert.equal(result.body.cacheHit, false);
     assert.deepEqual(result.body.listings, []);
-    assert.equal(googleLoaderCalls, googleCallsBefore);
     assert.equal(osmLoaderCalls, osmCallsBefore);
   });
 

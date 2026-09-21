@@ -288,7 +288,7 @@ describe("listings query persistence inputs", () => {
     assert.deepEqual(listings.map((listing) => listing.name), ["Theresiastraat Beauty"]);
   });
 
-  it("keeps the closest neighborhood businesses when a targeted category exceeds the cap", () => {
+  it("keeps every matching neighborhood business without a provider-derived cap", () => {
     const distantBeauty = Array.from({ length: 200 }, (_, index) => ({
       id: index + 1,
       lat: 52.04,
@@ -322,7 +322,7 @@ describe("listings query persistence inputs", () => {
       ["Beauty & Personal Care"],
       { lat: 52.089, lng: 4.337 },
     );
-    assert.equal(listings.length, 200);
+    assert.equal(listings.length, 201);
     assert.ok(listings.some((listing) => listing.name === "Nearby Theresiastraat Beauty"));
   });
 });

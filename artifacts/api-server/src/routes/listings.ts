@@ -8,7 +8,6 @@ import {
   externalQueriesTable,
   externalResultListingsTable,
   externalResultsTable,
-  providerUsageTable,
   pool,
   type DiscoveredEvent,
   userQueriesTable,
@@ -631,157 +630,7 @@ function hasHagueEvidence(address: string): boolean {
   return /\bden haag\b|\bthe hague\b|\bscheveningen\b|\bs?-?gravenhage\b|\b(?:25\d{2}|249\d)\s?[a-z]{2}\b/i.test(address);
 }
 
-type GooglePlace = {
-  id?: string;
-  displayName?: { text?: string };
-  formattedAddress?: string;
-  location?: { latitude?: number; longitude?: number };
-  primaryTypeDisplayName?: { text?: string };
-  primaryType?: string;
-  googleMapsUri?: string;
-  websiteUri?: string;
-  rating?: number;
-  userRatingCount?: number;
-  regularOpeningHours?: { weekdayDescriptions?: string[] };
-  currentOpeningHours?: { openNow?: boolean };
-};
-
-type GooglePlacesResponse = { places?: GooglePlace[]; nextPageToken?: string };
-
-const GOOGLE_TYPE_TO_BUSINESS_CATEGORY: Record<string, BusinessCategory> = {
-  restaurant: "Food & Drink",
-  cafe: "Food & Drink",
-  bar: "Food & Drink",
-  bakery: "Food & Drink",
-  meal_takeaway: "Food & Drink",
-  meal_delivery: "Food & Drink",
-  food: "Food & Drink",
-  store: "Retail & Shopping",
-  shopping_mall: "Retail & Shopping",
-  clothing_store: "Retail & Shopping",
-  convenience_store: "Retail & Shopping",
-  department_store: "Retail & Shopping",
-  electronics_store: "Retail & Shopping",
-  furniture_store: "Retail & Shopping",
-  hardware_store: "Retail & Shopping",
-  home_goods_store: "Retail & Shopping",
-  jewelry_store: "Retail & Shopping",
-  book_store: "Retail & Shopping",
-  pet_store: "Retail & Shopping",
-  pharmacy: "Health & Wellness",
-  doctor: "Health & Wellness",
-  dentist: "Health & Wellness",
-  hospital: "Health & Wellness",
-  physiotherapist: "Health & Wellness",
-  beauty_salon: "Beauty & Personal Care",
-  barber_shop: "Beauty & Personal Care",
-  hair_care: "Beauty & Personal Care",
-  spa: "Beauty & Personal Care",
-  lawyer: "Finance & Legal",
-  accounting: "Finance & Legal",
-  bank: "Finance & Legal",
-  insurance_agency: "Finance & Legal",
-  real_estate_agency: "Finance & Legal",
-  electrician: "Home & Repair",
-  plumber: "Home & Repair",
-  locksmith: "Home & Repair",
-  roofing_contractor: "Home & Repair",
-  general_contractor: "Home & Repair",
-  painter: "Home & Repair",
-  car_dealer: "Automotive & Mobility",
-  car_repair: "Automotive & Mobility",
-  car_wash: "Automotive & Mobility",
-  car_rental: "Automotive & Mobility",
-  gas_station: "Automotive & Mobility",
-  parking: "Automotive & Mobility",
-  school: "Education & Childcare",
-  primary_school: "Education & Childcare",
-  secondary_school: "Education & Childcare",
-  university: "Education & Childcare",
-  preschool: "Education & Childcare",
-  child_care_agency: "Education & Childcare",
-  hotel: "Hospitality & Travel",
-  lodging: "Hospitality & Travel",
-  hostel: "Hospitality & Travel",
-  travel_agency: "Hospitality & Travel",
-  museum: "Arts, Culture & Entertainment",
-  art_gallery: "Arts, Culture & Entertainment",
-  movie_theater: "Arts, Culture & Entertainment",
-  performing_arts_theater: "Arts, Culture & Entertainment",
-  theater: "Arts, Culture & Entertainment",
-  night_club: "Arts, Culture & Entertainment",
-  tourist_attraction: "Arts, Culture & Entertainment",
-  gym: "Fitness & Sports",
-  fitness_center: "Fitness & Sports",
-  sports_club: "Fitness & Sports",
-  sports_activity_location: "Fitness & Sports",
-  stadium: "Fitness & Sports",
-};
-
-const GOOGLE_FOOD_PLACE_TYPES = new Set([
-  "bakery",
-  "bar",
-  "cafe",
-  "cafeteria",
-  "coffee_shop",
-  "dessert_shop",
-  "fast_food_restaurant",
-  "food",
-  "ice_cream_shop",
-  "meal_delivery",
-  "meal_takeaway",
-  "pizza_restaurant",
-  "pub",
-  "restaurant",
-  "tea_house",
-  "wine_bar",
-]);
-
-function isFoodGooglePlace(place: GooglePlace): boolean {
-  const primaryType = place.primaryType?.toLowerCase();
-  return Boolean(
-    primaryType
-    && (GOOGLE_FOOD_PLACE_TYPES.has(primaryType) || primaryType.endsWith("_restaurant")),
-  );
-}
-
-export function foodTypeForGooglePrimaryType(primaryType: string | undefined): FoodType {
-  const type = primaryType?.toLowerCase();
-  if (!type) return "other";
-  if (type === "cafe" || type === "cafeteria" || type === "coffee_shop" || type === "tea_house") return "cafe";
-  if (type === "bar" || type === "pub" || type === "wine_bar" || type === "night_club") return "bar";
-  if (type === "bakery" || type === "dessert_shop" || type === "ice_cream_shop") return "bakery";
-  if (type === "meal_takeaway" || type === "meal_delivery" || type === "fast_food_restaurant") return "takeaway";
-  if (type === "restaurant" || type.endsWith("_restaurant")) return "restaurant";
-  return "other";
-}
-
-function businessCategoryForGooglePlace(
-  place: GooglePlace,
-  section: Exclude<ListingSection, "events" | "social-map">,
-): BusinessCategory {
-  if (section === "food-drink") return "Food & Drink";
-  const primaryType = place.primaryType?.toLowerCase();
-  if (isFoodGooglePlace(place)) return "Food & Drink";
-  if (primaryType) {
-    const mappedCategory = GOOGLE_TYPE_TO_BUSINESS_CATEGORY[primaryType];
-    if (mappedCategory) return mappedCategory;
-  }
-  return "Professional Services";
-}
-
-const GOOGLE_PLACES_URL = "https://places.googleapis.com/v1/places:searchText";
-const GOOGLE_PLACES_TIMEOUT_MS = 12_000;
-const GOOGLE_PLACES_MAX_RESULTS = 200;
-const GOOGLE_PLACES_MAX_PAGES_PER_SEARCH = 3;
-const GOOGLE_PLACES_CONCURRENCY = 6;
-const GOOGLE_PLACES_CACHE_TTL_MS = 15 * 60 * 1000;
-const GOOGLE_PLACES_QUERIES_ENABLED = false;
-const OPEN_STREET_MAP_RESULT_RESERVE = 0.25;
-const googlePlacesCache = new Map<string, { expiresAt: number; listings: Listing[] }>();
-const googlePlacesRequests = new Map<string, Promise<Listing[]>>();
-let activeGoogleRequests = 0;
-const queuedGoogleRequests: Array<() => void> = [];
+const OPEN_STREET_MAP_CACHE_TTL_MS = 15 * 60 * 1000;
 const overpassCache = new Map<string, { expiresAt: number; elements: OsmElement[] }>();
 const overpassRequests = new Map<string, Promise<OsmElement[]>>();
 
@@ -822,161 +671,11 @@ export function resolveSearchArea(
     neighborhoods: neighborhoods.filter((name) => getNeighborhoodsBoundingBox([name])),
   };
 }
-type GoogleSearchSpec = { textQuery: string; bounds: GeographicBounds };
-
 function distanceFromSearchCenterSquared(lat: number, lng: number, center: SearchCenter): number {
   const latitudeScale = Math.cos(center.lat * Math.PI / 180);
   const latitudeDelta = lat - center.lat;
   const longitudeDelta = (lng - center.lng) * latitudeScale;
   return latitudeDelta ** 2 + longitudeDelta ** 2;
-}
-
-// Text Search is ranked and query-scoped, so one city-wide query systematically
-// misses smaller businesses. These overlapping cells give every part of The
-// Hague a chance to rank for each relevant business group while the final
-// bounds/evidence checks remain the source of truth.
-const HAGUE_DISCOVERY_AREAS: GeographicBounds[] = [
-  // Two rows by three columns. Adjacent cells overlap so ranked results near
-  // a cell edge get another opportunity without making the search unbounded.
-  { s: 52.025, w: 4.235, n: 52.077, e: 4.31 },
-  { s: 52.025, w: 4.295, n: 52.077, e: 4.375 },
-  { s: 52.025, w: 4.36, n: 52.077, e: 4.42 },
-  { s: 52.073, w: 4.235, n: 52.125, e: 4.31 },
-  { s: 52.073, w: 4.295, n: 52.125, e: 4.375 },
-  { s: 52.073, w: 4.36, n: 52.125, e: 4.42 },
-];
-
-const GOOGLE_SEARCH_TERMS: Record<Exclude<ListingSection, "events" | "social-map">, string[]> = {
-  businesses: [
-    "winkels en retail in Den Haag Nederland",
-    "kleding schoenen juweliers en boekhandels in Den Haag",
-    "elektronica meubels en woonwinkels in Den Haag",
-    "supermarkten en speciaalzaken in Den Haag",
-    "zorg huisartsen tandartsen en apotheken in Den Haag",
-    "kappers schoonheidssalons en spa's in Den Haag",
-    "professionele diensten kantoren en consultants in Den Haag",
-    "advocaten accountants banken verzekeringen en makelaars in Den Haag",
-    "klusbedrijven loodgieters elektriciens en reparatie in Den Haag",
-    "autogarages fietsenwinkels en mobiliteit in Den Haag",
-    "scholen kinderopvang en onderwijs in Den Haag",
-    "hotels hostels reisbureaus en toerisme in Den Haag",
-    "kunst cultuur theaters bioscopen en musea in Den Haag",
-    "sportscholen fitness en sportclubs in Den Haag",
-  ],
-  "food-drink": [
-    "restaurants en eetcafes in Den Haag Nederland",
-    "koffiebars lunchrooms en brunch in Den Haag",
-    "bars pubs en nachtleven in Den Haag",
-    "bakkerijen patisserieen en chocolatiers in Den Haag",
-    "afhaalrestaurants bezorging en fastfood in Den Haag",
-    "ijssalons en dessertzaken in Den Haag",
-    "vegan vegetarische en internationale horeca in Den Haag",
-  ],
-};
-
-const GOOGLE_BUSINESS_CATEGORY_SEARCH_TERMS: Record<Exclude<BusinessCategory, "Food & Drink">, string[]> = {
-  "Retail & Shopping": ["winkels retail en speciaalzaken in Den Haag Nederland"],
-  "Health & Wellness": ["zorg huisartsen tandartsen apotheken en opticiens in Den Haag"],
-  "Beauty & Personal Care": ["kappers barbiers schoonheidssalons nagelstudio's parfumerie en spa's in Den Haag"],
-  "Professional Services": ["professionele diensten kantoren en consultants in Den Haag"],
-  "Finance & Legal": ["advocaten accountants banken verzekeringen notarissen en makelaars in Den Haag"],
-  "Home & Repair": ["klusbedrijven loodgieters elektriciens en reparatie in Den Haag"],
-  "Automotive & Mobility": ["autogarages fietsenwinkels en mobiliteit in Den Haag"],
-  "Education & Childcare": ["scholen kinderopvang en onderwijs in Den Haag"],
-  "Hospitality & Travel": ["hotels hostels reisbureaus en toerisme in Den Haag"],
-  "Arts, Culture & Entertainment": ["kunst cultuur theaters bioscopen en musea in Den Haag"],
-  "Fitness & Sports": ["sportscholen fitness en sportclubs in Den Haag"],
-};
-
-function googleSearchSpecs(
-  section: Exclude<ListingSection, "events" | "social-map">,
-  neighborhoods: string[] = [],
-  businessCategories: BusinessCategory[] = [],
-): GoogleSearchSpec[] {
-  const baseTerms = section === "businesses" && businessCategories.length > 0
-    ? businessCategories
-      .filter((category): category is Exclude<BusinessCategory, "Food & Drink"> => category !== "Food & Drink")
-      .flatMap((category) => GOOGLE_BUSINESS_CATEGORY_SEARCH_TERMS[category])
-    : GOOGLE_SEARCH_TERMS[section];
-  const terms = neighborhoods.length > 0
-    ? neighborhoods.flatMap((neighborhood) =>
-      baseTerms.map((term) => `${term} nabij ${neighborhood}`),
-    )
-    : baseTerms;
-  return HAGUE_DISCOVERY_AREAS.flatMap((area) =>
-    terms.map((term) => ({
-      textQuery: term,
-      bounds: area,
-    })),
-  );
-}
-
-function googlePlaceDescription(place: GooglePlace, section: Exclude<ListingSection, "events" | "social-map">): string {
-  const type = place.primaryTypeDisplayName?.text
-    ?? place.primaryType?.replace(/_/g, " ")
-    ?? (section === "food-drink" ? "Food & drink" : "Local business");
-  return `${cap(type)} in Den Haag`;
-}
-
-function googlePlaceDetails(place: GooglePlace): string {
-  const parts = [place.formattedAddress];
-  if (typeof place.rating === "number") {
-    parts.push(`${place.rating.toFixed(1)}★${place.userRatingCount ? ` (${place.userRatingCount} reviews)` : ""}`);
-  }
-  const opening = place.regularOpeningHours?.weekdayDescriptions?.[0];
-  if (opening) parts.push(opening);
-  return parts.filter(Boolean).join(" · ");
-}
-
-function googlePlaceUrl(place: GooglePlace): string | undefined {
-  if (place.googleMapsUri) return place.googleMapsUri;
-  if (place.websiteUri) return place.websiteUri;
-  return place.id
-    ? `https://www.google.com/maps/search/?api=1&query=Google&query_place_id=${encodeURIComponent(place.id)}`
-    : undefined;
-}
-
-async function withGoogleRequestSlot<T>(operation: () => Promise<T>): Promise<T> {
-  await new Promise<void>((resolve) => {
-    const grant = () => {
-      activeGoogleRequests += 1;
-      resolve();
-    };
-    if (activeGoogleRequests < GOOGLE_PLACES_CONCURRENCY) {
-      grant();
-    } else {
-      queuedGoogleRequests.push(grant);
-    }
-  });
-  try {
-    return await operation();
-  } finally {
-    activeGoogleRequests -= 1;
-    queuedGoogleRequests.shift()?.();
-  }
-}
-
-async function fetchGooglePlaces(
-  bounds: { s: number; w: number; n: number; e: number },
-  section: Exclude<ListingSection, "events" | "social-map">,
-  neighborhoods: string[] = [],
-  businessCategories: BusinessCategory[] = [],
-): Promise<Listing[]> {
-  const cacheKey = `${section}:${neighborhoods.slice().sort().join("|")}:${businessCategories.slice().sort().join("|")}`;
-  const cached = googlePlacesCache.get(cacheKey);
-  if (cached && cached.expiresAt > Date.now()) return cached.listings;
-  const inFlight = googlePlacesRequests.get(cacheKey);
-  if (inFlight) return inFlight;
-
-  const request = collectGooglePlaces(bounds, section, neighborhoods, businessCategories);
-  googlePlacesRequests.set(cacheKey, request);
-  try {
-    const listings = await request;
-    googlePlacesCache.set(cacheKey, { expiresAt: Date.now() + GOOGLE_PLACES_CACHE_TTL_MS, listings });
-    return listings;
-  } finally {
-    googlePlacesRequests.delete(cacheKey);
-  }
 }
 
 export async function resolveClaimableBusinessListing(
@@ -987,21 +686,6 @@ export async function resolveClaimableBusinessListing(
   if (cityId !== "dhg") return null;
   const bounds = CITY_BOUNDS[cityId];
   if (!bounds) return null;
-
-  if (listingSource === "google_maps") {
-    if (!GOOGLE_PLACES_QUERIES_ENABLED) return null;
-    const results = await Promise.allSettled([
-      fetchGooglePlaces(bounds, "businesses"),
-      fetchGooglePlaces(bounds, "food-drink"),
-    ]);
-    const listings = results.flatMap((result) =>
-      result.status === "fulfilled" ? result.value : [],
-    );
-    if (listings.length === 0) {
-      throw new Error("Google Places did not return claimable business listings.");
-    }
-    return listings.find((listing) => listing.id === listingId) ?? null;
-  }
 
   if (listingSource === "openstreetmap") {
     const elements = await fetchCityListings(bounds);
@@ -1015,145 +699,6 @@ export async function resolveClaimableBusinessListing(
   return null;
 }
 
-async function collectGooglePlaces(
-  bounds: { s: number; w: number; n: number; e: number },
-  section: Exclude<ListingSection, "events" | "social-map">,
-  neighborhoods: string[] = [],
-  businessCategories: BusinessCategory[] = [],
-): Promise<Listing[]> {
-  const apiKey = process.env.GOOGLE_MAPS_API_KEY;
-  if (!apiKey) return [];
-
-  const seen = new Set<string>();
-  const searches = googleSearchSpecs(section, neighborhoods, businessCategories);
-  const selectedBusinessCategories = new Set(businessCategories);
-  const resultsBySearch = searches.map((): Listing[] => []);
-  let nextSearchIndex = 0;
-  const worker = async () => {
-    while (true) {
-      const searchIndex = nextSearchIndex++;
-      if (searchIndex >= searches.length) return;
-      const search = searches[searchIndex];
-      const searchResults = resultsBySearch[searchIndex];
-      let pageToken: string | undefined;
-      for (let page = 0; page < GOOGLE_PLACES_MAX_PAGES_PER_SEARCH; page += 1) {
-        await reserveGooglePlacesRequest();
-        const response = await withGoogleRequestSlot(() => fetch(GOOGLE_PLACES_URL, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "X-Goog-Api-Key": apiKey,
-            "X-Goog-FieldMask": [
-              "places.id",
-              "places.displayName",
-              "places.formattedAddress",
-              "places.location",
-              "places.primaryType",
-              "places.primaryTypeDisplayName",
-              "places.googleMapsUri",
-              "places.websiteUri",
-              "places.rating",
-              "places.userRatingCount",
-              "places.regularOpeningHours.weekdayDescriptions",
-              "places.currentOpeningHours.openNow",
-              "nextPageToken",
-            ].join(","),
-          },
-          body: JSON.stringify({
-            textQuery: search.textQuery,
-            languageCode: "nl",
-            regionCode: "NL",
-            pageSize: 20,
-            ...(pageToken ? { pageToken } : {}),
-            locationBias: {
-              rectangle: {
-                low: { latitude: search.bounds.s, longitude: search.bounds.w },
-                high: { latitude: search.bounds.n, longitude: search.bounds.e },
-              },
-            },
-          }),
-          signal: AbortSignal.timeout(GOOGLE_PLACES_TIMEOUT_MS),
-        }));
-        if (!response.ok) {
-          throw new Error(`Google Places HTTP ${response.status}`);
-        }
-
-        const data = (await response.json()) as GooglePlacesResponse;
-        for (const place of data.places ?? []) {
-          const name = place.displayName?.text?.trim();
-          const address = place.formattedAddress?.trim();
-          const lat = place.location?.latitude;
-          const lng = place.location?.longitude;
-          if (!name || !address || typeof lat !== "number" || typeof lng !== "number") continue;
-          if (!isInHagueBounds(lat, lng) || !hasHagueEvidence(address)) continue;
-           if (section === "food-drink" && place.primaryType && !isFoodGooglePlace(place)) continue;
-           const businessCategory = businessCategoryForGooglePlace(place, section);
-           if (section === "businesses" && businessCategory === "Food & Drink") continue;
-           if (
-             section === "businesses"
-             && selectedBusinessCategories.size > 0
-             && !selectedBusinessCategories.has(businessCategory)
-           ) continue;
-
-           const providerKey = place.id ? `id:${place.id}` : undefined;
-           const nameAddressKey = `place:${normalizedTitle(name)}|${normalizedAddress(address)}`;
-           if ((providerKey && seen.has(providerKey)) || seen.has(nameAddressKey)) continue;
-           if (providerKey) seen.add(providerKey);
-           seen.add(nameAddressKey);
-          const { x, y } = toXY(lat, lng, bounds);
-          searchResults.push({
-             id: `google-${section}-${place.id ?? normalizedTitle(name).replace(/\s+/g, "-")}`,
-            locationId: "dhg",
-            category: section === "food-drink" ? "Food & Drink" : "Businesses",
-             businessCategory,
-             ...(businessCategory === "Food & Drink"
-               ? { foodType: foodTypeForGooglePrimaryType(place.primaryType) }
-               : {}),
-            name,
-             address,
-            description: googlePlaceDescription(place, section),
-            x,
-            y,
-            details: googlePlaceDetails(place),
-            lat,
-            lng,
-            sourceUrl: googlePlaceUrl(place),
-            source: "google_maps",
-            sourceName: "Google Maps",
-             openNow: place.currentOpeningHours?.openNow ?? null,
-          });
-        }
-        if (!data.nextPageToken) break;
-        pageToken = data.nextPageToken;
-      }
-    }
-  };
-
-  const workerResults = await Promise.allSettled(
-    Array.from({ length: Math.min(GOOGLE_PLACES_CONCURRENCY, searches.length) }, () => worker()),
-  );
-  const results: Listing[] = [];
-  for (let resultIndex = 0; results.length < GOOGLE_PLACES_MAX_RESULTS; resultIndex += 1) {
-    let foundResult = false;
-    for (const searchResults of resultsBySearch) {
-      const result = searchResults[resultIndex];
-      if (!result) continue;
-      results.push(result);
-      foundResult = true;
-      if (results.length >= GOOGLE_PLACES_MAX_RESULTS) break;
-    }
-    if (!foundResult) break;
-  }
-  if (results.length === 0) {
-    const failure = workerResults.find(
-      (result): result is PromiseRejectedResult => result.status === "rejected",
-    );
-    if (failure) throw failure.reason;
-  }
-
-  return results;
-}
-
 function listingDedupeKey(listing: Pick<Listing, "name" | "address" | "lat" | "lng">): string {
   if (listing.address) {
     return `${normalizedTitle(listing.name)}|${normalizedAddress(listing.address)}`;
@@ -1163,39 +708,16 @@ function listingDedupeKey(listing: Pick<Listing, "name" | "address" | "lat" | "l
   return `${normalizedTitle(listing.name)}|${Math.round(listing.lat * 1000)}|${Math.round(listing.lng * 1000)}`;
 }
 
-function mergeBusinessListings(
-  googleListings: Listing[],
-  osmListings: Listing[],
-): { listings: Listing[]; osmAdded: number } {
+function dedupeBusinessListings(listingsToMerge: Listing[]): Listing[] {
   const listings: Listing[] = [];
   const seen = new Set<string>();
-  const addListing = (listing: Listing): boolean => {
+  for (const listing of listingsToMerge) {
     const key = listingDedupeKey(listing);
-    if (seen.has(key)) return false;
+    if (seen.has(key)) continue;
     seen.add(key);
     listings.push(listing);
-    return true;
-  };
-  const reservedForOsm = Math.min(
-    osmListings.length,
-    Math.ceil(GOOGLE_PLACES_MAX_RESULTS * OPEN_STREET_MAP_RESULT_RESERVE),
-  );
-  const preferredGoogleCount = Math.max(0, GOOGLE_PLACES_MAX_RESULTS - reservedForOsm);
-  for (const listing of googleListings.slice(0, preferredGoogleCount)) addListing(listing);
-
-  let osmAdded = 0;
-  for (const listing of osmListings) {
-    if (listings.length >= GOOGLE_PLACES_MAX_RESULTS) break;
-    if (addListing(listing)) osmAdded += 1;
   }
-  for (const listing of googleListings.slice(preferredGoogleCount)) {
-    if (listings.length >= GOOGLE_PLACES_MAX_RESULTS) break;
-    addListing(listing);
-  }
-  return {
-    listings,
-    osmAdded,
-  };
+  return listings;
 }
 
 function businessCategoryForOsmTags(
@@ -1424,7 +946,7 @@ export function fetchOpenStreetMapBusinesses(
       - distanceFromSearchCenterSquared(b.lat, b.lng, searchCenter),
     );
   }
-  return listings.slice(0, GOOGLE_PLACES_MAX_RESULTS);
+  return listings;
 }
 
 export interface OsmElement {
@@ -1462,24 +984,8 @@ interface OsmResponse {
   }>;
 }
 
-const GOOGLE_PLACES_LIFETIME_LIMIT = 100;
 const OVERPASS_MIN_INTERVAL_MS = 2_000;
 const PROVIDER_MAX_ATTEMPTS = 3;
-
-export async function reserveGooglePlacesRequest(): Promise<void> {
-  const reserved = await db.execute(sql`
-    insert into ${providerUsageTable} (provider, request_count, updated_at)
-    values ('google_places', 1, now())
-    on conflict (provider) do update
-      set request_count = ${providerUsageTable.requestCount} + 1,
-          updated_at = now()
-      where ${providerUsageTable.requestCount} < ${GOOGLE_PLACES_LIFETIME_LIMIT}
-    returning request_count
-  `);
-  if (reserved.rows.length === 0) {
-    throw new Error(`Google Places permanent request allowance of ${GOOGLE_PLACES_LIFETIME_LIMIT} is exhausted.`);
-  }
-}
 
 export function retryDelayMs(attempt: number, retryAfterHeader?: string | null): number {
   const retryAfterSeconds = retryAfterHeader ? Number(retryAfterHeader) : Number.NaN;
@@ -1560,7 +1066,7 @@ async function fetchCityListings(
   try {
     const elements = await request;
     overpassCache.set(cacheKey, {
-      expiresAt: Date.now() + GOOGLE_PLACES_CACHE_TTL_MS,
+      expiresAt: Date.now() + OPEN_STREET_MAP_CACHE_TTL_MS,
       elements,
     });
     return elements;
@@ -1669,7 +1175,7 @@ out center 2000;`;
   throw lastError instanceof Error ? lastError : new Error("Overpass request failed.");
 }
 
-type ExternalProvider = "google_places" | "openstreetmap";
+type ExternalProvider = "openstreetmap";
 export const SCHEDULED_DISCOVERY_PROVIDERS = ["openstreetmap"] as const satisfies readonly ExternalProvider[];
 
 async function createListingsQuery(input: {
@@ -1741,9 +1247,6 @@ export async function refreshNeighborhoodDiscoveryScope(scope: NeighborhoodRefre
     mode: "live",
     normalizedKey,
   });
-  // Scheduled refreshes deliberately use the non-billable source. Google Places
-  // has a permanent 100-request allowance and remains available for intentional
-  // live searches; background work must not silently consume that finite budget.
   const outcomes = await Promise.all(SCHEDULED_DISCOVERY_PROVIDERS.map((provider) =>
     captureProviderResult(queryId, provider, normalizedKey, {
       section: scope.section,
@@ -1828,13 +1331,6 @@ async function captureProviderResult(
     }
     return { provider, listings: [], error };
   }
-}
-
-export function mergeStoredProviderListings(
-  googleListings: Listing[],
-  osmListings: Listing[],
-): Listing[] {
-  return mergeBusinessListings(googleListings, osmListings).listings;
 }
 
 const STORED_DETAIL_RESULT_LIMIT = 25;
@@ -2057,13 +1553,6 @@ async function loadStoredBusinessResults(
 
 export interface ListingsRouterDependencies {
   getUserId: (req: Parameters<typeof getAuth>[0]) => string | null;
-  googlePlacesEnabled?: boolean;
-  loadGooglePlaces: (
-    bounds: GeographicBounds,
-    section: Exclude<ListingSection, "events" | "social-map">,
-    neighborhoods: string[],
-    businessCategories: BusinessCategory[],
-  ) => Promise<Listing[]>;
   loadOpenStreetMapBusinesses: (
     bounds: GeographicBounds,
     section: Exclude<ListingSection, "events" | "social-map">,
@@ -2075,8 +1564,6 @@ export interface ListingsRouterDependencies {
 
 const defaultListingsRouterDependencies: ListingsRouterDependencies = {
   getUserId: (req) => getAuth(req).userId,
-  googlePlacesEnabled: GOOGLE_PLACES_QUERIES_ENABLED,
-  loadGooglePlaces: fetchGooglePlaces,
   loadOpenStreetMapBusinesses: async (bounds, section, businessCategories, searchCenter, searchArea) =>
     fetchOpenStreetMapBusinesses(
       await fetchCityListings(searchArea?.bounds ?? bounds, businessCategories, searchCenter),
@@ -2309,23 +1796,18 @@ export function createListingsRouter(
     }
 
     if (listingSection !== "events") {
-      const providers: ExternalProvider[] = dependencies.googlePlacesEnabled
-        ? ["google_places", "openstreetmap"]
-        : ["openstreetmap"];
+      const providers: ExternalProvider[] = ["openstreetmap"];
       if (!allowsExternalQueries(mode)) {
         const stored = await loadStoredBusinessResults(normalizedKey, providers, { cityId, section: listingSection, language, neighborhoods: requestedNeighborhoods, businessCategories: requestedBusinessCategories });
         const filterToSearchArea = (listings: Listing[]) => searchArea.neighborhoods.length > 0
           ? listings.filter((listing) =>
             isPointInsideNeighborhoods(listing.lat, listing.lng, searchArea.neighborhoods))
           : listings;
-        const googleListings = filterToSearchArea(dependencies.googlePlacesEnabled
-          ? stored.get("google_places") ?? []
-          : []);
         const osmListings = filterToSearchArea(stored.get("openstreetmap") ?? []);
         const hit = stored.size > 0;
         await finalizeListingsQuery(queryId, hit && stored.size < providers.length ? "partial" : "succeeded");
         res.json({
-          listings: mergeStoredProviderListings(googleListings, osmListings),
+          listings: dedupeBusinessListings(osmListings),
           source: "stored",
           ...(hit ? {} : { message: storedMissMessage(language) }),
           queryId, mode, cacheHit: hit, cacheMiss: !hit, partial: hit && stored.size < providers.length,
@@ -2334,26 +1816,6 @@ export function createListingsRouter(
         return;
       }
       const outcomes = await Promise.all([
-        ...(dependencies.googlePlacesEnabled
-          ? [captureProviderResult(queryId, "google_places", normalizedKey, {
-              section: listingSection,
-              neighborhoods: requestedNeighborhoods,
-              businessCategories: requestedBusinessCategories,
-            }, async () => {
-              const listings = await dependencies.loadGooglePlaces(
-                bounds,
-                listingSection,
-                requestedNeighborhoods,
-                requestedBusinessCategories,
-              );
-              // Google text search is neighborhood-hinted, not geometry-bound;
-              // enforce the official polygon before results are persisted.
-              return searchArea.neighborhoods.length > 0
-                ? listings.filter((listing) =>
-                  isPointInsideNeighborhoods(listing.lat, listing.lng, searchArea.neighborhoods))
-                : listings;
-            })]
-          : []),
         captureProviderResult(queryId, "openstreetmap", normalizedKey, {
           section: listingSection,
           businessCategories: requestedBusinessCategories,
@@ -2366,10 +1828,8 @@ export function createListingsRouter(
           searchArea,
         ), 1),
       ]);
-      const google = outcomes.find((result) => result.provider === "google_places");
       const osm = outcomes.find((result) => result.provider === "openstreetmap");
       const successful = outcomes.filter((result) => !result.error);
-      let googleListings = google?.listings ?? [];
       let osmListings = osm?.listings ?? [];
       let servedStoredFallback = false;
       // A provider outage must not blank a neighborhood that already has verified
@@ -2381,31 +1841,24 @@ export function createListingsRouter(
           ? listings.filter((listing) =>
             isPointInsideNeighborhoods(listing.lat, listing.lng, searchArea.neighborhoods))
           : listings;
-        if (google?.error && stored.has("google_places")) {
-          googleListings = filterStored(stored.get("google_places") ?? []);
-          servedStoredFallback = googleListings.length > 0;
-        }
         if (osm?.error && stored.has("openstreetmap")) {
           osmListings = filterStored(stored.get("openstreetmap") ?? []);
           servedStoredFallback = servedStoredFallback || osmListings.length > 0;
         }
       }
-      const merged = mergeBusinessListings(googleListings, osmListings);
+      const mergedListings = dedupeBusinessListings(osmListings);
       const partial = successful.length > 0 && successful.length < providers.length;
       const status = successful.length === 0 && !servedStoredFallback ? "failed" : partial || servedStoredFallback ? "partial" : "succeeded";
       await finalizeListingsQuery(queryId, status, status === "failed" ? "All external providers failed." : undefined);
-      if (google?.error) req.log.warn({ err: google.error }, "Google Places listings unavailable");
       if (osm?.error) req.log.warn({ err: osm.error }, "OpenStreetMap listings unavailable");
       res.json({
-        listings: merged.listings,
-        source: servedStoredFallback ? "stored" : googleListings.length ? "google_places" : osmListings.length ? "live" : "fallback",
+        listings: mergedListings,
+        source: servedStoredFallback ? "stored" : osmListings.length ? "live" : "fallback",
         message: servedStoredFallback
-          ? `${merged.listings.length} opgeslagen Haagse resultaten worden getoond terwijl een live bron tijdelijk niet beschikbaar is.`
-          : googleListings.length
-            ? `${googleListings.length} Haagse ${listingSection === "food-drink" ? "horecazaken" : "bedrijven"} uit Google Places${merged.osmAdded > 0 ? ` en ${merged.osmAdded} aanvullende OpenStreetMap-vermeldingen` : ""}.`
-            : osmListings.length
-              ? `${osmListings.length} Haagse ${listingSection === "food-drink" ? "horecazaken" : "bedrijven"} uit OpenStreetMap.`
-              : "Er zijn tijdelijk geen gecontroleerde resultaten voor deze sectie.",
+          ? `${mergedListings.length} opgeslagen Haagse resultaten worden getoond terwijl een live bron tijdelijk niet beschikbaar is.`
+          : osmListings.length
+            ? `${osmListings.length} Haagse ${listingSection === "food-drink" ? "horecazaken" : "bedrijven"} uit OpenStreetMap.`
+            : "Er zijn tijdelijk geen gecontroleerde resultaten voor deze sectie.",
         queryId, mode, cacheHit: servedStoredFallback, cacheMiss: false, partial: partial || servedStoredFallback,
         providers: successful.map((result) => result.provider),
       });
