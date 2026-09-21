@@ -53,6 +53,13 @@ describe('public discovery URL state', () => {
     assert.equal(serializeDiscoveryUrlState(parsed.state), '');
   });
 
+  it('accepts the app-owned restore flag without showing it as an invalid criterion', () => {
+    const parsed = parseDiscoveryUrlState('?restore=1');
+    assert.equal(parsed.valid, true);
+    assert.deepEqual(parsed.errors, []);
+    assert.equal(parsed.canonical, '');
+  });
+
   it('rejects unknown and sensitive parameters while retaining safe criteria', () => {
     const parsed = parseDiscoveryUrlState(
       '?locale=nl&section=events&user_id=abc&lat=52.07&return_path=%2Fprivate&sort=name&postcode=2511',

@@ -34,6 +34,7 @@ export type DiscoveryUrlErrorCode =
   | 'invalid-neighborhood'
   | 'invalid-postcode'
   | 'invalid-scope'
+  | 'invalid-restore'
   | 'sensitive-parameter';
 
 export interface DiscoveryUrlError {
@@ -43,7 +44,7 @@ export interface DiscoveryUrlError {
 
 const CITY_ALIASES = new Set(['den-haag', 'den haag', 'the-hague', 'the hague', 'dhg']);
 const SECTIONS = new Set<DiscoverySection>(['events', 'businesses', 'food-drink', 'social-map']);
-const PARAMS = new Set(['locale', 'city', 'section', 'neighborhood', 'postcode', 'scope']);
+const PARAMS = new Set(['locale', 'city', 'section', 'neighborhood', 'postcode', 'scope', 'restore']);
 const SENSITIVE = new Set([
   'token', 'access_token', 'refresh_token', 'session', 'session_id', 'user_id',
   'userid', 'uid', 'return', 'return_to', 'return_path', 'redirect', 'redirect_uri',
@@ -167,6 +168,11 @@ export function parseDiscoveryUrlState(input: string | URL | URLSearchParams | R
   const scope = params.get('scope');
   if (scope !== null && !duplicateKeys.has('scope')) scope === 'local' || scope === 'web'
     ? state.scope = scope : error(errors, 'invalid-scope', 'scope');
+
+  const restore = params.get('restore');
+  if (restore !== null && !duplicateKeys.has('restore') && restore !== '1') {
+    error(errors, 'invalid-restore', 'restore');
+  }
 
   return { state, valid: errors.length === 0, errors, canonical: serializeDiscoveryUrlState(state) };
 }
