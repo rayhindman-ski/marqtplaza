@@ -186,3 +186,21 @@
 **Resulting decision:** A school defaults to `Businesses → Education & Childcare`. It belongs on the Social map only when the listing represents a distinct community-support service rather than the school itself. If the word “Businesses” is too narrow for public schools, rename the parent directory to “Businesses & organizations” or “Local organizations” instead of misclassifying schools as social listings.
 
 **Resulting implementation commit:** No product code change was made from this prompt.
+
+### Prompt 18
+
+**Timestamp:** 2026-09-22; exact message time unavailable
+**Recorded at:** 2026-09-22T06:49:37+02:00
+
+> as a human, i find this behavior VERY annoying.
+> I navigate from the main page to select a neighborhood
+> I drill down into that neighborhood and then zoom the map to a specific resolution so i can see the individual icons instead of a cluster icons. then I select on one of the icons to drill down to its detail. once I've finished with the item detail page, i click on the '<- back' navigation link.
+> at this point the map FORGOT my last coordinates, zoom level, etc.
+>
+> WHY
+
+**Resulting diagnosis:** The discovery map unmounts when navigating to the separate detail route. The return-state snapshot restores neighborhoods and filters but does not store the map center or zoom. On return, a new map mounts and its automatic fit logic calculates a fresh viewport, replacing the manually chosen camera.
+
+**Required correction:** Capture the map camera before detail navigation, restore it when returning to discovery, and suppress automatic fitting when a saved camera is being restored.
+
+**Resulting implementation commit:** No product code change was made from this diagnostic prompt.
