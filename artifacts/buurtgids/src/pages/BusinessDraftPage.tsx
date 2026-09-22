@@ -18,6 +18,7 @@ import {
   useWithdrawBusinessClaim,
 } from '@workspace/api-client-react';
 import { useQueryClient } from '@tanstack/react-query';
+import { Globe2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -25,7 +26,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { useAccountAuth } from '@/lib/accountAuth';
 import { featureFlags } from '@/lib/featureFlags';
-import { accountErrorMessage, businessIntakeTranslations } from '@/lib/i18n';
+import { accountErrorMessage, businessIntakeTranslations, LANGUAGE_OPTIONS, type Language } from '@/lib/i18n';
 import { withReturnPath } from '@/lib/returnPath';
 import { useAppLanguage } from '@/lib/useAppLanguage';
 
@@ -56,7 +57,7 @@ function apiErrorFrom(error: unknown): ApiError | null {
 }
 
 export default function BusinessDraftPage() {
-  const [language] = useAppLanguage();
+  const [language, setLanguage] = useAppLanguage();
   const copy = businessIntakeTranslations[language];
   const auth = useAccountAuth();
   const [, setLocation] = useLocation();
@@ -87,6 +88,12 @@ export default function BusinessDraftPage() {
   const [duplicateVersion, setDuplicateVersion] = useState<number | null>(null);
   const duplicateHeadingRef = useRef<HTMLHeadingElement>(null);
   const claim = current ?? claimQuery.data ?? null;
+  const changeLanguage = (nextLanguage: Language) => {
+    setLanguage(nextLanguage);
+    const url = new URL(window.location.href);
+    url.searchParams.set('locale', nextLanguage);
+    window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`);
+  };
 
   useEffect(() => {
     if (!claimQuery.data || hydrated.current === claimQuery.data.id) return;
@@ -174,7 +181,7 @@ export default function BusinessDraftPage() {
     setCurrent(saved);
     queryClient.setQueryData(getGetBusinessClaimQueryKey(saved.id), saved);
     const testParam = auth.isTestAuth ? '&e2eAccountAuth=1' : '';
-    setLocation(`/bedrijf-nieuw?claim=${saved.id}${testParam}`, { replace: true });
+    setLocation(`/bedrijf-nieuw?claim=${saved.id}&locale=${language}${testParam}`, { replace: true });
     return saved;
   };
 
@@ -233,6 +240,9 @@ export default function BusinessDraftPage() {
   if (claim && !editable) {
     return (
       <main className="container mx-auto max-w-2xl px-4 py-12" data-testid="business-claim-receipt">
+        <div className="mb-6 flex justify-end">
+          <ClaimLanguageSelector language={language} onLanguageChange={changeLanguage} />
+        </div>
         <Card><CardHeader><CardTitle>{copy.receiptTitle}</CardTitle></CardHeader><CardContent className="space-y-5">
           <Badge>{copy.status[claim.status]}</Badge>
           <p>{claim.status === 'withdrawn' ? copy.withdrawn : copy.receiptBody}</p>
@@ -249,6 +259,9 @@ export default function BusinessDraftPage() {
   const busy = create.isPending || update.isPending || submit.isPending;
   return (
     <main className="container mx-auto max-w-3xl px-4 py-12" data-testid="page-business-draft">
+      <div className="mb-6 flex justify-end">
+        <ClaimLanguageSelector language={language} onLanguageChange={changeLanguage} />
+      </div>
       <h1 className="font-serif text-4xl font-semibold">{copy.draftTitle}</h1>
       {!isNew ? <p className="mt-2 text-muted-foreground">{copy.existingIntro}</p> : null}
       {claim?.status === 'changes_requested' ? <div role="alert" className="mt-6 rounded-xl border border-amber-300 bg-amber-50 p-4"><strong>{copy.changesTitle}</strong><p>{claim.reviewNote}</p></div> : null}
@@ -265,6 +278,7 @@ export default function BusinessDraftPage() {
                 cityId: candidate.cityId,
                 listingSource: candidate.listingSource,
                 listingId: candidate.listingId,
+                locale: language,
               });
               return (
                 <li key={`${candidate.listingSource}:${candidate.listingId}`} className="rounded-xl border border-amber-200 bg-background p-4">
@@ -306,6 +320,33 @@ export default function BusinessDraftPage() {
         </div>
       </form>
     </main>
+  );
+}
+
+function ClaimLanguageSelector({
+  language,
+  onLanguageChange,
+}: {
+  language: Language;
+  onLanguageChange: (language: Language) => void;
+}) {
+  const label = language === 'nl' ? 'Taal' : 'Language';
+  return (
+    <div role="group" aria-label={label} className="inline-flex items-center gap-2 rounded-full border border-border bg-card p-1 pl-3 text-xs font-bold shadow-sm">
+      <Globe2 className="h-4 w-4 text-primary" aria-hidden="true" />
+      {LANGUAGE_OPTIONS.map((option) => (
+        <button
+          key={option.value}
+          type="button"
+          data-testid={`button-language-${option.value}`}
+          aria-pressed={language === option.value}
+          onClick={() => onLanguageChange(option.value)}
+          className={`rounded-full px-3 py-1.5 transition-colors ${language === option.value ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+        >
+          {option.label}
+        </button>
+      ))}
+    </div>
   );
 }
 

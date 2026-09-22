@@ -10,6 +10,12 @@ export function readStoredLanguage(): Language {
   return window.localStorage.getItem(LANGUAGE_STORAGE_KEY) === 'nl' ? 'nl' : 'en';
 }
 
+function readRequestedLanguage(): Language | null {
+  if (typeof window === 'undefined') return null;
+  const locale = new URLSearchParams(window.location.search).get('locale');
+  return locale === 'nl' || locale === 'en' ? locale : null;
+}
+
 /**
  * Persist the UI language and notify same-tab subscribers (e.g. the Clerk
  * provider, which lives above every page and cannot see page-level state).
@@ -46,7 +52,9 @@ export function useStoredLanguage(): Language {
  * copy; form drafts owned by the calling page are untouched.
  */
 export function useAppLanguage(): [Language, (language: Language) => void] {
-  const [language, setLanguage] = useState<Language>(readStoredLanguage);
+  const [language, setLanguage] = useState<Language>(
+    () => readRequestedLanguage() ?? readStoredLanguage(),
+  );
 
   useEffect(() => {
     persistLanguage(language);

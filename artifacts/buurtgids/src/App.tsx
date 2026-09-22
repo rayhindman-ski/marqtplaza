@@ -1846,8 +1846,8 @@ function MarkerCard({
               {(marker.category === 'Businesses' || marker.category === 'Food & Drink') && (
                 <Link
                   href={featureFlags.businessIntake
-                    ? `/bedrijf-nieuw?kind=existing_listing&cityId=dhg&listingSource=${encodeURIComponent(marker.source || 'google_maps')}&listingId=${encodeURIComponent(String(marker.id))}`
-                    : `/bedrijf-claim?listingId=${marker.id}&cityId=dhg&listingSource=${marker.source || 'google_maps'}&name=${encodeURIComponent(marker.name)}&address=${encodeURIComponent(marker.address || '')}`}
+                    ? `/bedrijf-nieuw?kind=existing_listing&cityId=dhg&listingSource=${encodeURIComponent(marker.source || 'google_maps')}&listingId=${encodeURIComponent(String(marker.id))}&locale=${language}`
+                    : `/bedrijf-claim?listingId=${marker.id}&cityId=dhg&listingSource=${marker.source || 'google_maps'}&name=${encodeURIComponent(marker.name)}&address=${encodeURIComponent(marker.address || '')}&locale=${language}`}
                   className="flex items-center gap-1 text-[11px] font-bold text-primary hover:text-primary/80 transition-colors"
                   onClick={e => e.stopPropagation()}
                 >

@@ -113,6 +113,29 @@ async function fillCommon(page: Page) {
 }
 
 test.describe('business intake', () => {
+  test('claim editor keeps the selected language and exposes its language selector', async ({ page }) => {
+    await signIn(page);
+    await installServer(page);
+    await page.addInitScript(() => {
+      window.localStorage.setItem('buurtplaza-language', 'nl');
+    });
+
+    await page.goto('/bedrijf-nieuw?kind=existing_listing&cityId=dhg&listingSource=openstreetmap&listingId=place-7&locale=en&e2eAccountAuth=1');
+    await expect(page.getByTestId('page-business-draft')).toContainText('Claim or add a business');
+    await expect(page.getByTestId('button-language-en')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByTestId('button-language-nl')).toBeVisible();
+    await expect(page).toHaveURL(/locale=en/);
+
+    await page.getByTestId('button-language-nl').click();
+    await expect(page.getByTestId('page-business-draft')).toContainText('Bedrijf claimen of toevoegen');
+    await expect(page.getByTestId('button-language-nl')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page).toHaveURL(/locale=nl/);
+
+    await page.reload();
+    await expect(page.getByTestId('page-business-draft')).toContainText('Bedrijf claimen of toevoegen');
+    await expect(page.getByTestId('button-language-nl')).toHaveAttribute('aria-pressed', 'true');
+  });
+
   test('lookup, existing-listing draft resume, submit receipt, and withdraw', async ({ page }) => {
     await signIn(page);
     const server = await installServer(page);
