@@ -204,3 +204,16 @@
 **Required correction:** Capture the map camera before detail navigation, restore it when returning to discovery, and suppress automatic fitting when a saved camera is being restored.
 
 **Resulting implementation commit:** No product code change was made from this diagnostic prompt.
+
+### Prompt 19
+
+**Timestamp:** 2026-09-22; exact message time unavailable
+**Recorded at:** 2026-09-22T06:55:24+02:00
+
+> the 'FIX IT' was implied
+
+**Resulting correction:** Treated the reported broken behavior as an implementation request. Discovery now captures the exact map center and zoom before detail navigation, restores that camera on `restore=1`, and prevents automatic fitting from overwriting the restored viewport. The behavior is implemented for both the Google and OpenStreetMap tile renderers.
+
+**Verification:** The frontend typecheck passed, all 10 pre-existing discovery-map regression tests passed, and the new focused regression confirmed exact latitude, longitude, and zoom restoration after the detail-return flow.
+
+**Resulting implementation commit:** `f0116db980da41e953bc3851655413d48e521bbd`
