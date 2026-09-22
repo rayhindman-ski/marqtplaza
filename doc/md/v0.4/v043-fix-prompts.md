@@ -153,3 +153,14 @@
 **Resulting change:** Created the tracked directory `doc/md/v0.4/business-requirements`.
 
 **Resulting implementation commit:** `21fc1a84b60c3432d6db2ef31696516909302f20`
+
+### Prompt 15
+
+**Timestamp:** 2026-09-22; exact message time unavailable
+**Recorded at:** 2026-09-22T06:37:26+02:00
+
+> move the files doc/md/v0.4/BR-??.md into the new directory doc/md/v0.4/business-requirements
+
+**Resulting change:** Moved `BR-01.md` through `BR-12.md` into `doc/md/v0.4/business-requirements` without changing their contents.
+
+**Resulting implementation commit:** `abb8ce85362e603ae5923829988e34484d3b9c6e`
