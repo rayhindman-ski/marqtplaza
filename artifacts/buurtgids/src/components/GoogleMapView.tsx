@@ -199,6 +199,8 @@ export interface MapRendererProps {
   savedIds: Set<string>;
   onMarkerClick: (id: string) => void;
   onClusterMarkerClick?: (id: string) => void;
+  initialViewport?: MapViewport | null;
+  onViewportChange?: (viewport: MapViewport) => void;
 }
 
 interface LatLng {
@@ -206,10 +208,12 @@ interface LatLng {
   lng: number;
 }
 
-interface TileViewport {
+export interface MapViewport {
   center: LatLng;
   zoom: number;
 }
+
+type TileViewport = MapViewport;
 
 type HtmlMarkerOverlay = google.maps.OverlayView & {
   setContent: (content: HTMLElement) => void;
@@ -1108,6 +1112,8 @@ function TileMapView({
   recenterSelectedMarker = true,
   savedIds,
   onMarkerClick,
+  initialViewport,
+  onViewportChange,
   onUnavailable,
   onClusterClick,
   onClusterLeave,
@@ -1131,7 +1137,7 @@ function TileMapView({
   });
   const fallbackStartedRef = useRef(false);
   const [size, setSize] = useState({ width: 0, height: 0 });
-  const [viewport, setViewport] = useState<TileViewport>(() => getInitialViewport(locationId));
+  const [viewport, setViewport] = useState<TileViewport>(() => initialViewport ?? getInitialViewport(locationId));
   const mapCopy = MAP_COPY[language];
 
   const reportUnavailable = useCallback(() => {
@@ -1158,8 +1164,12 @@ function TileMapView({
   }, []);
 
   useEffect(() => {
-    setViewport(getInitialViewport(locationId));
-  }, [locationId]);
+    setViewport(initialViewport ?? getInitialViewport(locationId));
+  }, [initialViewport, locationId]);
+
+  useEffect(() => {
+    onViewportChange?.(viewport);
+  }, [onViewportChange, viewport]);
 
   // Only refit the camera when the content actually changes; parent re-renders
   // (e.g. hover state) that pass equivalent props must never reset user zoom.
@@ -1172,6 +1182,7 @@ function TileMapView({
   selectedNeighborhoodsRef.current = selectedNeighborhoods;
 
   useEffect(() => {
+    if (initialViewport) return;
     const selected = selectedNeighborhoodsRef.current;
     const viewportNeighborhoods = showAllNeighborhoods
       ? (getLocation(locationId)?.neighborhoods ?? selected)
@@ -1181,7 +1192,7 @@ function TileMapView({
         ? getNeighborhoodViewport(locationId, viewportNeighborhoods, size)
         : getMarkerViewport(locationId, markersRef.current, size),
     );
-  }, [locationId, viewportSignature, showAllNeighborhoods, size.height, size.width]);
+  }, [initialViewport, locationId, viewportSignature, showAllNeighborhoods, size.height, size.width]);
 
   useEffect(() => {
     const marker = markersRef.current.find((item) => item.id === selectedMarkerId);
@@ -1333,6 +1344,9 @@ function TileMapView({
       ref={containerRef}
       className="absolute inset-0 z-0 cursor-grab overflow-hidden bg-[#e9efea] select-none active:cursor-grabbing"
       aria-label={mapCopy.interactiveMap}
+      data-map-center-lat={viewport.center.lat}
+      data-map-center-lng={viewport.center.lng}
+      data-map-zoom={viewport.zoom}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
@@ -1564,6 +1578,8 @@ function GoogleMapCanvas({
   recenterSelectedMarker = true,
   savedIds,
   onMarkerClick,
+  initialViewport,
+  onViewportChange,
   onUnavailable,
   onClusterClick,
   onClusterLeave,
@@ -1778,8 +1794,8 @@ function GoogleMapCanvas({
       .then(({ Map: GoogleMap }) => {
         if (disposed || !containerRef.current) return;
         mapRef.current = new GoogleMap(containerRef.current, {
-          center: { lat: location.lat, lng: location.lng },
-          zoom: location.zoom,
+          center: initialViewport?.center ?? { lat: location.lat, lng: location.lng },
+          zoom: initialViewport?.zoom ?? location.zoom,
           styles: MAP_STYLES,
           zoomControl: true,
            gestureHandling: 'greedy',
@@ -1788,7 +1804,7 @@ function GoogleMapCanvas({
           streetViewControl: false,
           fullscreenControl: false,
         });
-        setMapZoom(location.zoom);
+        setMapZoom(initialViewport?.zoom ?? location.zoom);
         setMapReady(true);
       })
       .catch(onUnavailable)
@@ -1801,15 +1817,27 @@ function GoogleMapCanvas({
       if (loadTimeout) clearTimeout(loadTimeout);
       mapsWindow.gm_authFailure = previousAuthFailure;
     };
-  }, [location, onUnavailable]);
+  }, [initialViewport, location, onUnavailable]);
 
   useEffect(() => {
     if (!mapReady || !mapRef.current) return;
     const zoomListener = mapRef.current.addListener('zoom_changed', () => {
       setMapZoom(mapRef.current?.getZoom() ?? location?.zoom ?? 12);
     });
-    return () => zoomListener.remove();
-  }, [location?.zoom, mapReady]);
+    const idleListener = mapRef.current.addListener('idle', () => {
+      const center = mapRef.current?.getCenter();
+      const zoom = mapRef.current?.getZoom();
+      if (!center || typeof zoom !== 'number') return;
+      onViewportChange?.({
+        center: { lat: center.lat(), lng: center.lng() },
+        zoom,
+      });
+    });
+    return () => {
+      zoomListener.remove();
+      idleListener.remove();
+    };
+  }, [location?.zoom, mapReady, onViewportChange]);
 
   // Only refit the camera when the content actually changes; parent re-renders
   // (e.g. hover state) that pass equivalent props must never reset user zoom.
@@ -1822,7 +1850,7 @@ function GoogleMapCanvas({
   viewportNeighborhoodsRef.current = selectedNeighborhoods;
 
   useEffect(() => {
-    if (!mapReady || !mapRef.current || !location) return;
+    if (!mapReady || !mapRef.current || !location || initialViewport) return;
     const markers = viewportMarkersRef.current;
     const selectedNeighborhoods = viewportNeighborhoodsRef.current;
     const neighborhoods = getNeighborhoodAreas(
@@ -1853,7 +1881,7 @@ function GoogleMapCanvas({
       mapRef.current.fitBounds(bounds, 64);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps -- content tracked via viewportSignature
-  }, [location, locationId, mapReady, viewportSignature, showAllNeighborhoods]);
+  }, [initialViewport, location, locationId, mapReady, viewportSignature, showAllNeighborhoods]);
 
   useEffect(() => {
     if (!mapReady || !mapRef.current || !location) return;

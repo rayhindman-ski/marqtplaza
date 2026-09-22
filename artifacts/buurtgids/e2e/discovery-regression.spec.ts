@@ -34,8 +34,8 @@ async function stubBoundaryDiscovery(page: Page, tilesAvailable: boolean) {
           startsAt: todayAt(14),
           x: 50,
           y: 50,
-          lat: 52.071,
-          lng: 4.301,
+           lat: 52.07860321,
+           lng: 4.30803492,
           activityKind: 'family',
           priceType: 'free',
           isIndoor: true,
@@ -358,6 +358,50 @@ test('adding a third neighborhood never decreases the visible results', async ({
   expect(counts).toEqual([1, 2, 3]);
   expect(counts[1]).toBeGreaterThanOrEqual(counts[0]);
   expect(counts[2]).toBeGreaterThanOrEqual(counts[1]);
+});
+
+test('restores the exact map camera after opening a detail and returning', async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(window, 'open', {
+      configurable: true,
+      value: () => null,
+    });
+  });
+  await stubBoundaryDiscovery(page, true);
+
+  const map = page.getByLabel('Interactive activity map');
+  await expect(map).toBeVisible();
+  const initialZoom = Number(await map.getAttribute('data-map-zoom'));
+  await map.dispatchEvent('wheel', { deltaY: -100 });
+  await map.dispatchEvent('wheel', { deltaY: -100 });
+  await expect(map).toHaveAttribute('data-map-zoom', String(initialZoom + 2));
+
+  const cameraBeforeDetail = {
+    lat: await map.getAttribute('data-map-center-lat'),
+    lng: await map.getAttribute('data-map-center-lng'),
+    zoom: await map.getAttribute('data-map-zoom'),
+  };
+  await page.locator('[data-map-pin]').click();
+
+  const storedCamera = await page.evaluate(() => {
+    const value = JSON.parse(
+      window.localStorage.getItem('buurtplaza-discovery-return-state') ?? 'null',
+    ) as { mapViewport?: { center?: { lat?: number; lng?: number }; zoom?: number } } | null;
+    return value?.mapViewport;
+  });
+  expect(storedCamera).toEqual({
+    center: {
+      lat: Number(cameraBeforeDetail.lat),
+      lng: Number(cameraBeforeDetail.lng),
+    },
+    zoom: Number(cameraBeforeDetail.zoom),
+  });
+
+  await page.goto('/activiteiten/den-haag?restore=1');
+  const restoredMap = page.getByLabel('Interactive activity map');
+  await expect(restoredMap).toHaveAttribute('data-map-center-lat', cameraBeforeDetail.lat ?? '');
+  await expect(restoredMap).toHaveAttribute('data-map-center-lng', cameraBeforeDetail.lng ?? '');
+  await expect(restoredMap).toHaveAttribute('data-map-zoom', cameraBeforeDetail.zoom ?? '');
 });
 
 for (const [mapPath, tilesAvailable] of [['tile map', true], ['coordinate fallback', false]] as const) {

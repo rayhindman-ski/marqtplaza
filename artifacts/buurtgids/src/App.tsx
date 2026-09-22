@@ -46,6 +46,7 @@ import {
   type FoodType,
 } from './lib/data';
 import { DiscoveryResultsMap } from './components/DiscoveryResultsMap';
+import type { MapViewport } from './components/GoogleMapView';
 import { NeighborhoodSelectionMap } from './components/NeighborhoodSelectionMap';
 import { getSubcategoryColor } from './lib/mapColors';
 import CaptureView from './pages/CaptureView';
@@ -498,6 +499,7 @@ type DiscoveryReturnState = {
   neighborhoodSelection: 'all' | 'some' | 'none';
   postcodeFilter: string;
   quickFilters: DiscoveryQuickFilter[];
+  mapViewport?: MapViewport;
 };
 
 const DISCOVERY_RETURN_STATE_KEY = 'buurtplaza-discovery-return-state';
@@ -514,6 +516,13 @@ function readDiscoveryReturnState(locationId: string): DiscoveryReturnState | nu
       || !value.subcategories
       || !Array.isArray(value.selectedNeighborhoods)
       || !Array.isArray(value.quickFilters)) {
+      return null;
+    }
+    if (value.mapViewport && (
+      !Number.isFinite(value.mapViewport.center?.lat)
+      || !Number.isFinite(value.mapViewport.center?.lng)
+      || !Number.isFinite(value.mapViewport.zoom)
+    )) {
       return null;
     }
     return value as DiscoveryReturnState;
@@ -2008,6 +2017,7 @@ function DiscoveryState({
   const [quickFilters, setQuickFilters] = useState<Set<DiscoveryQuickFilter>>(
     () => new Set(restoredState?.quickFilters ?? []),
   );
+  const mapViewportRef = useRef<MapViewport | null>(restoredState?.mapViewport ?? null);
   const [nearbyPosition, setNearbyPosition] = useState<{ lat: number; lng: number } | null>(null);
   const [nearbyStatus, setNearbyStatus] = useState<'idle' | 'locating' | 'ready' | 'fallback'>('idle');
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
@@ -2094,6 +2104,31 @@ function DiscoveryState({
     businesses: webBusinessesQuery,
     'food-drink': webFoodDrinkQuery,
   };
+  const handleMapViewportChange = useCallback((viewport: MapViewport) => {
+    mapViewportRef.current = viewport;
+  }, []);
+  const persistDiscoveryReturnState = useCallback(() => {
+    const returnState: DiscoveryReturnState = {
+      savedAt: Date.now(),
+      locationId,
+      topLevelCategories,
+      subcategories,
+      selectedNeighborhoods,
+      neighborhoodSelection,
+      postcodeFilter,
+      quickFilters: [...quickFilters],
+      ...(mapViewportRef.current ? { mapViewport: mapViewportRef.current } : {}),
+    };
+    window.localStorage.setItem(DISCOVERY_RETURN_STATE_KEY, JSON.stringify(returnState));
+  }, [
+    locationId,
+    neighborhoodSelection,
+    postcodeFilter,
+    quickFilters,
+    selectedNeighborhoods,
+    subcategories,
+    topLevelCategories,
+  ]);
 
   useEffect(() => {
     if (!eventsQuery.data) return;
@@ -2165,6 +2200,7 @@ function DiscoveryState({
   };
 
   const handleMarkerClick = (id: string) => {
+    persistDiscoveryReturnState();
     const marker = allMarkers.find((item) => item.id === id);
     if (marker) persistDetailListing(marker);
     const section = marker ? topLevelForMarker(marker) : listingSection;
@@ -2242,26 +2278,8 @@ function DiscoveryState({
   }, [initialNeighborhood, initialNeighborhoods, initialPostcode, listingSection, restoredState]);
 
   useEffect(() => {
-    const returnState: DiscoveryReturnState = {
-      savedAt: Date.now(),
-      locationId,
-      topLevelCategories,
-      subcategories,
-      selectedNeighborhoods,
-      neighborhoodSelection,
-      postcodeFilter,
-      quickFilters: [...quickFilters],
-    };
-    window.localStorage.setItem(DISCOVERY_RETURN_STATE_KEY, JSON.stringify(returnState));
-  }, [
-    locationId,
-    neighborhoodSelection,
-    postcodeFilter,
-    quickFilters,
-    selectedNeighborhoods,
-    subcategories,
-    topLevelCategories,
-  ]);
+    persistDiscoveryReturnState();
+  }, [persistDiscoveryReturnState]);
 
   useEffect(() => {
     if (nearbyStatus !== 'locating') return;
@@ -3067,6 +3085,8 @@ function DiscoveryState({
             savedIds={savedIds}
             onMarkerClick={handleMarkerClick}
             onClusterMarkerClick={handleClusterMarkerClick}
+             initialViewport={restoredState?.mapViewport}
+             onViewportChange={handleMapViewportChange}
           />
 
         </div>
