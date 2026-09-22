@@ -217,3 +217,32 @@
 **Verification:** The frontend typecheck passed, all 10 pre-existing discovery-map regression tests passed, and the new focused regression confirmed exact latitude, longitude, and zoom restoration after the detail-return flow.
 
 **Resulting implementation commit:** `f0116db980da41e953bc3851655413d48e521bbd`
+
+### Prompt 20
+
+**Timestamp:** 2026-09-22; exact message time unavailable
+**Recorded at:** 2026-09-22T06:59:30+02:00
+
+> another annoyance.
+> when i filter on a business, then on the left 'list' of businesses, i click on 'claim my business'
+> I am shown the business card (edit option, i think)
+> but you switched the language of the dialog to Dutch
+> - WHERE it the language selector on this layout?
+> - WHY would YOU decide to switch languages on a user? \
+
+**Resulting diagnosis:** The language change was not intentional. Discovery could render English from `?locale=en` without persisting that URL-selected language. The claim link then discarded `locale`, and the standalone claim editor fell back to the older stored language, which could be Dutch. The claim editor also had no visible language selector.
+
+**Resulting implementation commit:** `5fecab5d63886b0a32ee7e8a313d3833e2be9403`
+
+### Prompt 21
+
+**Timestamp:** 2026-09-22; exact message time unavailable
+**Recorded at:** 2026-09-22T06:59:30+02:00
+
+> FIX IT
+
+**Resulting change:** Claim links now preserve the active locale, standalone claim pages honor URL locale before stored language, and the claim editor and receipt expose a visible English/Nederlands selector that updates the URL and survives refresh.
+
+**Verification:** The frontend typecheck passed. All five business-intake tests passed, including a new regression that starts with Dutch stored locally, enters through `locale=en`, verifies English remains active, switches to Dutch, and confirms Dutch remains active after reload.
+
+**Resulting implementation commit:** `5fecab5d63886b0a32ee7e8a313d3833e2be9403`
