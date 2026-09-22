@@ -246,3 +246,16 @@
 **Verification:** The frontend typecheck passed. All five business-intake tests passed, including a new regression that starts with Dutch stored locally, enters through `locale=en`, verifies English remains active, switches to Dutch, and confirms Dutch remains active after reload.
 
 **Resulting implementation commit:** `5fecab5d63886b0a32ee7e8a313d3833e2be9403`
+
+### Prompt 22
+
+**Timestamp:** 2026-09-22; exact message time unavailable
+**Recorded at:** 2026-09-22T07:04:30+02:00
+
+> On the map hover over card or the location detail page , i still do not see the WEBSITE , LinkedIn, Facebook, Instagram links.  Enrich the searcch params to include these fields and show the website for the hoverover and all on the detail card.
+
+**Resulting change:** Expanded OSM business enrichment to normalize website, Facebook, Instagram, and LinkedIn tags, including bare website domains and social handles. Added LinkedIn to the generated listing API contract. Map hover cards now show the official website, list cards include LinkedIn alongside existing website/Facebook/Instagram links, and the full location detail page shows website, Facebook, Instagram, LinkedIn, and the separate source page when available.
+
+**Verification:** API client generation and shared-library typechecking passed. The buurtgids frontend typecheck passed. All 24 listing-query tests passed, including new OSM link-normalization coverage. The focused discovery regression passed with assertions for the hover website and all detail-page links.
+
+**Resulting implementation commit:** `7b621d051ba2d1502a340f77dfca56d20d255a58`
