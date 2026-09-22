@@ -175,3 +175,14 @@
 **Resulting change:** Moved `requirements.md` into `doc/md/v0.4/business-requirements` without changing its contents.
 
 **Resulting implementation commit:** `f8857f659e248f6885b20d8912944027edff2dd2`
+
+### Prompt 17
+
+**Timestamp:** 2026-09-22; exact message time unavailable
+**Recorded at:** 2026-09-22T06:41:10+02:00
+
+> should a school be classified as a business ? or a social listing? show your reasoning
+
+**Resulting decision:** A school defaults to `Businesses → Education & Childcare`. It belongs on the Social map only when the listing represents a distinct community-support service rather than the school itself. If the word “Businesses” is too narrow for public schools, rename the parent directory to “Businesses & organizations” or “Local organizations” instead of misclassifying schools as social listings.
+
+**Resulting implementation commit:** No product code change was made from this prompt.
