@@ -142,3 +142,14 @@
 **Resulting change:** Moved the prompt record to `doc/md/v0.4/v043-fix-prompts.md`. Future prompts are recorded at this path.
 
 **Resulting documentation commit:** Reported after the commit is created because a commit cannot contain its own final hash.
+
+### Prompt 14
+
+**Timestamp:** 2026-09-22; exact message time unavailable
+**Recorded at:** 2026-09-22T06:36:20+02:00
+
+> create a directory doc/md/v0.4/business-requirements
+
+**Resulting change:** Created the tracked directory `doc/md/v0.4/business-requirements`.
+
+**Resulting implementation commit:** `21fc1a84b60c3432d6db2ef31696516909302f20`
