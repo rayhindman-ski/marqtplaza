@@ -164,3 +164,14 @@
 **Resulting change:** Moved `BR-01.md` through `BR-12.md` into `doc/md/v0.4/business-requirements` without changing their contents.
 
 **Resulting implementation commit:** `abb8ce85362e603ae5923829988e34484d3b9c6e`
+
+### Prompt 16
+
+**Timestamp:** 2026-09-22; exact message time unavailable
+**Recorded at:** 2026-09-22T06:38:33+02:00
+
+> also move the file doc/md/v0.4/requirements.md to the dir doc/md/v0.4/business-requirements/
+
+**Resulting change:** Moved `requirements.md` into `doc/md/v0.4/business-requirements` without changing its contents.
+
+**Resulting implementation commit:** `f8857f659e248f6885b20d8912944027edff2dd2`
