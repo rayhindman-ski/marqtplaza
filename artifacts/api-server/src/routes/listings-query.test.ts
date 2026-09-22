@@ -325,6 +325,32 @@ describe("listings query persistence inputs", () => {
     assert.equal(listings.length, 201);
     assert.ok(listings.some((listing) => listing.name === "Nearby Theresiastraat Beauty"));
   });
+
+  it("enriches OSM businesses with normalized website and social links", () => {
+    const [listing] = fetchOpenStreetMapBusinesses(
+      [{
+        id: 501,
+        lat: 52.0786,
+        lon: 4.308,
+        tags: {
+          name: "Linked Local",
+          shop: "clothes",
+          "addr:city": "Den Haag",
+          website: "linked-local.nl",
+          facebook: "@linkedlocal",
+          instagram: "https://instagram.com/linkedlocal",
+          linkedin: "linked-local",
+        },
+      }],
+      "businesses",
+      { s: 52.025, w: 4.235, n: 52.125, e: 4.42 },
+    );
+
+    assert.equal(listing.officialUrl, "https://linked-local.nl");
+    assert.equal(listing.facebookUrl, "https://www.facebook.com/linkedlocal");
+    assert.equal(listing.instagramUrl, "https://instagram.com/linkedlocal");
+    assert.equal(listing.linkedinUrl, "https://www.linkedin.com/company/linked-local");
+  });
 });
 describe("stored business subcategory narrowing", () => {
   const listings = [

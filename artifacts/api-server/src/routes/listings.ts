@@ -97,6 +97,7 @@ export type Listing = {
   sourcePageUrl?: string;
   facebookUrl?: string;
   instagramUrl?: string;
+  linkedinUrl?: string;
   snapshotDate?: string;
   reviewStatus?: "verified" | "review_due" | "changed" | "unavailable";
   reviewReason?: string | null;
@@ -930,9 +931,10 @@ export function fetchOpenStreetMapBusinesses(
       source: "openstreetmap",
       sourceName: "OpenStreetMap",
       sourcePageUrl: `https://www.openstreetmap.org/${element.type ?? "node"}/${element.id}`,
-      officialUrl: normalizeOsmUrl(tags["contact:website"] ?? tags.website),
+      officialUrl: normalizeOsmUrl(tags["contact:website"] ?? tags.website ?? tags.url),
       facebookUrl: normalizeOsmSocialUrl("facebook", tags["contact:facebook"] ?? tags.facebook),
       instagramUrl: normalizeOsmSocialUrl("instagram", tags["contact:instagram"] ?? tags.instagram),
+      linkedinUrl: normalizeOsmSocialUrl("linkedin", tags["contact:linkedin"] ?? tags.linkedin),
     };
     const key = listingDedupeKey(listing);
     if (seen.has(key)) continue;
@@ -958,21 +960,23 @@ export interface OsmElement {
 }
 
 function normalizeOsmUrl(value: string | undefined): string | undefined {
-  const url = value?.trim();
+  const url = value?.split(";")[0]?.trim();
   if (!url) return undefined;
   if (/^https?:\/\//i.test(url)) return url;
   if (/^www\./i.test(url)) return `https://${url}`;
+  if (/^[a-z0-9.-]+\.[a-z]{2,}(?:[/?#].*)?$/i.test(url)) return `https://${url}`;
   return undefined;
 }
 
 function normalizeOsmSocialUrl(
-  provider: "facebook" | "instagram",
+  provider: "facebook" | "instagram" | "linkedin",
   value: string | undefined,
 ): string | undefined {
   const directUrl = normalizeOsmUrl(value);
   if (directUrl) return directUrl;
   const handle = value?.trim().replace(/^@/, "").replace(/^\/+|\/+$/g, "");
   if (!handle || /\s/.test(handle)) return undefined;
+  if (provider === "linkedin") return `https://www.linkedin.com/company/${handle}`;
   return `https://www.${provider}.com/${handle}`;
 }
 

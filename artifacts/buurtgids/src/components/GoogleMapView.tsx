@@ -351,11 +351,12 @@ function MarkerPreview({
   marker,
   language,
 }: {
-  marker: Pick<MarkerData, 'id' | 'name' | 'category' | 'description' | 'details'>;
+  marker: Pick<MarkerData, 'id' | 'name' | 'category' | 'description' | 'details' | 'officialUrl' | 'sourceUrl'>;
   language: Language;
 }) {
   const copy = getMarkerCopy(marker, language);
   const t = translations[language];
+  const websiteUrl = marker.officialUrl ?? marker.sourceUrl;
 
   return (
     <div
@@ -369,6 +370,11 @@ function MarkerPreview({
       </p>
       <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-muted-foreground">{copy.description}</p>
       <p className="mt-2 text-[11px] font-bold text-secondary">{copy.details}</p>
+      {websiteUrl && (
+        <p data-testid={`map-preview-website-${marker.id}`} className="mt-2 truncate text-[11px] font-bold text-primary">
+          {language === 'nl' ? 'Website' : 'Website'}: {websiteUrl.replace(/^https?:\/\/(www\.)?/i, '').replace(/\/$/, '')}
+        </p>
+      )}
     </div>
   );
 }
@@ -1727,6 +1733,14 @@ function GoogleMapCanvas({
       details.textContent = copy.details;
       details.style.cssText = 'margin-top:8px;font-size:11px;font-weight:700;color:hsl(var(--secondary));';
       preview.append(title, category, description, details);
+      const websiteUrl = marker.officialUrl ?? marker.sourceUrl;
+      if (websiteUrl) {
+        const website = document.createElement('p');
+        website.setAttribute('data-map-preview-website', marker.id);
+        website.textContent = `Website: ${websiteUrl.replace(/^https?:\/\/(www\.)?/i, '').replace(/\/$/, '')}`;
+        website.style.cssText = 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:8px;font-size:11px;font-weight:800;color:hsl(var(--primary));';
+        preview.append(website);
+      }
       wrapper.append(element, preview);
 
       const showPreview = () => {

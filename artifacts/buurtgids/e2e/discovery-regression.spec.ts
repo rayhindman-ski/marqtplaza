@@ -572,6 +572,7 @@ test('main search external-source setting controls discovery mode and persists',
           officialUrl: 'https://example.com/stored-postcode-result',
           facebookUrl: 'https://www.facebook.com/stored-postcode-result',
           instagramUrl: 'https://www.instagram.com/stored-postcode-result',
+           linkedinUrl: 'https://www.linkedin.com/company/stored-postcode-result',
         }],
       }),
     });
@@ -614,6 +615,11 @@ test('main search external-source setting controls discovery mode and persists',
   expect(anonId).toBeTruthy();
   expect(anonId).toMatch(/^anon_|^[0-9a-f-]{36}$/i);
   await expect(page.getByText('Stored postcode result').first()).toBeVisible();
+  const mapPin = page.locator('[data-map-pin][data-event-id="postcode-result"]');
+  await mapPin.hover();
+  await expect(page.getByTestId('map-preview-website-postcode-result')).toContainText(
+    'example.com/stored-postcode-result',
+  );
   await expect(page.getByText('Local-only search.')).toBeVisible();
   await expect(page.getByTestId('listing-website-postcode-result')).toHaveAttribute(
     'href',
@@ -626,6 +632,10 @@ test('main search external-source setting controls discovery mode and persists',
   await expect(page.getByRole('link', { name: 'Instagram: Stored postcode result' })).toHaveAttribute(
     'href',
     'https://www.instagram.com/stored-postcode-result',
+  );
+  await expect(page.getByRole('link', { name: 'LinkedIn: Stored postcode result' })).toHaveAttribute(
+    'href',
+    'https://www.linkedin.com/company/stored-postcode-result',
   );
   await page.getByRole('button', { name: 'Stored postcode result', exact: true }).click();
   const carRoute = page.getByRole('link', { name: 'Directions by Car: Stored postcode result' });
@@ -660,6 +670,47 @@ test('main search external-source setting controls discovery mode and persists',
   await page.goto('/activiteiten/den-haag?postcode=2511');
   await page.getByRole('button', { name: 'Search scope' }).click();
   await expect(page.getByRole('checkbox', { name: 'Include web results' })).toBeChecked();
+
+  await page.route(/\/api\/listing(?:\?|$)/, async (route) => {
+    await route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({
+        source: 'stored',
+        listing: {
+          id: 'postcode-result',
+          locationId: 'dhg',
+          category: 'Businesses',
+          businessCategory: 'Retail & Shopping',
+          name: 'Stored postcode result',
+          description: 'A stored neighborhood listing',
+          details: '2511 AB Den Haag',
+          address: '2511 AB Den Haag',
+          x: 50,
+          y: 50,
+          lat: 52.071,
+          lng: 4.301,
+          source: 'openstreetmap',
+          officialUrl: 'https://example.com/stored-postcode-result',
+          sourcePageUrl: 'https://www.openstreetmap.org/node/42',
+          facebookUrl: 'https://www.facebook.com/stored-postcode-result',
+          instagramUrl: 'https://www.instagram.com/stored-postcode-result',
+          linkedinUrl: 'https://www.linkedin.com/company/stored-postcode-result',
+        },
+      }),
+    });
+  });
+  await page.goto('/activiteiten/den-haag/postcode-result?section=businesses&locale=en');
+  await expect(page.getByTestId('detail-website-postcode-result')).toHaveAttribute(
+    'href',
+    'https://example.com/stored-postcode-result',
+  );
+  await expect(page.getByRole('link', { name: 'Facebook: Stored postcode result' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Instagram: Stored postcode result' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'LinkedIn: Stored postcode result' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Source page' })).toHaveAttribute(
+    'href',
+    'https://www.openstreetmap.org/node/42',
+  );
 });
 
 test('keeps every selected neighborhood free of out-of-boundary listings', async ({ page }) => {

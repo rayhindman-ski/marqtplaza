@@ -125,6 +125,7 @@ export interface Marker {
   sourcePageUrl?: string;
   facebookUrl?: string;
   instagramUrl?: string;
+  linkedinUrl?: string;
   snapshotDate?: string;
   reviewStatus?: SocialMapReviewStatus;
   reviewReason?: string | null;

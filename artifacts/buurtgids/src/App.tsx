@@ -12,7 +12,7 @@ import {
   Landmark, Route as RouteIcon, Baby, Building2, Coffee, Gamepad2, HandHeart, Waves, ShoppingBag, ExternalLink, AlertCircle, CalendarPlus,
   CalendarDays, UsersRound, Utensils,
   CloudSun, Cloud, CloudFog, CloudRain, CloudSnow, Sun, Wind, Droplets, Tag, Store,
-  Bike, Car, Footprints, TrainFront, ShieldCheck, Sparkles, Navigation, UserRound, Loader2, Menu, Facebook, Instagram
+  Bike, Car, Footprints, TrainFront, ShieldCheck, Sparkles, Navigation, UserRound, Loader2, Menu, Facebook, Instagram, Linkedin
 } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -1601,7 +1601,7 @@ function MarkerCard({
     ?? (marker.source ? getListingSourceName(marker.source, language) : undefined);
   const isEvent = topLevelForMarker(marker) === 'events';
   const websiteUrl = marker.officialUrl ?? marker.sourcePageUrl ?? marker.sourceUrl;
-  const hasWebLinks = Boolean(websiteUrl || marker.facebookUrl || marker.instagramUrl);
+  const hasWebLinks = Boolean(websiteUrl || marker.facebookUrl || marker.instagramUrl || marker.linkedinUrl);
   const timing = isEvent ? formatEventTiming(marker.startsAt, language) : null;
   const evidence = marker.evidence ?? [];
   const evidenceStatusLabel = getEvidenceStatusLabel(language);
@@ -1748,6 +1748,19 @@ function MarkerCard({
                   className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-primary/25 bg-primary/5 text-primary transition-colors hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                 >
                   <Instagram className="h-4 w-4" aria-hidden="true" />
+                </a>
+              )}
+              {marker.linkedinUrl && (
+                <a
+                  href={marker.linkedinUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={`LinkedIn: ${marker.name}`}
+                  title="LinkedIn"
+                  onClick={(event) => event.stopPropagation()}
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-primary/25 bg-primary/5 text-primary transition-colors hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                >
+                  <Linkedin className="h-4 w-4" aria-hidden="true" />
                 </a>
               )}
               {!hasWebLinks && (
@@ -2376,6 +2389,7 @@ function DiscoveryState({
         sourcePageUrl: l.sourcePageUrl,
         facebookUrl: l.facebookUrl,
         instagramUrl: l.instagramUrl,
+        linkedinUrl: l.linkedinUrl,
         snapshotDate: l.snapshotDate,
         reviewStatus: l.reviewStatus as SocialMapReviewStatus | undefined,
         reviewReason: l.reviewReason,
@@ -3169,6 +3183,16 @@ function EventDetailView({ eventId, listingSection = 'events' }: {
   const category = listing.category as Category;
   const Icon = CATEGORY_ICONS[category] ?? MapPinOff;
   const sourceUrl = (listing as typeof listing & { sourceUrl?: string }).sourceUrl;
+  const officialUrl = listing.officialUrl;
+  const websiteUrl = officialUrl ?? sourceUrl;
+  const sourcePageUrl = listing.sourcePageUrl;
+  const hasExternalLinks = Boolean(
+    websiteUrl
+    || sourcePageUrl
+    || listing.facebookUrl
+    || listing.instagramUrl
+    || listing.linkedinUrl,
+  );
   const practicalDetails = listingSection === 'events'
     ? [
       listing.organizer ? `${language === 'nl' ? 'Organisatie' : 'Organizer'}: ${listing.organizer}` : '',
@@ -3311,22 +3335,40 @@ function EventDetailView({ eventId, listingSection = 'events' }: {
             className="mt-6 rounded-2xl border border-border bg-muted/30 p-4"
           />
 
-          {sourceUrl && (
+          {hasExternalLinks && (
             <div className="mt-8 flex flex-wrap gap-3">
-            <a
-              href={sourceUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="mt-8 inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/5 px-4 py-2.5 text-sm font-bold text-primary transition-colors hover:bg-primary/10"
-            >
-              {(listing as typeof listing & { officialUrl?: string }).officialUrl
-                ? translations[language].officialWebsite
-                : (language === 'nl' ? 'Bekijk de bronwebsite' : 'View source website')}
-              <ExternalLink className="h-4 w-4" />
-            </a>
-            {(listing as typeof listing & { sourcePageUrl?: string }).sourcePageUrl && (
+            {websiteUrl && (
               <a
-                href={(listing as typeof listing & { sourcePageUrl?: string }).sourcePageUrl}
+                data-testid={`detail-website-${listing.id}`}
+                href={websiteUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/5 px-4 py-2.5 text-sm font-bold text-primary transition-colors hover:bg-primary/10"
+              >
+                {officialUrl
+                  ? translations[language].officialWebsite
+                  : (language === 'nl' ? 'Bekijk de bronwebsite' : 'View source website')}
+                <ExternalLink className="h-4 w-4" />
+              </a>
+            )}
+            {listing.facebookUrl && (
+              <a href={listing.facebookUrl} target="_blank" rel="noopener noreferrer" aria-label={`Facebook: ${listing.name}`} className="inline-flex items-center gap-2 rounded-full border border-border bg-muted/40 px-4 py-2.5 text-sm font-bold text-muted-foreground transition-colors hover:bg-muted">
+                <Facebook className="h-4 w-4" aria-hidden="true" /> Facebook
+              </a>
+            )}
+            {listing.instagramUrl && (
+              <a href={listing.instagramUrl} target="_blank" rel="noopener noreferrer" aria-label={`Instagram: ${listing.name}`} className="inline-flex items-center gap-2 rounded-full border border-border bg-muted/40 px-4 py-2.5 text-sm font-bold text-muted-foreground transition-colors hover:bg-muted">
+                <Instagram className="h-4 w-4" aria-hidden="true" /> Instagram
+              </a>
+            )}
+            {listing.linkedinUrl && (
+              <a href={listing.linkedinUrl} target="_blank" rel="noopener noreferrer" aria-label={`LinkedIn: ${listing.name}`} className="inline-flex items-center gap-2 rounded-full border border-border bg-muted/40 px-4 py-2.5 text-sm font-bold text-muted-foreground transition-colors hover:bg-muted">
+                <Linkedin className="h-4 w-4" aria-hidden="true" /> LinkedIn
+              </a>
+            )}
+            {sourcePageUrl && sourcePageUrl !== websiteUrl && (
+              <a
+                href={sourcePageUrl}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-2 rounded-full border border-border bg-muted/40 px-4 py-2.5 text-sm font-bold text-muted-foreground transition-colors hover:bg-muted"

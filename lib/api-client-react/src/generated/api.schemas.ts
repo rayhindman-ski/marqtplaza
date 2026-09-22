@@ -2315,6 +2315,8 @@ export interface Listing {
   facebookUrl?: string;
   /** Public Instagram profile supplied by the listing provider. */
   instagramUrl?: string;
+  /** Public LinkedIn page supplied by the listing provider. */
+  linkedinUrl?: string;
   businessCategory?: BusinessCategory;
   /** Source-derived Food & Drink venue type. Absent for non-food listings. */
   foodType?: ListingFoodType;

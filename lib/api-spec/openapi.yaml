@@ -4885,6 +4885,9 @@ components:
         instagramUrl:
           type: string
           description: Public Instagram profile supplied by the listing provider.
+        linkedinUrl:
+          type: string
+          description: Public LinkedIn page supplied by the listing provider.
         businessCategory:
           $ref: "#/components/schemas/BusinessCategory"
         foodType:
