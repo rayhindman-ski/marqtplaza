@@ -10,6 +10,13 @@ export function readStoredLanguage(): Language {
   return window.localStorage.getItem(LANGUAGE_STORAGE_KEY) === 'nl' ? 'nl' : 'en';
 }
 
+/** True once the visitor (or the app on their behalf) has stored a language in this browser. */
+export function hasStoredLanguage(): boolean {
+  if (typeof window === 'undefined') return false;
+  const stored = window.localStorage.getItem(LANGUAGE_STORAGE_KEY);
+  return stored === 'nl' || stored === 'en';
+}
+
 function readRequestedLanguage(): Language | null {
   if (typeof window === 'undefined') return null;
   const locale = new URLSearchParams(window.location.search).get('locale');

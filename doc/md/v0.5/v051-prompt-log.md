@@ -109,3 +109,32 @@ Clerk's card re-localizes on switch. Typecheck + relevant e2e suites green.
 **Duration:** 10:23 → 10:33 CEST (≈10 minutes).
 
 **Commits:** `aaad90c` (pushed)
+
+### Prompt 6
+
+**Received:** 2026-09-23 ≈20:05 CEST (answer to the follow-up question)
+
+> complete registration
+
+**Response (summary):** Located the override on `/account/register/complete`
+that replaced the visitor's language with the link's locale; changed it to a
+fallback used only when no language is stored in the browser.
+
+**Duration:** 20:06 → 20:10 CEST (≈4 minutes, merged with Prompt 7).
+
+### Prompt 7
+
+**Received:** 2026-09-23 ≈20:10 CEST (screenshot of the Dutch form)
+
+> (screenshot: research registration form — Naam, E-mailadres, "Ik registreer
+> mij als", ratings, "Registratie afronden")
+
+**Response (summary):** Identified the page as `/onboarding` (research
+registration), which was hard-coded Dutch with no toggle. Localized all copy
+NL/EN through `accountTranslations.onboarding`, added the shared language
+toggle, kept the API payload unchanged. Typecheck, i18n parity and the account
+e2e suites pass.
+
+**Duration:** 20:10 → 20:22 CEST (≈12 minutes).
+
+**Commits:** see the commit that adds this entry.

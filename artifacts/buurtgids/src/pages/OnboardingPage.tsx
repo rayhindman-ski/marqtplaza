@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useAuth, useUser } from '@clerk/react';
 import { ArrowRight, Check, HeartHandshake, LoaderCircle, ShieldCheck, UserRound } from 'lucide-react';
 import { useLocation, Redirect, Link } from 'wouter';
+import { LanguageToggle } from '@/components/account/AccountShell';
 import { featureFlags } from '@/lib/featureFlags';
 import { accountTranslations } from '@/lib/i18n';
 import { useAppLanguage } from '@/lib/useAppLanguage';
@@ -34,16 +35,12 @@ function OnboardingSkeleton() {
 /** Browser cache of the server-side research registration status. */
 const REGISTRATION_MARKER_KEY = 'buurtplaza-onboarding-complete';
 
-const ratingLabels = {
-  usefulness: ['Nog niet nuttig', 'Een beetje nuttig', 'Redelijk nuttig', 'Erg nuttig', 'Heel nuttig'],
-  referral: ['Zeker niet', 'Waarschijnlijk niet', 'Misschien', 'Waarschijnlijk wel', 'Zeker wel'],
-};
-
 export default function OnboardingPage() {
   const { isLoaded, isSignedIn } = useAuth();
   const { user } = useUser();
   const [, setLocation] = useLocation();
-  const [language] = useAppLanguage();
+  const [language, setLanguage] = useAppLanguage();
+  const copy = accountTranslations[language].onboarding;
   const registrationQuery = useGetRegistration({
     query: {
       enabled: Boolean(isLoaded && isSignedIn && user),
@@ -62,8 +59,8 @@ export default function OnboardingPage() {
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
-    document.title = 'Registratie · Buurtplaza';
-  }, []);
+    document.title = copy.docTitle;
+  }, [copy.docTitle]);
 
   useEffect(() => {
     if (!user) return;
@@ -102,7 +99,7 @@ export default function OnboardingPage() {
     setSaved(false);
 
     if (!name.trim() || !email.trim() || !usefulnessRating || !referralLikelihood || !desiredFeatures.trim()) {
-      setError('Vul alle velden in om je registratie af te ronden.');
+      setError(copy.errorIncomplete);
       return;
     }
 
@@ -122,7 +119,7 @@ export default function OnboardingPage() {
       },
       onError: (saveError) => {
         const message = saveError instanceof Error ? saveError.message : '';
-        setError(message || 'Opslaan is niet gelukt. Probeer het opnieuw.');
+        setError(message || copy.errorSave);
       },
     });
   };
@@ -141,9 +138,12 @@ export default function OnboardingPage() {
           >
             buurt<span className="text-primary">plaza</span>
           </Link>
-          <span data-testid="text-onboarding-step" className="rounded-full border border-border/80 bg-card/70 px-3 py-1.5 text-xs font-bold text-muted-foreground">
-            Registratie · laatste stap
-          </span>
+          <div className="flex items-center gap-3">
+            <span data-testid="text-onboarding-step" className="rounded-full border border-border/80 bg-card/70 px-3 py-1.5 text-xs font-bold text-muted-foreground">
+              {copy.step}
+            </span>
+            <LanguageToggle language={language} onLanguageChange={setLanguage} />
+          </div>
         </header>
 
         <div className="grid gap-8 lg:grid-cols-[0.8fr_1.2fr] lg:items-start">
@@ -151,22 +151,21 @@ export default function OnboardingPage() {
             <div className="mb-5 inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
               <HeartHandshake className="h-6 w-6" aria-hidden="true" />
             </div>
-            <p className="mb-3 text-sm font-extrabold uppercase tracking-[0.16em] text-primary">Welkom bij de buurt</p>
+            <p className="mb-3 text-sm font-extrabold uppercase tracking-[0.16em] text-primary">{copy.eyebrow}</p>
             <h1 data-testid="heading-onboarding" className="max-w-md font-serif text-4xl font-semibold leading-[1.08] text-foreground sm:text-5xl">
-              Help ons MarqtPlaza nuttiger te maken.
+              {copy.title}
             </h1>
             <p className="mt-5 max-w-md text-base leading-7 text-muted-foreground">
-              Deze korte registratie geeft ons context voor lokale blogs, posts, reviews en tips.
-              Je kunt je antwoorden later aanpassen.
+              {copy.intro}
             </p>
             <div className="mt-8 space-y-3 text-sm text-foreground">
               <div className="flex items-start gap-3">
                 <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-primary" aria-hidden="true" />
-                <span>Je gegevens worden gekoppeld aan je beveiligde Clerk-account.</span>
+                <span>{copy.trustClerk}</span>
               </div>
               <div className="flex items-start gap-3">
                 <Check className="mt-0.5 h-5 w-5 shrink-0 text-primary" aria-hidden="true" />
-                <span>Na registratie kun je bijdragen plaatsen en reageren op lokale content.</span>
+                <span>{copy.trustContribute}</span>
               </div>
             </div>
           </section>
@@ -175,29 +174,27 @@ export default function OnboardingPage() {
             <CardHeader className="border-b border-border/70 bg-accent/35 px-6 py-6 sm:px-8">
               <CardTitle className="flex items-center gap-2 text-xl">
                 <UserRound className="h-5 w-5 text-primary" aria-hidden="true" />
-                Jouw registratie
+                {copy.cardTitle}
               </CardTitle>
-              <CardDescription>
-                Een paar antwoorden is genoeg. Je e-mailadres komt uit je account en wordt alleen gebruikt voor je registratie.
-              </CardDescription>
+              <CardDescription>{copy.cardDescription}</CardDescription>
             </CardHeader>
             <CardContent className="px-6 py-7 sm:px-8">
               <form data-testid="form-onboarding" onSubmit={submit} className="space-y-7">
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="space-y-2 sm:col-span-2">
-                    <Label htmlFor="registration-name">Naam</Label>
+                    <Label htmlFor="registration-name">{copy.nameLabel}</Label>
                     <Input
                       id="registration-name"
                       data-testid="input-onboarding-name"
                       value={name}
                       onChange={(event) => setName(event.target.value)}
                       autoComplete="name"
-                      placeholder="Bijv. Noor Jansen"
+                      placeholder={copy.namePlaceholder}
                       required
                     />
                   </div>
                   <div className="space-y-2 sm:col-span-2">
-                    <Label htmlFor="registration-email">E-mailadres</Label>
+                    <Label htmlFor="registration-email">{copy.emailLabel}</Label>
                     <Input
                       id="registration-email"
                       data-testid="input-onboarding-email"
@@ -205,18 +202,18 @@ export default function OnboardingPage() {
                       value={email}
                       onChange={(event) => setEmail(event.target.value)}
                       autoComplete="email"
-                      placeholder="jij@voorbeeld.nl"
+                      placeholder={copy.emailPlaceholder}
                       required
                     />
                   </div>
                 </div>
 
                 <fieldset className="space-y-3">
-                  <legend className="text-sm font-semibold leading-none">Ik registreer mij als</legend>
+                  <legend className="text-sm font-semibold leading-none">{copy.typeLegend}</legend>
                   <div className="grid gap-3 sm:grid-cols-2">
                     {([
-                      { value: 'consumer' as const, label: 'Buurtbewoner / consument', detail: 'Ik wil ontdekken, lezen en meedoen.' },
-                      { value: 'business' as const, label: 'Bedrijf / organisatie', detail: 'Ik vertegenwoordig een lokale onderneming.' },
+                      { value: 'consumer' as const, label: copy.typeConsumer, detail: copy.typeConsumerDetail },
+                      { value: 'business' as const, label: copy.typeBusiness, detail: copy.typeBusinessDetail },
                     ]).map((option) => (
                       <button
                         type="button"
@@ -239,30 +236,32 @@ export default function OnboardingPage() {
 
                 <RatingField
                   id="registration-usefulness"
-                  label="Hoe nuttig is MarqtPlaza voor jou?"
+                  label={copy.usefulnessLabel}
                   value={usefulnessRating}
                   onChange={setUsefulnessRating}
-                  labels={ratingLabels.usefulness}
+                  labels={copy.usefulnessScale}
+                  ratingOf={copy.ratingOf}
                   testId="input-usefulness-rating"
                 />
 
                 <RatingField
                   id="registration-referral"
-                  label="Hoe waarschijnlijk is het dat je vrienden of familie verwijst?"
+                  label={copy.referralLabel}
                   value={referralLikelihood}
                   onChange={setReferralLikelihood}
-                  labels={ratingLabels.referral}
+                  labels={copy.referralScale}
+                  ratingOf={copy.ratingOf}
                   testId="input-referral-likelihood"
                 />
 
                 <div className="space-y-2">
-                  <Label htmlFor="registration-desired-features">Wat wil je graag zien op MarqtPlaza?</Label>
+                  <Label htmlFor="registration-desired-features">{copy.featuresLabel}</Label>
                   <Textarea
                     id="registration-desired-features"
                     data-testid="input-desired-features"
                     value={desiredFeatures}
                     onChange={(event) => setDesiredFeatures(event.target.value)}
-                    placeholder="Bijv. buurtverhalen, activiteiten, reviews van lokale bedrijven…"
+                    placeholder={copy.featuresPlaceholder}
                     className="min-h-28 resize-y"
                     maxLength={2000}
                     required
@@ -277,12 +276,12 @@ export default function OnboardingPage() {
                 )}
                 {saved && (
                   <div data-testid="status-onboarding-success" role="status" className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 px-4 py-3 text-sm text-emerald-700">
-                    <p>Je registratie is opgeslagen. Je kunt nu meedoen in de buurt.</p>
+                    <p>{copy.savedBody}</p>
                     <Link
                       href={registrationType === 'business' ? '/bedrijf-aanmelden' : '/'}
                       className="mt-2 inline-flex font-bold underline underline-offset-4"
                     >
-                      {registrationType === 'business' ? 'Ga door met bedrijfsaanmelding' : 'Ga naar MarqtPlaza'}
+                      {registrationType === 'business' ? copy.savedContinueBusiness : copy.savedContinueHome}
                     </Link>
                   </div>
                 )}
@@ -299,11 +298,11 @@ export default function OnboardingPage() {
 
                 <div className="flex flex-col gap-3 border-t border-border/70 pt-6 sm:flex-row sm:items-center sm:justify-between">
                   <Link href="/account" className="text-sm font-bold text-muted-foreground underline-offset-4 hover:text-foreground hover:underline">
-                    Later aanpassen in account
+                    {copy.later}
                   </Link>
                   <Button type="submit" data-testid="button-save-onboarding" disabled={saveRegistration.isPending} className="gap-2 font-bold">
                     {saveRegistration.isPending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}
-                    {saveRegistration.isPending ? 'Opslaan…' : saved ? 'Opnieuw opslaan' : 'Registratie afronden'}
+                    {saveRegistration.isPending ? copy.saving : saved ? copy.saveAgain : copy.save}
                   </Button>
                 </div>
               </form>
@@ -321,13 +320,15 @@ function RatingField({
   value,
   onChange,
   labels,
+  ratingOf,
   testId,
 }: {
   id: string;
   label: string;
   value: number | null;
   onChange: (value: number) => void;
-  labels: string[];
+  labels: readonly string[];
+  ratingOf: (rating: number, detail: string) => string;
   testId: string;
 }) {
   return (
@@ -341,7 +342,7 @@ function RatingField({
               type="button"
               key={rating}
               data-testid={`${testId}-${rating}`}
-              aria-label={`${rating} van 5: ${detail}`}
+              aria-label={ratingOf(rating, detail)}
               aria-pressed={value === rating}
               onClick={() => onChange(rating)}
               className={`flex min-h-12 items-center justify-center rounded-xl border text-sm font-extrabold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${

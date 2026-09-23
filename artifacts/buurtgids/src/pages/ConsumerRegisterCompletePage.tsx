@@ -14,7 +14,7 @@ import { AccountShell } from '@/components/account/AccountShell';
 import { Button } from '@/components/ui/button';
 import { featureFlags } from '@/lib/featureFlags';
 import { accountErrorMessage, accountTranslations, formatCopy, type Language } from '@/lib/i18n';
-import { useAppLanguage } from '@/lib/useAppLanguage';
+import { hasStoredLanguage, useAppLanguage } from '@/lib/useAppLanguage';
 import { RegistrationUnavailable, apiErrorFrom } from './ConsumerRegisterPage';
 
 /**
@@ -58,10 +58,12 @@ export default function ConsumerRegisterCompletePage() {
   const [result, setResult] = useState<ConsumerRegistrationLinkState | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
-  // The email's locale wins on first load so the consumer sees the language they registered in.
+  // The link's locale is only a fallback for a browser that has not chosen a
+  // language yet (e.g. the email was opened on another device). A language the
+  // visitor already picked in this browser always wins, as on every other page.
   useEffect(() => {
     const locale = inspect.data?.locale;
-    if (locale && locale !== language) setLanguage(locale);
+    if (locale && locale !== language && !hasStoredLanguage()) setLanguage(locale);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [inspect.data?.locale]);
 

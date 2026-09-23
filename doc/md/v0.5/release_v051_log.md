@@ -266,3 +266,26 @@ selected, and the flow had no language toggle.
   6/6; `e2e/clerk-verification-recovery`, `e2e/signup-stale-step`,
   `e2e/account-preferences` 14 passed / 3 skipped (unchanged skips).
 - No discovery, map, list, filter, card or icon code touched.
+
+### 2026-09-23 — Follow-up: language on the registration screens (root causes)
+
+The reporter's screenshot showed the research registration page
+(`/onboarding`, "Registratie afronden"), and the answer "complete
+registration" also pointed at `/account/register/complete`. Two causes:
+
+1. **`/account/register/complete` overrode the chosen language.** The v0.5.1
+   completion page set the app language to the locale stored in the link on
+   every load. Changed: the link locale is now only a fallback when the
+   browser has no stored language at all (email opened on another device);
+   a language already chosen in this browser always wins
+   (`hasStoredLanguage()` in `lib/useAppLanguage.ts`).
+2. **`/onboarding` was Dutch-only and had no toggle.** All copy on the
+   research registration page was hard-coded Dutch. Moved it into
+   `accountTranslations.{nl,en}.onboarding` (35 keys incl. both rating
+   scales and the `n of 5` aria-label), the page now reads the shared app
+   language and shows the same NL/EN toggle as the other account screens.
+   The `/api/registration` contract and payload are unchanged (REG-010).
+
+Verification: typecheck clean; i18n parity 12/12; `e2e/consumer-registration`
+6/6, `e2e/account-preferences`, `e2e/account-privacy`: 19 passed in total.
+Discovery code untouched.
