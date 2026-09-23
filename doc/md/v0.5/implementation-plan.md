@@ -207,6 +207,7 @@ isolated production-like dataset; no completion is reported prematurely.
 | BUS-T03 | Begin registration from a filtered map, cancel, fail, then succeed; verify exact safe context restoration. |
 | BUS-T04 | Inspect network, database, logs, analytics, and email payloads for data minimization. |
 | BUS-T05 | Complete every core journey in Dutch and English and compare outcomes. |
+| BUS-T06 | Run the established map, list, icon, card, and filter regression suites before and after onboarding changes; verify unchanged snapshots, interactions, request contracts, ordering, selection, hover, zoom, viewport restoration, and filter results. |
 
 ### 4.2 Registration tests
 
@@ -306,6 +307,7 @@ the global acceptance baseline.
 | BUS-008 | Add profile, legal, export, and deletion controls. | PROF-T01, PRIV-T05, OFF-T01–T05 | Authorized rights journeys complete truthfully. |
 | BUS-009 | Use one locale catalogue and bilingual lifecycle templates. | BUS-T05, L10N-T01 | Dutch/English outcomes are equivalent. |
 | BUS-010 | Add safe event codes, request status, and operator queues. | OPS-T01, SEC-T03 | Failures are diagnosable without prohibited data. |
+| BUS-011 | Keep account work behind additive account routes/services; consume existing discovery state interfaces without modifying map, list, icon, card, filter, route, request, response, cache, or provider contracts. | BUS-T06, SRCH-T01–T06 | Existing discovery regression tests pass without changed expectations; any exception has a separate approved requirement and impact assessment. |
 
 ### 5.2 Registration requirements
 
@@ -517,8 +519,9 @@ Before release, produce:
 8. Dutch/English content parity report;
 9. WCAG 2.2 AA audit for critical journeys;
 10. isolated integration-test report for account isolation, export, and deletion;
-11. operator/support runbook rehearsal; and
-12. product, legal, privacy, security, accessibility, QA, support, and operations sign-off.
+11. unchanged map, list, icon, card, and filter regression evidence;
+12. operator/support runbook rehearsal; and
+13. product, legal, privacy, security, accessibility, QA, support, and operations sign-off.
 
 ## 7. Definition of implementation complete
 

@@ -29,6 +29,38 @@ decisions, identity-provider policy, or production operating procedures.
 | BUS-008 | The lifecycle must support access, correction, export, consent withdrawal, and policy-compliant deletion. | Must |
 | BUS-009 | Dutch and English journeys must be semantically and functionally equivalent. | Must |
 | BUS-010 | Operations must be able to diagnose lifecycle failures without viewing passwords, tokens, or unnecessary personal data. | Must |
+| BUS-011 | Consumer onboarding and offboarding changes must not alter any existing map, list, icon, card, or filter behavior, appearance, interaction, state, data contract, or performance unless a separate approved requirement explicitly authorizes that change. | Must |
+
+### 2.1 Existing discovery behavior is fixed
+
+The registration, authentication, account, recovery, privacy, and offboarding
+work is an additive account capability. It must not redesign, replace,
+reconfigure, or otherwise change existing discovery behavior.
+
+This restriction includes, but is not limited to:
+
+- map rendering, boundaries, tiles, markers, clusters, selection, hover,
+  panning, zooming, viewport restoration, and map/list synchronization;
+- list ordering, grouping, pagination, scrolling, selection, and empty/error
+  states;
+- icon choice, color, size, position, labels, and interaction;
+- result cards, hover cards, detail cards, saved-state indicators, links, and
+  actions;
+- filter names, hierarchy, defaults, visibility, combinations, query
+  serialization, application, clearing, and result counts;
+- existing public discovery routes, API request parameters, response mapping,
+  cache keys, and provider behavior; and
+- desktop, responsive, keyboard, and localized behavior for those surfaces.
+
+The only permitted interaction with discovery state is the explicitly defined
+account-backed capture and restoration of the consumer's last search. That
+feature must call the existing map, list, card, icon, and filter interfaces
+without changing their established behavior.
+
+Any change to these protected surfaces requires a separate requirement,
+documented impact assessment, explicit product approval, and dedicated
+regression evidence. It must not be introduced as an incidental part of
+consumer onboarding or offboarding.
 
 ## 3. Registration requirements
 
@@ -271,7 +303,8 @@ Every **Must** requirement is accepted only when:
 6. automated tests cover the stable contract and critical negative cases;
 7. operational failure and retry behavior is observable;
 8. legal/privacy wording matches actual system behavior; and
-9. the relevant product, engineering, QA, privacy, legal, security, accessibility, support, and operations owners approve the release evidence.
+9. existing map, list, icon, card, and filter regression suites pass without changed expectations, except where a separate approved requirement explicitly authorizes a change; and
+10. the relevant product, engineering, QA, privacy, legal, security, accessibility, support, and operations owners approve the release evidence.
 
 ## 15. Open policy decisions
 
