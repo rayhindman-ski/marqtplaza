@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
 
-import { and, eq, gt, inArray, isNull, lt, sql } from "drizzle-orm";
+import { and, eq, gt, inArray, isNull, lt, ne, sql } from "drizzle-orm";
 
 import {
   consumerRegistrationTokensTable,
@@ -108,20 +108,55 @@ export function normalizePhone(raw: string, defaultCountryCode = "31"): string |
   return E164.test(value) ? value : null;
 }
 
-/** Internal-only return references: a site-relative path, never a scheme, host, or protocol-relative URL. */
+/**
+ * Internal return destinations (SEC-009). Mirrors the web app's `returnPath`
+ * allow-list: only known discovery/account routes, never a scheme, host,
+ * protocol-relative URL, or an arbitrary path the app does not serve.
+ */
+const RETURN_REF_EXACT_PATHS: ReadonlySet<string> = new Set([
+  "/",
+  "/account",
+  "/account/voorkeuren",
+  "/onboarding",
+  "/activiteiten/den-haag",
+  "/buurt",
+  "/bronnen",
+  "/nieuws",
+  "/deals",
+  "/bedrijf-aanmelden",
+  "/bedrijf-zoeken",
+  "/bedrijf-nieuw",
+  "/bedrijf-claim",
+  "/mijn-bedrijf",
+]);
+const RETURN_REF_PREFIX_PATHS = ["/activiteiten/den-haag/", "/nieuws/", "/bedrijf/"] as const;
+const RETURN_REF_SEGMENT = /^[A-Za-z0-9._~:@!$&'()*+,;=%-]+$/;
+
+function isAllowedReturnPathname(pathname: string): boolean {
+  if (RETURN_REF_EXACT_PATHS.has(pathname)) return true;
+  return RETURN_REF_PREFIX_PATHS.some((prefix) => {
+    if (!pathname.startsWith(prefix)) return false;
+    const rest = pathname.slice(prefix.length);
+    return rest.length > 0 && rest.length <= 200 && RETURN_REF_SEGMENT.test(rest);
+  });
+}
+
 export function sanitizeReturnRef(raw: string | undefined | null): string | null {
   if (typeof raw !== "string") return null;
   const value = raw.trim();
   if (value.length === 0 || value.length > 512) return null;
   if (!value.startsWith("/") || value.startsWith("//") || value.startsWith("/\\")) return null;
   if (/[\u0000-\u001f\u007f\s]/.test(value)) return null;
+  let parsed: URL;
   try {
-    const parsed = new URL(value, "https://internal.invalid");
-    if (parsed.origin !== "https://internal.invalid") return null;
+    parsed = new URL(value, "https://internal.invalid");
   } catch {
     return null;
   }
-  return value;
+  if (parsed.origin !== "https://internal.invalid") return null;
+  const pathname = parsed.pathname.replace(/\/+$/, "") || "/";
+  if (!isAllowedReturnPathname(pathname)) return null;
+  return `${pathname}${parsed.search}${parsed.hash}`;
 }
 
 export type RegistrationInput = { name: string; email: string; phone: string; locale: string; returnRef?: string | null };
@@ -164,11 +199,17 @@ const TOKEN_SHAPE = /^[A-Za-z0-9_-]{32,128}$/;
  * the caller's transaction. Returns the raw token exactly once; only the
  * digest is stored.
  */
+/**
+ * Mint a token for one outbox row. Tokens of *other* rows (earlier
+ * generations) are superseded; tokens already minted for this same row stay
+ * valid because a provider may deduplicate a retried send by its idempotency
+ * key and deliver the first body — that link must keep working.
+ */
 export async function issueRegistrationToken(
   tx: Tx,
   input: { registrationId: number; outboxId: number | null; now: Date; ttlMs: number },
 ): Promise<{ token: string; expiresAt: Date }> {
-  await supersedeEffectiveTokens(tx, input.registrationId, input.now);
+  await supersedeEffectiveTokens(tx, input.registrationId, input.now, input.outboxId);
   const token = generateRegistrationToken();
   const expiresAt = new Date(input.now.getTime() + input.ttlMs);
   await tx.insert(consumerRegistrationTokensTable).values({
@@ -180,7 +221,7 @@ export async function issueRegistrationToken(
   return { token, expiresAt };
 }
 
-async function supersedeEffectiveTokens(tx: Tx, registrationId: number, now: Date): Promise<number> {
+async function supersedeEffectiveTokens(tx: Tx, registrationId: number, now: Date, exceptOutboxId: number | null = null): Promise<number> {
   const rows = await tx
     .update(consumerRegistrationTokensTable)
     .set({ supersededAt: now })
@@ -189,6 +230,7 @@ async function supersedeEffectiveTokens(tx: Tx, registrationId: number, now: Dat
         eq(consumerRegistrationTokensTable.registrationId, registrationId),
         isNull(consumerRegistrationTokensTable.usedAt),
         isNull(consumerRegistrationTokensTable.supersededAt),
+        exceptOutboxId === null ? undefined : ne(consumerRegistrationTokensTable.outboxId, exceptOutboxId),
       ),
     )
     .returning({ id: consumerRegistrationTokensTable.id });
@@ -237,6 +279,20 @@ export class SlidingWindowLimiter {
 // ---------------------------------------------------------------------------
 // Service
 // ---------------------------------------------------------------------------
+
+class RegistrationClosedError extends Error {
+  constructor() {
+    super("Registration closed during consumption.");
+    this.name = "RegistrationClosedError";
+  }
+}
+
+/** Safe error summary for logs: class and driver code only, never the message (it can carry SQL parameters). */
+export function safeErrorSummary(error: unknown): { name: string; code?: string } {
+  const name = error instanceof Error ? error.name : typeof error;
+  const code = (error as { code?: unknown } | null)?.code;
+  return typeof code === "string" ? { name, code } : { name };
+}
 
 export class AccountLookupUnavailableError extends Error {
   constructor(cause?: unknown) {
@@ -327,6 +383,17 @@ export function createConsumerRegistrationService(options: ConsumerRegistrationS
     /** Neutral by construction: every branch resolves; the caller answers 202 for all of them. */
     async submit(value: NormalizedRegistration): Promise<SubmitOutcome> {
       const at = now();
+      // The identity-provider lookup runs for *every* valid request, before the
+      // registration state is consulted, so new, pending, and existing addresses
+      // share one dependency path and one timing class; an outage answers 503
+      // for all of them (REG-008, §12.5.1).
+      let accountExists: boolean;
+      try {
+        accountExists = await options.accountExists(value.email);
+      } catch (error) {
+        throw error instanceof AccountLookupUnavailableError ? error : new AccountLookupUnavailableError(error);
+      }
+
       const existing = await db.transaction(async (tx) => {
         const open = await loadOpenRegistration(tx, value.email);
         if (!open) return null;
@@ -338,12 +405,6 @@ export function createConsumerRegistrationService(options: ConsumerRegistrationS
       });
       if (existing) return existing;
 
-      let accountExists: boolean;
-      try {
-        accountExists = await options.accountExists(value.email);
-      } catch (error) {
-        throw error instanceof AccountLookupUnavailableError ? error : new AccountLookupUnavailableError(error);
-      }
       if (accountExists) {
         logger.info({ event: "consumer_registration.suppressed", reason: "account_exists" }, "Registration request suppressed");
         return { kind: "suppressed", reason: "account_exists" };
@@ -406,7 +467,8 @@ export function createConsumerRegistrationService(options: ConsumerRegistrationS
       if (!TOKEN_SHAPE.test(token)) return { state: "invalid" };
       const at = now();
       const digest = digestRegistrationToken(token);
-      return db.transaction(async (tx) => {
+      try {
+        return await db.transaction(async (tx) => {
         const found = await loadTokenWithRegistration(tx, digest, true);
         const current = classify(found, at);
         if (current.state !== "valid" || !found) return current;
@@ -423,13 +485,29 @@ export function createConsumerRegistrationService(options: ConsumerRegistrationS
           )
           .returning({ id: consumerRegistrationTokensTable.id });
         if (!used) return { state: "used", locale: current.locale };
-        await tx
+        const [verified] = await tx
           .update(consumerRegistrationsTable)
           .set({ status: "verified", verifiedAt: at })
-          .where(and(eq(consumerRegistrationsTable.id, found.registration.id), eq(consumerRegistrationsTable.status, "pending")));
+          .where(
+            and(
+              eq(consumerRegistrationsTable.id, found.registration.id),
+              eq(consumerRegistrationsTable.status, "pending"),
+              gt(consumerRegistrationsTable.expiresAt, at),
+            ),
+          )
+          .returning({ id: consumerRegistrationsTable.id });
+        if (!verified) {
+          // The registration expired or was cancelled between the read and this
+          // write. Nothing may be consumed for a closed registration.
+          throw new RegistrationClosedError();
+        }
         logger.info({ event: "consumer_registration.verified", registrationId: found.registration.id }, "Registration link consumed");
         return current;
-      });
+        });
+      } catch (error) {
+        if (error instanceof RegistrationClosedError) return { state: "expired" };
+        throw error;
+      }
     },
 
     /** Housekeeping: pending registrations past their deadline become `expired`; their tokens stop working through the join. */

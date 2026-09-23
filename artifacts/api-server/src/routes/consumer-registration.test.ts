@@ -85,7 +85,8 @@ app.use(
 let server: ReturnType<typeof app.listen>;
 let baseUrl = "";
 
-async function request(path: string, init: RequestInit & { client?: string } = {}) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function request(path: string, init: RequestInit & { client?: string } = {}): Promise<{ status: number; body: any; headers: Headers }> {
   const { client, headers, ...rest } = init;
   const result = await fetch(`${baseUrl}${path}`, {
     ...rest,
@@ -158,7 +159,11 @@ describe("normalization helpers (REG-006, REG-007)", () => {
     assert.equal(normalizePhone("12"), null);
   });
   it("accepts only site-relative return references", () => {
-    assert.equal(sanitizeReturnRef("/activiteiten?buurt=zeeheldenkwartier"), "/activiteiten?buurt=zeeheldenkwartier");
+    assert.equal(sanitizeReturnRef("/activiteiten/den-haag?buurt=zeeheldenkwartier"), "/activiteiten/den-haag?buurt=zeeheldenkwartier");
+    assert.equal(sanitizeReturnRef("/activiteiten/den-haag/zeeheldenkwartier/"), "/activiteiten/den-haag/zeeheldenkwartier");
+    assert.equal(sanitizeReturnRef("/"), "/");
+    assert.equal(sanitizeReturnRef("/not-a-route"), null, "only allow-listed internal routes survive (SEC-009)");
+    assert.equal(sanitizeReturnRef("/account/register/complete?token=x"), null);
     assert.equal(sanitizeReturnRef("https://evil.example/"), null);
     assert.equal(sanitizeReturnRef("//evil.example/"), null);
     assert.equal(sanitizeReturnRef("/\\evil.example"), null);
@@ -228,7 +233,7 @@ describe("registration request (§12.1)", () => {
     const email = mail("first");
     const response = await request("/consumer-registration", {
       method: "POST",
-      body: json(validBody(email, { returnRef: "/activiteiten?buurt=x" })),
+      body: json(validBody(email, { returnRef: "/activiteiten/den-haag?buurt=x" })),
     });
     assert.equal(response.status, 202);
     assert.deepEqual(response.body, { status: "accepted", linkLifetimeMinutes: 30 });
@@ -238,7 +243,7 @@ describe("registration request (§12.1)", () => {
     assert.equal(registration.status, "pending");
     assert.equal(registration.name, "Test Persoon");
     assert.equal(registration.normalizedPhone, "+31612345678");
-    assert.equal(registration.returnRef, "/activiteiten?buurt=x");
+    assert.equal(registration.returnRef, "/activiteiten/den-haag?buurt=x");
     assert.equal(registration.resendCount, 0);
 
     const queued = await outboxFor(registration.id);
@@ -267,13 +272,17 @@ describe("registration request (§12.1)", () => {
     assert.equal(rows.length, 1);
   });
 
-  it("fails closed with 503 when the account lookup is unavailable", async () => {
+  it("fails closed with 503 when the account lookup is unavailable — for new and pending addresses alike", async () => {
     lookupUnavailable = true;
     try {
       const response = await request("/consumer-registration", { method: "POST", body: json(validBody(mail("unavailable"))) });
       assert.equal(response.status, 503);
       assert.equal(response.body.code, "DEPENDENCY_UNAVAILABLE");
       assert.equal(await registrationFor(mail("unavailable")), undefined);
+      // A pending address must not be distinguishable by getting a 202 during the outage (status oracle).
+      const pending = await request("/consumer-registration", { method: "POST", body: json(validBody(mail("first"))) });
+      assert.equal(pending.status, 503);
+      assert.deepEqual(pending.body.code, response.body.code);
     } finally {
       lookupUnavailable = false;
     }
@@ -423,6 +432,94 @@ describe("resend (§12.3, REG-016)", () => {
     const registration = (await registrationFor(email))!;
     assert.equal(registration.resendCount, policy.maxResends);
     assert.equal((await outboxFor(registration.id)).length, 1 + policy.maxResends);
+  });
+});
+
+describe("send generations (REG-014, §12.4.3/§12.4.6)", () => {
+  it("a retried send of the same row keeps the first link valid (provider may have deduplicated the retry)", async () => {
+    const email = mail("retry");
+    await request("/consumer-registration", { method: "POST", body: json(validBody(email)) });
+    const registration = (await registrationFor(email))!;
+    let failedOnce = false;
+    const flaky = createEmailDeliveryLoader({
+      senderAddress: "noreply@buurtplaza.nl",
+      transport: async (message) => {
+        sentMail.push(message);
+        if (message.to === email && !failedOnce) {
+          failedOnce = true;
+          return { kind: "transient_failure", errorCode: "timeout" };
+        }
+        return { kind: "accepted" };
+      },
+      resolveRecipient: async () => ({ kind: "not_found" }),
+      resolveRegistrationRecipient: createRegistrationRecipientResolver({ baseUrl: "https://buurtplaza.test", tokenTtlMs: policy.tokenTtlMs, now }),
+    });
+    await dispatchLifecycleOutbox({ deliver: flaky, now, backoffMs: () => 1_000 });
+    advance(2_000);
+    await dispatchLifecycleOutbox({ deliver: flaky, now });
+    const mails = sentMail.filter((m) => m.to === email);
+    assert.equal(mails.length, 2);
+    assert.equal(mails[0]!.idempotencyKey, mails[1]!.idempotencyKey, "one outbox row keeps one provider idempotency key");
+    const first = tokenFromMail(mails[0]!);
+    const second = tokenFromMail(mails[1]!);
+    assert.notEqual(first, second);
+    assert.equal((await request(`/consumer-registration/verify?token=${first}`)).body.state, "valid", "the body the provider may have delivered still works");
+    assert.equal((await request(`/consumer-registration/verify?token=${second}`)).body.state, "valid");
+    const [row] = await outboxFor(registration.id);
+    assert.equal(row!.status, "accepted");
+  });
+
+  it("a stale earlier row cannot mint a link after a resend was accepted", async () => {
+    const email = mail("stale");
+    await request("/consumer-registration", { method: "POST", body: json(validBody(email)) });
+    const registration = (await registrationFor(email))!;
+    // Resend before the first row was ever dispatched (e.g. dispatcher was down).
+    advance(policy.resendCooldownMs + 1_000);
+    assert.equal((await request("/consumer-registration/resend", { method: "POST", body: json({ email, locale: "nl" }) })).status, 202);
+    await dispatch();
+    const rows = (await outboxFor(registration.id)).sort((a, b) => a.id - b.id);
+    assert.equal(rows.length, 2);
+    assert.equal(rows[0]!.status, "failed");
+    assert.equal(rows[0]!.lastErrorCode, "registration_send_superseded");
+    assert.equal(rows[1]!.status, "accepted");
+    const mails = sentMail.filter((m) => m.to === email);
+    assert.equal(mails.length, 1, "exactly one effective replacement email");
+    assert.equal((await request(`/consumer-registration/verify?token=${tokenFromMail(mails[0]!)}`)).body.state, "valid");
+  });
+});
+
+describe("failure isolation (§12.2.8)", () => {
+  it("answers the safe envelope, not a stack trace, when token storage fails", async () => {
+    const broken = express();
+    broken.use(express.json());
+    broken.use(
+      "/api",
+      createConsumerRegistrationRouter({
+        flags: () => flags,
+        now,
+        limiter: new SlidingWindowLimiter(),
+        clientKey: () => "broken-client",
+        service: {
+          ...service,
+          inspect: async () => {
+            throw new Error(`Failed query: select ... params: ${mail("secret")}`);
+          },
+        },
+      }),
+    );
+    const brokenServer = broken.listen(0);
+    await new Promise<void>((resolve) => brokenServer.once("listening", resolve));
+    try {
+      const port = (brokenServer.address() as AddressInfo).port;
+      const response = await fetch(`http://127.0.0.1:${port}/api/consumer-registration/verify?token=${"C".repeat(43)}`);
+      assert.equal(response.status, 503);
+      const text = await response.text();
+      assert.equal(JSON.parse(text).code, "DEPENDENCY_UNAVAILABLE");
+      assert.equal(text.includes(mail("secret")), false);
+      assert.equal(text.includes("Failed query"), false);
+    } finally {
+      brokenServer.close();
+    }
   });
 });
 

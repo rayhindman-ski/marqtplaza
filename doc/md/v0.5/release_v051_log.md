@@ -139,3 +139,106 @@ gains the field. Existing test fixtures updated for the wider type only.
 Decision recorded: the initial request endpoint does not apply the resend
 cooldown (a double-submit is absorbed silently), only the resend endpoint
 does; both share the per-address and per-network hourly budgets.
+
+### 2026-09-23 — Step 6: web screens, dev wiring, live walk-through
+
+**Web (`artifacts/buurtgids`)**
+- New pages `ConsumerRegisterPage` (`/account/register`: name, email, phone,
+  locale from the app language, optional `returnRef` from `?return=`),
+  `ConsumerRegisterCheckEmailPage` (`/account/register/check-email`: neutral
+  "check your email" copy, existing-account hint with sign-in link, resend
+  form) and `ConsumerRegisterCompletePage` (`/account/register/complete`:
+  GET inspect on load, explicit **Continue** button issues the consuming POST;
+  states valid / used / expired / superseded / invalid / unavailable / done).
+- The token is removed from the address bar with `history.replaceState`
+  before the first request; the registered address travels to the check-email
+  screen through `sessionStorage`, never through the URL.
+- The link's locale (from inspect) sets the app language so the consumer
+  lands in the language they registered in.
+- Routes registered in `App.tsx` before `/account/voorkeuren`; NL/EN copy
+  added as `register` in `accountTranslations` (`lib/i18n.ts`); the i18n
+  parity test covers it. Feature flag off → pages render the "not available"
+  panel and never call the API.
+- No change to any discovery, map, list, filter, card or icon code.
+
+**Dev wiring**
+- Development env vars `CONSUMER_REGISTRATION_ENABLED=true` and
+  `VITE_CONSUMER_REGISTRATION_ENABLED=true` (development only; production
+  stays off per §6). `CONSUMER_REGISTRATION_LINK_BASE_URL` is intentionally
+  not set: no delivery provider is configured, so mails stay queued.
+- Development database schema pushed (`drizzle-kit push`, applied cleanly:
+  `consumer_registrations`, `consumer_registration_tokens`,
+  `lifecycle_outbox.recipient_registration_id`). Production schema is applied
+  by the Publish flow, not by code.
+
+**Live walk-through (dev API + dev web)**
+- POST request → 202 `{status:"accepted", linkLifetimeMinutes:60}`; repeated
+  request → identical 202; bogus token → `invalid`; resend → 202.
+- Outbox dispatched once with a capturing transport and the dev domain as
+  link base: NL mail rendered as specified (link, 60 min, single use, "no
+  account yet", ignore-if-unintended, privacy + support links).
+- Opening the link: page in Dutch, state `valid`, "Geldig tot 07:41",
+  **Doorgaan** button; GET inspect did not consume (second inspect still
+  `valid`); POST consume → `valid`, second POST → `used`; reopening the link
+  shows "Deze link is al gebruikt". Check-email screen verified visually.
+- Observation: a resend issued inside the 60 s cooldown right after the
+  first request answers 202 while the service suppresses the send (cooldown
+  is measured from `last_sent_at`); a second resend inside the window gets
+  429. Both are neutral; no enumeration signal.
+
+### 2026-09-23 — Step 7: review round and hardening
+
+Architect review (full diff) reported the following; all addressed:
+
+1. **Stale send generations could invalidate the delivered link (severe).**
+   A retried outbox row re-minted a token and superseded *every* effective
+   token, so (a) a provider that deduplicates the retry by idempotency key
+   delivered a body whose token was already superseded, and (b) an old queued
+   row retried after a resend superseded the newer link.
+   Fix: token issuance supersedes only tokens of *other* outbox rows (tokens
+   of the same row stay valid); the loader refuses to mint for any row that
+   is not the newest send for the registration → permanent failure
+   `registration_send_superseded`, no mail. Tests: same-row retry keeps the
+   first link valid; stale earlier row fails and exactly one replacement
+   mail goes out.
+2. **Status/timing oracle (severe).** Pending/verified addresses returned
+   before the identity-provider lookup, so an outage answered 202 for
+   pending addresses and 503 for others. Fix: the lookup runs first for every
+   valid request; the outage now answers 503 uniformly (test added).
+3. **Error objects in logs (high).** Full errors could carry SQL parameters
+   (address, name, phone). Fix: `safeErrorSummary` logs class + driver code
+   only, in the router's fail-closed handler and the account lookup.
+4. **Consume race.** The `verified` transition ignored its row count. Fix:
+   guarded update (`pending` and not past deadline) must affect one row,
+   otherwise the transaction rolls back and the link reports `expired`.
+5. **SEC-009 `returnRef`.** Same-origin shape only. Fix: server-side
+   allow-list identical to the web `returnPath` list (exact routes and
+   `/activiteiten/den-haag/…`, `/nieuws/…`, `/bedrijf/…` segments);
+   anything else is dropped. Tests updated.
+6. **A11Y.** Failed submit focuses the first invalid field or the form-level
+   error; resend error is associated (`aria-invalid`, `aria-describedby`) and
+   focus returns to the field, success focuses the notice; the completion
+   page moves focus to the outcome region on every state change.
+7. **Unhandled route errors.** Express's default handler echoed the failing
+   query (including parameters) as an HTML 500. A router-scoped fail-closed
+   handler answers `DEPENDENCY_UNAVAILABLE` (test proves no address or query
+   text leaks).
+
+**Verification**
+- `pnpm run typecheck` (all packages): clean.
+- `test:consumer-registration:integration`: **27/27**;
+  `test:account-lifecycle:integration`: 22/22; `test:account-foundation`:
+  26/26; `test:business-intake`: 14/14.
+- Web unit tests (i18n parity etc.): 32/32.
+- New Playwright spec `e2e/consumer-registration.spec.ts` (route-mocked API;
+  flag enabled in `playwright.config.ts` webServer env): **6/6** — focus and
+  error association, neutral 202 → check-email without address in URL,
+  inspect-then-explicit-consume with the token stripped from the address
+  bar, used/expired/superseded states, no API call without a token.
+- Discovery regression (`e2e/discovery-regression.spec.ts`, the
+  `map-regression` workflow): **11/11** — unchanged behaviour.
+- Pre-existing failures, reproduced identically on base commit `0f00d01`
+  before this release's changes: 5 tests in `v042-release.spec.ts` /
+  `v043-release.spec.ts`, and `test:business-publication` "flags a re-check
+  as due before freshness flips to stale" (date-dependent assertion, 29 vs
+  21). Not touched by v0.5.1; listed here so they are not attributed to it.

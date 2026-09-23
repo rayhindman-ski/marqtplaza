@@ -1,5 +1,5 @@
 import { clerkClient } from "@clerk/express";
-import { Router, type IRouter, type Request, type Response } from "express";
+import { Router, type ErrorRequestHandler, type IRouter, type Request, type Response } from "express";
 
 import {
   ConsumeConsumerRegistrationLinkBody,
@@ -19,6 +19,7 @@ import {
   createConsumerRegistrationService,
   normalizeEmail,
   normalizeRegistrationInput,
+  safeErrorSummary,
   SlidingWindowLimiter,
   type AccountExistsLookup,
   type ConsumerRegistrationService,
@@ -45,7 +46,7 @@ export const clerkAccountExists: AccountExistsLookup = async (normalizedEmail) =
     const page = await clerkClient.users.getUserList({ emailAddress: [normalizedEmail], limit: 1 });
     return page.totalCount > 0 || page.data.length > 0;
   } catch (error) {
-    logger.warn({ err: error, event: "consumer_registration.account_lookup_failed" }, "Account lookup at identity provider failed");
+    logger.warn({ error: safeErrorSummary(error), event: "consumer_registration.account_lookup_failed" }, "Account lookup at identity provider failed");
     throw new AccountLookupUnavailableError(error);
   }
 };
@@ -232,6 +233,21 @@ export function createConsumerRegistrationRouter(options: ConsumerRegistrationRo
     res.setHeader("Cache-Control", "no-store");
     res.json(ConsumeConsumerRegistrationLinkResponse.parse(linkStateResponse(state)));
   });
+
+  /**
+   * Unexpected failures (token storage unreachable, query errors) must answer
+   * the safe envelope. Express's default handler would echo the failed query
+   * including its parameters — an address or a digest — into the response.
+   */
+  const failClosed: ErrorRequestHandler = (error, req, res, next) => {
+    if (res.headersSent) {
+      next(error);
+      return;
+    }
+    (req.log ?? logger).error({ error: safeErrorSummary(error), event: "consumer_registration.unhandled" }, "Consumer registration request failed");
+    sendApiError(req, res, "DEPENDENCY_UNAVAILABLE");
+  };
+  router.use("/consumer-registration", failClosed);
 
   return router;
 }

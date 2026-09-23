@@ -68,6 +68,9 @@ import OnboardingPage from './pages/OnboardingPage';
 import AccountPage from './pages/AccountPage';
 import AccountPreferencesPage from './pages/AccountPreferencesPage';
 import AccountPrivacyPage from './pages/AccountPrivacyPage';
+import ConsumerRegisterPage from './pages/ConsumerRegisterPage';
+import ConsumerRegisterCheckEmailPage from './pages/ConsumerRegisterCheckEmailPage';
+import ConsumerRegisterCompletePage from './pages/ConsumerRegisterCompletePage';
 import { useAccountAuth } from './lib/accountAuth';
 import { featureFlags } from './lib/featureFlags';
 import { carryReturnPath, resolveReturnPath, withReturnPath } from './lib/returnPath';
@@ -3631,6 +3634,9 @@ export default function App() {
           <Route path="/sign-in/*?" component={SignInPage} />
           <Route path="/sign-up/*?" component={SignUpPage} />
           <Route path="/onboarding" component={OnboardingPage} />
+          <Route path="/account/register" component={ConsumerRegisterPage} />
+          <Route path="/account/register/check-email" component={ConsumerRegisterCheckEmailPage} />
+          <Route path="/account/register/complete" component={ConsumerRegisterCompletePage} />
           <Route path="/account/voorkeuren" component={AccountPreferencesPage} />
           <Route path="/account/privacy" component={AccountPrivacyPage} />
           <Route path="/account/*?" component={AccountPage} />

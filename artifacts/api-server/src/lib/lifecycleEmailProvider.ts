@@ -1,9 +1,9 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 
 import { clerkClient } from "@clerk/express";
-import { eq } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 
-import { consumerRegistrationsTable, db } from "@workspace/db";
+import { consumerRegistrationsTable, db, lifecycleOutboxTable } from "@workspace/db";
 
 import { issueRegistrationToken, DEFAULT_CONSUMER_REGISTRATION_POLICY } from "./consumerRegistration";
 import { logger } from "./logger";
@@ -61,6 +61,7 @@ export type RegistrationRecipientResolution =
   | { kind: "found"; recipient: ResolvedRecipient; templateVars: { registrationUrl: string; linkLifetimeMinutes: number } }
   /** The registration is no longer pending (verified, expired, cancelled, or gone); nothing to send. */
   | { kind: "closed" }
+  | { kind: "superseded" }
   /** Link base URL not configured; retry once the operator sets it. */
   | { kind: "not_configured" };
 
@@ -124,6 +125,16 @@ export function createRegistrationRecipientResolver(
       if (!registration || registration.status !== "pending" || registration.expiresAt.getTime() <= at.getTime()) {
         return { kind: "closed" as const };
       }
+      // Only the newest send generation may mint a link. A stale row that is
+      // retried after a resend must not supersede the link the consumer was
+      // just promised (REG-014: one effective newest link).
+      const [newest] = await tx
+        .select({ id: lifecycleOutboxTable.id })
+        .from(lifecycleOutboxTable)
+        .where(eq(lifecycleOutboxTable.recipientRegistrationId, registration.id))
+        .orderBy(desc(lifecycleOutboxTable.id))
+        .limit(1);
+      if (newest && newest.id !== message.id) return { kind: "superseded" as const };
       const issued = await issueRegistrationToken(tx, { registrationId: registration.id, outboxId: message.id, now: at, ttlMs: ttlMs });
       return {
         kind: "found" as const,
@@ -177,6 +188,7 @@ export function createEmailDeliveryLoader(options: EmailDeliveryLoaderOptions): 
     if (message.recipientRegistrationId !== null) {
       const resolution = await resolveRegistrationRecipient(message);
       if (resolution.kind === "closed") return { kind: "permanent_failure", errorCode: "registration_closed" };
+      if (resolution.kind === "superseded") return { kind: "permanent_failure", errorCode: "registration_send_superseded" };
       if (resolution.kind === "not_configured") return { kind: "transient_failure", errorCode: "registration_link_not_configured" };
       recipient = resolution.recipient;
       templateVars = resolution.templateVars;
