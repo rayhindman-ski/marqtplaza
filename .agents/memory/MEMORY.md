@@ -41,3 +41,4 @@
 - [Clerk offline stub](clerk-offline-stub.md) — real Clerk screens in the default e2e suite: stub environment (POST), client, dev_browser; only CDN bundles need network.
 - [Lifecycle schema reconciliation](lifecycle-schema-reconciliation.md) — noninteractive Drizzle push may stop on rename conflicts; never guess through lifecycle schema drift.
 - [Multi-neighborhood stored results](multi-neighborhood-stored-results.md) — union saved singleton scopes so adding a selected neighborhood cannot reduce visible listings.
+- [Consumer registration links](consumer-registration-links.md) — newest outbox row mints the link, same-row retries keep the first token valid; lookup-first submit; router-scoped fail-closed handler.
