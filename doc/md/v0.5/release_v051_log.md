@@ -242,3 +242,27 @@ Architect review (full diff) reported the following; all addressed:
   `v043-release.spec.ts`, and `test:business-publication` "flags a re-check
   as due before freshness flips to stale" (date-dependent assertion, 29 vs
   21). Not touched by v0.5.1; listed here so they are not attributed to it.
+
+### 2026-09-23 — Follow-up: language toggle on the sign-in / sign-up screens
+
+Report: the registration form appeared in Dutch although English was
+selected, and the flow had no language toggle.
+
+- Verified with a scripted browser run (stored language `en`):
+  `/account/register`, `/sign-up` and `/account` → `/sign-in` all render in
+  English; switching the homepage selector NL→EN and then following the
+  header account link also yields English Clerk cards. The Dutch rendering
+  could not be reproduced from a stored English choice; awaiting the exact URL
+  from the reporter.
+- Confirmed gap: the Clerk `/sign-in` and `/sign-up` pages had no back link
+  and no NL/EN toggle (the v0.5.1 `/account/register*` pages already had one
+  via `AccountShell`).
+- Fix: extracted `LanguageToggle` from `AccountShell` and added an
+  `AuthPageFrame` around both Clerk cards with the same back link and toggle.
+  The toggle writes the shared stored language; the Clerk provider re-reads it
+  and re-localizes the card in place (verified: EN → NL → sign-in link → EN,
+  card copy follows each switch).
+- Verification: typecheck clean (all packages); `e2e/consumer-registration`
+  6/6; `e2e/clerk-verification-recovery`, `e2e/signup-stale-step`,
+  `e2e/account-preferences` 14 passed / 3 skipped (unchanged skips).
+- No discovery, map, list, filter, card or icon code touched.

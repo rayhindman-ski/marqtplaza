@@ -88,7 +88,9 @@ import {
   translations,
   type Language,
 } from './lib/i18n';
-import { persistLanguage, useStoredLanguage } from './lib/useAppLanguage';
+import { persistLanguage, useAppLanguage, useStoredLanguage } from './lib/useAppLanguage';
+import { LanguageToggle } from '@/components/account/AccountShell';
+import { accountTranslations } from '@/lib/i18n';
 import { clerkLocalizationFor } from './lib/clerkLocalization';
 import {
   formatEventTiming,
@@ -4352,11 +4354,34 @@ function useStaleSignUpStepRecovery() {
   }, [isVerificationStep, isLoaded, isSignedIn, clerk, search, navigate]);
 }
 
+/**
+ * Layout for the Clerk sign-in/sign-up cards: the same back link and NL/EN
+ * toggle as every other account screen, so the language can be changed here
+ * too. The toggle writes the shared stored language, which the Clerk provider
+ * above reads to re-localize its card.
+ */
+function AuthPageFrame({ testId, children }: { testId: string; children: React.ReactNode }) {
+  const [language, setLanguage] = useAppLanguage();
+  const copy = accountTranslations[language];
+  return (
+    <main data-testid={testId} className="flex min-h-[100dvh] flex-col bg-background px-4 py-6 sm:px-6">
+      <div className="mx-auto flex w-full max-w-5xl items-center justify-between gap-4">
+        <Link href="/" data-testid="link-account-back" className="inline-flex items-center gap-2 text-sm font-bold text-muted-foreground transition-colors hover:text-primary">
+          <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+          {copy.back}
+        </Link>
+        <LanguageToggle language={language} onLanguageChange={setLanguage} />
+      </div>
+      <div className="flex flex-1 items-center justify-center py-8">{children}</div>
+    </main>
+  );
+}
+
 function SignUpPage() {
   const redirects = useClerkRedirects();
   useStaleSignUpStepRecovery();
   return (
-    <div className="flex min-h-[100dvh] items-center justify-center bg-background px-4">
+    <AuthPageFrame testId="page-sign-up">
       <SignUp
         routing="path"
         path={`${basePath}/sign-up`}
@@ -4364,7 +4389,7 @@ function SignUpPage() {
         forceRedirectUrl={redirects.signUpTarget}
         signInForceRedirectUrl={redirects.signInTarget}
       />
-    </div>
+    </AuthPageFrame>
   );
 }
 
@@ -4414,7 +4439,7 @@ function ClerkProviderWithRouter({ children }: { children: React.ReactNode }) {
 function SignInPage() {
   const redirects = useClerkRedirects();
   return (
-    <div className="flex min-h-[100dvh] items-center justify-center bg-background px-4">
+    <AuthPageFrame testId="page-sign-in">
       <SignIn
         routing="path"
         path={`${basePath}/sign-in`}
@@ -4422,6 +4447,6 @@ function SignInPage() {
         forceRedirectUrl={redirects.signInTarget}
         signUpForceRedirectUrl={redirects.signUpTarget}
       />
-    </div>
+    </AuthPageFrame>
   );
 }

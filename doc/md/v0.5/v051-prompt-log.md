@@ -87,3 +87,25 @@ committed and pushed it.
 **Duration:** started ≈10:19 CEST, finished ≈10:23 CEST (≈4 minutes).
 
 **Commits:** `06a52f2` (adds this file; pushed). Hash correction committed separately.
+
+### Prompt 5
+
+**Received:** 2026-09-23 10:23 CEST
+
+> ok moving forward. when attempting to create a user registration, the form
+> is presented in dutch when my user has clearly (already) chosen the english
+> page. also the language toggle is not present on this flow; add it to
+> maintain consistent app behavior.
+
+**Response (summary):** Reproduction attempt with a scripted browser: with the
+stored language set to English, `/account/register`, `/sign-up` and
+`/account → /sign-in` all render in English, also after switching NL→EN on the
+homepage and following the header account link. Could not reproduce the Dutch
+form; asked for the exact URL. Confirmed and fixed the missing toggle: the
+Clerk sign-in/sign-up pages now share the account-area back link and NL/EN
+toggle (`AuthPageFrame`, `LanguageToggle` extracted from `AccountShell`);
+Clerk's card re-localizes on switch. Typecheck + relevant e2e suites green.
+
+**Duration:** 10:23 → 10:38 CEST (≈15 minutes).
+
+**Commits:** see the commit that adds this entry.

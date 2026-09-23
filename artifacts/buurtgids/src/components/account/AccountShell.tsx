@@ -17,6 +17,27 @@ type AccountShellProps = {
   children: ReactNode;
 };
 
+/** The NL/EN switch shared by every account-area screen, including the Clerk sign-in/sign-up pages. */
+export function LanguageToggle({ language, onLanguageChange }: Pick<AccountShellProps, 'language' | 'onLanguageChange'>) {
+  const copy = accountTranslations[language];
+  return (
+    <div role="group" aria-label={copy.languageLabel} className="inline-flex rounded-full border border-border bg-card p-1 text-xs font-bold">
+      {LANGUAGE_OPTIONS.map((option) => (
+        <button
+          key={option.value}
+          type="button"
+          data-testid={`button-language-${option.value}`}
+          aria-pressed={language === option.value}
+          onClick={() => onLanguageChange(option.value)}
+          className={`rounded-full px-3 py-1.5 transition-colors ${language === option.value ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+        >
+          {option.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export function AccountShell({
   language,
   onLanguageChange,
@@ -39,20 +60,7 @@ export function AccountShell({
               <ArrowLeft className="h-4 w-4" aria-hidden="true" />
               {copy.back}
             </Link>
-            <div role="group" aria-label={copy.languageLabel} className="inline-flex rounded-full border border-border bg-card p-1 text-xs font-bold">
-              {LANGUAGE_OPTIONS.map((option) => (
-                <button
-                  key={option.value}
-                  type="button"
-                  data-testid={`button-language-${option.value}`}
-                  aria-pressed={language === option.value}
-                  onClick={() => onLanguageChange(option.value)}
-                  className={`rounded-full px-3 py-1.5 transition-colors ${language === option.value ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}
-                >
-                  {option.label}
-                </button>
-              ))}
-            </div>
+            <LanguageToggle language={language} onLanguageChange={onLanguageChange} />
           </div>
           <p className="text-sm font-extrabold uppercase tracking-[0.16em] text-primary">{eyebrow}</p>
           <div className="mt-2 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
