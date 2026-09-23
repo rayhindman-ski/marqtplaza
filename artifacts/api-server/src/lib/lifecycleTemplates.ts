@@ -7,6 +7,9 @@ import type { LifecycleEventCode } from "./lifecycleOutbox";
  * identifiers, status codes). They never receive contact data, reviewer
  * notes, evidence, or tokens, and they never embed links that carry
  * credentials: the recipient signs in through the normal site to act.
+ *
+ * The one deliberate exception is `registration.link`: its single-use link is
+ * minted at dispatch time and passed in as a render-only variable, never stored.
  */
 
 export type LifecycleLocale = "nl" | "en";
@@ -21,6 +24,9 @@ type TemplateVars = {
   businessName: string;
   requestId: string;
   siteName: string;
+  /** Dispatch-time only (registration.link). */
+  registrationUrl: string;
+  linkLifetimeMinutes: string;
 };
 
 type Template = { subject: (v: TemplateVars) => string; body: (v: TemplateVars) => string };
@@ -31,12 +37,24 @@ const nl = {
   signIn: "Log in op buurtplaza.nl om de details te bekijken.",
   closing: "Met vriendelijke groet,\nhet team van buurtplaza.nl",
   noReply: "Dit is een automatisch bericht; antwoorden worden niet gelezen.",
+  privacy: "Privacyverklaring: https://buurtplaza.nl/account/privacy",
+  support: "Hulp nodig? Ga naar https://buurtplaza.nl/account en kies Ondersteuning.",
 };
 const en = {
   signIn: "Sign in at buurtplaza.nl to see the details.",
   closing: "Kind regards,\nthe buurtplaza.nl team",
   noReply: "This is an automated message; replies are not read.",
+  privacy: "Privacy notice: https://buurtplaza.nl/account/privacy",
+  support: "Need help? Go to https://buurtplaza.nl/account and choose Support.",
 };
+
+/** Registration mail: no sign-in line (there is no account yet); privacy and support links are required (REG-011). */
+function wrapRegistrationNl(lines: string[]): string {
+  return [...lines, "", nl.privacy, nl.support, "", nl.closing, "", nl.noReply].join("\n");
+}
+function wrapRegistrationEn(lines: string[]): string {
+  return [...lines, "", en.privacy, en.support, "", en.closing, "", en.noReply].join("\n");
+}
 
 function wrapNl(lines: string[]): string {
   return [...lines, "", nl.signIn, "", nl.closing, "", nl.noReply].join("\n");
@@ -216,6 +234,32 @@ const TEMPLATES: Record<LifecycleEventCode, Record<LifecycleLocale, Template>> =
       body: (v) => wrapEn([`Your request (number ${v.requestId}) to delete your account has been rejected.`, "The explanation is available in your account."]),
     },
   },
+  "registration.link": {
+    nl: {
+      subject: () => "Bevestig je e-mailadres voor buurtplaza.nl",
+      body: (v) =>
+        wrapRegistrationNl([
+          "Je hebt gevraagd om een account aan te maken op buurtplaza.nl. Bevestig met de onderstaande link dat dit e-mailadres van jou is.",
+          "",
+          `Registratie voortzetten: ${v.registrationUrl}`,
+          "",
+          `Deze link werkt ${v.linkLifetimeMinutes} minuten en kan één keer worden gebruikt. Er is nog geen account aangemaakt; dat gebeurt pas nadat je de registratie hebt afgerond.`,
+          "Heb je dit niet aangevraagd? Dan kun je dit bericht negeren; er wordt niets aangemaakt.",
+        ]),
+    },
+    en: {
+      subject: () => "Confirm your email address for buurtplaza.nl",
+      body: (v) =>
+        wrapRegistrationEn([
+          "You asked to create an account on buurtplaza.nl. Use the link below to confirm that this email address is yours.",
+          "",
+          `Continue registration: ${v.registrationUrl}`,
+          "",
+          `This link works for ${v.linkLifetimeMinutes} minutes and can be used once. No account has been created yet; that only happens after you finish registering.`,
+          "Did you not request this? You can ignore this message; nothing will be created.",
+        ]),
+    },
+  },
   "account.deletion_withdrawn": {
     nl: {
       subject: () => "Je verwijderverzoek is ingetrokken",
@@ -237,6 +281,18 @@ export class UnknownLifecycleTemplateError extends Error {
 
 export function normaliseLifecycleLocale(locale: string | null | undefined): LifecycleLocale {
   return locale?.trim().toLowerCase().startsWith("en") ? "en" : "nl";
+}
+
+/** Only an absolute https/http URL is ever rendered as the registration link; anything else renders as a placeholder that fails visibly. */
+function safeHttpsUrl(value: unknown): string {
+  if (typeof value !== "string") return "[link ontbreekt / link missing]";
+  try {
+    const url = new URL(value);
+    if (url.protocol !== "https:" && url.protocol !== "http:") return "[link ontbreekt / link missing]";
+    return /[\s\u0000-\u001f\u007f]/.test(value) ? "[link ontbreekt / link missing]" : value;
+  } catch {
+    return "[link ontbreekt / link missing]";
+  }
 }
 
 /** Strip control characters so payload text can never inject headers or extra lines. */
@@ -262,6 +318,8 @@ export function renderLifecycleEmail(
     businessName: cleanText(payload.businessName, resolvedLocale === "nl" ? "je bedrijf" : "your business"),
     requestId: typeof payload.requestId === "number" ? String(payload.requestId) : "—",
     siteName: SITE_NAME,
+    registrationUrl: safeHttpsUrl(payload.registrationUrl),
+    linkLifetimeMinutes: typeof payload.linkLifetimeMinutes === "number" ? String(payload.linkLifetimeMinutes) : "60",
   };
   const t = entry[resolvedLocale];
   return { locale: resolvedLocale, subject: t.subject(vars), text: t.body(vars) };

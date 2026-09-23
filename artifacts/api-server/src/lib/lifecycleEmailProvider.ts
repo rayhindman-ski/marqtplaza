@@ -1,7 +1,11 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 
 import { clerkClient } from "@clerk/express";
+import { eq } from "drizzle-orm";
 
+import { consumerRegistrationsTable, db } from "@workspace/db";
+
+import { issueRegistrationToken, DEFAULT_CONSUMER_REGISTRATION_POLICY } from "./consumerRegistration";
 import { logger } from "./logger";
 import type { DeliveryResult, LifecycleDeliveryLoader, OutboundLifecycleMessage } from "./lifecycleOutbox";
 import { renderLifecycleEmail, UnknownLifecycleTemplateError } from "./lifecycleTemplates";
@@ -50,6 +54,90 @@ export const clerkRecipientResolver: RecipientResolver = async (clerkUserId) => 
 };
 
 // ---------------------------------------------------------------------------
+// Registration recipients (pending registration, at dispatch time)
+// ---------------------------------------------------------------------------
+
+export type RegistrationRecipientResolution =
+  | { kind: "found"; recipient: ResolvedRecipient; templateVars: { registrationUrl: string; linkLifetimeMinutes: number } }
+  /** The registration is no longer pending (verified, expired, cancelled, or gone); nothing to send. */
+  | { kind: "closed" }
+  /** Link base URL not configured; retry once the operator sets it. */
+  | { kind: "not_configured" };
+
+export type RegistrationRecipientResolver = (
+  message: Pick<OutboundLifecycleMessage, "id" | "recipientRegistrationId">,
+) => Promise<RegistrationRecipientResolution>;
+
+export type RegistrationRecipientResolverOptions = {
+  /** Absolute origin of the web app, e.g. `https://buurtplaza.nl`; the link path is fixed. */
+  baseUrl: string | null;
+  tokenTtlMs?: number;
+  now?: () => Date;
+};
+
+export const REGISTRATION_LINK_PATH = "/account/register/complete";
+
+export function buildRegistrationLink(baseUrl: string, token: string): string {
+  const url = new URL(REGISTRATION_LINK_PATH, baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`);
+  url.searchParams.set("token", token);
+  return url.toString();
+}
+
+let registrationLinkNotConfiguredLogged = false;
+
+/**
+ * Resolve a pending registration to its address and mint the single-use token
+ * for this send. The token is superseded on every later send, so a retried
+ * message after an ambiguous provider response leaves exactly one working link.
+ */
+export function createRegistrationRecipientResolver(
+  options: RegistrationRecipientResolverOptions,
+): RegistrationRecipientResolver {
+  const ttlMs = options.tokenTtlMs ?? DEFAULT_CONSUMER_REGISTRATION_POLICY.tokenTtlMs;
+  const now = options.now ?? (() => new Date());
+  return async (message) => {
+    if (message.recipientRegistrationId === null) return { kind: "closed" };
+    if (!options.baseUrl) {
+      if (!registrationLinkNotConfiguredLogged) {
+        registrationLinkNotConfiguredLogged = true;
+        logger.warn(
+          { event: "registration_link_base_not_configured" },
+          "CONSUMER_REGISTRATION_LINK_BASE_URL is not set; registration emails stay queued",
+        );
+      }
+      return { kind: "not_configured" };
+    }
+    const at = now();
+    return db.transaction(async (tx) => {
+      const [registration] = await tx
+        .select({
+          id: consumerRegistrationsTable.id,
+          email: consumerRegistrationsTable.normalizedEmail,
+          locale: consumerRegistrationsTable.locale,
+          status: consumerRegistrationsTable.status,
+          expiresAt: consumerRegistrationsTable.expiresAt,
+        })
+        .from(consumerRegistrationsTable)
+        .where(eq(consumerRegistrationsTable.id, message.recipientRegistrationId as number))
+        .limit(1)
+        .for("update");
+      if (!registration || registration.status !== "pending" || registration.expiresAt.getTime() <= at.getTime()) {
+        return { kind: "closed" as const };
+      }
+      const issued = await issueRegistrationToken(tx, { registrationId: registration.id, outboxId: message.id, now: at, ttlMs: ttlMs });
+      return {
+        kind: "found" as const,
+        recipient: { email: registration.email, locale: registration.locale },
+        templateVars: {
+          registrationUrl: buildRegistrationLink(options.baseUrl as string, issued.token),
+          linkLifetimeMinutes: Math.round(ttlMs / 60_000),
+        },
+      };
+    });
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Transport contract
 // ---------------------------------------------------------------------------
 
@@ -68,6 +156,9 @@ export type EmailDeliveryLoaderOptions = {
   senderAddress: string;
   transport: EmailTransport;
   resolveRecipient?: RecipientResolver;
+  resolveRegistrationRecipient?: RegistrationRecipientResolver;
+  /** Used to build the default registration resolver when none is injected. */
+  registrationLinkBaseUrl?: string | null;
 };
 
 /**
@@ -77,16 +168,31 @@ export type EmailDeliveryLoaderOptions = {
  */
 export function createEmailDeliveryLoader(options: EmailDeliveryLoaderOptions): LifecycleDeliveryLoader {
   const resolveRecipient = options.resolveRecipient ?? clerkRecipientResolver;
+  const resolveRegistrationRecipient =
+    options.resolveRegistrationRecipient ??
+    createRegistrationRecipientResolver({ baseUrl: options.registrationLinkBaseUrl ?? null });
   return async (message: OutboundLifecycleMessage): Promise<DeliveryResult> => {
-    if (!message.recipientClerkUserId) return { kind: "permanent_failure", errorCode: "recipient_unknown" };
-    const resolution = await resolveRecipient(message.recipientClerkUserId);
-    if (resolution.kind === "not_found") return { kind: "permanent_failure", errorCode: "recipient_gone" };
-    if (resolution.kind === "no_address") return { kind: "permanent_failure", errorCode: "recipient_no_address" };
-    if (resolution.kind === "unavailable") return { kind: "transient_failure", errorCode: "identity_provider_unavailable" };
+    let recipient: ResolvedRecipient;
+    let templateVars: Record<string, unknown> = {};
+    if (message.recipientRegistrationId !== null) {
+      const resolution = await resolveRegistrationRecipient(message);
+      if (resolution.kind === "closed") return { kind: "permanent_failure", errorCode: "registration_closed" };
+      if (resolution.kind === "not_configured") return { kind: "transient_failure", errorCode: "registration_link_not_configured" };
+      recipient = resolution.recipient;
+      templateVars = resolution.templateVars;
+    } else {
+      if (!message.recipientClerkUserId) return { kind: "permanent_failure", errorCode: "recipient_unknown" };
+      const resolution = await resolveRecipient(message.recipientClerkUserId);
+      if (resolution.kind === "not_found") return { kind: "permanent_failure", errorCode: "recipient_gone" };
+      if (resolution.kind === "no_address") return { kind: "permanent_failure", errorCode: "recipient_no_address" };
+      if (resolution.kind === "unavailable") return { kind: "transient_failure", errorCode: "identity_provider_unavailable" };
+      recipient = resolution.recipient;
+    }
 
     let rendered;
     try {
-      rendered = renderLifecycleEmail(message.template, message.locale ?? resolution.recipient.locale, message.payload);
+      // Dispatch-time variables (the registration link) are merged for rendering only; they are never written back to the row.
+      rendered = renderLifecycleEmail(message.template, message.locale ?? recipient.locale, { ...message.payload, ...templateVars });
     } catch (error) {
       if (error instanceof UnknownLifecycleTemplateError) {
         return { kind: "permanent_failure", errorCode: "template_unknown" };
@@ -94,7 +200,7 @@ export function createEmailDeliveryLoader(options: EmailDeliveryLoaderOptions): 
       throw error;
     }
     const result = await options.transport({
-      to: resolution.recipient.email,
+      to: recipient.email,
       from: options.senderAddress,
       subject: rendered.subject,
       text: rendered.text,

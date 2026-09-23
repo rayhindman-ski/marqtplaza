@@ -287,6 +287,98 @@ export interface FeatureReadiness {
   accounts: boolean;
   businessIntake: boolean;
   businessPublication: boolean;
+  consumerRegistration: boolean;
+}
+
+export type AccountLocale = typeof AccountLocale[keyof typeof AccountLocale];
+
+
+export const AccountLocale = {
+  nl: 'nl',
+  en: 'en',
+} as const;
+
+export interface ConsumerRegistrationRequestInput {
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  name: string;
+  /**
+     * Validated server-side with a conservative pattern; normalization never merges distinct addresses.
+     * @minLength 3
+     * @maxLength 254
+     */
+  email: string;
+  /**
+     * Contact data only (REG-005). Country-aware normalization; not an SMS sign-in factor.
+     * @minLength 6
+     * @maxLength 32
+     */
+  phone: string;
+  locale: AccountLocale;
+  /**
+     * Opaque internal return reference; must match the allow-list or it is dropped.
+     * @maxLength 512
+     */
+  returnRef?: string;
+}
+
+export interface ConsumerRegistrationResendInput {
+  /**
+     * @minLength 3
+     * @maxLength 254
+     */
+  email: string;
+  locale: AccountLocale;
+}
+
+export interface ConsumerRegistrationVerifyInput {
+  /**
+     * @minLength 1
+     * @maxLength 128
+     */
+  token: string;
+}
+
+export type ConsumerRegistrationAcceptedStatus = typeof ConsumerRegistrationAcceptedStatus[keyof typeof ConsumerRegistrationAcceptedStatus];
+
+
+export const ConsumerRegistrationAcceptedStatus = {
+  accepted: 'accepted',
+} as const;
+
+/**
+ * Neutral acknowledgement. Identical for new, pending, and existing-account addresses.
+ */
+export interface ConsumerRegistrationAccepted {
+  status: ConsumerRegistrationAcceptedStatus;
+  /** Policy link lifetime, shown so the consumer knows how long to look for the email. */
+  linkLifetimeMinutes: number;
+}
+
+/**
+ * Explicit link states (REG-015). `valid` on GET means the link may be consumed; on POST it means
+ * the handoff was reached. `unavailable` is reported by the API as 503, never as a state.
+ */
+export type ConsumerRegistrationLinkStatus = typeof ConsumerRegistrationLinkStatus[keyof typeof ConsumerRegistrationLinkStatus];
+
+
+export const ConsumerRegistrationLinkStatus = {
+  valid: 'valid',
+  expired: 'expired',
+  used: 'used',
+  superseded: 'superseded',
+  invalid: 'invalid',
+} as const;
+
+export interface ConsumerRegistrationLinkState {
+  state: ConsumerRegistrationLinkStatus;
+  /** Whether the resend journey applies to this state. */
+  canResend: boolean;
+  locale?: AccountLocale;
+  /** Only for `valid`; when the link stops working. */
+  expiresAt?: string;
 }
 
 /**
@@ -301,14 +393,6 @@ export const AccountStatus = {
   active: 'active',
   suspended: 'suspended',
   deleted: 'deleted',
-} as const;
-
-export type AccountLocale = typeof AccountLocale[keyof typeof AccountLocale];
-
-
-export const AccountLocale = {
-  nl: 'nl',
-  en: 'en',
 } as const;
 
 /**
@@ -2802,6 +2886,14 @@ status?: AccountRequestStatus;
 
 export type GetSupportLifecycleMessagesParams = {
 status?: LifecycleMessageStatus;
+};
+
+export type InspectConsumerRegistrationLinkParams = {
+/**
+ * @minLength 1
+ * @maxLength 128
+ */
+token: string;
 };
 
 export type GetWeatherParams = {

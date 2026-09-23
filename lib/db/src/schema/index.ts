@@ -34,5 +34,6 @@ export * from "./externalResultListings";
 export * from "./listingCorrections";
 export * from "./userRegistrations";
 export * from "./accounts";
+export * from "./consumerRegistrations";
 export * from "./businessReview";
 export * from "./lifecycle";

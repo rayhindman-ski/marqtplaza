@@ -13,4 +13,5 @@ export interface FeatureReadiness {
   accounts: boolean;
   businessIntake: boolean;
   businessPublication: boolean;
+  consumerRegistration: boolean;
 }

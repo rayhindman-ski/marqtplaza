@@ -43,6 +43,8 @@ export const LIFECYCLE_EVENT_CODES = [
   "account.deletion_completed",
   "account.deletion_rejected",
   "account.deletion_withdrawn",
+  /** Consumer registration link (v0.5.1); addressed to a pending registration, not an account. */
+  "registration.link",
 ] as const;
 export type LifecycleEventCode = (typeof LIFECYCLE_EVENT_CODES)[number];
 
@@ -157,6 +159,46 @@ export async function enqueueLifecycleMessage(
   return { id: existing.id, created: false };
 }
 
+export type EnqueueRegistrationMessageInput = {
+  /** Pending consumer registration that will receive the link; never an address. */
+  registrationId: number;
+  idempotencyKey: string;
+  locale: string;
+  maxAttempts?: number;
+};
+
+/**
+ * Queue a registration-link email for a pending registration inside the
+ * caller's transaction. The payload is empty on purpose: the single-use token
+ * is minted by the email loader at dispatch time and never stored here.
+ */
+export async function enqueueRegistrationLifecycleMessage(
+  tx: Tx,
+  input: EnqueueRegistrationMessageInput,
+): Promise<EnqueueOutcome> {
+  const [inserted] = await tx
+    .insert(lifecycleOutboxTable)
+    .values({
+      eventCode: "registration.link",
+      recipientRegistrationId: input.registrationId,
+      template: "registration.link",
+      locale: input.locale,
+      payload: {},
+      idempotencyKey: input.idempotencyKey,
+      maxAttempts: input.maxAttempts ?? DEFAULT_MAX_ATTEMPTS,
+    })
+    .onConflictDoNothing({ target: lifecycleOutboxTable.idempotencyKey })
+    .returning({ id: lifecycleOutboxTable.id });
+  if (inserted) return { id: inserted.id, created: true };
+  const [existing] = await tx
+    .select({ id: lifecycleOutboxTable.id })
+    .from(lifecycleOutboxTable)
+    .where(eq(lifecycleOutboxTable.idempotencyKey, input.idempotencyKey))
+    .limit(1);
+  if (!existing) throw new Error("Lifecycle message row vanished after a duplicate key.");
+  return { id: existing.id, created: false };
+}
+
 /** Cancel queued messages whose triggering state was reverted; anything already sent is untouched. */
 export async function cancelQueuedLifecycleMessages(tx: Tx, idempotencyKeys: string[]): Promise<number> {
   if (idempotencyKeys.length === 0) return 0;
@@ -180,6 +222,8 @@ export type OutboundLifecycleMessage = {
   locale: string;
   recipientUserId: number | null;
   recipientClerkUserId: string | null;
+  /** Set instead of the account references for pre-account messages. */
+  recipientRegistrationId: number | null;
   payload: Record<string, unknown>;
   attempt: number;
   /**
@@ -230,7 +274,13 @@ export const logOnlyLoader: LifecycleDeliveryLoader = async (message) => {
 
 export type LoaderFactories = {
   /** Builds the e-mail loader for a named provider; injected so tests never touch the network. */
-  email?: (config: { provider: "resend"; apiKey: string; senderAddress: string }) => LifecycleDeliveryLoader;
+  email?: (config: {
+    provider: "resend";
+    apiKey: string;
+    senderAddress: string;
+    /** Absolute origin used to build registration links; absent means registration mail cannot be sent yet. */
+    registrationLinkBaseUrl: string | null;
+  }) => LifecycleDeliveryLoader;
 };
 
 /**
@@ -260,7 +310,8 @@ export function resolveLifecycleDeliveryLoader(
       throw new Error("LIFECYCLE_DELIVERY_PROVIDER=resend requires LIFECYCLE_RECEIPT_WEBHOOK_SECRET so delivery receipts can be verified.");
     }
     const build = factories.email ?? defaultEmailLoaderFactory;
-    return { loader: build({ provider: "resend", apiKey, senderAddress }), configured: true, name: "resend" };
+    const registrationLinkBaseUrl = env.CONSUMER_REGISTRATION_LINK_BASE_URL?.trim() || null;
+    return { loader: build({ provider: "resend", apiKey, senderAddress, registrationLinkBaseUrl }), configured: true, name: "resend" };
   }
   throw new Error(`Unknown LIFECYCLE_DELIVERY_PROVIDER "${provider}".`);
 }
@@ -269,6 +320,7 @@ const defaultEmailLoaderFactory: NonNullable<LoaderFactories["email"]> = (config
   createEmailDeliveryLoader({
     senderAddress: config.senderAddress,
     transport: createResendTransport({ apiKey: config.apiKey }),
+    registrationLinkBaseUrl: config.registrationLinkBaseUrl,
   });
 
 export type BackoffPolicy = (attempt: number) => number;
@@ -363,8 +415,11 @@ export async function dispatchLifecycleOutbox(options: DispatchOptions = {}): Pr
 
   for (const row of claimed) {
     // A recipient whose application account row is gone can never be
-    // addressed; cancel instead of handing an unaddressable message to the provider.
-    if (row.recipientUserId === null || !clerkIdByRecipient.has(row.recipientUserId)) {
+    // addressed; cancel instead of handing an unaddressable message to the
+    // provider. Registration-addressed rows are validated by the loader, which
+    // reads the pending registration at send time.
+    const addressedToRegistration = row.recipientRegistrationId !== null;
+    if (!addressedToRegistration && (row.recipientUserId === null || !clerkIdByRecipient.has(row.recipientUserId))) {
       await db
         .update(lifecycleOutboxTable)
         .set({ status: "cancelled", claimedAt: null, cancelledAt: now(), lastErrorCode: "recipient_gone", lastErrorAt: now() })
@@ -383,6 +438,7 @@ export async function dispatchLifecycleOutbox(options: DispatchOptions = {}): Pr
         locale: row.locale,
         recipientUserId: row.recipientUserId,
         recipientClerkUserId: row.recipientUserId ? (clerkIdByRecipient.get(row.recipientUserId) ?? null) : null,
+        recipientRegistrationId: row.recipientRegistrationId,
         payload: row.payload,
         attempt,
         dedupeKey: lifecycleDedupeKey(row),
@@ -574,6 +630,7 @@ export function serialiseLifecycleMessageForSupport(row: LifecycleOutboxRow) {
   return {
     ...serialiseLifecycleMessage(row),
     recipientUserId: row.recipientUserId,
+    recipientRegistrationId: row.recipientRegistrationId,
     lastErrorCode: row.lastErrorCode,
     lastErrorAt: row.lastErrorAt?.toISOString() ?? null,
   };

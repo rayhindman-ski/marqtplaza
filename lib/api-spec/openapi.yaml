@@ -36,6 +36,10 @@ tags:
     description: Authenticated community registration and participation eligibility
   - name: account
     description: Server-derived account identity, capabilities, and controlled preference options (disabled until the accounts readiness gate is met)
+  - name: consumer-registration
+    description: |
+      Consumer registration foundation (v0.5.1). Public, unauthenticated, feature-gated.
+      Creates pending registrations only; never an account, session, or credential.
 paths:
   /healthz:
     get:
@@ -591,6 +595,155 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/FeatureReadiness"
+
+  /consumer-registration:
+    post:
+      operationId: requestConsumerRegistration
+      tags: [consumer-registration]
+      summary: Submit a secure registration request
+      description: |
+        Accepts name, email, and phone (contact data only). The response is identical whether the
+        address is new, already pending, or already belongs to an account, so account existence
+        cannot be inferred (REG-008). A valid new request creates one pending registration and queues
+        one registration email transactionally; no account, session, or password is created.
+        `returnRef` is an opaque internal return reference validated against an allow-list.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConsumerRegistrationRequestInput"
+      responses:
+        "202":
+          description: Request accepted (neutral; does not reveal account state)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConsumerRegistrationAccepted"
+        "400":
+          description: Validation failed (field errors are about format only, never about existence)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          $ref: "#/components/responses/FeatureDisabled"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "503":
+          description: A dependency needed to accept the request is unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /consumer-registration/resend:
+    post:
+      operationId: resendConsumerRegistration
+      tags: [consumer-registration]
+      summary: Request a fresh registration link
+      description: |
+        Neutral response regardless of whether a pending registration exists. When one does, every
+        earlier link is superseded and exactly one replacement email is queued, subject to cooldown
+        and layered rate limits (REG-016, SEC-004).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConsumerRegistrationResendInput"
+      responses:
+        "202":
+          description: Resend accepted (neutral)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConsumerRegistrationAccepted"
+        "400":
+          description: Validation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          $ref: "#/components/responses/FeatureDisabled"
+        "429":
+          description: Rate limited (cooldown or budget exceeded; identical for known and unknown addresses)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /consumer-registration/verify:
+    get:
+      operationId: inspectConsumerRegistrationLink
+      tags: [consumer-registration]
+      summary: Inspect a registration link without consuming it
+      description: |
+        Safe, idempotent inspection used when the link is opened. It never consumes the token, so
+        mail scanners and link previews cannot burn a single-use link. The handoff page consumes the
+        token with an explicit POST.
+      parameters:
+        - name: token
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 128
+      responses:
+        "200":
+          description: Link state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConsumerRegistrationLinkState"
+        "404":
+          $ref: "#/components/responses/FeatureDisabled"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+    post:
+      operationId: consumeConsumerRegistrationLink
+      tags: [consumer-registration]
+      summary: Consume a registration link and reach the handoff state
+      description: |
+        Marks the newest valid token as used and the registration as verified in one transaction.
+        Replaying the same token yields `used`. Does not create an account or a session.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConsumerRegistrationVerifyInput"
+      responses:
+        "200":
+          description: Resulting link state; `valid` means the handoff was reached
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConsumerRegistrationLinkState"
+        "400":
+          description: Validation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          $ref: "#/components/responses/FeatureDisabled"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
 
   /registration:
     get:
@@ -2809,7 +2962,7 @@ components:
     FeatureReadiness:
       type: object
       description: Read-only rollout flags; each entry point stays disabled (404) until its gate is met.
-      required: [accounts, businessIntake, businessPublication]
+      required: [accounts, businessIntake, businessPublication, consumerRegistration]
       properties:
         accounts:
           type: boolean
@@ -2817,6 +2970,91 @@ components:
           type: boolean
         businessPublication:
           type: boolean
+        consumerRegistration:
+          type: boolean
+
+    ConsumerRegistrationRequestInput:
+      type: object
+      additionalProperties: false
+      required: [name, email, phone, locale]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        email:
+          type: string
+          minLength: 3
+          maxLength: 254
+          description: Validated server-side with a conservative pattern; normalization never merges distinct addresses.
+        phone:
+          type: string
+          minLength: 6
+          maxLength: 32
+          description: Contact data only (REG-005). Country-aware normalization; not an SMS sign-in factor.
+        locale:
+          $ref: "#/components/schemas/AccountLocale"
+        returnRef:
+          type: string
+          maxLength: 512
+          description: Opaque internal return reference; must match the allow-list or it is dropped.
+
+    ConsumerRegistrationResendInput:
+      type: object
+      additionalProperties: false
+      required: [email, locale]
+      properties:
+        email:
+          type: string
+          minLength: 3
+          maxLength: 254
+        locale:
+          $ref: "#/components/schemas/AccountLocale"
+
+    ConsumerRegistrationVerifyInput:
+      type: object
+      additionalProperties: false
+      required: [token]
+      properties:
+        token:
+          type: string
+          minLength: 1
+          maxLength: 128
+
+    ConsumerRegistrationAccepted:
+      type: object
+      description: Neutral acknowledgement. Identical for new, pending, and existing-account addresses.
+      required: [status, linkLifetimeMinutes]
+      properties:
+        status:
+          type: string
+          enum: [accepted]
+        linkLifetimeMinutes:
+          type: number
+          description: Policy link lifetime, shown so the consumer knows how long to look for the email.
+
+    ConsumerRegistrationLinkStatus:
+      type: string
+      description: |
+        Explicit link states (REG-015). `valid` on GET means the link may be consumed; on POST it means
+        the handoff was reached. `unavailable` is reported by the API as 503, never as a state.
+      enum: [valid, expired, used, superseded, invalid]
+
+    ConsumerRegistrationLinkState:
+      type: object
+      required: [state, canResend]
+      properties:
+        state:
+          $ref: "#/components/schemas/ConsumerRegistrationLinkStatus"
+        canResend:
+          type: boolean
+          description: Whether the resend journey applies to this state.
+        locale:
+          $ref: "#/components/schemas/AccountLocale"
+        expiresAt:
+          type: string
+          format: date-time
+          description: Only for `valid`; when the link stops working.
 
     AccountStatus:
       type: string

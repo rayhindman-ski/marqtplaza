@@ -49,7 +49,7 @@ const slug = `pub-test-${runId}`;
 const legacySlug = `pub-legacy-${runId}`;
 const claimSlug = `pub-claim-${runId}`;
 
-let flags = { accounts: true, businessIntake: true, businessPublication: true };
+let flags = { accounts: true, businessIntake: true, businessPublication: true, consumerRegistration: false };
 let clock = new Date("2026-09-14T10:00:00.000Z");
 
 function identityFromHeaders(req: express.Request): Identity | null {
@@ -262,7 +262,7 @@ describe("business publication routes", () => {
   });
 
   it("hides every publication route behind the flag", async () => {
-    flags = { ...flags, businessPublication: false };
+    flags = { ...flags, businessPublication: false, consumerRegistration: false };
     for (const [method, path] of [
       ["GET", `/api/business-profiles/${profileId}/revision`],
       ["PATCH", `/api/business-profiles/${profileId}/revision`],
@@ -275,7 +275,7 @@ describe("business publication routes", () => {
       assert.equal(response.status, 404, `${method} ${path}`);
       assert.equal(response.body.code, "FEATURE_DISABLED");
     }
-    flags = { ...flags, businessPublication: true };
+    flags = { ...flags, businessPublication: true, consumerRegistration: false };
   });
 
   it("serves the workspace only to members and never to strangers", async () => {
@@ -1131,7 +1131,7 @@ describe("business publication routes", () => {
   });
 
   it("serves the legacy columns again when the flag is rolled back after a backfill", async () => {
-    flags = { ...flags, businessPublication: false };
+    flags = { ...flags, businessPublication: false, consumerRegistration: false };
     try {
       const edit = await request(`/api/business-profiles/${legacyProfileId}`, {
         method: "PATCH",
@@ -1153,7 +1153,7 @@ describe("business publication routes", () => {
       const [row] = await db.select().from(businessProfilesTable).where(eq(businessProfilesTable.id, legacyProfileId));
       assert.ok(row.approvedRevisionId, "the snapshot is kept for re-enablement");
     } finally {
-      flags = { ...flags, businessPublication: true };
+      flags = { ...flags, businessPublication: true, consumerRegistration: false };
     }
     const back = await request(`/api/business-profiles/public/${legacySlug}`, { userId: null });
     assert.equal(back.status, 200);

@@ -7,6 +7,7 @@ export type FeatureFlags = Readonly<{
   accounts: boolean;
   businessIntake: boolean;
   businessPublication: boolean;
+  consumerRegistration: boolean;
 }>;
 
 const TRUE_VALUES = new Set(["1", "true", "yes", "on"]);
@@ -20,6 +21,7 @@ export function readFeatureFlags(env: Record<string, unknown> = import.meta.env)
     accounts: parseFlag(env.VITE_ACCOUNTS_ENABLED),
     businessIntake: parseFlag(env.VITE_BUSINESS_INTAKE_ENABLED),
     businessPublication: parseFlag(env.VITE_BUSINESS_PUBLICATION_ENABLED),
+    consumerRegistration: parseFlag(env.VITE_CONSUMER_REGISTRATION_ENABLED),
   };
 }
 

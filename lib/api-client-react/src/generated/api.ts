@@ -50,6 +50,11 @@ import type {
   CommunityPostParticipationInput,
   CommunityPostParticipationResponse,
   CommunityPostSubmission,
+  ConsumerRegistrationAccepted,
+  ConsumerRegistrationLinkState,
+  ConsumerRegistrationRequestInput,
+  ConsumerRegistrationResendInput,
+  ConsumerRegistrationVerifyInput,
   CreateAccountDeletionRequestInput,
   Deal,
   DealInput,
@@ -79,6 +84,7 @@ import type {
   GetWeatherParams,
   GooglePlacesUsage,
   HealthStatus,
+  InspectConsumerRegistrationLinkParams,
   LifecycleMessages,
   ListingCorrectionReceipt,
   ListingCorrectionReviewItem,
@@ -1400,6 +1406,316 @@ export function useGetReadiness<TData = Awaited<ReturnType<typeof getReadiness>>
 
 
 
+
+export const getRequestConsumerRegistrationUrl = () => {
+
+
+
+
+  return `/api/consumer-registration`
+}
+
+/**
+ * Accepts name, email, and phone (contact data only). The response is identical whether the
+ * address is new, already pending, or already belongs to an account, so account existence
+ * cannot be inferred (REG-008). A valid new request creates one pending registration and queues
+ * one registration email transactionally; no account, session, or password is created.
+ * `returnRef` is an opaque internal return reference validated against an allow-list.
+ * @summary Submit a secure registration request
+ */
+export const requestConsumerRegistration = async (consumerRegistrationRequestInput: ConsumerRegistrationRequestInput, options?: Parameters<typeof customFetch>[1]): Promise<ConsumerRegistrationAccepted> => {
+
+  return customFetch<ConsumerRegistrationAccepted>(getRequestConsumerRegistrationUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(consumerRegistrationRequestInput)
+  }
+);}
+
+
+
+
+
+export const getRequestConsumerRegistrationMutationOptions = <TError = ErrorType<ApiError | FeatureDisabledResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof requestConsumerRegistration>>, TError,{data: BodyType<ConsumerRegistrationRequestInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof requestConsumerRegistration>>, TError,{data: BodyType<ConsumerRegistrationRequestInput>}, TContext> => {
+
+const mutationKey = ['requestConsumerRegistration'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof requestConsumerRegistration>>, {data: BodyType<ConsumerRegistrationRequestInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  requestConsumerRegistration(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RequestConsumerRegistrationMutationResult = NonNullable<Awaited<ReturnType<typeof requestConsumerRegistration>>>
+    export type RequestConsumerRegistrationMutationBody = BodyType<ConsumerRegistrationRequestInput>
+    export type RequestConsumerRegistrationMutationError = ErrorType<ApiError | FeatureDisabledResponse>
+
+    /**
+ * @summary Submit a secure registration request
+ */
+export const useRequestConsumerRegistration = <TError = ErrorType<ApiError | FeatureDisabledResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof requestConsumerRegistration>>, TError,{data: BodyType<ConsumerRegistrationRequestInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof requestConsumerRegistration>>,
+        TError,
+        {data: BodyType<ConsumerRegistrationRequestInput>},
+        TContext
+      > => {
+      return useMutation(getRequestConsumerRegistrationMutationOptions(options));
+    }
+
+export const getResendConsumerRegistrationUrl = () => {
+
+
+
+
+  return `/api/consumer-registration/resend`
+}
+
+/**
+ * Neutral response regardless of whether a pending registration exists. When one does, every
+ * earlier link is superseded and exactly one replacement email is queued, subject to cooldown
+ * and layered rate limits (REG-016, SEC-004).
+ * @summary Request a fresh registration link
+ */
+export const resendConsumerRegistration = async (consumerRegistrationResendInput: ConsumerRegistrationResendInput, options?: Parameters<typeof customFetch>[1]): Promise<ConsumerRegistrationAccepted> => {
+
+  return customFetch<ConsumerRegistrationAccepted>(getResendConsumerRegistrationUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(consumerRegistrationResendInput)
+  }
+);}
+
+
+
+
+
+export const getResendConsumerRegistrationMutationOptions = <TError = ErrorType<ApiError | FeatureDisabledResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof resendConsumerRegistration>>, TError,{data: BodyType<ConsumerRegistrationResendInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof resendConsumerRegistration>>, TError,{data: BodyType<ConsumerRegistrationResendInput>}, TContext> => {
+
+const mutationKey = ['resendConsumerRegistration'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof resendConsumerRegistration>>, {data: BodyType<ConsumerRegistrationResendInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  resendConsumerRegistration(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ResendConsumerRegistrationMutationResult = NonNullable<Awaited<ReturnType<typeof resendConsumerRegistration>>>
+    export type ResendConsumerRegistrationMutationBody = BodyType<ConsumerRegistrationResendInput>
+    export type ResendConsumerRegistrationMutationError = ErrorType<ApiError | FeatureDisabledResponse>
+
+    /**
+ * @summary Request a fresh registration link
+ */
+export const useResendConsumerRegistration = <TError = ErrorType<ApiError | FeatureDisabledResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof resendConsumerRegistration>>, TError,{data: BodyType<ConsumerRegistrationResendInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof resendConsumerRegistration>>,
+        TError,
+        {data: BodyType<ConsumerRegistrationResendInput>},
+        TContext
+      > => {
+      return useMutation(getResendConsumerRegistrationMutationOptions(options));
+    }
+
+export const getInspectConsumerRegistrationLinkUrl = (params: InspectConsumerRegistrationLinkParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/consumer-registration/verify?${stringifiedParams}` : `/api/consumer-registration/verify`
+}
+
+/**
+ * Safe, idempotent inspection used when the link is opened. It never consumes the token, so
+ * mail scanners and link previews cannot burn a single-use link. The handoff page consumes the
+ * token with an explicit POST.
+ * @summary Inspect a registration link without consuming it
+ */
+export const inspectConsumerRegistrationLink = async (params: InspectConsumerRegistrationLinkParams, options?: Parameters<typeof customFetch>[1]): Promise<ConsumerRegistrationLinkState> => {
+
+  return customFetch<ConsumerRegistrationLinkState>(getInspectConsumerRegistrationLinkUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getInspectConsumerRegistrationLinkQueryKey = (params?: InspectConsumerRegistrationLinkParams,) => {
+    return [
+    `/api/consumer-registration/verify`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getInspectConsumerRegistrationLinkQueryOptions = <TData = Awaited<ReturnType<typeof inspectConsumerRegistrationLink>>, TError = ErrorType<FeatureDisabledResponse | ApiError>>(params: InspectConsumerRegistrationLinkParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof inspectConsumerRegistrationLink>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getInspectConsumerRegistrationLinkQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof inspectConsumerRegistrationLink>>> = ({ signal }) => inspectConsumerRegistrationLink(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof inspectConsumerRegistrationLink>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type InspectConsumerRegistrationLinkQueryResult = NonNullable<Awaited<ReturnType<typeof inspectConsumerRegistrationLink>>>
+export type InspectConsumerRegistrationLinkQueryError = ErrorType<FeatureDisabledResponse | ApiError>
+
+
+/**
+ * @summary Inspect a registration link without consuming it
+ */
+
+export function useInspectConsumerRegistrationLink<TData = Awaited<ReturnType<typeof inspectConsumerRegistrationLink>>, TError = ErrorType<FeatureDisabledResponse | ApiError>>(
+ params: InspectConsumerRegistrationLinkParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof inspectConsumerRegistrationLink>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getInspectConsumerRegistrationLinkQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getConsumeConsumerRegistrationLinkUrl = () => {
+
+
+
+
+  return `/api/consumer-registration/verify`
+}
+
+/**
+ * Marks the newest valid token as used and the registration as verified in one transaction.
+ * Replaying the same token yields `used`. Does not create an account or a session.
+ * @summary Consume a registration link and reach the handoff state
+ */
+export const consumeConsumerRegistrationLink = async (consumerRegistrationVerifyInput: ConsumerRegistrationVerifyInput, options?: Parameters<typeof customFetch>[1]): Promise<ConsumerRegistrationLinkState> => {
+
+  return customFetch<ConsumerRegistrationLinkState>(getConsumeConsumerRegistrationLinkUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(consumerRegistrationVerifyInput)
+  }
+);}
+
+
+
+
+
+export const getConsumeConsumerRegistrationLinkMutationOptions = <TError = ErrorType<ApiError | FeatureDisabledResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof consumeConsumerRegistrationLink>>, TError,{data: BodyType<ConsumerRegistrationVerifyInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof consumeConsumerRegistrationLink>>, TError,{data: BodyType<ConsumerRegistrationVerifyInput>}, TContext> => {
+
+const mutationKey = ['consumeConsumerRegistrationLink'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof consumeConsumerRegistrationLink>>, {data: BodyType<ConsumerRegistrationVerifyInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  consumeConsumerRegistrationLink(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ConsumeConsumerRegistrationLinkMutationResult = NonNullable<Awaited<ReturnType<typeof consumeConsumerRegistrationLink>>>
+    export type ConsumeConsumerRegistrationLinkMutationBody = BodyType<ConsumerRegistrationVerifyInput>
+    export type ConsumeConsumerRegistrationLinkMutationError = ErrorType<ApiError | FeatureDisabledResponse>
+
+    /**
+ * @summary Consume a registration link and reach the handoff state
+ */
+export const useConsumeConsumerRegistrationLink = <TError = ErrorType<ApiError | FeatureDisabledResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof consumeConsumerRegistrationLink>>, TError,{data: BodyType<ConsumerRegistrationVerifyInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof consumeConsumerRegistrationLink>>,
+        TError,
+        {data: BodyType<ConsumerRegistrationVerifyInput>},
+        TContext
+      > => {
+      return useMutation(getConsumeConsumerRegistrationLinkMutationOptions(options));
+    }
 
 export const getGetRegistrationUrl = () => {
 

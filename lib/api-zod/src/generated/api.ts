@@ -581,8 +581,108 @@ export const ResendSupportLifecycleMessageResponse = zod.object({
 export const GetReadinessResponse = zod.object({
   "accounts": zod.boolean(),
   "businessIntake": zod.boolean(),
-  "businessPublication": zod.boolean()
+  "businessPublication": zod.boolean(),
+  "consumerRegistration": zod.boolean()
 }).describe('Read-only rollout flags; each entry point stays disabled (404) until its gate is met.')
+
+
+/**
+ * Accepts name, email, and phone (contact data only). The response is identical whether the
+ * address is new, already pending, or already belongs to an account, so account existence
+ * cannot be inferred (REG-008). A valid new request creates one pending registration and queues
+ * one registration email transactionally; no account, session, or password is created.
+ * `returnRef` is an opaque internal return reference validated against an allow-list.
+ * @summary Submit a secure registration request
+ */
+export const requestConsumerRegistrationBodyNameMax = 120;
+
+export const requestConsumerRegistrationBodyEmailMin = 3;
+export const requestConsumerRegistrationBodyEmailMax = 254;
+
+export const requestConsumerRegistrationBodyPhoneMin = 6;
+export const requestConsumerRegistrationBodyPhoneMax = 32;
+
+export const requestConsumerRegistrationBodyReturnRefMax = 512;
+
+
+
+export const RequestConsumerRegistrationBody = zod.object({
+  "name": zod.string().min(1).max(requestConsumerRegistrationBodyNameMax),
+  "email": zod.string().min(requestConsumerRegistrationBodyEmailMin).max(requestConsumerRegistrationBodyEmailMax).describe('Validated server-side with a conservative pattern; normalization never merges distinct addresses.'),
+  "phone": zod.string().min(requestConsumerRegistrationBodyPhoneMin).max(requestConsumerRegistrationBodyPhoneMax).describe('Contact data only (REG-005). Country-aware normalization; not an SMS sign-in factor.'),
+  "locale": zod.enum(['nl', 'en']),
+  "returnRef": zod.string().max(requestConsumerRegistrationBodyReturnRefMax).optional().describe('Opaque internal return reference; must match the allow-list or it is dropped.')
+})
+
+export const RequestConsumerRegistrationResponse = zod.object({
+  "status": zod.enum(['accepted']),
+  "linkLifetimeMinutes": zod.number().describe('Policy link lifetime, shown so the consumer knows how long to look for the email.')
+}).describe('Neutral acknowledgement. Identical for new, pending, and existing-account addresses.')
+
+
+/**
+ * Neutral response regardless of whether a pending registration exists. When one does, every
+ * earlier link is superseded and exactly one replacement email is queued, subject to cooldown
+ * and layered rate limits (REG-016, SEC-004).
+ * @summary Request a fresh registration link
+ */
+export const resendConsumerRegistrationBodyEmailMin = 3;
+export const resendConsumerRegistrationBodyEmailMax = 254;
+
+
+
+export const ResendConsumerRegistrationBody = zod.object({
+  "email": zod.string().min(resendConsumerRegistrationBodyEmailMin).max(resendConsumerRegistrationBodyEmailMax),
+  "locale": zod.enum(['nl', 'en'])
+})
+
+export const ResendConsumerRegistrationResponse = zod.object({
+  "status": zod.enum(['accepted']),
+  "linkLifetimeMinutes": zod.number().describe('Policy link lifetime, shown so the consumer knows how long to look for the email.')
+}).describe('Neutral acknowledgement. Identical for new, pending, and existing-account addresses.')
+
+
+/**
+ * Safe, idempotent inspection used when the link is opened. It never consumes the token, so
+ * mail scanners and link previews cannot burn a single-use link. The handoff page consumes the
+ * token with an explicit POST.
+ * @summary Inspect a registration link without consuming it
+ */
+export const inspectConsumerRegistrationLinkQueryTokenMax = 128;
+
+
+
+export const InspectConsumerRegistrationLinkQueryParams = zod.object({
+  "token": zod.coerce.string().min(1).max(inspectConsumerRegistrationLinkQueryTokenMax)
+})
+
+export const InspectConsumerRegistrationLinkResponse = zod.object({
+  "state": zod.enum(['valid', 'expired', 'used', 'superseded', 'invalid']).describe('Explicit link states (REG-015). `valid` on GET means the link may be consumed; on POST it means\nthe handoff was reached. `unavailable` is reported by the API as 503, never as a state.\n'),
+  "canResend": zod.boolean().describe('Whether the resend journey applies to this state.'),
+  "locale": zod.enum(['nl', 'en']).optional(),
+  "expiresAt": zod.coerce.date().optional().describe('Only for `valid`; when the link stops working.')
+})
+
+
+/**
+ * Marks the newest valid token as used and the registration as verified in one transaction.
+ * Replaying the same token yields `used`. Does not create an account or a session.
+ * @summary Consume a registration link and reach the handoff state
+ */
+export const consumeConsumerRegistrationLinkBodyTokenMax = 128;
+
+
+
+export const ConsumeConsumerRegistrationLinkBody = zod.object({
+  "token": zod.string().min(1).max(consumeConsumerRegistrationLinkBodyTokenMax)
+})
+
+export const ConsumeConsumerRegistrationLinkResponse = zod.object({
+  "state": zod.enum(['valid', 'expired', 'used', 'superseded', 'invalid']).describe('Explicit link states (REG-015). `valid` on GET means the link may be consumed; on POST it means\nthe handoff was reached. `unavailable` is reported by the API as 503, never as a state.\n'),
+  "canResend": zod.boolean().describe('Whether the resend journey applies to this state.'),
+  "locale": zod.enum(['nl', 'en']).optional(),
+  "expiresAt": zod.coerce.date().optional().describe('Only for `valid`; when the link stops working.')
+})
 
 
 /**

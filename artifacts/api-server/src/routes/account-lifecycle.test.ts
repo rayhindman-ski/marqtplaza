@@ -60,7 +60,7 @@ const users = {
 const allUserIds = Object.values(users);
 const keyPrefix = `lifecycle-test:${runId}`;
 
-let flags = { accounts: true, businessIntake: true, businessPublication: true };
+let flags = { accounts: true, businessIntake: true, businessPublication: true, consumerRegistration: false };
 
 function identityFromHeaders(req: express.Request): Identity | null {
   const userId = req.header("x-test-user-id");
@@ -318,7 +318,8 @@ describe("lifecycle outbox", () => {
     );
     // The provider only ever sees internal references, never an address or evidence.
     for (const message of seen) {
-      assert.deepEqual(Object.keys(message).sort(), ["attempt", "dedupeKey", "eventCode", "id", "locale", "payload", "recipientClerkUserId", "recipientUserId", "template"]);
+      assert.deepEqual(Object.keys(message).sort(), ["attempt", "dedupeKey", "eventCode", "id", "locale", "payload", "recipientClerkUserId", "recipientRegistrationId", "recipientUserId", "template"]);
+      assert.equal(message.recipientRegistrationId, null);
     }
 
     // Support can re-queue a failed message; a second resend of a queued message is refused.
@@ -766,6 +767,9 @@ describe("lifecycle outbox", () => {
   it("renders NL and EN copy for every event from the allow-listed payload only", () => {
     const payload = { businessName: `Bakkerij ${runId}`, requestId: 42, claimId: 7, status: "approved", blockerCode: "sole_owner" };
     for (const eventCode of LIFECYCLE_EVENT_CODES) {
+      // The registration link mail is the documented exception (it carries a dispatch-time link);
+      // it is covered by the consumer-registration suite.
+      if (eventCode === "registration.link") continue;
       const nl = renderLifecycleEmail(eventCode, "nl", payload);
       const en = renderLifecycleEmail(eventCode, "en-GB", payload);
       assert.equal(nl.locale, "nl");
@@ -900,7 +904,7 @@ describe("lifecycle outbox", () => {
   it("maps recipient and provider outcomes onto the delivery contract", async () => {
     const message: OutboundLifecycleMessage = {
       id: 1, eventCode: "claim.approved", template: "claim.approved", locale: "nl",
-      recipientUserId: 1, recipientClerkUserId: "user_x", payload: {}, attempt: 1, dedupeKey: "lifecycle-1-g5",
+      recipientUserId: 1, recipientClerkUserId: "user_x", recipientRegistrationId: null, payload: {}, attempt: 1, dedupeKey: "lifecycle-1-g5",
     };
     const withRecipient = (resolution: RecipientResolution, transportResult: DeliveryResult = { kind: "accepted" }) =>
       createEmailDeliveryLoader({

@@ -1,4 +1,5 @@
 import {
+  foreignKey,
   index,
   integer,
   jsonb,
@@ -13,6 +14,7 @@ import { sql } from "drizzle-orm";
 import { z } from "zod/v4";
 
 import { appUsersTable } from "./accounts";
+import { consumerRegistrationsTable } from "./consumerRegistrations";
 
 /**
  * Outbox delivery states. Each one is a truthful statement about what the
@@ -58,6 +60,12 @@ export const lifecycleOutboxTable = pgTable(
     recipientUserId: integer("recipient_user_id").references(() => appUsersTable.id, {
       onDelete: "set null",
     }),
+    /**
+     * Alternative recipient for pre-account messages (consumer registration
+     * links). Exactly one of the two recipient references is set; the address
+     * is resolved from the pending registration at dispatch time.
+     */
+    recipientRegistrationId: integer("recipient_registration_id"),
     template: text("template").notNull(),
     locale: text("locale").notNull().default("nl"),
     /**
@@ -89,6 +97,12 @@ export const lifecycleOutboxTable = pgTable(
       .$onUpdate(() => new Date()),
   },
   (table) => [
+    // Named explicitly: the generated name would exceed PostgreSQL's 63-char limit.
+    foreignKey({
+      name: "lifecycle_outbox_recipient_registration_fk",
+      columns: [table.recipientRegistrationId],
+      foreignColumns: [consumerRegistrationsTable.id],
+    }).onDelete("set null"),
     uniqueIndex("lifecycle_outbox_idempotency_unique").on(table.idempotencyKey),
     uniqueIndex("lifecycle_outbox_provider_message_unique")
       .on(table.providerMessageId)

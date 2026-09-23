@@ -40,7 +40,7 @@ const users = {
 };
 const allUserIds = Object.values(users);
 
-let flags = { accounts: true, businessIntake: false, businessPublication: false };
+let flags = { accounts: true, businessIntake: false, businessPublication: false, consumerRegistration: false };
 // The routes read the taxonomy through this source on every request, so a
 // test can roll out a new version exactly the way a deploy would: the served
 // option lists change while stored preference rows are left untouched.
@@ -116,7 +116,7 @@ describe("account routes", () => {
   });
 
   it("reports readiness gates and hides account routes while accounts are disabled", async () => {
-    flags = { accounts: false, businessIntake: false, businessPublication: false };
+    flags = { accounts: false, businessIntake: false, businessPublication: false, consumerRegistration: false };
     const readiness = await request("/api/readiness", { userId: null });
     assert.equal(readiness.status, 200);
     assert.deepEqual(readiness.body, flags);
@@ -131,7 +131,7 @@ describe("account routes", () => {
 
     const [row] = await db.select().from(appUsersTable).where(eq(appUsersTable.clerkUserId, users.plain));
     assert.equal(row, undefined, "a disabled gate must not provision accounts");
-    flags = { accounts: true, businessIntake: false, businessPublication: false };
+    flags = { accounts: true, businessIntake: false, businessPublication: false, consumerRegistration: false };
   });
 
   it("requires authentication with the stable error shape", async () => {

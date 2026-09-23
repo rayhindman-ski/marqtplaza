@@ -13,15 +13,15 @@ import {
   SelfReviewError,
 } from "./permissions";
 
-const offFlags = { accounts: false, businessIntake: false, businessPublication: false };
-const onFlags = { accounts: true, businessIntake: true, businessPublication: true };
+const offFlags = { accounts: false, businessIntake: false, businessPublication: false, consumerRegistration: false };
+const onFlags = { accounts: true, businessIntake: true, businessPublication: true, consumerRegistration: false };
 
 describe("feature flags", () => {
   it("default to off and only accept explicit truthy values", () => {
     assert.deepEqual(readFeatureFlags({}), offFlags);
     assert.deepEqual(
       readFeatureFlags({ ACCOUNTS_ENABLED: "true", BUSINESS_INTAKE_ENABLED: "0", BUSINESS_PUBLICATION_ENABLED: "yes" }),
-      { accounts: true, businessIntake: false, businessPublication: true },
+      { accounts: true, businessIntake: false, businessPublication: true, consumerRegistration: false },
     );
     assert.equal(readFeatureFlags({ ACCOUNTS_ENABLED: "enabled" }).accounts, false);
   });

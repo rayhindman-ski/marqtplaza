@@ -43,7 +43,7 @@ const agedGoogleListingId = `intake-test-google-aged-${runId}`;
 const publishedSelfReportedListingId = `intake-test-selfrep-${runId}`;
 let storedUserQueryId: number | null = null;
 
-let flags = { accounts: true, businessIntake: true, businessPublication: false };
+let flags = { accounts: true, businessIntake: true, businessPublication: false, consumerRegistration: false };
 let lookupShouldFail = false;
 
 const listings: LookupListing[] = [

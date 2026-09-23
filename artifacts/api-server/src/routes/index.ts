@@ -14,6 +14,7 @@ import savedEventsRouter from "./saved-events";
 import registrationRouter from "./registration";
 import accountRouter from "./account";
 import accountLifecycleRouter from "./account-lifecycle";
+import consumerRegistrationRouter from "./consumer-registration";
 
 const router: IRouter = Router();
 
@@ -33,5 +34,6 @@ router.use(savedEventsRouter);
 router.use(registrationRouter);
 router.use(accountRouter);
 router.use(accountLifecycleRouter);
+router.use(consumerRegistrationRouter);
 
 export default router;
