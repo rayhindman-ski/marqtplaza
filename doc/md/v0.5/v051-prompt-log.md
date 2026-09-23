@@ -106,6 +106,6 @@ Clerk sign-in/sign-up pages now share the account-area back link and NL/EN
 toggle (`AuthPageFrame`, `LanguageToggle` extracted from `AccountShell`);
 Clerk's card re-localizes on switch. Typecheck + relevant e2e suites green.
 
-**Duration:** 10:23 → 10:38 CEST (≈15 minutes).
+**Duration:** 10:23 → 10:33 CEST (≈10 minutes).
 
-**Commits:** see the commit that adds this entry.
+**Commits:** `aaad90c` (pushed)
