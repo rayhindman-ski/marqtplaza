@@ -138,3 +138,33 @@ e2e suites pass.
 **Duration:** 20:10 → 20:22 CEST (≈12 minutes).
 
 **Commits:** `442772a` (pushed)
+
+### Prompt 8
+
+**Received:** 2026-09-25 ≈07:08 CEST (three screenshots attached)
+
+> where is the testing capability for a new user ? and the journey, itself.
+> the screens below show a confusion and non functional result of your coding
+> skills. very disappointed. The initial screen should act as an anonomyous
+> user. then when the user is comfortable, he/she can choose to 'create an
+> account' and then initiate the account creation journey. and the
+> implementation is faulty because it is unusable as the screenshots attached
+> illustrate. add full user account create testing and validation to your
+> regresssion tests. also keep loging the prompt now in
+> doc/md/v0.5/v051-prompt-log.md
+
+**Response (summary):** Diagnosed the three screenshots: (a) the "not
+available yet" state is the published app, where no rollout flags are set in
+production; (b) the header had no anonymous "create account" entry (the
+Consumer/Editor pill is the preview-mode switch); (c) the Clerk profile was
+constrained by the global 440px card width. Made the header auth-aware
+(Create account / Sign in / My account with a neutral loading placeholder),
+gave the profile panel a scoped full-width appearance, extended the live
+Clerk sign-up test into a full anonymous→account journey, added an offline
+header test, and registered the `account-regression` workflow (22 passed).
+Architect review found one issue (pre-load flicker), fixed. Details in
+`release_v051_log.md`.
+
+**Duration:** 07:08 → 07:25 CEST (≈17 minutes).
+
+**Commits:** see the commit that adds this entry.

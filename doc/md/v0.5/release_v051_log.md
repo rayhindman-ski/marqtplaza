@@ -289,3 +289,48 @@ registration" also pointed at `/account/register/complete`. Two causes:
 Verification: typecheck clean; i18n parity 12/12; `e2e/consumer-registration`
 6/6, `e2e/account-preferences`, `e2e/account-privacy`: 19 passed in total.
 Discovery code untouched.
+
+### 2026-09-25 — Follow-up: new-user journey, account page layout, regression coverage
+
+Report (three screenshots): no visible way for a new visitor to start
+creating an account; the Clerk profile on `/account` rendered in a narrow,
+overlapping column; a signed-in visitor saw "Accounts are not available yet".
+
+Findings:
+
+1. **"Accounts are not available yet" came from the published app.** The
+   production environment has no `ACCOUNTS_ENABLED` / `VITE_ACCOUNTS_ENABLED`
+   (or any other rollout flag) set, so the API answers `FEATURE_DISABLED` and
+   the page shows the intentional closed state. The development environment
+   has all v0.5 flags on. Enabling accounts in production is a release
+   decision (see `convergence.md`), not a code fix; it is not changed here.
+2. **No anonymous entry into account creation.** The header always showed a
+   "My account" icon that sent anonymous visitors to sign-in. The "Consumer /
+   Editor" pill is the existing preview-mode switch, not an account state.
+   Fix: the header is now auth-aware. Anonymous visitors see a
+   **Create account** button (→ `/sign-up?terug=<current page>`) and the icon
+   reads **Sign in** (→ `/sign-in?terug=…`); signed-in visitors keep
+   **My account**. While Clerk is still loading a neutral placeholder is shown
+   so the wrong state never flashes. NL/EN labels paired. Discovery, map,
+   list, filter, card and icon behaviour untouched (map regression 11/11).
+3. **Clerk `UserProfile` was squeezed to the global 440px card width** used
+   for the sign-in/sign-up cards. Fix: a scoped appearance override on the
+   profile panel only; the profile now spans the full panel with its own
+   navigation column (screenshot captured by the live test).
+
+Regression coverage added:
+
+- `e2e/clerk-live-signup.spec.ts` now covers the whole journey against the
+  real Clerk development instance: anonymous homepage → "Create account" →
+  sign-up → e-mail code verification → `/account/voorkeuren` → `/api/account/me`
+  verified → `/account` renders the preferences panel, no unavailable state,
+  and a full-width profile panel → homepage shows "My account" instead of
+  "Create account". Passing (≈17 s).
+- `e2e/account-preferences.spec.ts`: always-on (offline) test for the
+  anonymous vs signed-in header entry points and their return paths.
+- `e2e/signup-stale-step.spec.ts`: header label updated ("Sign in" for
+  anonymous visitors); still proves Clerk NL/EN switching.
+- New workflow **`account-regression`** runs the live sign-up spec plus the
+  account, consumer-registration and Clerk-offline suites against the
+  workspace dev domain: 22 passed. `map-regression` 11/11, workspace
+  typecheck clean.

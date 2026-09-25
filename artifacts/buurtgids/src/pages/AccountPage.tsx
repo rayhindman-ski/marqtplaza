@@ -209,7 +209,19 @@ export default function AccountPage() {
         {auth.isTestAuth ? (
           <p data-testid="status-profile-test-mode" className="px-6 py-5 text-sm text-muted-foreground">Clerk profile is not loaded in test mode.</p>
         ) : (
-          <UserProfile routing="path" path={`${basePath}/account`} />
+          <UserProfile
+            routing="path"
+            path={`${basePath}/account`}
+            // The global Clerk appearance sizes the sign-in/sign-up cards at
+            // 440px; the two-column profile needs the full panel width.
+            appearance={{
+              elements: {
+                rootBox: '!w-full !block',
+                cardBox: '!w-full !max-w-full !rounded-none !shadow-none',
+                navbar: 'border-r border-slate-200',
+              },
+            }}
+          />
         )}
       </section>
     </AccountShell>

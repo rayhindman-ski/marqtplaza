@@ -24,6 +24,10 @@ args = "typecheck"
 task = "workflow.run"
 args = "map-regression"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "account-regression"
+
 [[workflows.workflow]]
 name = "typecheck"
 author = "agent"
@@ -45,6 +49,17 @@ args = "PLAYWRIGHT_CHROMIUM_EXECUTABLE=\"$(command -v chromium)\" pnpm --filter 
 
 [workflows.workflow.metadata]
 isValidation = true
+
+[[workflows.workflow]]
+name = "account-regression"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "CLERK_LIVE_SIGNUP=1 CLERK_LIVE_BASE_URL=\"https://$REPLIT_DEV_DOMAIN\" PLAYWRIGHT_CHROMIUM_EXECUTABLE=\"$(command -v chromium)\" pnpm --filter @workspace/buurtgids exec playwright test e2e/clerk-live-signup.spec.ts e2e/account-preferences.spec.ts e2e/consumer-registration.spec.ts e2e/signup-stale-step.spec.ts"
+
+[workflows.workflow.metadata]
+outputType = "console"
 
 [agent]
 stack = "PNPM_WORKSPACE"

@@ -165,6 +165,21 @@ test.describe('consumer account journey', () => {
     await expect(page.getByTestId('page-account-preferences')).toHaveCount(0);
   });
 
+  test('the anonymous homepage offers "create account" and "sign in"; a signed-in header shows "my account"', async ({ page }) => {
+    // Anonymous first: discovery works without an account and the header
+    // carries the explicit entry into account creation with a return path.
+    await page.goto('/?e2eAccountAuth=1');
+    const create = page.getByTestId('link-create-account');
+    await expect(create).toBeVisible();
+    await expect(create).toHaveAttribute('href', /^\/sign-up\?terug=/);
+    await expect(page.getByRole('link', { name: /^(sign in|inloggen)$/i }).first()).toHaveAttribute('href', /^\/sign-in\?terug=/);
+    await expect(page.getByRole('link', { name: /^(my account|mijn account)$/i })).toHaveCount(0);
+
+    await page.evaluate(() => window.__setAccountTestAuth?.({ userId: 'user-e2e' }));
+    await expect(page.getByTestId('link-create-account')).toHaveCount(0);
+    await expect(page.getByRole('link', { name: /^(my account|mijn account)$/i }).first()).toHaveAttribute('href', /^\/account\?terug=/);
+  });
+
   test('signed-out visitors are sent to sign-in with a safe return path', async ({ page }) => {
     await page.goto('/account/voorkeuren?e2eAccountAuth=1&terug=%2Fdeals');
     await expect(page).toHaveURL(/\/sign-in\?terug=%2Faccount%2Fvoorkeuren/);

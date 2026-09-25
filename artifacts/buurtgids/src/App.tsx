@@ -12,7 +12,7 @@ import {
   Landmark, Route as RouteIcon, Baby, Building2, Coffee, Gamepad2, HandHeart, Waves, ShoppingBag, ExternalLink, AlertCircle, CalendarPlus,
   CalendarDays, UsersRound, Utensils,
   CloudSun, Cloud, CloudFog, CloudRain, CloudSnow, Sun, Wind, Droplets, Tag, Store,
-  Bike, Car, Footprints, TrainFront, ShieldCheck, Sparkles, Navigation, UserRound, Loader2, Menu, Facebook, Instagram, Linkedin
+  Bike, Car, Footprints, TrainFront, ShieldCheck, Sparkles, Navigation, UserRound, UserPlus, Loader2, Menu, Facebook, Instagram, Linkedin
 } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -860,7 +860,13 @@ function ReferenceCategoryNav({
   const search = useSearch();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuTriggerRef = useRef<HTMLButtonElement>(null);
-  const accountHref = withReturnPath('/account', `${location}${search ? `?${search}` : ''}`);
+  const currentPath = `${location}${search ? `?${search}` : ''}`;
+  const accountHref = withReturnPath('/account', currentPath);
+  // Anonymous visitors get an explicit "create account" entry; the icon then
+  // leads to sign-in. Signed-in visitors keep the "my account" icon only.
+  const auth = useAccountAuth();
+  const anonymous = auth.isLoaded && !auth.isSignedIn;
+  const authPending = !auth.isLoaded;
   const iconForCategory = (id: string) => {
     if (id === 'things-to-do') return CalendarDays;
     if (id === 'locals') return UsersRound;
@@ -959,20 +965,46 @@ function ReferenceCategoryNav({
           { href: '/deals', label: language === 'nl' ? 'Deals' : 'Deals', Icon: Tag },
           { href: '/mijn-bedrijf', label: language === 'nl' ? 'Mijn bedrijf' : 'My business', Icon: Store },
           { href: '/bedrijf-aanmelden', label: language === 'nl' ? 'Bedrijf aanmelden' : 'List a business', Icon: Building2 },
-          { href: accountHref, label: language === 'nl' ? 'Mijn account' : 'My account', Icon: UserRound },
+          anonymous
+            ? { href: withReturnPath('/sign-in', currentPath), label: language === 'nl' ? 'Inloggen' : 'Sign in', Icon: UserRound }
+            : { href: accountHref, label: language === 'nl' ? 'Mijn account' : 'My account', Icon: UserRound },
         ].filter(({ href }) => userRole === 'designer' || !['/capture', '/bronnen'].includes(href))
           .map(({ href, label, Icon }) => (
           <span key={href} className="group relative">
-            <Link
-              href={href}
-              aria-label={label}
-               className="inline-flex min-h-11 items-center gap-2 rounded-lg px-3 text-sm font-bold text-foreground transition-colors hover:bg-primary/10 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary lg:min-w-11 lg:justify-center"
-            >
-              <Icon className="h-5 w-5" aria-hidden="true" />
-            </Link>
-            <span className={tooltipClass}>{label}</span>
+            {Icon === UserRound && authPending ? (
+              // Neutral placeholder until Clerk resolves, so an anonymous
+              // visitor never briefly sees "my account".
+              <span
+                data-testid="status-account-nav-pending"
+                aria-hidden="true"
+                className="inline-flex min-h-11 items-center px-3 text-muted-foreground/60 lg:min-w-11 lg:justify-center"
+              >
+                <Icon className="h-5 w-5" />
+              </span>
+            ) : (
+              <>
+                <Link
+                  href={href}
+                  aria-label={label}
+                  className="inline-flex min-h-11 items-center gap-2 rounded-lg px-3 text-sm font-bold text-foreground transition-colors hover:bg-primary/10 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary lg:min-w-11 lg:justify-center"
+                >
+                  <Icon className="h-5 w-5" aria-hidden="true" />
+                </Link>
+                <span className={tooltipClass}>{label}</span>
+              </>
+            )}
           </span>
         ))}
+        {anonymous ? (
+          <Link
+            href={withReturnPath('/sign-up', currentPath)}
+            data-testid="link-create-account"
+            className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full bg-primary px-3 text-[11px] font-extrabold text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          >
+            <UserPlus className="h-3.5 w-3.5" aria-hidden="true" />
+            {language === 'nl' ? 'Account aanmaken' : 'Create account'}
+          </Link>
+        ) : null}
         <UserRoleSelector userRole={userRole} onUserRoleChange={onUserRoleChange} />
       </div>
     </nav>

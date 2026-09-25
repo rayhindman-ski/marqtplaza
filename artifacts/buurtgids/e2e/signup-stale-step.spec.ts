@@ -163,14 +163,14 @@ test.describe('Clerk language switching (offline)', () => {
     {
       initialLanguage: 'nl',
       selectedLanguage: 'en',
-      accountLabel: 'My account',
+      accountLabel: 'Sign in',
       heading: 'Sign in to marqtplaza-speckit',
       emailLabel: 'Email address',
     },
     {
       initialLanguage: 'en',
       selectedLanguage: 'nl',
-      accountLabel: 'Mijn account',
+      accountLabel: 'Inloggen',
       heading: 'Inloggen',
       emailLabel: 'E-mailadres',
     },
@@ -183,7 +183,8 @@ test.describe('Clerk language switching (offline)', () => {
 
       await page.goto('/');
       await page.getByRole('combobox', { name: /Taal|Language/ }).selectOption(selectedLanguage);
-      await page.getByRole('link', { name: accountLabel }).click();
+      // Anonymous header: the account icon reads "Sign in" and leads to the Clerk card.
+      await page.getByRole('link', { name: accountLabel, exact: true }).click();
 
       await expect(page).toHaveURL(/\/sign-in(?:\?|$)/);
       await expect(page.getByRole('heading', { name: heading, exact: true })).toBeVisible({ timeout: 20_000 });

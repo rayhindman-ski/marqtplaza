@@ -61,6 +61,12 @@ test.describe('live Clerk sign-up', () => {
     const terug = encodeURIComponent(returnPath);
 
     const liveBase = (process.env.CLERK_LIVE_BASE_URL ?? '').replace(/\/$/, '');
+    // Anonymous first: the homepage must work without an account and offer an
+    // explicit "create account" entry that leads to the Clerk sign-up card.
+    await page.goto(`${liveBase}/`);
+    const createAccount = page.getByTestId('link-create-account');
+    await expect(createAccount).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByTestId('link-create-account')).toHaveAttribute('href', /^\/sign-up\?terug=/);
     await page.goto(`${liveBase}/sign-up?terug=${terug}`);
     const emailInput = page.locator('input[name="emailAddress"]');
     await expect(emailInput).toBeVisible({ timeout: 30_000 });
@@ -95,6 +101,23 @@ test.describe('live Clerk sign-up', () => {
       expect(me.status).toBe(200);
       expect(me.isVerified).toBe(true);
       expect(me.onboardingCompleted).toBe(false);
+
+      // The new account must reach a usable account page: no "accounts are not
+      // available" dead end, the header switches to "my account", and the Clerk
+      // profile panel renders at panel width with its own navigation.
+      await page.goto(`${liveBase}/account`);
+      await expect(page.getByTestId('heading-account')).toBeVisible({ timeout: 30_000 });
+      await expect(page.getByTestId('status-account-unavailable')).toHaveCount(0);
+      await expect(page.getByTestId('account-preferences-panel')).toBeVisible({ timeout: 30_000 });
+      const profileNav = page.locator('[data-testid="account-profile-panel"] .cl-navbar');
+      await expect(profileNav).toBeVisible({ timeout: 30_000 });
+      await page.getByTestId('account-profile-panel').scrollIntoViewIfNeeded();
+      await page.getByTestId('account-profile-panel').screenshot({ path: test.info().outputPath('account-profile.png') });
+      const profileBox = await page.locator('[data-testid="account-profile-panel"] .cl-cardBox').boundingBox();
+      const panelBox = await page.getByTestId('account-profile-panel').boundingBox();
+      expect(profileBox && panelBox && profileBox.width >= panelBox.width - 4, 'profile uses the full panel width').toBe(true);
+      await page.goto(`${liveBase}/`);
+      await expect(page.getByRole('link', { name: /my account|mijn account/i })).toBeVisible({ timeout: 30_000 });
     }
 
     const attempt = fapiRequests.find((r) => /POST \/v1\/client\/sign_ups\/[^/]+\/attempt_verification/.test(r));
