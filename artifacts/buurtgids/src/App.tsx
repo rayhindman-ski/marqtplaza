@@ -9,7 +9,7 @@ import {
   Map as MapIcon, Clock, Newspaper,
   Globe2, Bookmark, BookmarkCheck, X, ChevronDown, ChevronUp,
   ScanSearch, RefreshCw, WifiOff, Radio, MapPinned,
-  Landmark, Route as RouteIcon, Baby, Building2, Coffee, Gamepad2, HandHeart, Waves, ShoppingBag, ExternalLink, AlertCircle, CalendarPlus,
+  Landmark, Route as RouteIcon, Baby, Building2, Coffee, Gamepad2, HandHeart, MessagesSquare, Waves, ShoppingBag, ExternalLink, AlertCircle, CalendarPlus,
   CalendarDays, UsersRound, Utensils,
   CloudSun, Cloud, CloudFog, CloudRain, CloudSnow, Sun, Wind, Droplets, Tag, Store,
   Bike, Car, Footprints, TrainFront, ShieldCheck, Sparkles, Navigation, UserRound, UserPlus, Loader2, Menu, Facebook, Instagram, Linkedin
@@ -715,12 +715,12 @@ function UserRoleSelector({
       className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border border-border/70 bg-card/90 px-3 text-[11px] font-extrabold text-foreground shadow-sm backdrop-blur-md"
       title={userRole === 'designer' ? 'Editor view' : 'Consumer view'}
     >
-      <span>{userRole === 'designer' ? 'Editor' : 'Consumer'}</span>
+      <span className="text-muted-foreground">View:</span>
       <select
         value={userRole}
         onChange={(event) => onUserRoleChange(event.target.value as UserRole)}
         aria-label="Preview mode"
-        className="cursor-pointer appearance-none bg-transparent text-[11px] font-extrabold lowercase outline-none"
+        className="cursor-pointer appearance-none bg-transparent text-[11px] font-extrabold outline-none"
       >
         <option value="designer">Editor</option>
         <option value="user">Consumer</option>
@@ -875,7 +875,7 @@ function ReferenceCategoryNav({
     if (id === 'social-map') return HandHeart;
     return Newspaper;
   };
-  const tooltipClass = 'pointer-events-none absolute left-1/2 top-full z-50 mt-2 -translate-x-1/2 whitespace-nowrap rounded-md bg-foreground px-2 py-1 text-[10px] font-bold text-background opacity-0 shadow-lg transition-opacity group-hover:opacity-100 group-focus-within:opacity-100';
+  const tooltipClass = 'pointer-events-none hidden lg:block absolute left-1/2 top-full z-50 mt-2 -translate-x-1/2 whitespace-nowrap rounded-md bg-foreground px-2 py-1 text-[10px] font-bold text-background opacity-0 shadow-lg transition-opacity group-hover:opacity-100 group-focus-within:opacity-100';
 
   return (
     <nav
@@ -933,6 +933,7 @@ function ReferenceCategoryNav({
                   className="inline-flex min-h-11 items-center gap-2 rounded-lg px-3 text-sm font-bold text-foreground transition-colors hover:bg-primary/10 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary lg:min-w-11 lg:justify-center"
                 >
                   <Icon className="h-5 w-5" aria-hidden="true" />
+                  <span className="lg:hidden">{category.label}</span>
                 </Link>
                 <span className={tooltipClass}>{category.label}</span>
               </span>
@@ -953,6 +954,7 @@ function ReferenceCategoryNav({
                  className="inline-flex min-h-11 items-center gap-2 rounded-lg px-3 text-sm font-bold text-foreground transition-colors hover:bg-primary/10 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary lg:min-w-11 lg:justify-center"
               >
                 <Icon className="h-5 w-5" aria-hidden="true" />
+                <span className="lg:hidden">{category.label}</span>
               </button>
               <span className={tooltipClass}>{category.label}</span>
             </span>
@@ -961,7 +963,7 @@ function ReferenceCategoryNav({
         {[
           { href: '/capture', label: t.capture, Icon: ScanSearch },
           { href: '/bronnen', label: language === 'nl' ? 'Bronnen' : 'Sources', Icon: Radio },
-          { href: '/buurt', label: language === 'nl' ? 'Buurtplein' : 'Community', Icon: HandHeart },
+          { href: '/buurt', label: language === 'nl' ? 'Buurtplein' : 'Community', Icon: MessagesSquare },
           { href: '/deals', label: language === 'nl' ? 'Deals' : 'Deals', Icon: Tag },
           { href: '/mijn-bedrijf', label: language === 'nl' ? 'Mijn bedrijf' : 'My business', Icon: Store },
           { href: '/bedrijf-aanmelden', label: language === 'nl' ? 'Bedrijf aanmelden' : 'List a business', Icon: Building2 },
@@ -989,6 +991,7 @@ function ReferenceCategoryNav({
                   className="inline-flex min-h-11 items-center gap-2 rounded-lg px-3 text-sm font-bold text-foreground transition-colors hover:bg-primary/10 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary lg:min-w-11 lg:justify-center"
                 >
                   <Icon className="h-5 w-5" aria-hidden="true" />
+                  <span className="lg:hidden">{label}</span>
                 </Link>
                 <span className={tooltipClass}>{label}</span>
               </>
@@ -999,7 +1002,7 @@ function ReferenceCategoryNav({
           <Link
             href={withReturnPath('/sign-up', currentPath)}
             data-testid="link-create-account"
-            className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full bg-primary px-3 text-[11px] font-extrabold text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            className="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full bg-primary px-4 text-xs lg:min-h-9 lg:px-3 lg:text-[11px] font-extrabold text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
           >
             <UserPlus className="h-3.5 w-3.5" aria-hidden="true" />
             {language === 'nl' ? 'Account aanmaken' : 'Create account'}
@@ -1192,6 +1195,7 @@ function SearchState({
           )}>
             <input
               type="text"
+              data-testid="input-postcode-search"
               value={query}
               onChange={(e) => { setQuery(e.target.value); setError(''); }}
               placeholder={t.placeholder}
@@ -1199,9 +1203,10 @@ function SearchState({
             />
             <button
               type="submit"
+              aria-label={t.explore}
               className="px-6 md:px-8 bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-lg transition-colors flex items-center gap-2"
             >
-              <Search className="w-5 h-5" />
+              <Search className="w-5 h-5" aria-hidden="true" />
               <span className="hidden md:inline">{t.explore}</span>
             </button>
           </div>
@@ -3083,6 +3088,9 @@ function DiscoveryState({
           role="separator"
           aria-orientation="vertical"
           aria-label={language === 'nl' ? 'Breedte van filterpaneel aanpassen' : 'Resize filter panel'}
+          aria-valuemin={280}
+          aria-valuemax={Math.round(typeof window === 'undefined' ? 420 : window.innerWidth * 0.3)}
+          aria-valuenow={Math.round(sidebarWidth)}
           tabIndex={0}
           className="absolute -right-1 top-0 z-30 hidden h-full w-2 cursor-col-resize touch-none items-center justify-center bg-transparent after:h-14 after:w-1 after:rounded-full after:bg-border hover:after:bg-primary focus-visible:outline-none focus-visible:after:bg-primary md:flex"
           onPointerDown={(event) => {
@@ -3122,7 +3130,7 @@ function DiscoveryState({
           onSectionSelect={selectTopLevelSection}
         />
         <WeatherCard cityId={locationId} language={language} />
-        <div className="relative min-h-0 flex-1">
+        <div data-testid="discovery-results-map" className="relative min-h-0 flex-1">
           <DiscoveryResultsMap
             language={language}
             locationId={location.id}

@@ -28,6 +28,10 @@ args = "map-regression"
 task = "workflow.run"
 args = "account-regression"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "usability-regression"
+
 [[workflows.workflow]]
 name = "typecheck"
 author = "agent"
@@ -54,12 +58,20 @@ isValidation = true
 name = "account-regression"
 author = "agent"
 
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "CLERK_LIVE_SIGNUP=1 CLERK_LIVE_BASE_URL=\"https://$REPLIT_DEV_DOMAIN\" PLAYWRIGHT_CHROMIUM_EXECUTABLE=\"$(command -v chromium)\" pnpm --filter @workspace/buurtgids exec playwright test e2e/clerk-live-signup.spec.ts e2e/account-preferences.spec.ts e2e/consumer-registration.spec.ts e2e/signup-stale-step.spec.ts"
-
 [workflows.workflow.metadata]
 outputType = "console"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "PW_PORT=22590 CLERK_LIVE_SIGNUP=1 CLERK_LIVE_BASE_URL=\"https://$REPLIT_DEV_DOMAIN\" PLAYWRIGHT_CHROMIUM_EXECUTABLE=\"$(command -v chromium)\" pnpm --filter @workspace/buurtgids exec playwright test e2e/clerk-live-signup.spec.ts e2e/account-preferences.spec.ts e2e/consumer-registration.spec.ts e2e/signup-stale-step.spec.ts"
+
+[[workflows.workflow]]
+name = "usability-regression"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "PW_PORT=22580 PLAYWRIGHT_CHROMIUM_EXECUTABLE=\"$(command -v chromium)\" pnpm --filter @workspace/buurtgids exec playwright test e2e/usability-regression.spec.ts --reporter=line"
 
 [agent]
 stack = "PNPM_WORKSPACE"

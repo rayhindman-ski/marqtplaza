@@ -334,3 +334,51 @@ Regression coverage added:
   account, consumer-registration and Clerk-offline suites against the
   workspace dev domain: 22 passed. `map-regression` 11/11, workspace
   typecheck clean.
+
+### 2026-09-25 — Follow-up: usability/readability gate, phone menu, contrast debt
+
+Report (screenshot, phone width): the opened navigation menu showed a column
+of bare icons with no text, the preview switch read "Consumer consumer", and
+the header pushed the map off the first screen.
+
+Fixes:
+
+1. **Phone menu labels.** Each navigation entry now shows its text label in
+   the stacked menu (icons alone only on the desktop bar, where hover
+   tooltips exist). The "Create account" pill meets the 44px tap target on
+   phones. Two entries were indistinguishable: the category nav label for
+   `shopping` read "Deals" next to the real `/deals` link — renamed to
+   "Shopping"/"Winkelen" (it opens the businesses section, behaviour
+   unchanged); the Community link shared the Social-map glyph — now uses a
+   speech-bubble icon. No discovery, map, list, filter or card behaviour
+   changed (map regression 11/11).
+2. **Preview switch** reads "View: Consumer/Editor" instead of duplicating the
+   word.
+3. **Accessibility defects found by the new gate:** homepage search button had
+   no accessible name on phones (icon only) → `aria-label`; the filter-panel
+   resize handle lacked `aria-valuenow/max` (critical axe rule); the viewport
+   meta blocked pinch-zoom (`maximum-scale=1`) → removed.
+
+Usability/readability scoring (new `e2e/usability-regression.spec.ts`,
+workflow **`usability-regression`**):
+
+- axe-core (WCAG 2.1 A/AA + best-practice) on homepage, discovery and the
+  consumer registration page at 1280×900 and 390×844. Every run attaches the
+  full violation list per screen and records pass/violation counts as test
+  annotations. Any `serious`/`critical` violation fails the run.
+- **Colour-contrast debt is explicit, not hidden.** Brand orange `#f26a21` on
+  white measures 3.06:1 (AA needs 4.5:1 for normal text). Recolouring it
+  changes every primary button, pin and badge, so that is a brand decision
+  left to the product owner. The gate tolerates only nodes whose pair
+  involves `#f26a21`, capped per screen (2/2/4/2/5/5 nodes today); any other
+  unreadable pair, or any growth, fails.
+- Rule checks axe cannot make: every phone menu entry has visible text, a
+  ≥44px target, unique label and unique glyph, and the menu fits the
+  viewport; the discovery map starts in the top half of a phone screen;
+  every visible control on the three screens has an accessible name.
+- Playwright now takes `PW_PORT` so the three regression workflows
+  (map 22572, usability 22580, account 22590) can run in parallel without
+  sharing a dev server.
+
+Verification: typecheck clean, i18n parity 12/12, usability 9/9, map 11/11,
+account suites 22/22 (live Clerk sign-up included).

@@ -168,3 +168,22 @@ Architect review found one issue (pre-load flicker), fixed. Details in
 **Duration:** 07:08 → 07:25 CEST (≈17 minutes).
 
 **Commits:** `7989967` (pushed)
+
+### Prompt 9
+
+**Received:** 2026-09-25 ≈07:27 CEST (phone-width screenshot of the open menu)
+
+> where is the usability/readabiliy scoring? do you consider this production
+> grade code? I consider is LESS than Intern qualiy. Improve your testing
+> harness
+
+**Response (summary):** Added an axe-core based usability/readability gate
+(`usability-regression` workflow) with per-screen scores, an explicit
+brand-orange contrast budget and phone-menu readability rules; the gate found
+and I fixed: icon-only phone menu, duplicate "Deals"/duplicate glyph, nameless
+search button, invalid resize-handle ARIA, zoom-blocking viewport meta. The
+"Consumer consumer" switch now reads "View: Consumer". Brand contrast (3.06:1)
+is reported as open debt for a product decision. Regression workflows now use
+separate ports. Details in `release_v051_log.md`.
+
+**Duration:** 07:27 → 08:02 CEST (≈35 minutes).

@@ -932,7 +932,7 @@ export const translations = {
       { id: 'locals', label: 'Bedrijven' },
       { id: 'food-drink', label: 'Horeca' },
       { id: 'social-map', label: 'Sociale kaart' },
-      { id: 'shopping', label: 'Deals' },
+      { id: 'shopping', label: 'Winkelen' },
     ],
     // Saved places
     savedPlaces: 'Opgeslagen plekken',
@@ -1100,7 +1100,7 @@ export const translations = {
       { id: 'locals', label: 'Businesses' },
       { id: 'food-drink', label: 'Food & drink' },
       { id: 'social-map', label: 'Social map' },
-      { id: 'shopping', label: 'Deals' },
+      { id: 'shopping', label: 'Shopping' },
     ],
     // Saved places
     savedPlaces: 'Saved Places',
