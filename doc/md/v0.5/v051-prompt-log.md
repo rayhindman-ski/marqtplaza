@@ -167,4 +167,4 @@ Architect review found one issue (pre-load flicker), fixed. Details in
 
 **Duration:** 07:08 → 07:25 CEST (≈17 minutes).
 
-**Commits:** see the commit that adds this entry.
+**Commits:** `7989967` (pushed)
