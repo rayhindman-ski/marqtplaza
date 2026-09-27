@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { AccountBusinessMembership } from './accountBusinessMembership';
 import type { AccountCapabilities } from './accountCapabilities';
 import type { AccountLocale } from './accountLocale';
 import type { AccountRole } from './accountRole';
@@ -27,6 +28,8 @@ export interface AccountMe {
   /** Whether the separate campaign-style research registration exists. Never merged into account data. */
   hasResearchRegistration: boolean;
   businessMembershipCount: number;
+  /** Businesses the account belongs to (v0.5.2), for the account home Business section. Never preference data. */
+  businesses: AccountBusinessMembership[];
   preferences: ConsumerPreferences | null;
   createdAt: string;
 }

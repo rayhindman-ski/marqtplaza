@@ -25,6 +25,7 @@ import {
 
 import { getAccountOptions, type AccountOptionsSource } from "../lib/accountOptions";
 import { sendApiError, unknownFieldErrors } from "../lib/apiError";
+import { listBusinessesForUser } from "../lib/businessMembership";
 import { getFeatureFlags, type FeatureFlagSource } from "../lib/featureFlags";
 import {
   countBusinessMemberships,
@@ -181,8 +182,9 @@ export async function buildAccountMe(
   accountOptions: AccountOptionsSource = getAccountOptions,
 ) {
   const user: AppUser = account.user;
-  const [businessMembershipCount, hasResearchRegistration, [preferences]] = await Promise.all([
+  const [businessMembershipCount, businesses, hasResearchRegistration, [preferences]] = await Promise.all([
     countBusinessMemberships(account.identity.userId),
+    listBusinessesForUser(account.identity.userId),
     hasUserRegistration(account.identity.userId),
     db
       .select()
@@ -206,6 +208,14 @@ export async function buildAccountMe(
     capabilities: deriveCapabilities(capabilityInput),
     hasResearchRegistration,
     businessMembershipCount,
+    // v0.5.2: memberships for the account home Business section (BMEM); never preference data.
+    businesses: businesses.map((business) => ({
+      id: business.id,
+      name: business.name,
+      slug: business.slug,
+      role: business.role,
+      status: business.closedAt ? "closed" : business.publicationStatus,
+    })),
     preferences: serialisePreferences(preferences, accountOptions),
     createdAt: user.createdAt.toISOString(),
   };

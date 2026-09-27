@@ -379,6 +379,113 @@ export const BusinessOnboardingContext = {
   listing: 'listing',
 } as const;
 
+export type BusinessMemberRole = typeof BusinessMemberRole[keyof typeof BusinessMemberRole];
+
+
+export const BusinessMemberRole = {
+  owner: 'owner',
+  manager: 'manager',
+} as const;
+
+export interface AccountBusinessMembership {
+  id: number;
+  name: string;
+  slug: string;
+  role: BusinessMemberRole;
+  /** Publication status, or `closed` once an owner closed the business. */
+  status: string;
+}
+
+export interface BusinessMember {
+  id: number;
+  role: BusinessMemberRole;
+  displayName: string | null;
+  isSelf: boolean;
+  joinedAt: string;
+}
+
+export type BusinessInvitationStatus = typeof BusinessInvitationStatus[keyof typeof BusinessInvitationStatus];
+
+
+export const BusinessInvitationStatus = {
+  open: 'open',
+  accepted: 'accepted',
+  revoked: 'revoked',
+  expired: 'expired',
+} as const;
+
+export interface BusinessInvitation {
+  id: number;
+  /** Present in owner listings only. */
+  email?: string;
+  role: BusinessMemberRole;
+  status: BusinessInvitationStatus;
+  expiresAt: string;
+  createdAt?: string;
+}
+
+export interface BusinessMembership {
+  businessId: number;
+  viewerRole: BusinessMemberRole;
+  members: BusinessMember[];
+  /** Empty for managers; invitations carry the invited address. */
+  invitations: BusinessInvitation[];
+}
+
+export interface BusinessInvitationInput {
+  /**
+     * @minLength 3
+     * @maxLength 320
+     * @pattern ^[^\s@]+@[^\s@]+\.[^\s@]+$
+     */
+  email: string;
+  role: BusinessMemberRole;
+}
+
+export interface BusinessInvitationAcceptInput {
+  /**
+     * @minLength 1
+     * @maxLength 256
+     */
+  token: string;
+}
+
+export interface BusinessMemberRoleInput {
+  role: BusinessMemberRole;
+}
+
+export interface BusinessOwnershipTransferInput {
+  memberId: number;
+}
+
+export interface BusinessCloseInput {
+  /** Must be true. */
+  confirm: boolean;
+}
+
+export interface BusinessInvitationAccepted {
+  accepted: true;
+  businessId: number;
+  businessName: string;
+  role: BusinessMemberRole;
+}
+
+export type BusinessInvitationRejectedReason = typeof BusinessInvitationRejectedReason[keyof typeof BusinessInvitationRejectedReason];
+
+
+export const BusinessInvitationRejectedReason = {
+  invalid: 'invalid',
+  expired: 'expired',
+  used: 'used',
+  revoked: 'revoked',
+  email_mismatch: 'email_mismatch',
+} as const;
+
+export interface BusinessInvitationRejected {
+  accepted: false;
+  reason: BusinessInvitationRejectedReason;
+}
+
 export interface BusinessOnboardingIntentInput {
   context: BusinessOnboardingContext;
   /**
@@ -596,6 +703,8 @@ export interface AccountMe {
   /** Whether the separate campaign-style research registration exists. Never merged into account data. */
   hasResearchRegistration: boolean;
   businessMembershipCount: number;
+  /** Businesses the account belongs to (v0.5.2), for the account home Business section. Never preference data. */
+  businesses: AccountBusinessMembership[];
   preferences: ConsumerPreferences | null;
   createdAt: string;
 }
@@ -3175,6 +3284,41 @@ export type InspectConsumerRegistrationLinkParams = {
  * @maxLength 128
  */
 token: string;
+};
+
+export type RevokeBusinessInvitation200Status = typeof RevokeBusinessInvitation200Status[keyof typeof RevokeBusinessInvitation200Status];
+
+
+export const RevokeBusinessInvitation200Status = {
+  revoked: 'revoked',
+} as const;
+
+export type RevokeBusinessInvitation200 = {
+  id: number;
+  status: RevokeBusinessInvitation200Status;
+};
+
+export type ChangeBusinessMemberRole200 = {
+  id: number;
+  role: BusinessMemberRole;
+};
+
+export type RemoveBusinessMember200 = {
+  id: number;
+  removed: boolean;
+  /** True when the caller removed themselves. */
+  left: boolean;
+};
+
+export type TransferBusinessOwnership200 = {
+  businessId: number;
+  viewerRole: BusinessMemberRole;
+};
+
+export type CloseBusiness200 = {
+  businessId: number;
+  publicationStatus: string;
+  closed: boolean;
 };
 
 export type GetWeatherParams = {

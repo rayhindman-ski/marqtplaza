@@ -410,3 +410,56 @@ failures; account-lifecycle 22/22; e2e `business-intake` 7/7,
 `business-onboarding` 13/13, `business-moderation` 9/9,
 `usability-regression` 15/15; i18n parity 15/15; workspace typecheck clean;
 API server restarted cleanly.
+
+### 2026-09-27 — Phase 5: business membership (BMEM-001 … BMEM-006)
+
+**Window:** 19:02 – 19:36 CEST.
+
+**Schema (push-only, dev DB):** `business_invitations` (email, role,
+status open/accepted/revoked/expired, `expires_at`, invited_by, accepted_by,
+version), `business_invitation_tokens` (digest-only; token minted at
+dispatch), `business_member_events` (audit trail: invited, accepted,
+revoked, role_changed, transferred, removed, left, closed), and
+`business_profiles.closed_at`. Named FKs/indexes per the drizzle-kit push
+limits already on record. Actor columns hold the Clerk user id as text —
+a deliberate deviation from the plan's uuid because the account tables key
+on that id; recorded here so the choice is not "corrected" later.
+
+**API (`routes/business-membership.ts`, `lib/businessMembership.ts`):**
+`GET /businesses/:id/members` (members + open invitations for owners
+only), `POST …/invitations` (owner; one open invitation per address;
+7-day expiry per the provisional policy; queues
+`business.member_invited` through the lifecycle outbox — the only
+lifecycle mail besides `registration.link` that carries a link),
+`DELETE …/invitations/:invitationId`, `POST /business-invitations/accept`
+(signed-in + verified e-mail; `email_mismatch` → 403, other refusals → 409
+`{accepted:false, reason}`; token digest compared, single-use),
+`PATCH/DELETE …/members/:memberId` (role change, remove, leave — the
+last-owner guard refuses with `last_owner`), `POST …/ownership/transfer`
+(atomic swap owner→manager), `POST …/close` (owner only, explicit
+`confirm:true`, unpublishes, stamps `closed_at`, revokes open invitations,
+queues `business.closed` to every member). Account deletion keeps the
+existing sole-owner blocker. `GET /account/me` now returns `businesses[]`
+(id, name, slug, role, status).
+
+**Web:** account home lists businesses with role and status and links to
+the team page; `/account/bedrijf/:id/team` (invite, revoke, role change,
+transfer, remove, leave — buttons hidden by role, every server refusal
+shown verbatim), `/account/bedrijf/:id/sluiten` (one explicit tick before
+the close request), `/account/uitnodiging?token=` (token stays in the URL
+and is only sent on the accept click; signed-out visitors get sign-in /
+register links that return here). Return-path allowlist extended with the
+three routes. NL/EN copy in parity.
+
+**Deviations / notes:** invitation e-mail added to the lifecycle "carries a
+link" exception list in the lifecycle test; account page tolerates a
+missing `businesses` array from older mocks instead of crashing. The
+usability gate records the brand-orange contrast debt for the three new
+screens (6/2/3 nodes) under the standing budget rule — no other colour
+pair fails.
+
+**Evidence:** api `test:business-membership` 10/10, `test:business-intake`
+15/15, account-lifecycle 22/22; e2e `business-membership` 4/4,
+`usability-regression` 21/21, `business-onboarding` + `account-preferences`
++ `account-privacy` + `business-moderation` green; returnPath unit 7/7;
+i18n parity 12/12; workspace typecheck clean; API server restarted cleanly.

@@ -37,3 +37,4 @@ export * from "./accounts";
 export * from "./consumerRegistrations";
 export * from "./businessReview";
 export * from "./lifecycle";
+export * from "./businessMembership";

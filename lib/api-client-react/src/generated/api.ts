@@ -32,11 +32,20 @@ import type {
   BusinessClaimList,
   BusinessClaimTransitionInput,
   BusinessClaimUpdateInput,
+  BusinessCloseInput,
   BusinessIntakeDraftInput,
+  BusinessInvitation,
+  BusinessInvitationAcceptInput,
+  BusinessInvitationAccepted,
+  BusinessInvitationInput,
+  BusinessInvitationRejected,
   BusinessListResult,
   BusinessLookupResponse,
+  BusinessMemberRoleInput,
+  BusinessMembership,
   BusinessOnboardingIntent,
   BusinessOnboardingIntentInput,
+  BusinessOwnershipTransferInput,
   BusinessProfile,
   BusinessProfileUpdate,
   BusinessRevisionTransitionInput,
@@ -45,6 +54,8 @@ import type {
   CapturePersistRequest,
   CaptureScanRequest,
   CaptureSearchRequest,
+  ChangeBusinessMemberRole200,
+  CloseBusiness200,
   CommunityPost,
   CommunityPostDecision,
   CommunityPostInput,
@@ -109,8 +120,10 @@ import type {
   RecordAccountConsentInput,
   RegistrationInput,
   RegistrationStatus,
+  RemoveBusinessMember200,
   ReviewClaimDecisionInput,
   ReviewRevisionDecisionInput,
+  RevokeBusinessInvitation200,
   RunSocialMapReview502,
   SavedEventsResponse,
   SavedEventsSyncRequest,
@@ -124,6 +137,7 @@ import type {
   SupportAccountRequests,
   SupportLifecycleMessage,
   SupportLifecycleMessages,
+  TransferBusinessOwnership200,
   UpdateAccountPreferencesInput,
   VersionConflictResponse,
   WeatherResponse,
@@ -1795,6 +1809,603 @@ export const useRecordBusinessOnboardingIntent = <TError = ErrorType<ApiError | 
         TContext
       > => {
       return useMutation(getRecordBusinessOnboardingIntentMutationOptions(options));
+    }
+
+export const getListBusinessMembersUrl = (id: number,) => {
+
+
+
+
+  return `/api/businesses/${id}/members`
+}
+
+/**
+ * Members see every member; only owners see invitations (they carry the invited address).
+ * Non-members receive 404 so the surface never confirms which businesses exist (BSEC).
+ * @summary List the team of a business the caller belongs to
+ */
+export const listBusinessMembers = async (id: number, options?: Parameters<typeof customFetch>[1]): Promise<BusinessMembership> => {
+
+  return customFetch<BusinessMembership>(getListBusinessMembersUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListBusinessMembersQueryKey = (id: number,) => {
+    return [
+    `/api/businesses/${id}/members`
+    ] as const;
+    }
+
+
+export const getListBusinessMembersQueryOptions = <TData = Awaited<ReturnType<typeof listBusinessMembers>>, TError = ErrorType<ApiError>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listBusinessMembers>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListBusinessMembersQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listBusinessMembers>>> = ({ signal }) => listBusinessMembers(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listBusinessMembers>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListBusinessMembersQueryResult = NonNullable<Awaited<ReturnType<typeof listBusinessMembers>>>
+export type ListBusinessMembersQueryError = ErrorType<ApiError>
+
+
+/**
+ * @summary List the team of a business the caller belongs to
+ */
+
+export function useListBusinessMembers<TData = Awaited<ReturnType<typeof listBusinessMembers>>, TError = ErrorType<ApiError>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listBusinessMembers>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListBusinessMembersQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getInviteBusinessMemberUrl = (id: number,) => {
+
+
+
+
+  return `/api/businesses/${id}/invitations`
+}
+
+/**
+ * Creates an open invitation (7 days) and queues the invitation e-mail; the single-use link token
+ * is minted at dispatch time and only its digest is stored (BMEM-002). One open invitation per
+ * address per business; a second attempt answers 409 `already_invited`.
+ * @summary Invite someone by e-mail as owner or manager (owner only)
+ */
+export const inviteBusinessMember = async (id: number,
+    businessInvitationInput: BusinessInvitationInput, options?: Parameters<typeof customFetch>[1]): Promise<BusinessInvitation> => {
+
+  return customFetch<BusinessInvitation>(getInviteBusinessMemberUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(businessInvitationInput)
+  }
+);}
+
+
+
+
+
+export const getInviteBusinessMemberMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof inviteBusinessMember>>, TError,{id: number;data: BodyType<BusinessInvitationInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof inviteBusinessMember>>, TError,{id: number;data: BodyType<BusinessInvitationInput>}, TContext> => {
+
+const mutationKey = ['inviteBusinessMember'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof inviteBusinessMember>>, {id: number;data: BodyType<BusinessInvitationInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  inviteBusinessMember(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type InviteBusinessMemberMutationResult = NonNullable<Awaited<ReturnType<typeof inviteBusinessMember>>>
+    export type InviteBusinessMemberMutationBody = BodyType<BusinessInvitationInput>
+    export type InviteBusinessMemberMutationError = ErrorType<ApiError>
+
+    /**
+ * @summary Invite someone by e-mail as owner or manager (owner only)
+ */
+export const useInviteBusinessMember = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof inviteBusinessMember>>, TError,{id: number;data: BodyType<BusinessInvitationInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof inviteBusinessMember>>,
+        TError,
+        {id: number;data: BodyType<BusinessInvitationInput>},
+        TContext
+      > => {
+      return useMutation(getInviteBusinessMemberMutationOptions(options));
+    }
+
+export const getRevokeBusinessInvitationUrl = (id: number,
+    invitationId: number,) => {
+
+
+
+
+  return `/api/businesses/${id}/invitations/${invitationId}`
+}
+
+/**
+ * @summary Revoke an open invitation (owner only)
+ */
+export const revokeBusinessInvitation = async (id: number,
+    invitationId: number, options?: Parameters<typeof customFetch>[1]): Promise<RevokeBusinessInvitation200> => {
+
+  return customFetch<RevokeBusinessInvitation200>(getRevokeBusinessInvitationUrl(id,invitationId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getRevokeBusinessInvitationMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof revokeBusinessInvitation>>, TError,{id: number;invitationId: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof revokeBusinessInvitation>>, TError,{id: number;invitationId: number}, TContext> => {
+
+const mutationKey = ['revokeBusinessInvitation'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof revokeBusinessInvitation>>, {id: number;invitationId: number}> = (props) => {
+          const {id,invitationId} = props ?? {};
+
+          return  revokeBusinessInvitation(id,invitationId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RevokeBusinessInvitationMutationResult = NonNullable<Awaited<ReturnType<typeof revokeBusinessInvitation>>>
+
+    export type RevokeBusinessInvitationMutationError = ErrorType<ApiError>
+
+    /**
+ * @summary Revoke an open invitation (owner only)
+ */
+export const useRevokeBusinessInvitation = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof revokeBusinessInvitation>>, TError,{id: number;invitationId: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof revokeBusinessInvitation>>,
+        TError,
+        {id: number;invitationId: number},
+        TContext
+      > => {
+      return useMutation(getRevokeBusinessInvitationMutationOptions(options));
+    }
+
+export const getAcceptBusinessInvitationUrl = () => {
+
+
+
+
+  return `/api/business-invitations/accept`
+}
+
+/**
+ * The signed-in account's verified primary address must equal the invited address; otherwise 403
+ * `email_mismatch`. Invalid, expired, revoked and used tokens answer 409 with the reason so the
+ * page can explain what to do next. Accepting an already-used token never re-grants access.
+ * @summary Accept an invitation with the single-use link token
+ */
+export const acceptBusinessInvitation = async (businessInvitationAcceptInput: BusinessInvitationAcceptInput, options?: Parameters<typeof customFetch>[1]): Promise<BusinessInvitationAccepted> => {
+
+  return customFetch<BusinessInvitationAccepted>(getAcceptBusinessInvitationUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(businessInvitationAcceptInput)
+  }
+);}
+
+
+
+
+
+export const getAcceptBusinessInvitationMutationOptions = <TError = ErrorType<ApiError | BusinessInvitationRejected | FeatureDisabledResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof acceptBusinessInvitation>>, TError,{data: BodyType<BusinessInvitationAcceptInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof acceptBusinessInvitation>>, TError,{data: BodyType<BusinessInvitationAcceptInput>}, TContext> => {
+
+const mutationKey = ['acceptBusinessInvitation'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof acceptBusinessInvitation>>, {data: BodyType<BusinessInvitationAcceptInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  acceptBusinessInvitation(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type AcceptBusinessInvitationMutationResult = NonNullable<Awaited<ReturnType<typeof acceptBusinessInvitation>>>
+    export type AcceptBusinessInvitationMutationBody = BodyType<BusinessInvitationAcceptInput>
+    export type AcceptBusinessInvitationMutationError = ErrorType<ApiError | BusinessInvitationRejected | FeatureDisabledResponse>
+
+    /**
+ * @summary Accept an invitation with the single-use link token
+ */
+export const useAcceptBusinessInvitation = <TError = ErrorType<ApiError | BusinessInvitationRejected | FeatureDisabledResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof acceptBusinessInvitation>>, TError,{data: BodyType<BusinessInvitationAcceptInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof acceptBusinessInvitation>>,
+        TError,
+        {data: BodyType<BusinessInvitationAcceptInput>},
+        TContext
+      > => {
+      return useMutation(getAcceptBusinessInvitationMutationOptions(options));
+    }
+
+export const getChangeBusinessMemberRoleUrl = (id: number,
+    memberId: number,) => {
+
+
+
+
+  return `/api/businesses/${id}/members/${memberId}`
+}
+
+/**
+ * Demoting the last owner answers 409 `last_owner`; transfer ownership instead (BMEM-003).
+ * @summary Change a member's role (owner only)
+ */
+export const changeBusinessMemberRole = async (id: number,
+    memberId: number,
+    businessMemberRoleInput: BusinessMemberRoleInput, options?: Parameters<typeof customFetch>[1]): Promise<ChangeBusinessMemberRole200> => {
+
+  return customFetch<ChangeBusinessMemberRole200>(getChangeBusinessMemberRoleUrl(id,memberId),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(businessMemberRoleInput)
+  }
+);}
+
+
+
+
+
+export const getChangeBusinessMemberRoleMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof changeBusinessMemberRole>>, TError,{id: number;memberId: number;data: BodyType<BusinessMemberRoleInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof changeBusinessMemberRole>>, TError,{id: number;memberId: number;data: BodyType<BusinessMemberRoleInput>}, TContext> => {
+
+const mutationKey = ['changeBusinessMemberRole'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof changeBusinessMemberRole>>, {id: number;memberId: number;data: BodyType<BusinessMemberRoleInput>}> = (props) => {
+          const {id,memberId,data} = props ?? {};
+
+          return  changeBusinessMemberRole(id,memberId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ChangeBusinessMemberRoleMutationResult = NonNullable<Awaited<ReturnType<typeof changeBusinessMemberRole>>>
+    export type ChangeBusinessMemberRoleMutationBody = BodyType<BusinessMemberRoleInput>
+    export type ChangeBusinessMemberRoleMutationError = ErrorType<ApiError>
+
+    /**
+ * @summary Change a member's role (owner only)
+ */
+export const useChangeBusinessMemberRole = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof changeBusinessMemberRole>>, TError,{id: number;memberId: number;data: BodyType<BusinessMemberRoleInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof changeBusinessMemberRole>>,
+        TError,
+        {id: number;memberId: number;data: BodyType<BusinessMemberRoleInput>},
+        TContext
+      > => {
+      return useMutation(getChangeBusinessMemberRoleMutationOptions(options));
+    }
+
+export const getRemoveBusinessMemberUrl = (id: number,
+    memberId: number,) => {
+
+
+
+
+  return `/api/businesses/${id}/members/${memberId}`
+}
+
+/**
+ * The last owner can neither be removed nor leave; 409 `last_owner` (BMEM-003).
+ * @summary Remove a member (owner) or leave the business (any member removing themselves)
+ */
+export const removeBusinessMember = async (id: number,
+    memberId: number, options?: Parameters<typeof customFetch>[1]): Promise<RemoveBusinessMember200> => {
+
+  return customFetch<RemoveBusinessMember200>(getRemoveBusinessMemberUrl(id,memberId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getRemoveBusinessMemberMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof removeBusinessMember>>, TError,{id: number;memberId: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof removeBusinessMember>>, TError,{id: number;memberId: number}, TContext> => {
+
+const mutationKey = ['removeBusinessMember'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof removeBusinessMember>>, {id: number;memberId: number}> = (props) => {
+          const {id,memberId} = props ?? {};
+
+          return  removeBusinessMember(id,memberId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RemoveBusinessMemberMutationResult = NonNullable<Awaited<ReturnType<typeof removeBusinessMember>>>
+
+    export type RemoveBusinessMemberMutationError = ErrorType<ApiError>
+
+    /**
+ * @summary Remove a member (owner) or leave the business (any member removing themselves)
+ */
+export const useRemoveBusinessMember = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof removeBusinessMember>>, TError,{id: number;memberId: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof removeBusinessMember>>,
+        TError,
+        {id: number;memberId: number},
+        TContext
+      > => {
+      return useMutation(getRemoveBusinessMemberMutationOptions(options));
+    }
+
+export const getTransferBusinessOwnershipUrl = (id: number,) => {
+
+
+
+
+  return `/api/businesses/${id}/ownership/transfer`
+}
+
+/**
+ * @summary Make another member the owner; the caller becomes a manager (owner only)
+ */
+export const transferBusinessOwnership = async (id: number,
+    businessOwnershipTransferInput: BusinessOwnershipTransferInput, options?: Parameters<typeof customFetch>[1]): Promise<TransferBusinessOwnership200> => {
+
+  return customFetch<TransferBusinessOwnership200>(getTransferBusinessOwnershipUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(businessOwnershipTransferInput)
+  }
+);}
+
+
+
+
+
+export const getTransferBusinessOwnershipMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof transferBusinessOwnership>>, TError,{id: number;data: BodyType<BusinessOwnershipTransferInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof transferBusinessOwnership>>, TError,{id: number;data: BodyType<BusinessOwnershipTransferInput>}, TContext> => {
+
+const mutationKey = ['transferBusinessOwnership'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof transferBusinessOwnership>>, {id: number;data: BodyType<BusinessOwnershipTransferInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  transferBusinessOwnership(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type TransferBusinessOwnershipMutationResult = NonNullable<Awaited<ReturnType<typeof transferBusinessOwnership>>>
+    export type TransferBusinessOwnershipMutationBody = BodyType<BusinessOwnershipTransferInput>
+    export type TransferBusinessOwnershipMutationError = ErrorType<ApiError>
+
+    /**
+ * @summary Make another member the owner; the caller becomes a manager (owner only)
+ */
+export const useTransferBusinessOwnership = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof transferBusinessOwnership>>, TError,{id: number;data: BodyType<BusinessOwnershipTransferInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof transferBusinessOwnership>>,
+        TError,
+        {id: number;data: BodyType<BusinessOwnershipTransferInput>},
+        TContext
+      > => {
+      return useMutation(getTransferBusinessOwnershipMutationOptions(options));
+    }
+
+export const getCloseBusinessUrl = (id: number,) => {
+
+
+
+
+  return `/api/businesses/${id}/close`
+}
+
+/**
+ * Unpublishes a published or suspended listing through the same state as a reviewer
+ * unpublication and marks the business closed; every record is kept and open invitations are
+ * revoked (BMEM-006). Idempotent.
+ * @summary Close the business (owner only)
+ */
+export const closeBusiness = async (id: number,
+    businessCloseInput: BusinessCloseInput, options?: Parameters<typeof customFetch>[1]): Promise<CloseBusiness200> => {
+
+  return customFetch<CloseBusiness200>(getCloseBusinessUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(businessCloseInput)
+  }
+);}
+
+
+
+
+
+export const getCloseBusinessMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof closeBusiness>>, TError,{id: number;data: BodyType<BusinessCloseInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof closeBusiness>>, TError,{id: number;data: BodyType<BusinessCloseInput>}, TContext> => {
+
+const mutationKey = ['closeBusiness'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof closeBusiness>>, {id: number;data: BodyType<BusinessCloseInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  closeBusiness(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CloseBusinessMutationResult = NonNullable<Awaited<ReturnType<typeof closeBusiness>>>
+    export type CloseBusinessMutationBody = BodyType<BusinessCloseInput>
+    export type CloseBusinessMutationError = ErrorType<ApiError>
+
+    /**
+ * @summary Close the business (owner only)
+ */
+export const useCloseBusiness = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof closeBusiness>>, TError,{id: number;data: BodyType<BusinessCloseInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof closeBusiness>>,
+        TError,
+        {id: number;data: BodyType<BusinessCloseInput>},
+        TContext
+      > => {
+      return useMutation(getCloseBusinessMutationOptions(options));
     }
 
 export const getGetRegistrationUrl = () => {

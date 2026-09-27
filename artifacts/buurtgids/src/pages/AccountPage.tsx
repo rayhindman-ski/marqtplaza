@@ -136,21 +136,55 @@ export default function AccountPage() {
           ) : null}
           {me ? <ConsentPanel language={language} enabled={accountsOn} verified={me.capabilities.isVerified} /> : null}
           {featureFlags.businessOnboarding ? (
-            <section data-testid="account-business-panel" className="mb-6 flex flex-col gap-4 rounded-3xl border border-border/80 bg-card p-6 shadow-sm sm:flex-row sm:items-center sm:justify-between sm:p-8">
-              <div>
-                <p className="flex items-center gap-2 text-xs font-extrabold uppercase tracking-[0.16em] text-primary">
-                  <Store className="h-4 w-4" aria-hidden="true" />
-                  {copy.business.homeTitle}
-                </p>
-                <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">{copy.business.homeBody}</p>
+            <section data-testid="account-business-panel" className="mb-6 rounded-3xl border border-border/80 bg-card p-6 shadow-sm sm:p-8">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="flex items-center gap-2 text-xs font-extrabold uppercase tracking-[0.16em] text-primary">
+                    <Store className="h-4 w-4" aria-hidden="true" />
+                    {copy.business.homeTitle}
+                  </p>
+                  <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">{copy.business.homeBody}</p>
+                </div>
+                <Link
+                  href={businessIntentRef('account_home')}
+                  data-testid="link-account-add-business"
+                  className="inline-flex shrink-0 items-center justify-center rounded-full bg-primary px-4 py-2 text-sm font-bold text-primary-foreground hover:bg-primary/90"
+                >
+                  {copy.business.homeAction}
+                </Link>
               </div>
-              <Link
-                href={businessIntentRef('account_home')}
-                data-testid="link-account-add-business"
-                className="inline-flex shrink-0 items-center justify-center rounded-full bg-primary px-4 py-2 text-sm font-bold text-primary-foreground hover:bg-primary/90"
-              >
-                {copy.business.homeAction}
-              </Link>
+              {me && (me.businesses ?? []).length > 0 ? (
+                <div className="mt-5 border-t border-border/70 pt-4">
+                  <p className="text-sm font-bold text-foreground">{copy.business.homeMine}</p>
+                  <ul data-testid="account-business-list" className="mt-2 divide-y divide-border/70">
+                    {(me.businesses ?? []).map((business) => (
+                      <li key={business.id} data-testid={`account-business-${business.id}`} className="flex flex-col gap-2 py-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                          <p className="text-sm font-bold text-foreground">{business.name}</p>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            {business.role === 'owner' ? copy.members.roleOwner : copy.members.roleManager}
+                            {' · '}
+                            <span data-testid={`account-business-status-${business.id}`}>
+                              {business.status === 'closed'
+                                ? copy.business.homeStatusClosed
+                                : business.status === 'published'
+                                  ? copy.business.homeStatusPublished
+                                  : copy.business.homeStatusDraft}
+                            </span>
+                          </p>
+                        </div>
+                        <Link
+                          href={`/account/bedrijf/${business.id}/team`}
+                          data-testid={`link-account-business-team-${business.id}`}
+                          className="inline-flex shrink-0 items-center justify-center rounded-full border border-border px-4 py-2 text-sm font-bold text-foreground hover:border-primary/50 hover:text-primary"
+                        >
+                          {copy.business.homeTeam}
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
             </section>
           ) : null}
           <section data-testid="account-security-link-panel" className="mb-6 flex flex-col gap-4 rounded-3xl border border-border/80 bg-card p-6 shadow-sm sm:flex-row sm:items-center sm:justify-between sm:p-8">

@@ -46,6 +46,12 @@ export const LIFECYCLE_EVENT_CODES = [
   "account.deletion_withdrawn",
   /** Consumer registration link (v0.5.1); addressed to a pending registration, not an account. */
   "registration.link",
+  /** Business membership (v0.5.2). The invitation is addressed to an invitation row, not an account. */
+  "business.member_invited",
+  "business.member_joined",
+  "business.member_removed",
+  "business.member_role_changed",
+  "business.ownership_transferred",
 ] as const;
 export type LifecycleEventCode = (typeof LIFECYCLE_EVENT_CODES)[number];
 
@@ -63,6 +69,7 @@ const PAYLOAD_ALLOW_LIST: ReadonlySet<string> = new Set([
   "status",
   "blockerCode",
   "resolutionCode",
+  "role",
 ]);
 
 export class UnsafePayloadError extends Error {
@@ -81,6 +88,7 @@ export type LifecyclePayload = Partial<{
   status: string;
   blockerCode: string;
   resolutionCode: string;
+  role: string;
 }>;
 
 /** Returns only allow-listed scalar values; throws when a caller passes anything else. */
@@ -200,6 +208,47 @@ export async function enqueueRegistrationLifecycleMessage(
   return { id: existing.id, created: false };
 }
 
+export type EnqueueInvitationMessageInput = {
+  /** Business invitation that will receive the link; never an address. */
+  invitationId: number;
+  idempotencyKey: string;
+  locale: string;
+  payload?: LifecyclePayload;
+  maxAttempts?: number;
+};
+
+/**
+ * Queue a member-invitation email inside the caller's transaction (v0.5.2).
+ * As with registration links, the single-use token is minted by the email
+ * loader at dispatch time and never stored on the row.
+ */
+export async function enqueueInvitationLifecycleMessage(
+  tx: Tx,
+  input: EnqueueInvitationMessageInput,
+): Promise<EnqueueOutcome> {
+  const [inserted] = await tx
+    .insert(lifecycleOutboxTable)
+    .values({
+      eventCode: "business.member_invited",
+      recipientInvitationId: input.invitationId,
+      template: "business.member_invited",
+      locale: input.locale,
+      payload: restrictPayload(input.payload ?? {}),
+      idempotencyKey: input.idempotencyKey,
+      maxAttempts: input.maxAttempts ?? DEFAULT_MAX_ATTEMPTS,
+    })
+    .onConflictDoNothing({ target: lifecycleOutboxTable.idempotencyKey })
+    .returning({ id: lifecycleOutboxTable.id });
+  if (inserted) return { id: inserted.id, created: true };
+  const [existing] = await tx
+    .select({ id: lifecycleOutboxTable.id })
+    .from(lifecycleOutboxTable)
+    .where(eq(lifecycleOutboxTable.idempotencyKey, input.idempotencyKey))
+    .limit(1);
+  if (!existing) throw new Error("Lifecycle message row vanished after a duplicate key.");
+  return { id: existing.id, created: false };
+}
+
 /** Cancel queued messages whose triggering state was reverted; anything already sent is untouched. */
 export async function cancelQueuedLifecycleMessages(tx: Tx, idempotencyKeys: string[]): Promise<number> {
   if (idempotencyKeys.length === 0) return 0;
@@ -225,6 +274,8 @@ export type OutboundLifecycleMessage = {
   recipientClerkUserId: string | null;
   /** Set instead of the account references for pre-account messages. */
   recipientRegistrationId: number | null;
+  /** Set instead of the account references for business invitations (v0.5.2). */
+  recipientInvitationId: number | null;
   payload: Record<string, unknown>;
   attempt: number;
   /**
@@ -419,7 +470,7 @@ export async function dispatchLifecycleOutbox(options: DispatchOptions = {}): Pr
     // addressed; cancel instead of handing an unaddressable message to the
     // provider. Registration-addressed rows are validated by the loader, which
     // reads the pending registration at send time.
-    const addressedToRegistration = row.recipientRegistrationId !== null;
+    const addressedToRegistration = row.recipientRegistrationId !== null || row.recipientInvitationId !== null;
     if (!addressedToRegistration && (row.recipientUserId === null || !clerkIdByRecipient.has(row.recipientUserId))) {
       await db
         .update(lifecycleOutboxTable)
@@ -440,6 +491,7 @@ export async function dispatchLifecycleOutbox(options: DispatchOptions = {}): Pr
         recipientUserId: row.recipientUserId,
         recipientClerkUserId: row.recipientUserId ? (clerkIdByRecipient.get(row.recipientUserId) ?? null) : null,
         recipientRegistrationId: row.recipientRegistrationId,
+        recipientInvitationId: row.recipientInvitationId,
         payload: row.payload,
         attempt,
         dedupeKey: lifecycleDedupeKey(row),
@@ -632,6 +684,7 @@ export function serialiseLifecycleMessageForSupport(row: LifecycleOutboxRow) {
     ...serialiseLifecycleMessage(row),
     recipientUserId: row.recipientUserId,
     recipientRegistrationId: row.recipientRegistrationId,
+    recipientInvitationId: row.recipientInvitationId,
     lastErrorCode: row.lastErrorCode,
     lastErrorAt: row.lastErrorAt?.toISOString() ?? null,
   };

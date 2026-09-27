@@ -15,6 +15,7 @@ import { z } from "zod/v4";
 
 import { appUsersTable } from "./accounts";
 import { consumerRegistrationsTable } from "./consumerRegistrations";
+import { businessInvitationsTable } from "./businessMembership";
 
 /**
  * Outbox delivery states. Each one is a truthful statement about what the
@@ -66,6 +67,8 @@ export const lifecycleOutboxTable = pgTable(
      * is resolved from the pending registration at dispatch time.
      */
     recipientRegistrationId: integer("recipient_registration_id"),
+    /** Third recipient kind (v0.5.2): a business invitation; the address is read from it at dispatch time. */
+    recipientInvitationId: integer("recipient_invitation_id"),
     template: text("template").notNull(),
     locale: text("locale").notNull().default("nl"),
     /**
@@ -102,6 +105,11 @@ export const lifecycleOutboxTable = pgTable(
       name: "lifecycle_outbox_recipient_registration_fk",
       columns: [table.recipientRegistrationId],
       foreignColumns: [consumerRegistrationsTable.id],
+    }).onDelete("set null"),
+    foreignKey({
+      name: "lifecycle_outbox_recipient_invitation_fk",
+      columns: [table.recipientInvitationId],
+      foreignColumns: [businessInvitationsTable.id],
     }).onDelete("set null"),
     uniqueIndex("lifecycle_outbox_idempotency_unique").on(table.idempotencyKey),
     uniqueIndex("lifecycle_outbox_provider_message_unique")

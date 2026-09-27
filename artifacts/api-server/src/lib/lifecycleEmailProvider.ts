@@ -3,8 +3,9 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import { clerkClient } from "@clerk/express";
 import { desc, eq } from "drizzle-orm";
 
-import { consumerRegistrationsTable, db, lifecycleOutboxTable } from "@workspace/db";
+import { businessInvitationsTable, consumerRegistrationsTable, db, lifecycleOutboxTable } from "@workspace/db";
 
+import { issueInvitationToken, newestInvitationOutboxId } from "./businessMembership";
 import { issueRegistrationToken, DEFAULT_CONSUMER_REGISTRATION_POLICY } from "./consumerRegistration";
 import { logger } from "./logger";
 import type { DeliveryResult, LifecycleDeliveryLoader, OutboundLifecycleMessage } from "./lifecycleOutbox";
@@ -149,6 +150,70 @@ export function createRegistrationRecipientResolver(
 }
 
 // ---------------------------------------------------------------------------
+// Invitation recipients (business invitation row, at dispatch time; v0.5.2)
+// ---------------------------------------------------------------------------
+
+export type InvitationRecipientResolution =
+  | { kind: "found"; recipient: ResolvedRecipient; templateVars: { invitationUrl: string; linkLifetimeDays: number } }
+  /** Accepted, revoked, expired, or gone; nothing to send. */
+  | { kind: "closed" }
+  | { kind: "superseded" }
+  | { kind: "not_configured" };
+
+export type InvitationRecipientResolver = (
+  message: Pick<OutboundLifecycleMessage, "id" | "recipientInvitationId">,
+) => Promise<InvitationRecipientResolution>;
+
+export const INVITATION_LINK_PATH = "/account/uitnodiging";
+
+export function buildInvitationLink(baseUrl: string, token: string): string {
+  const url = new URL(INVITATION_LINK_PATH, baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`);
+  url.searchParams.set("token", token);
+  return url.toString();
+}
+
+/**
+ * Resolve an open invitation to its address and mint the single-use token
+ * for this send. The token lives as long as the invitation itself.
+ */
+export function createInvitationRecipientResolver(options: { baseUrl: string | null; now?: () => Date }): InvitationRecipientResolver {
+  const now = options.now ?? (() => new Date());
+  return async (message) => {
+    if (message.recipientInvitationId === null) return { kind: "closed" };
+    if (!options.baseUrl) {
+      if (!registrationLinkNotConfiguredLogged) {
+        registrationLinkNotConfiguredLogged = true;
+        logger.warn({ event: "registration_link_base_not_configured" }, "CONSUMER_REGISTRATION_LINK_BASE_URL is not set; invitation emails stay queued");
+      }
+      return { kind: "not_configured" };
+    }
+    const at = now();
+    return db.transaction(async (tx) => {
+      const [invitation] = await tx
+        .select()
+        .from(businessInvitationsTable)
+        .where(eq(businessInvitationsTable.id, message.recipientInvitationId as number))
+        .limit(1)
+        .for("update");
+      if (!invitation || invitation.acceptedAt || invitation.revokedAt || invitation.expiresAt.getTime() <= at.getTime()) {
+        return { kind: "closed" as const };
+      }
+      const newest = await newestInvitationOutboxId(tx, invitation.id);
+      if (newest !== null && newest !== message.id) return { kind: "superseded" as const };
+      const issued = await issueInvitationToken(tx, { invitationId: invitation.id, outboxId: message.id, now: at, expiresAt: invitation.expiresAt });
+      return {
+        kind: "found" as const,
+        recipient: { email: invitation.normalizedEmail, locale: invitation.locale },
+        templateVars: {
+          invitationUrl: buildInvitationLink(options.baseUrl as string, issued.token),
+          linkLifetimeDays: Math.max(1, Math.round((invitation.expiresAt.getTime() - at.getTime()) / 86_400_000)),
+        },
+      };
+    });
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Transport contract
 // ---------------------------------------------------------------------------
 
@@ -168,7 +233,8 @@ export type EmailDeliveryLoaderOptions = {
   transport: EmailTransport;
   resolveRecipient?: RecipientResolver;
   resolveRegistrationRecipient?: RegistrationRecipientResolver;
-  /** Used to build the default registration resolver when none is injected. */
+  resolveInvitationRecipient?: InvitationRecipientResolver;
+  /** Used to build the default registration and invitation resolvers when none is injected. */
   registrationLinkBaseUrl?: string | null;
 };
 
@@ -182,6 +248,8 @@ export function createEmailDeliveryLoader(options: EmailDeliveryLoaderOptions): 
   const resolveRegistrationRecipient =
     options.resolveRegistrationRecipient ??
     createRegistrationRecipientResolver({ baseUrl: options.registrationLinkBaseUrl ?? null });
+  const resolveInvitationRecipient =
+    options.resolveInvitationRecipient ?? createInvitationRecipientResolver({ baseUrl: options.registrationLinkBaseUrl ?? null });
   return async (message: OutboundLifecycleMessage): Promise<DeliveryResult> => {
     let recipient: ResolvedRecipient;
     let templateVars: Record<string, unknown> = {};
@@ -190,6 +258,13 @@ export function createEmailDeliveryLoader(options: EmailDeliveryLoaderOptions): 
       if (resolution.kind === "closed") return { kind: "permanent_failure", errorCode: "registration_closed" };
       if (resolution.kind === "superseded") return { kind: "permanent_failure", errorCode: "registration_send_superseded" };
       if (resolution.kind === "not_configured") return { kind: "transient_failure", errorCode: "registration_link_not_configured" };
+      recipient = resolution.recipient;
+      templateVars = resolution.templateVars;
+    } else if (message.recipientInvitationId !== null) {
+      const resolution = await resolveInvitationRecipient(message);
+      if (resolution.kind === "closed") return { kind: "permanent_failure", errorCode: "invitation_closed" };
+      if (resolution.kind === "superseded") return { kind: "permanent_failure", errorCode: "invitation_send_superseded" };
+      if (resolution.kind === "not_configured") return { kind: "transient_failure", errorCode: "invitation_link_not_configured" };
       recipient = resolution.recipient;
       templateVars = resolution.templateVars;
     } else {

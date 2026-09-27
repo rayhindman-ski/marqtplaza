@@ -50,6 +50,8 @@ export const businessProfilesTable = pgTable(
     publicationStatus: text("publication_status").notNull().default("published"),
     /** Points at the single approved `business_profile_revisions` row, if any. */
     approvedRevisionId: integer("approved_revision_id"),
+    /** Set when an owner closed the business (v0.5.2, BMEM-006); rows are kept, the listing is unpublished. */
+    closedAt: timestamp("closed_at", { withTimezone: true }),
     /** Clerk subject that created a draft business; null for listing-derived rows. */
     createdByUserId: text("created_by_user_id"),
     /** Self-reported business category for new-business drafts; null for listing-derived rows. */
@@ -218,6 +220,9 @@ export const businessMembersTable = pgTable(
       .references(() => businessProfilesTable.id, { onDelete: "cascade" }),
     userId: text("user_id").notNull(),
     role: text("role").notNull().default("owner"),
+    /** Clerk subject of the owner who invited this member; null for owners created by an approved claim. */
+    invitedByUserId: text("invited_by_user_id"),
+    joinedAt: timestamp("joined_at", { withTimezone: true }).notNull().defaultNow(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
@@ -226,6 +231,7 @@ export const businessMembersTable = pgTable(
       table.userId,
     ),
     index("business_members_user_idx").on(table.userId),
+    check("business_members_role_check", sql`${table.role} in ('owner', 'manager')`),
   ],
 );
 

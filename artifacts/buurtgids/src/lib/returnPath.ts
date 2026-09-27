@@ -27,9 +27,13 @@ const EXACT_PATHS = new Set([
   '/mijn-bedrijf',
   '/account/beveiliging',
   '/account/bedrijf/toevoegen',
+  '/account/uitnodiging',
 ]);
 
 const PREFIX_PATHS = ['/activiteiten/den-haag/', '/nieuws/', '/bedrijf/'];
+
+/** Business team pages: `/account/bedrijf/<id>/team|sluiten` (v0.5.2). */
+const BUSINESS_TEAM_PATH = /^\/account\/bedrijf\/[1-9][0-9]{0,9}\/(team|sluiten)$/;
 
 const SEGMENT = /^[A-Za-z0-9._~:@!$&'()*+,;=%-]+$/;
 
@@ -43,6 +47,7 @@ function stripBase(pathname: string, basePath: string): string | null {
 
 function isAllowedPathname(pathname: string): boolean {
   if (EXACT_PATHS.has(pathname)) return true;
+  if (BUSINESS_TEAM_PATH.test(pathname)) return true;
   return PREFIX_PATHS.some((prefix) => {
     if (!pathname.startsWith(prefix)) return false;
     const rest = pathname.slice(prefix.length);

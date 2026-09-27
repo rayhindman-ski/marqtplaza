@@ -27,6 +27,10 @@ type TemplateVars = {
   /** Dispatch-time only (registration.link). */
   registrationUrl: string;
   linkLifetimeMinutes: string;
+  /** Membership (v0.5.2); `invitationUrl` and `linkLifetimeDays` are dispatch-time only. */
+  role: string;
+  invitationUrl: string;
+  linkLifetimeDays: string;
 };
 
 type Template = { subject: (v: TemplateVars) => string; body: (v: TemplateVars) => string };
@@ -278,6 +282,72 @@ const TEMPLATES: Record<LifecycleEventCode, Record<LifecycleLocale, Template>> =
         ]),
     },
   },
+  "business.member_invited": {
+    nl: {
+      subject: (v) => `Uitnodiging om ${v.businessName} mee te beheren op buurtplaza.nl`,
+      body: (v) =>
+        wrapRegistrationNl([
+          `Je bent uitgenodigd als ${v.role === "owner" ? "eigenaar" : "bedrijfsleider"} van ${v.businessName} op buurtplaza.nl.`,
+          "",
+          `Uitnodiging accepteren: ${v.invitationUrl}`,
+          "",
+          `Deze link werkt ${v.linkLifetimeDays} dagen en kan één keer worden gebruikt. Je accepteert met een account op hetzelfde e-mailadres; heb je nog geen account, dan maak je dat eerst aan.`,
+          "Ken je dit bedrijf niet? Dan kun je dit bericht negeren; er verandert niets.",
+        ]),
+    },
+    en: {
+      subject: (v) => `Invitation to help manage ${v.businessName} on buurtplaza.nl`,
+      body: (v) =>
+        wrapRegistrationEn([
+          `You have been invited as ${v.role === "owner" ? "owner" : "manager"} of ${v.businessName} on buurtplaza.nl.`,
+          "",
+          `Accept the invitation: ${v.invitationUrl}`,
+          "",
+          `This link works for ${v.linkLifetimeDays} days and can be used once. You accept with an account on this same email address; if you have none yet, create it first.`,
+          "Do you not know this business? You can ignore this message; nothing changes.",
+        ]),
+    },
+  },
+  "business.member_joined": {
+    nl: {
+      subject: (v) => `Nieuw teamlid bij ${v.businessName}`,
+      body: (v) => wrapNl([`Een uitnodiging voor ${v.businessName} is geaccepteerd; het nieuwe teamlid heeft de rol ${v.role === "owner" ? "eigenaar" : "bedrijfsleider"}.`, "Je beheert het team onder Mijn bedrijf."]),
+    },
+    en: {
+      subject: (v) => `New team member at ${v.businessName}`,
+      body: (v) => wrapEn([`An invitation for ${v.businessName} has been accepted; the new team member has the role ${v.role === "owner" ? "owner" : "manager"}.`, "You manage the team under My business."]),
+    },
+  },
+  "business.member_removed": {
+    nl: {
+      subject: (v) => `Je toegang tot ${v.businessName} is beëindigd`,
+      body: (v) => wrapNl([`Je bent geen teamlid meer van ${v.businessName} op buurtplaza.nl. Je persoonlijke account en voorkeuren blijven ongewijzigd.`]),
+    },
+    en: {
+      subject: (v) => `Your access to ${v.businessName} has ended`,
+      body: (v) => wrapEn([`You are no longer a team member of ${v.businessName} on buurtplaza.nl. Your personal account and preferences are unchanged.`]),
+    },
+  },
+  "business.member_role_changed": {
+    nl: {
+      subject: (v) => `Je rol bij ${v.businessName} is gewijzigd`,
+      body: (v) => wrapNl([`Je rol bij ${v.businessName} is nu ${v.role === "owner" ? "eigenaar" : "bedrijfsleider"}.`]),
+    },
+    en: {
+      subject: (v) => `Your role at ${v.businessName} has changed`,
+      body: (v) => wrapEn([`Your role at ${v.businessName} is now ${v.role === "owner" ? "owner" : "manager"}.`]),
+    },
+  },
+  "business.ownership_transferred": {
+    nl: {
+      subject: (v) => `Je bent nu eigenaar van ${v.businessName}`,
+      body: (v) => wrapNl([`Het eigenaarschap van ${v.businessName} op buurtplaza.nl is aan jou overgedragen. Je beheert het team en het profiel onder Mijn bedrijf.`]),
+    },
+    en: {
+      subject: (v) => `You are now the owner of ${v.businessName}`,
+      body: (v) => wrapEn([`Ownership of ${v.businessName} on buurtplaza.nl has been transferred to you. You manage the team and the profile under My business.`]),
+    },
+  },
   "account.deletion_withdrawn": {
     nl: {
       subject: () => "Je verwijderverzoek is ingetrokken",
@@ -338,6 +408,9 @@ export function renderLifecycleEmail(
     siteName: SITE_NAME,
     registrationUrl: safeHttpsUrl(payload.registrationUrl),
     linkLifetimeMinutes: typeof payload.linkLifetimeMinutes === "number" ? String(payload.linkLifetimeMinutes) : "60",
+    role: payload.role === "owner" ? "owner" : "manager",
+    invitationUrl: safeHttpsUrl(payload.invitationUrl),
+    linkLifetimeDays: typeof payload.linkLifetimeDays === "number" ? String(payload.linkLifetimeDays) : "7",
   };
   const t = entry[resolvedLocale];
   return { locale: resolvedLocale, subject: t.subject(vars), text: t.body(vars) };

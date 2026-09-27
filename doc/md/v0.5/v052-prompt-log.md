@@ -110,3 +110,12 @@ confirmation. Progress lines above and below.
 - 18:50 `businessFacts.ts` (taxonomy, required facts at submit, address-derived geography), lookup by postcode/address/website, extra signals, legacy endpoint replay; DB columns pushed; clients regenerated.
 - 18:57 form: taxonomy selects, phone, public/private markers, explicit role, journey-preserving claim link, server field errors; reviewer panel shows new signals.
 - 19:01 api + e2e suites green; typecheck clean; log entry; commit + push. Phase 5 next.
+
+### Progress — Phase 5 (business membership)
+
+- 19:02 start (after remediation push `dfca242`).
+- 19:14 schema pushed; outbox event codes + NL/EN templates; membership lib + router; `/account/me` businesses.
+- 19:19 api `test:business-membership` 10/10; OpenAPI paths/schemas; clients regenerated; typecheck clean.
+- 19:27 team, close and invitation pages; account home business list; routes + return-path allowlist; i18n parity.
+- 19:33 e2e `business-membership` 4/4; usability gate 21/21 (three new screens budgeted); lifecycle test exception for invitation mail; account suites green.
+- 19:36 phase log; commit + push. Phase 6 next.

@@ -796,6 +796,435 @@ paths:
         "404":
           $ref: "#/components/responses/FeatureDisabled"
 
+
+  /businesses/{id}/members:
+    get:
+      operationId: listBusinessMembers
+      tags: [business-membership]
+      summary: List the team of a business the caller belongs to
+      description: |
+        Members see every member; only owners see invitations (they carry the invited address).
+        Non-members receive 404 so the surface never confirms which businesses exist (BSEC).
+      parameters:
+        - $ref: "#/components/parameters/ProfileId"
+      responses:
+        "200":
+          description: Team listing
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BusinessMembership"
+        "401":
+          description: Sign-in required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: Account unverified, suspended or deleted, or role insufficient
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Not a member of this business, or the area is closed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /businesses/{id}/invitations:
+    post:
+      operationId: inviteBusinessMember
+      tags: [business-membership]
+      summary: Invite someone by e-mail as owner or manager (owner only)
+      description: |
+        Creates an open invitation (7 days) and queues the invitation e-mail; the single-use link token
+        is minted at dispatch time and only its digest is stored (BMEM-002). One open invitation per
+        address per business; a second attempt answers 409 `already_invited`.
+      parameters:
+        - $ref: "#/components/parameters/ProfileId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BusinessInvitationInput"
+      responses:
+        "201":
+          description: Invitation created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BusinessInvitation"
+        "400":
+          description: Validation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Sign-in required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: Account unverified, suspended or deleted, or role insufficient
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Not a member of this business, or the area is closed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "409":
+          description: Address already invited, or the business is closed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "429":
+          description: Too many invitations from this account
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /businesses/{id}/invitations/{invitationId}:
+    delete:
+      operationId: revokeBusinessInvitation
+      tags: [business-membership]
+      summary: Revoke an open invitation (owner only)
+      parameters:
+        - $ref: "#/components/parameters/ProfileId"
+        - name: invitationId
+          in: path
+          required: true
+          schema:
+            type: number
+      responses:
+        "200":
+          description: Invitation revoked (idempotent)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [id, status]
+                properties:
+                  id:
+                    type: number
+                  status:
+                    type: string
+                    enum: [revoked]
+        "401":
+          description: Sign-in required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: Account unverified, suspended or deleted, or role insufficient
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Not a member of this business, or the area is closed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "409":
+          description: Invitation already accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /business-invitations/accept:
+    post:
+      operationId: acceptBusinessInvitation
+      tags: [business-membership]
+      summary: Accept an invitation with the single-use link token
+      description: |
+        The signed-in account's verified primary address must equal the invited address; otherwise 403
+        `email_mismatch`. Invalid, expired, revoked and used tokens answer 409 with the reason so the
+        page can explain what to do next. Accepting an already-used token never re-grants access.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BusinessInvitationAcceptInput"
+      responses:
+        "200":
+          description: Membership granted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BusinessInvitationAccepted"
+        "400":
+          description: Validation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Sign-in required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+        "403":
+          description: Account unverified, or the invitation was addressed to a different e-mail address
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/ApiError"
+                  - $ref: "#/components/schemas/BusinessInvitationRejected"
+        "404":
+          $ref: "#/components/responses/FeatureDisabled"
+        "409":
+          description: Token invalid, expired, revoked or already used
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BusinessInvitationRejected"
+        "429":
+          description: Too many attempts from this network
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "503":
+          description: Identity provider unavailable; retry later
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /businesses/{id}/members/{memberId}:
+    patch:
+      operationId: changeBusinessMemberRole
+      tags: [business-membership]
+      summary: Change a member's role (owner only)
+      description: Demoting the last owner answers 409 `last_owner`; transfer ownership instead (BMEM-003).
+      parameters:
+        - $ref: "#/components/parameters/ProfileId"
+        - $ref: "#/components/parameters/MemberId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BusinessMemberRoleInput"
+      responses:
+        "200":
+          description: Role updated
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [id, role]
+                properties:
+                  id:
+                    type: number
+                  role:
+                    $ref: "#/components/schemas/BusinessMemberRole"
+        "400":
+          description: Validation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Sign-in required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: Account unverified, suspended or deleted, or role insufficient
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Not a member of this business, or the area is closed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "409":
+          description: Last owner cannot be demoted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+    delete:
+      operationId: removeBusinessMember
+      tags: [business-membership]
+      summary: Remove a member (owner) or leave the business (any member removing themselves)
+      description: The last owner can neither be removed nor leave; 409 `last_owner` (BMEM-003).
+      parameters:
+        - $ref: "#/components/parameters/ProfileId"
+        - $ref: "#/components/parameters/MemberId"
+      responses:
+        "200":
+          description: Member removed
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [id, removed, left]
+                properties:
+                  id:
+                    type: number
+                  removed:
+                    type: boolean
+                  left:
+                    type: boolean
+                    description: True when the caller removed themselves.
+        "401":
+          description: Sign-in required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: Account unverified, suspended or deleted, or role insufficient
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Not a member of this business, or the area is closed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "409":
+          description: Last owner cannot leave or be removed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /businesses/{id}/ownership/transfer:
+    post:
+      operationId: transferBusinessOwnership
+      tags: [business-membership]
+      summary: Make another member the owner; the caller becomes a manager (owner only)
+      parameters:
+        - $ref: "#/components/parameters/ProfileId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BusinessOwnershipTransferInput"
+      responses:
+        "200":
+          description: Ownership transferred
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [businessId, viewerRole]
+                properties:
+                  businessId:
+                    type: number
+                  viewerRole:
+                    $ref: "#/components/schemas/BusinessMemberRole"
+        "400":
+          description: Validation failed (for example transferring to yourself)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Sign-in required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: Account unverified, suspended or deleted, or role insufficient
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Not a member of this business, or the area is closed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /businesses/{id}/close:
+    post:
+      operationId: closeBusiness
+      tags: [business-membership]
+      summary: Close the business (owner only)
+      description: |
+        Unpublishes a published or suspended listing through the same state as a reviewer
+        unpublication and marks the business closed; every record is kept and open invitations are
+        revoked (BMEM-006). Idempotent.
+      parameters:
+        - $ref: "#/components/parameters/ProfileId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BusinessCloseInput"
+      responses:
+        "200":
+          description: Business closed
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [businessId, publicationStatus, closed]
+                properties:
+                  businessId:
+                    type: number
+                  publicationStatus:
+                    type: string
+                  closed:
+                    type: boolean
+        "400":
+          description: Validation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Sign-in required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: Account unverified, suspended or deleted, or role insufficient
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Not a member of this business, or the area is closed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
   /registration:
     get:
       operationId: getRegistration
@@ -2679,6 +3108,12 @@ paths:
 
 components:
   parameters:
+    MemberId:
+      name: memberId
+      in: path
+      required: true
+      schema:
+        type: number
     ClaimId:
       name: id
       in: path
@@ -3069,6 +3504,152 @@ components:
       description: Where the business intent was expressed; stored later on the claim, never in the URL as free text.
       enum: [registration, account_home, listing]
 
+    BusinessMemberRole:
+      type: string
+      enum: [owner, manager]
+
+    AccountBusinessMembership:
+      type: object
+      required: [id, name, slug, role, status]
+      properties:
+        id:
+          type: number
+        name:
+          type: string
+        slug:
+          type: string
+        role:
+          $ref: "#/components/schemas/BusinessMemberRole"
+        status:
+          type: string
+          description: Publication status, or `closed` once an owner closed the business.
+
+    BusinessMembership:
+      type: object
+      required: [businessId, viewerRole, members, invitations]
+      properties:
+        businessId:
+          type: number
+        viewerRole:
+          $ref: "#/components/schemas/BusinessMemberRole"
+        members:
+          type: array
+          items:
+            $ref: "#/components/schemas/BusinessMember"
+        invitations:
+          type: array
+          description: Empty for managers; invitations carry the invited address.
+          items:
+            $ref: "#/components/schemas/BusinessInvitation"
+
+    BusinessMember:
+      type: object
+      required: [id, role, displayName, isSelf, joinedAt]
+      properties:
+        id:
+          type: number
+        role:
+          $ref: "#/components/schemas/BusinessMemberRole"
+        displayName:
+          type: string
+          nullable: true
+        isSelf:
+          type: boolean
+        joinedAt:
+          type: string
+
+    BusinessInvitationInput:
+      type: object
+      additionalProperties: false
+      required: [email, role]
+      properties:
+        email:
+          type: string
+          minLength: 3
+          maxLength: 320
+          pattern: "^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$"
+        role:
+          $ref: "#/components/schemas/BusinessMemberRole"
+
+    BusinessInvitation:
+      type: object
+      required: [id, role, status, expiresAt]
+      properties:
+        id:
+          type: number
+        email:
+          type: string
+          description: Present in owner listings only.
+        role:
+          $ref: "#/components/schemas/BusinessMemberRole"
+        status:
+          type: string
+          enum: [open, accepted, revoked, expired]
+        expiresAt:
+          type: string
+        createdAt:
+          type: string
+
+    BusinessInvitationAcceptInput:
+      type: object
+      additionalProperties: false
+      required: [token]
+      properties:
+        token:
+          type: string
+          minLength: 1
+          maxLength: 256
+
+    BusinessMemberRoleInput:
+      type: object
+      additionalProperties: false
+      required: [role]
+      properties:
+        role:
+          $ref: "#/components/schemas/BusinessMemberRole"
+
+    BusinessOwnershipTransferInput:
+      type: object
+      additionalProperties: false
+      required: [memberId]
+      properties:
+        memberId:
+          type: number
+
+    BusinessCloseInput:
+      type: object
+      additionalProperties: false
+      required: [confirm]
+      properties:
+        confirm:
+          type: boolean
+          description: Must be true.
+
+    BusinessInvitationAccepted:
+      type: object
+      required: [accepted, businessId, businessName, role]
+      properties:
+        accepted:
+          type: boolean
+          enum: [true]
+        businessId:
+          type: number
+        businessName:
+          type: string
+        role:
+          $ref: "#/components/schemas/BusinessMemberRole"
+
+    BusinessInvitationRejected:
+      type: object
+      required: [accepted, reason]
+      properties:
+        accepted:
+          type: boolean
+          enum: [false]
+        reason:
+          type: string
+          enum: [invalid, expired, used, revoked, email_mismatch]
+
     BusinessOnboardingIntentInput:
       type: object
       additionalProperties: false
@@ -3258,6 +3839,7 @@ components:
         - capabilities
         - hasResearchRegistration
         - businessMembershipCount
+        - businesses
         - preferences
         - createdAt
       properties:
@@ -3281,6 +3863,11 @@ components:
           description: Whether the separate campaign-style research registration exists. Never merged into account data.
         businessMembershipCount:
           type: number
+        businesses:
+          type: array
+          description: Businesses the account belongs to (v0.5.2), for the account home Business section. Never preference data.
+          items:
+            $ref: "#/components/schemas/AccountBusinessMembership"
         preferences:
           oneOf:
             - $ref: "#/components/schemas/ConsumerPreferences"

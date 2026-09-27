@@ -52,6 +52,13 @@ export const GetAccountMeResponse = zod.object({
 }).describe('Server-derived capabilities. Clients must never send these; they are recomputed on every request.'),
   "hasResearchRegistration": zod.boolean().describe('Whether the separate campaign-style research registration exists. Never merged into account data.'),
   "businessMembershipCount": zod.number(),
+  "businesses": zod.array(zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "slug": zod.string(),
+  "role": zod.enum(['owner', 'manager']),
+  "status": zod.string().describe('Publication status, or `closed` once an owner closed the business.')
+})).describe('Businesses the account belongs to (v0.5.2), for the account home Business section. Never preference data.'),
   "preferences": zod.union([zod.object({
   "revision": zod.number(),
   "neighborhoodIds": zod.array(zod.string()).max(getAccountMeResponsePreferencesOneNeighborhoodIdsMax),
@@ -146,6 +153,13 @@ export const UpdateAccountPreferencesResponse = zod.object({
 }).describe('Server-derived capabilities. Clients must never send these; they are recomputed on every request.'),
   "hasResearchRegistration": zod.boolean().describe('Whether the separate campaign-style research registration exists. Never merged into account data.'),
   "businessMembershipCount": zod.number(),
+  "businesses": zod.array(zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "slug": zod.string(),
+  "role": zod.enum(['owner', 'manager']),
+  "status": zod.string().describe('Publication status, or `closed` once an owner closed the business.')
+})).describe('Businesses the account belongs to (v0.5.2), for the account home Business section. Never preference data.'),
   "preferences": zod.union([zod.object({
   "revision": zod.number(),
   "neighborhoodIds": zod.array(zod.string()).max(updateAccountPreferencesResponsePreferencesOneNeighborhoodIdsMax),
@@ -191,6 +205,13 @@ export const CompleteAccountOnboardingResponse = zod.object({
 }).describe('Server-derived capabilities. Clients must never send these; they are recomputed on every request.'),
   "hasResearchRegistration": zod.boolean().describe('Whether the separate campaign-style research registration exists. Never merged into account data.'),
   "businessMembershipCount": zod.number(),
+  "businesses": zod.array(zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "slug": zod.string(),
+  "role": zod.enum(['owner', 'manager']),
+  "status": zod.string().describe('Publication status, or `closed` once an owner closed the business.')
+})).describe('Businesses the account belongs to (v0.5.2), for the account home Business section. Never preference data.'),
   "preferences": zod.union([zod.object({
   "revision": zod.number(),
   "neighborhoodIds": zod.array(zod.string()).max(completeAccountOnboardingResponsePreferencesOneNeighborhoodIdsMax),
@@ -725,6 +746,177 @@ export const RecordBusinessOnboardingIntentBody = zod.object({
 export const RecordBusinessOnboardingIntentResponse = zod.object({
   "context": zod.enum(['registration', 'account_home', 'listing']).describe('Where the business intent was expressed; stored later on the claim, never in the URL as free text.'),
   "returnRef": zod.string().describe('Allow-listed local path of the business step, carrying only the context and the listing reference.')
+})
+
+
+/**
+ * Members see every member; only owners see invitations (they carry the invited address).
+ * Non-members receive 404 so the surface never confirms which businesses exist (BSEC).
+ * @summary List the team of a business the caller belongs to
+ */
+export const ListBusinessMembersParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const ListBusinessMembersResponse = zod.object({
+  "businessId": zod.number(),
+  "viewerRole": zod.enum(['owner', 'manager']),
+  "members": zod.array(zod.object({
+  "id": zod.number(),
+  "role": zod.enum(['owner', 'manager']),
+  "displayName": zod.string().nullable(),
+  "isSelf": zod.boolean(),
+  "joinedAt": zod.string()
+})),
+  "invitations": zod.array(zod.object({
+  "id": zod.number(),
+  "email": zod.string().optional().describe('Present in owner listings only.'),
+  "role": zod.enum(['owner', 'manager']),
+  "status": zod.enum(['open', 'accepted', 'revoked', 'expired']),
+  "expiresAt": zod.string(),
+  "createdAt": zod.string().optional()
+})).describe('Empty for managers; invitations carry the invited address.')
+})
+
+
+/**
+ * Creates an open invitation (7 days) and queues the invitation e-mail; the single-use link token
+ * is minted at dispatch time and only its digest is stored (BMEM-002). One open invitation per
+ * address per business; a second attempt answers 409 `already_invited`.
+ * @summary Invite someone by e-mail as owner or manager (owner only)
+ */
+export const InviteBusinessMemberParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const inviteBusinessMemberBodyEmailMin = 3;
+export const inviteBusinessMemberBodyEmailMax = 320;
+
+
+export const inviteBusinessMemberBodyEmailRegExp = new RegExp('^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$');
+
+
+export const InviteBusinessMemberBody = zod.object({
+  "email": zod.string().min(inviteBusinessMemberBodyEmailMin).max(inviteBusinessMemberBodyEmailMax).regex(inviteBusinessMemberBodyEmailRegExp),
+  "role": zod.enum(['owner', 'manager'])
+})
+
+export const InviteBusinessMemberResponse = zod.object({
+  "id": zod.number(),
+  "email": zod.string().optional().describe('Present in owner listings only.'),
+  "role": zod.enum(['owner', 'manager']),
+  "status": zod.enum(['open', 'accepted', 'revoked', 'expired']),
+  "expiresAt": zod.string(),
+  "createdAt": zod.string().optional()
+})
+
+
+/**
+ * @summary Revoke an open invitation (owner only)
+ */
+export const RevokeBusinessInvitationParams = zod.object({
+  "id": zod.coerce.number(),
+  "invitationId": zod.coerce.number()
+})
+
+export const RevokeBusinessInvitationResponse = zod.object({
+  "id": zod.number(),
+  "status": zod.enum(['revoked'])
+})
+
+
+/**
+ * The signed-in account's verified primary address must equal the invited address; otherwise 403
+ * `email_mismatch`. Invalid, expired, revoked and used tokens answer 409 with the reason so the
+ * page can explain what to do next. Accepting an already-used token never re-grants access.
+ * @summary Accept an invitation with the single-use link token
+ */
+export const acceptBusinessInvitationBodyTokenMax = 256;
+
+
+
+export const AcceptBusinessInvitationBody = zod.object({
+  "token": zod.string().min(1).max(acceptBusinessInvitationBodyTokenMax)
+})
+
+export const AcceptBusinessInvitationResponse = zod.object({
+  "accepted": zod.literal(true),
+  "businessId": zod.number(),
+  "businessName": zod.string(),
+  "role": zod.enum(['owner', 'manager'])
+})
+
+
+/**
+ * Demoting the last owner answers 409 `last_owner`; transfer ownership instead (BMEM-003).
+ * @summary Change a member's role (owner only)
+ */
+export const ChangeBusinessMemberRoleParams = zod.object({
+  "id": zod.coerce.number(),
+  "memberId": zod.coerce.number()
+})
+
+export const ChangeBusinessMemberRoleBody = zod.object({
+  "role": zod.enum(['owner', 'manager'])
+})
+
+export const ChangeBusinessMemberRoleResponse = zod.object({
+  "id": zod.number(),
+  "role": zod.enum(['owner', 'manager'])
+})
+
+
+/**
+ * The last owner can neither be removed nor leave; 409 `last_owner` (BMEM-003).
+ * @summary Remove a member (owner) or leave the business (any member removing themselves)
+ */
+export const RemoveBusinessMemberParams = zod.object({
+  "id": zod.coerce.number(),
+  "memberId": zod.coerce.number()
+})
+
+export const RemoveBusinessMemberResponse = zod.object({
+  "id": zod.number(),
+  "removed": zod.boolean(),
+  "left": zod.boolean().describe('True when the caller removed themselves.')
+})
+
+
+/**
+ * @summary Make another member the owner; the caller becomes a manager (owner only)
+ */
+export const TransferBusinessOwnershipParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const TransferBusinessOwnershipBody = zod.object({
+  "memberId": zod.number()
+})
+
+export const TransferBusinessOwnershipResponse = zod.object({
+  "businessId": zod.number(),
+  "viewerRole": zod.enum(['owner', 'manager'])
+})
+
+
+/**
+ * Unpublishes a published or suspended listing through the same state as a reviewer
+ * unpublication and marks the business closed; every record is kept and open invitations are
+ * revoked (BMEM-006). Idempotent.
+ * @summary Close the business (owner only)
+ */
+export const CloseBusinessParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const CloseBusinessBody = zod.object({
+  "confirm": zod.boolean().describe('Must be true.')
+})
+
+export const CloseBusinessResponse = zod.object({
+  "businessId": zod.number(),
+  "publicationStatus": zod.string(),
+  "closed": zod.boolean()
 })
 
 

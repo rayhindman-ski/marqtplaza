@@ -78,6 +78,9 @@ import ForgotPasswordPage, { FORGOT_PASSWORD_PATH, RESET_PASSWORD_PATH } from '.
 import BusinessOnboardingIntroPage from './pages/BusinessOnboardingIntroPage';
 import { businessIntentRef, BUSINESS_ONBOARDING_PATH, searchCarriesBusinessIntent } from '@/lib/businessIntent';
 import AccountSecurityPage from './pages/AccountSecurityPage';
+import BusinessMembersPage from './pages/BusinessMembersPage';
+import BusinessClosePage from './pages/BusinessClosePage';
+import BusinessInvitationPage, { BUSINESS_INVITATION_PATH } from './pages/BusinessInvitationPage';
 import { clearCredentialHandoff, peekCredentialHandoff } from './lib/credentialHandoff';
 import { useAccountAuth } from './lib/accountAuth';
 import { accountDiscoveryDefaults, type AccountDiscoveryDefaults } from './lib/accountDiscoveryDefaults';
@@ -3777,6 +3780,9 @@ export default function App() {
           <Route path="/account/beveiliging" component={AccountSecurityPage} />
           <Route path={BUSINESS_ONBOARDING_PATH} component={BusinessOnboardingIntroPage} />
           <Route path="/account/privacy" component={AccountPrivacyPage} />
+          <Route path={BUSINESS_INVITATION_PATH} component={BusinessInvitationPage} />
+          <Route path="/account/bedrijf/:id/team" component={BusinessMembersPage} />
+          <Route path="/account/bedrijf/:id/sluiten" component={BusinessClosePage} />
           <Route path="/account/*?" component={AccountPage} />
           <Route path="/bedrijf-aanmelden" component={BusinessOnboardingPage} />
           <Route path="/bedrijf-zoeken" component={BusinessLookupPage} />

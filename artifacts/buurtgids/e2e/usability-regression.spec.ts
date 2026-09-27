@@ -27,6 +27,10 @@ const SCREENS: Screen[] = [
   { name: 'reset-password', path: '/account/wachtwoord-herstellen', ready: 'status-reset-password-no-flow' },
   // v0.5.2 business step intro (BENT-005) needs a session; the account API and intent check are stubbed.
   { name: 'business-onboarding', path: '/account/bedrijf/toevoegen?context=account_home', ready: 'button-business-start', signedIn: true },
+  // v0.5.2 membership screens (BMEM): team page as owner, close confirmation, invitation landing.
+  { name: 'business-team', path: '/account/bedrijf/41/team', ready: 'invitations-panel', signedIn: true },
+  { name: 'business-close', path: '/account/bedrijf/41/sluiten', ready: 'button-close-business', signedIn: true },
+  { name: 'business-invitation', path: '/account/uitnodiging?token=a11y-token', ready: 'button-invitation-accept', signedIn: true },
 ];
 
 const VIEWPORTS = [
@@ -57,6 +61,12 @@ const COLOR_CONTRAST_BUDGET: Record<string, number> = {
   'reset-password@phone': 3,
   'business-onboarding@desktop': 4,
   'business-onboarding@phone': 4,
+  'business-team@desktop': 6,
+  'business-team@phone': 6,
+  'business-close@desktop': 2,
+  'business-close@phone': 2,
+  'business-invitation@desktop': 3,
+  'business-invitation@phone': 3,
 };
 
 async function stubNetwork(page: Page) {
@@ -98,10 +108,19 @@ async function stubSession(page: Page) {
         userId: 'user-a11y', email: 'a11y@example.com', role: 'consumer', status: 'active', locale: 'nl',
         onboardingCompleted: true, onboardingCompletedAt: '2026-09-01T10:00:00.000Z', preferences: null,
         capabilities: { isVerified: true, canParticipate: true, canReview: false, canModerate: false },
+        businesses: [{ id: 41, name: 'Kapper Centrum', slug: 'kapper-centrum', role: 'owner', status: 'published' }],
       }));
     }
     return route.fulfill(json({ code: 'NOT_FOUND', messageKey: 'errors.not_found', correlationId: 'a11y' }, 404));
   });
+  await page.route('**/api/businesses/41/members', (route) => route.fulfill(json({
+    businessId: 41, viewerRole: 'owner',
+    members: [
+      { id: 1, role: 'owner', displayName: 'Anna Eigenaar', isSelf: true, joinedAt: '2026-09-01T10:00:00.000Z' },
+      { id: 2, role: 'manager', displayName: null, isSelf: false, joinedAt: '2026-09-05T10:00:00.000Z' },
+    ],
+    invitations: [{ id: 1, email: 'nieuw@example.com', role: 'manager', status: 'open', expiresAt: '2026-10-04T10:00:00.000Z', createdAt: '2026-09-27T10:00:00.000Z' }],
+  })));
   await page.route('**/api/business-onboarding/intent', (route) =>
     route.fulfill(json({ context: 'account_home', returnRef: '/account/bedrijf/toevoegen?context=account_home' })),
   );
