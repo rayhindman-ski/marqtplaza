@@ -142,3 +142,64 @@ this release), `account-lifecycle` 22/0, `account-foundation` 26/0,
 template — see Phase 0 finding 4. `clerk-verification-recovery.spec.ts` was
 not extended; its states are covered by `signup-stale-step.spec.ts` and the
 new suite.
+
+### 2026-09-27 — Phase 2: intent, entry points, `businessOnboarding` flag
+
+**Flag (BOPS-001):** `businessOnboarding` added to server flags
+(`BUSINESS_ONBOARDING_ENABLED`), web mirror (`VITE_BUSINESS_ONBOARDING_ENABLED`),
+`/api/readiness`, and the Playwright web server env. Both are set **on** in the
+development environment only; production stays off (pending user decision, as
+for the v0.5.1 flags). Existing unit suites updated for the new flag key.
+
+**API (BENT-002/003):** `POST /business-onboarding/intent` — stateless and
+unauthenticated; validates `context ∈ {registration, account_home, listing}`
+and an optional `listingSource`/`listingId` pair (both or neither; strict
+character sets; unknown fields refused) and answers the canonical local return
+path `/account/bedrijf/toevoegen?context=…[&listingSource&listingId]`. Nothing
+is stored, so resuming after verification, sign-in or a reload replays no
+write. 404 `FEATURE_DISABLED` while the gate is closed. OpenAPI
+`BusinessOnboardingIntentInput` / `BusinessOnboardingIntent`; clients
+regenerated. `test:business-onboarding` 4/0.
+
+Design note: an intent is *derived*, not persisted. Persisting the context
+lands on the claim itself (`business_claims.onboarding_context`) in Phase 3,
+when there is a row to attach it to. The v0.5.1 return-ref allow-lists (API
+and web) already admit the business-step path with its query string.
+
+**Web (BENT-001/004/005):**
+
+- `ConsumerRegisterPage`: "I represent a business" choice (flag on). Checked
+  → `returnRef = /account/bedrijf/toevoegen?context=registration` (only that
+  path is sent; no extra field). Preselected when the visitor arrived with the
+  business return path; unchecking drops it. Complete page's "then you add
+  your business" line now matches the path with its query.
+- Sign-up frame: "I represent a business" link → `/sign-up?terug=<business
+  step>`; once carried, a status line confirms it.
+- Account home: "Business" panel → `?context=account_home`.
+- Public business page (`/bedrijf/:slug`), unclaimed only: "Is this your
+  business?" → `?context=listing&listingSource=buurtplaza_profile&listingId=<id>`.
+  Not on the map hover card (map behaviour unchanged).
+- New `BusinessOnboardingIntroPage` at `/account/bedrijf/toevoegen`: requires
+  a session (redirects to sign-in with itself, query included, as `terug`);
+  asks the server to confirm the intent on open (a malformed listing reference
+  is dropped, the context kept); explains the business profile, who sees
+  what, and that the personal account stays separate; resume notice for the
+  registration context; server 404 → "not open yet" state. The Start button
+  currently hands over to the existing lookup (`/bedrijf-zoeken`) with the
+  intent as return path; Phase 3 replaces it with the wizard.
+- Shared `lib/businessIntent.ts` (ref builder, path check). NL/EN copy under
+  `accountTranslations.business`; parity test green.
+
+**Tests / evidence:** new `e2e/business-onboarding.spec.ts` 11/11 (registration
+choice and payload, preselect/uncheck, sign-up entry, session gate with query,
+account-home path + server confirmation + explanation, resume without repeated
+write, listing entry with opaque reference, claimed listing shows nothing,
+tampered listing id dropped, closed gate, English). Business-step intro added
+to the axe gate (budget 4/4 brand-orange nodes, no other violations).
+Regression: consumer-registration 7/7, credential-lifecycle 4/4,
+account-preferences + account-privacy + signup-stale-step + business-review +
+business-intake + usability 44/44, api `account-foundation` 26/0, workspace
+typecheck clean. Dev API: `/api/readiness` reports `businessOnboarding: true`;
+intent round-trip verified with curl.
+
+Duration: ≈14:55 – 15:27 CEST.

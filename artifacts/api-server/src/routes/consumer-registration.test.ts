@@ -46,7 +46,7 @@ const advance = (ms: number) => {
   clock = new Date(clock.getTime() + ms);
 };
 
-let flags = { accounts: false, businessIntake: false, businessPublication: false, consumerRegistration: true };
+let flags = { accounts: false, businessIntake: false, businessPublication: false, consumerRegistration: true, businessOnboarding: false };
 const existingAccounts = new Set<string>([mail("existing")]);
 let lookupUnavailable = false;
 
@@ -191,7 +191,7 @@ describe("feature gate (OPS-006)", () => {
       }
       assert.equal(await registrationFor(mail("gated")), undefined);
     } finally {
-      flags = { ...flags, consumerRegistration: true };
+      flags = { ...flags, consumerRegistration: true, businessOnboarding: false };
     }
   });
 });

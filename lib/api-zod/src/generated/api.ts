@@ -582,7 +582,8 @@ export const GetReadinessResponse = zod.object({
   "accounts": zod.boolean(),
   "businessIntake": zod.boolean(),
   "businessPublication": zod.boolean(),
-  "consumerRegistration": zod.boolean()
+  "consumerRegistration": zod.boolean(),
+  "businessOnboarding": zod.boolean()
 }).describe('Read-only rollout flags; each entry point stays disabled (404) until its gate is met.')
 
 
@@ -690,6 +691,36 @@ export const ConsumeConsumerRegistrationLinkResponse = zod.object({
   "email": zod.string().describe('The verified address, normalized.'),
   "returnRef": zod.string().nullish().describe('Allow-listed local return path recorded at request time, if any.')
 }).optional().describe('Present only in the response of a successful consume (never on inspection). Lets the\nclient open the identity provider\'s password step with the verified address prefilled\nand resume the allow-listed return destination afterwards. The caller proved control of\nthe mailbox by presenting the single-use token.\n')
+})
+
+
+/**
+ * Stateless and unauthenticated: validates the entry context and optional listing reference
+ * and answers with the canonical local return path for the business step. Nothing is stored
+ * and no personal data is accepted, so resuming after verification, sign-in or a reload never
+ * replays a write (BENT-002, BENT-003). Clients use the 404 to hide entry points when the
+ * server gate is closed even if their own mirror flag is on.
+ * @summary Turn a business-onboarding entry point into an allow-listed return reference
+ */
+export const recordBusinessOnboardingIntentBodyListingSourceMax = 40;
+
+
+export const recordBusinessOnboardingIntentBodyListingSourceRegExp = new RegExp('^[a-z][a-z0-9_]*$');
+export const recordBusinessOnboardingIntentBodyListingIdMax = 200;
+
+
+export const recordBusinessOnboardingIntentBodyListingIdRegExp = new RegExp('^[A-Za-z0-9._~:@!$&\'()*+,;=%-]+$');
+
+
+export const RecordBusinessOnboardingIntentBody = zod.object({
+  "context": zod.enum(['registration', 'account_home', 'listing']).describe('Where the business intent was expressed; stored later on the claim, never in the URL as free text.'),
+  "listingSource": zod.string().min(1).max(recordBusinessOnboardingIntentBodyListingSourceMax).regex(recordBusinessOnboardingIntentBodyListingSourceRegExp).optional().describe('Required with `listingId`; the listing provider key (e.g. `google_maps`, `curated`).'),
+  "listingId": zod.string().min(1).max(recordBusinessOnboardingIntentBodyListingIdMax).regex(recordBusinessOnboardingIntentBodyListingIdRegExp).optional().describe('Required with `listingSource`; opaque provider listing identifier.')
+})
+
+export const RecordBusinessOnboardingIntentResponse = zod.object({
+  "context": zod.enum(['registration', 'account_home', 'listing']).describe('Where the business intent was expressed; stored later on the claim, never in the URL as free text.'),
+  "returnRef": zod.string().describe('Allow-listed local path of the business step, carrying only the context and the listing reference.')
 })
 
 

@@ -40,6 +40,10 @@ tags:
     description: |
       Consumer registration foundation (v0.5.1). Public, unauthenticated, feature-gated.
       Creates pending registrations only; never an account, session, or credential.
+  - name: business-onboarding
+    description: |
+      Business onboarding enrichment (v0.5.2). Feature-gated by `businessOnboarding`; every route
+      answers 404 `FEATURE_DISABLED` while the gate is closed. Public discovery is unaffected.
 paths:
   /healthz:
     get:
@@ -744,6 +748,39 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+
+  /business-onboarding/intent:
+    post:
+      operationId: recordBusinessOnboardingIntent
+      tags: [business-onboarding]
+      summary: Turn a business-onboarding entry point into an allow-listed return reference
+      description: |
+        Stateless and unauthenticated: validates the entry context and optional listing reference
+        and answers with the canonical local return path for the business step. Nothing is stored
+        and no personal data is accepted, so resuming after verification, sign-in or a reload never
+        replays a write (BENT-002, BENT-003). Clients use the 404 to hide entry points when the
+        server gate is closed even if their own mirror flag is on.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BusinessOnboardingIntentInput"
+      responses:
+        "200":
+          description: Canonical return reference for the business step
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BusinessOnboardingIntent"
+        "400":
+          description: Validation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          $ref: "#/components/responses/FeatureDisabled"
 
   /registration:
     get:
@@ -2962,7 +2999,7 @@ components:
     FeatureReadiness:
       type: object
       description: Read-only rollout flags; each entry point stays disabled (404) until its gate is met.
-      required: [accounts, businessIntake, businessPublication, consumerRegistration]
+      required: [accounts, businessIntake, businessPublication, consumerRegistration, businessOnboarding]
       properties:
         accounts:
           type: boolean
@@ -2972,6 +3009,43 @@ components:
           type: boolean
         consumerRegistration:
           type: boolean
+        businessOnboarding:
+          type: boolean
+
+    BusinessOnboardingContext:
+      type: string
+      description: Where the business intent was expressed; stored later on the claim, never in the URL as free text.
+      enum: [registration, account_home, listing]
+
+    BusinessOnboardingIntentInput:
+      type: object
+      additionalProperties: false
+      required: [context]
+      properties:
+        context:
+          $ref: "#/components/schemas/BusinessOnboardingContext"
+        listingSource:
+          type: string
+          description: Required with `listingId`; the listing provider key (e.g. `google_maps`, `curated`).
+          minLength: 1
+          maxLength: 40
+          pattern: "^[a-z][a-z0-9_]*$"
+        listingId:
+          type: string
+          description: Required with `listingSource`; opaque provider listing identifier.
+          minLength: 1
+          maxLength: 200
+          pattern: "^[A-Za-z0-9._~:@!$&'()*+,;=%-]+$"
+
+    BusinessOnboardingIntent:
+      type: object
+      required: [context, returnRef]
+      properties:
+        context:
+          $ref: "#/components/schemas/BusinessOnboardingContext"
+        returnRef:
+          type: string
+          description: Allow-listed local path of the business step, carrying only the context and the listing reference.
 
     ConsumerRegistrationRequestInput:
       type: object

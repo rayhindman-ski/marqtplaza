@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { featureFlags } from '@/lib/featureFlags';
 import { accountErrorMessage, accountTranslations, type Language } from '@/lib/i18n';
+import { businessIntentRef, isBusinessIntentPath } from '@/lib/businessIntent';
 import { RETURN_PATH_PARAM, sanitizeReturnPath } from '@/lib/returnPath';
 import { useAppLanguage } from '@/lib/useAppLanguage';
 
@@ -65,7 +66,15 @@ export default function ConsumerRegisterPage() {
   const search = useSearch();
   const [, navigate] = useLocation();
   const params = new URLSearchParams(search);
-  const returnRef = sanitizeReturnPath(params.get(RETURN_PATH_PARAM));
+  const incomingReturnRef = sanitizeReturnPath(params.get(RETURN_PATH_PARAM));
+  // BENT-001/002: the business intent is a choice here, carried only as the
+  // allow-listed business-step path (preselected when the visitor arrived with it).
+  const businessOn = featureFlags.businessOnboarding;
+  const [businessIntent, setBusinessIntent] = useState(() => businessOn && isBusinessIntentPath(incomingReturnRef));
+  const incomingIsBusiness = isBusinessIntentPath(incomingReturnRef);
+  const returnRef = businessIntent
+    ? (incomingIsBusiness ? incomingReturnRef : businessIntentRef('registration'))
+    : (incomingIsBusiness ? null : incomingReturnRef);
 
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -210,6 +219,25 @@ export default function ConsumerRegisterPage() {
                 <p id="register-phone-hint" className="text-xs text-muted-foreground">{register.phoneHint}</p>
               )}
             </div>
+
+            {businessOn ? (
+              <div className="rounded-2xl border border-border/80 bg-muted/40 p-4">
+                <label className="flex items-start gap-3 text-sm leading-6 text-foreground">
+                  <input
+                    type="checkbox"
+                    name="businessIntent"
+                    data-testid="checkbox-register-business-intent"
+                    className="mt-1.5 h-4 w-4"
+                    checked={businessIntent}
+                    disabled={disabled}
+                    aria-describedby="register-business-intent-hint"
+                    onChange={(event) => setBusinessIntent(event.target.checked)}
+                  />
+                  <span className="font-semibold">{copy.business.entryLabel}</span>
+                </label>
+                <p id="register-business-intent-hint" className="mt-1 pl-7 text-xs leading-5 text-muted-foreground">{copy.business.entryHint}</p>
+              </div>
+            ) : null}
           </div>
 
           {formError ? (

@@ -75,6 +75,8 @@ import ConsumerRegisterPage from './pages/ConsumerRegisterPage';
 import ConsumerRegisterCheckEmailPage from './pages/ConsumerRegisterCheckEmailPage';
 import ConsumerRegisterCompletePage from './pages/ConsumerRegisterCompletePage';
 import ForgotPasswordPage, { FORGOT_PASSWORD_PATH, RESET_PASSWORD_PATH } from './pages/ForgotPasswordPage';
+import BusinessOnboardingIntroPage from './pages/BusinessOnboardingIntroPage';
+import { businessIntentRef, BUSINESS_ONBOARDING_PATH, searchCarriesBusinessIntent } from '@/lib/businessIntent';
 import AccountSecurityPage from './pages/AccountSecurityPage';
 import { clearCredentialHandoff, peekCredentialHandoff } from './lib/credentialHandoff';
 import { useAccountAuth } from './lib/accountAuth';
@@ -3773,6 +3775,7 @@ export default function App() {
           <Route path={FORGOT_PASSWORD_PATH} component={ForgotPasswordPage} />
           <Route path={RESET_PASSWORD_PATH} component={ForgotPasswordPage} />
           <Route path="/account/beveiliging" component={AccountSecurityPage} />
+          <Route path={BUSINESS_ONBOARDING_PATH} component={BusinessOnboardingIntroPage} />
           <Route path="/account/privacy" component={AccountPrivacyPage} />
           <Route path="/account/*?" component={AccountPage} />
           <Route path="/bedrijf-aanmelden" component={BusinessOnboardingPage} />
@@ -4513,19 +4516,41 @@ function AuthPageFrame({ testId, children }: { testId: string; children: React.R
 function SignUpPage() {
   const redirects = useClerkRedirects();
   useStaleSignUpStepRecovery();
+  const [language] = useAppLanguage();
+  const search = useSearch();
   // v0.5.2: after the registration link is consumed the verified address is
   // prefilled (tab-scoped storage, never the URL); the password is created here.
   const [handoff] = useState(() => peekCredentialHandoff());
+  // BENT-001: the business intent is offered on the sign-up frame and carried
+  // only as the allow-listed business-step return path.
+  const businessIntent = searchCarriesBusinessIntent(search);
+  const businessCopy = accountTranslations[language].business;
   return (
     <AuthPageFrame testId="page-sign-up">
-      <SignUp
-        routing="path"
-        path={`${basePath}/sign-up`}
-        initialValues={handoff ? { emailAddress: handoff.email } : undefined}
-        signInUrl={redirects.signInUrl}
-        forceRedirectUrl={redirects.signUpTarget}
-        signInForceRedirectUrl={redirects.signInTarget}
-      />
+      <div className="flex flex-col items-center gap-4">
+        <SignUp
+          routing="path"
+          path={`${basePath}/sign-up`}
+          initialValues={handoff ? { emailAddress: handoff.email } : undefined}
+          signInUrl={redirects.signInUrl}
+          forceRedirectUrl={redirects.signUpTarget}
+          signInForceRedirectUrl={redirects.signInTarget}
+        />
+        {featureFlags.businessOnboarding ? (
+          businessIntent ? (
+            <p data-testid="status-sign-up-business-intent" role="status" className="max-w-md text-center text-sm leading-6 text-muted-foreground">
+              {businessCopy.signUpEntryActive}
+            </p>
+          ) : (
+            <p className="max-w-md text-center text-sm leading-6 text-muted-foreground">
+              {businessCopy.signUpEntry}{' '}
+              <Link href={withReturnPath('/sign-up', businessIntentRef('registration'))} data-testid="link-sign-up-business-intent" className="font-bold text-primary hover:underline">
+                {businessCopy.signUpEntryLink}
+              </Link>
+            </p>
+          )
+        ) : null}
+      </div>
     </AuthPageFrame>
   );
 }

@@ -15,6 +15,7 @@ import registrationRouter from "./registration";
 import accountRouter from "./account";
 import accountLifecycleRouter from "./account-lifecycle";
 import consumerRegistrationRouter from "./consumer-registration";
+import businessOnboardingRouter from "./business-onboarding";
 
 const router: IRouter = Router();
 
@@ -35,5 +36,6 @@ router.use(registrationRouter);
 router.use(accountRouter);
 router.use(accountLifecycleRouter);
 router.use(consumerRegistrationRouter);
+router.use(businessOnboardingRouter);
 
 export default router;

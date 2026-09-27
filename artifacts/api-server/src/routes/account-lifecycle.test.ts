@@ -60,7 +60,7 @@ const users = {
 const allUserIds = Object.values(users);
 const keyPrefix = `lifecycle-test:${runId}`;
 
-let flags = { accounts: true, businessIntake: true, businessPublication: true, consumerRegistration: false };
+let flags = { accounts: true, businessIntake: true, businessPublication: true, consumerRegistration: false, businessOnboarding: false };
 
 function identityFromHeaders(req: express.Request): Identity | null {
   const userId = req.header("x-test-user-id");

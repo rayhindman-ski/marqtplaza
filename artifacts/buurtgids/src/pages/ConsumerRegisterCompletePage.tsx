@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/button';
 import { storeCredentialHandoff } from '@/lib/credentialHandoff';
 import { featureFlags } from '@/lib/featureFlags';
 import { withReturnPath } from '@/lib/returnPath';
+import { isBusinessIntentPath } from '@/lib/businessIntent';
 import { accountErrorMessage, accountTranslations, formatCopy, type Language } from '@/lib/i18n';
 import { hasStoredLanguage, useAppLanguage } from '@/lib/useAppLanguage';
 import { RegistrationUnavailable, apiErrorFrom } from './ConsumerRegisterPage';
@@ -110,7 +111,7 @@ export default function ConsumerRegisterCompletePage() {
   // address once; the password itself is created at the identity provider.
   const handoff = result?.state === 'valid' ? result.handoff ?? null : null;
   const returnRef = handoff?.returnRef ?? null;
-  const isBusinessReturn = returnRef === '/account/bedrijf/toevoegen';
+  const isBusinessReturn = isBusinessIntentPath(returnRef);
   function onSetPassword() {
     if (!handoff) return;
     storeCredentialHandoff({ email: handoff.email });

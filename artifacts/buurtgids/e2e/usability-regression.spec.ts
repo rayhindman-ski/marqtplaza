@@ -15,7 +15,7 @@ import { expect, test, type Page } from '@playwright/test';
  * no interactive control may be left without an accessible name.
  */
 
-type Screen = { name: string; path: string; ready: string };
+type Screen = { name: string; path: string; ready: string; signedIn?: boolean };
 
 const SCREENS: Screen[] = [
   // The create-account entry lives inside the collapsed menu on phones, so the
@@ -25,6 +25,8 @@ const SCREENS: Screen[] = [
   { name: 'consumer-register', path: '/account/register', ready: 'page-register' },
   { name: 'forgot-password', path: '/account/wachtwoord-vergeten', ready: 'form-forgot-password' },
   { name: 'reset-password', path: '/account/wachtwoord-herstellen', ready: 'status-reset-password-no-flow' },
+  // v0.5.2 business step intro (BENT-005) needs a session; the account API and intent check are stubbed.
+  { name: 'business-onboarding', path: '/account/bedrijf/toevoegen?context=account_home', ready: 'button-business-start', signedIn: true },
 ];
 
 const VIEWPORTS = [
@@ -53,6 +55,8 @@ const COLOR_CONTRAST_BUDGET: Record<string, number> = {
   'forgot-password@phone': 4,
   'reset-password@desktop': 3,
   'reset-password@phone': 3,
+  'business-onboarding@desktop': 4,
+  'business-onboarding@phone': 4,
 };
 
 async function stubNetwork(page: Page) {
@@ -82,8 +86,30 @@ async function stubNetwork(page: Page) {
   }));
 }
 
+async function stubSession(page: Page) {
+  await page.addInitScript(() => {
+    (window as Window & { __accountTestAuth?: { userId: string | null } }).__accountTestAuth = { userId: 'user-a11y' };
+  });
+  const json = (body: unknown, status = 200) => ({ status, contentType: 'application/json', body: JSON.stringify(body) });
+  await page.route('**/api/account/**', (route) => {
+    const path = new URL(route.request().url()).pathname;
+    if (path.endsWith('/account/me')) {
+      return route.fulfill(json({
+        userId: 'user-a11y', email: 'a11y@example.com', role: 'consumer', status: 'active', locale: 'nl',
+        onboardingCompleted: true, onboardingCompletedAt: '2026-09-01T10:00:00.000Z', preferences: null,
+        capabilities: { isVerified: true, canParticipate: true, canReview: false, canModerate: false },
+      }));
+    }
+    return route.fulfill(json({ code: 'NOT_FOUND', messageKey: 'errors.not_found', correlationId: 'a11y' }, 404));
+  });
+  await page.route('**/api/business-onboarding/intent', (route) =>
+    route.fulfill(json({ context: 'account_home', returnRef: '/account/bedrijf/toevoegen?context=account_home' })),
+  );
+}
+
 async function open(page: Page, screen: Screen) {
   await stubNetwork(page);
+  if (screen.signedIn) await stubSession(page);
   await page.goto(`${screen.path}${screen.path.includes('?') ? '&' : '?'}e2eAccountAuth=1`);
   await page.getByTestId(screen.ready).first().waitFor({ state: 'visible', timeout: 20_000 });
   if (screen.name === 'discovery') {

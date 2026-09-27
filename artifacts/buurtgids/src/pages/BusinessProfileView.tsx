@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { useRoute, Link } from 'wouter';
 import { useGetBusinessProfile, getGetBusinessProfileQueryKey } from '@workspace/api-client-react';
-import { MapPin, Phone, Globe, Clock, BadgeCheck, Tag, Calendar, Building2, AlertCircle } from 'lucide-react';
+import { MapPin, Phone, Globe, Clock, BadgeCheck, Tag, Calendar, Building2, AlertCircle, Store } from 'lucide-react';
 import { format } from 'date-fns';
 import { nl } from 'date-fns/locale';
 import { Badge } from '@/components/ui/badge';
@@ -9,7 +9,9 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAppLanguage } from '@/lib/useAppLanguage';
-import { businessPublicationTranslations } from '@/lib/i18n';
+import { accountTranslations, businessPublicationTranslations } from '@/lib/i18n';
+import { featureFlags } from '@/lib/featureFlags';
+import { businessIntentRef } from '@/lib/businessIntent';
 
 export default function BusinessProfileView() {
   const [, params] = useRoute('/bedrijf/:slug');
@@ -189,6 +191,25 @@ export default function BusinessProfileView() {
               )}
             </div>
           </div>
+
+          {featureFlags.businessOnboarding && !profile.isClaimed && (
+            <section data-testid="panel-listing-claim-intent" className="mt-8 flex flex-col gap-3 rounded-2xl border border-primary/20 bg-primary/5 p-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-start gap-3">
+                <Store className="mt-0.5 h-5 w-5 shrink-0 text-primary" aria-hidden="true" />
+                <div>
+                  <p className="text-sm font-bold text-foreground">{accountTranslations[language].business.listingAction}</p>
+                  <p className="text-xs leading-5 text-muted-foreground">{accountTranslations[language].business.listingHint}</p>
+                </div>
+              </div>
+              <Link
+                href={businessIntentRef('listing', { source: 'buurtplaza_profile', id: String(profile.id) })}
+                data-testid="link-listing-claim-intent"
+                className="inline-flex shrink-0 items-center justify-center rounded-full bg-primary px-4 py-2 text-sm font-bold text-primary-foreground hover:bg-primary/90"
+              >
+                {accountTranslations[language].business.listingAction}
+              </Link>
+            </section>
+          )}
 
           {provenance && (
             <section className="mt-8 pt-6 border-t border-border/50 text-xs text-muted-foreground space-y-2" aria-label={language === 'nl' ? 'Herkomst en controle' : 'Source and verification'} data-testid="public-provenance">

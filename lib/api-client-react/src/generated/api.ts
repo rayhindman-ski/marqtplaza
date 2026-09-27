@@ -35,6 +35,8 @@ import type {
   BusinessIntakeDraftInput,
   BusinessListResult,
   BusinessLookupResponse,
+  BusinessOnboardingIntent,
+  BusinessOnboardingIntentInput,
   BusinessProfile,
   BusinessProfileUpdate,
   BusinessRevisionTransitionInput,
@@ -1715,6 +1717,82 @@ export const useConsumeConsumerRegistrationLink = <TError = ErrorType<ApiError |
         TContext
       > => {
       return useMutation(getConsumeConsumerRegistrationLinkMutationOptions(options));
+    }
+
+export const getRecordBusinessOnboardingIntentUrl = () => {
+
+
+
+
+  return `/api/business-onboarding/intent`
+}
+
+/**
+ * Stateless and unauthenticated: validates the entry context and optional listing reference
+ * and answers with the canonical local return path for the business step. Nothing is stored
+ * and no personal data is accepted, so resuming after verification, sign-in or a reload never
+ * replays a write (BENT-002, BENT-003). Clients use the 404 to hide entry points when the
+ * server gate is closed even if their own mirror flag is on.
+ * @summary Turn a business-onboarding entry point into an allow-listed return reference
+ */
+export const recordBusinessOnboardingIntent = async (businessOnboardingIntentInput: BusinessOnboardingIntentInput, options?: Parameters<typeof customFetch>[1]): Promise<BusinessOnboardingIntent> => {
+
+  return customFetch<BusinessOnboardingIntent>(getRecordBusinessOnboardingIntentUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(businessOnboardingIntentInput)
+  }
+);}
+
+
+
+
+
+export const getRecordBusinessOnboardingIntentMutationOptions = <TError = ErrorType<ApiError | FeatureDisabledResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof recordBusinessOnboardingIntent>>, TError,{data: BodyType<BusinessOnboardingIntentInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof recordBusinessOnboardingIntent>>, TError,{data: BodyType<BusinessOnboardingIntentInput>}, TContext> => {
+
+const mutationKey = ['recordBusinessOnboardingIntent'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof recordBusinessOnboardingIntent>>, {data: BodyType<BusinessOnboardingIntentInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  recordBusinessOnboardingIntent(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RecordBusinessOnboardingIntentMutationResult = NonNullable<Awaited<ReturnType<typeof recordBusinessOnboardingIntent>>>
+    export type RecordBusinessOnboardingIntentMutationBody = BodyType<BusinessOnboardingIntentInput>
+    export type RecordBusinessOnboardingIntentMutationError = ErrorType<ApiError | FeatureDisabledResponse>
+
+    /**
+ * @summary Turn a business-onboarding entry point into an allow-listed return reference
+ */
+export const useRecordBusinessOnboardingIntent = <TError = ErrorType<ApiError | FeatureDisabledResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof recordBusinessOnboardingIntent>>, TError,{data: BodyType<BusinessOnboardingIntentInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof recordBusinessOnboardingIntent>>,
+        TError,
+        {data: BodyType<BusinessOnboardingIntentInput>},
+        TContext
+      > => {
+      return useMutation(getRecordBusinessOnboardingIntentMutationOptions(options));
     }
 
 export const getGetRegistrationUrl = () => {

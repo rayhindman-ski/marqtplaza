@@ -5,7 +5,7 @@
  * operator environment once its release gate is recorded in the Spec Kit
  * convergence record; nothing in code may turn one on by default.
  */
-export type FeatureFlagName = "accounts" | "businessIntake" | "businessPublication" | "consumerRegistration";
+export type FeatureFlagName = "accounts" | "businessIntake" | "businessPublication" | "consumerRegistration" | "businessOnboarding";
 
 export type FeatureFlags = Readonly<Record<FeatureFlagName, boolean>>;
 
@@ -15,6 +15,8 @@ export const FEATURE_FLAG_ENV_VARS: Readonly<Record<FeatureFlagName, string>> = 
   businessPublication: "BUSINESS_PUBLICATION_ENABLED",
   /** v0.5.1 registration foundation; independent of `accounts` so it can stay off on its own. */
   consumerRegistration: "CONSUMER_REGISTRATION_ENABLED",
+  /** v0.5.2 business onboarding enrichment; independent of `businessIntake` so the enrichment can stay off on its own. */
+  businessOnboarding: "BUSINESS_ONBOARDING_ENABLED",
 };
 
 const TRUE_VALUES = new Set(["1", "true", "yes", "on"]);
@@ -31,6 +33,7 @@ export function readFeatureFlags(
     businessIntake: parseFlag(env[FEATURE_FLAG_ENV_VARS.businessIntake]),
     businessPublication: parseFlag(env[FEATURE_FLAG_ENV_VARS.businessPublication]),
     consumerRegistration: parseFlag(env[FEATURE_FLAG_ENV_VARS.consumerRegistration]),
+    businessOnboarding: parseFlag(env[FEATURE_FLAG_ENV_VARS.businessOnboarding]),
   };
 }
 

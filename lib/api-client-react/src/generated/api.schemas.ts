@@ -288,6 +288,43 @@ export interface FeatureReadiness {
   businessIntake: boolean;
   businessPublication: boolean;
   consumerRegistration: boolean;
+  businessOnboarding: boolean;
+}
+
+/**
+ * Where the business intent was expressed; stored later on the claim, never in the URL as free text.
+ */
+export type BusinessOnboardingContext = typeof BusinessOnboardingContext[keyof typeof BusinessOnboardingContext];
+
+
+export const BusinessOnboardingContext = {
+  registration: 'registration',
+  account_home: 'account_home',
+  listing: 'listing',
+} as const;
+
+export interface BusinessOnboardingIntentInput {
+  context: BusinessOnboardingContext;
+  /**
+     * Required with `listingId`; the listing provider key (e.g. `google_maps`, `curated`).
+     * @minLength 1
+     * @maxLength 40
+     * @pattern ^[a-z][a-z0-9_]*$
+     */
+  listingSource?: string;
+  /**
+     * Required with `listingSource`; opaque provider listing identifier.
+     * @minLength 1
+     * @maxLength 200
+     * @pattern ^[A-Za-z0-9._~:@!$&'()*+,;=%-]+$
+     */
+  listingId?: string;
+}
+
+export interface BusinessOnboardingIntent {
+  context: BusinessOnboardingContext;
+  /** Allow-listed local path of the business step, carrying only the context and the listing reference. */
+  returnRef: string;
 }
 
 export type AccountLocale = typeof AccountLocale[keyof typeof AccountLocale];
