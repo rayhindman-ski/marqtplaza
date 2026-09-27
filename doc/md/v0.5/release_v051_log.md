@@ -460,3 +460,18 @@ pin-wide instead of card-wide so neighbouring pins stay reachable, keyboard
 focus anywhere inside pin + card keeps it open (focusin/focusout; Tab from
 pin to link verified in the map suite and on the Google path), and pending
 hide timers ignore detached marker content after a rebuild.
+
+### 2026-09-27 — v0.5.2 specification and implementation plan (documents only)
+
+- Added [`release_v052.md`](./release_v052.md): business onboarding
+  enrichment (business profile in addition to the personal profile) plus the
+  credential lifecycle v0.5.1 deferred (password creation, sign-in,
+  recovery/reset, change). New requirement IDs (`BBUS`, `BENT`, `BCRED`,
+  `BPROF`, `BVER`, `BMEM`, `BSEC`, `BPRIV`, `BA11Y`, `BL10N`, `BOPS`), the
+  consumer requirements it claims, technical components reusing the existing
+  claim/intake/publication/outbox infrastructure, concrete test cases,
+  acceptance criteria, public-release boundary and open policy decisions.
+- Added [`release_v052-implementation-plan.md`](./release_v052-implementation-plan.md):
+  architecture, additive data model, API boundary, seven phases with exit
+  criteria (≈6–7 days), test catalogue and requirement-by-requirement matrix.
+- No code, schema or configuration changed.

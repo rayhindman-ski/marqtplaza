@@ -222,7 +222,7 @@ Details in `release_v051_log.md`.
 
 ### Prompt 12
 
-**Received:** 2026-09-27 ≈14:38 CEST (screenshot of a Food & drink pin hover card with a website line)
+**Received:** 2026-09-27 ≈13:38 CEST (screenshot of a Food & drink pin hover card with a website line)
 
 > ok on the mouse - hoverover , i have no posibility to click the website, do
 > not remove the card if the mouse is over the map-card for the icon. that is
@@ -233,4 +233,27 @@ the pin or the card (grace period + bridge over the gap), the website is a
 real link, clicks inside the card do not select the marker. Applied to all
 three map renderers; regression added. Details in `release_v051_log.md`.
 
-**Duration:** 14:38 → 15:20 CEST (≈42 minutes, incl. review fixes).
+**Duration:** 13:38 → 14:12 CEST (≈34 minutes, incl. review fixes; earlier estimate corrected against commit times).
+
+### Prompt 13
+
+**Received:** 2026-09-27 ≈14:32 CEST
+
+> consider the document doc/md/v0.5/requirements.md and create a new document
+> named doc/md/v0.5/release_v052.md — add the requirements and tests to
+> achieve the business onboarding enrichment to the user onboarding process.
+> allow the business user to add their business profile (in addition to their
+> personal profile), include all supporting functionality like password
+> generation/recovery, etc. formalise this version's implementation plan into
+> docs/md/v0.5/release_v052-implementation-plan.md
+
+**Response (summary):** Wrote `release_v052.md` (journey, scope, 60 new
+requirements BBUS/BENT/BCRED/BPROF/BVER/BMEM/BSEC/BPRIV/BA11Y/BL10N/BOPS,
+consumer requirements claimed, components, test cases, acceptance, policy
+decisions) and `release_v052-implementation-plan.md` (architecture, data
+model, API, 7 phases with exit criteria, test catalogue, requirement matrix).
+Both grounded in the existing Clerk, account, claim/intake, publication and
+outbox infrastructure. Placed the plan under `doc/md/v0.5/` (the prompt's
+`docs/` path does not exist). No code changed.
+
+**Duration:** 14:32 → 14:50 CEST (≈18 minutes).
