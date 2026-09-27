@@ -192,7 +192,7 @@ export default function BusinessProfileView() {
             </div>
           </div>
 
-          {featureFlags.businessOnboarding && !profile.isClaimed && (
+          {featureFlags.businessOnboarding && !profile.isClaimed && profile.listingSource && profile.listingId && (
             <section data-testid="panel-listing-claim-intent" className="mt-8 flex flex-col gap-3 rounded-2xl border border-primary/20 bg-primary/5 p-4 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-start gap-3">
                 <Store className="mt-0.5 h-5 w-5 shrink-0 text-primary" aria-hidden="true" />
@@ -202,7 +202,7 @@ export default function BusinessProfileView() {
                 </div>
               </div>
               <Link
-                href={businessIntentRef('listing', { source: 'buurtplaza_profile', id: String(profile.id) })}
+                href={businessIntentRef('listing', { cityId: profile.cityId, source: profile.listingSource, id: profile.listingId })}
                 data-testid="link-listing-claim-intent"
                 className="inline-flex shrink-0 items-center justify-center rounded-full bg-primary px-4 py-2 text-sm font-bold text-primary-foreground hover:bg-primary/90"
               >

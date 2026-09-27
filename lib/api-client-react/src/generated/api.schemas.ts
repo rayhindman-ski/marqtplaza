@@ -306,14 +306,19 @@ export const BusinessOnboardingContext = {
 export interface BusinessOnboardingIntentInput {
   context: BusinessOnboardingContext;
   /**
-     * Required with `listingId`; the listing provider key (e.g. `google_maps`, `curated`).
+     * Required with `listingSource` and `listingId`; the intake's city key.
+     * @pattern ^[a-z]{3}$
+     */
+  cityId?: string;
+  /**
+     * Required with `cityId` and `listingId`; the listing provider key (e.g. `google_maps`, `curated`).
      * @minLength 1
      * @maxLength 40
      * @pattern ^[a-z][a-z0-9_]*$
      */
   listingSource?: string;
   /**
-     * Required with `listingSource`; opaque provider listing identifier.
+     * Required with `cityId` and `listingSource`; opaque provider listing identifier.
      * @minLength 1
      * @maxLength 200
      * @pattern ^[A-Za-z0-9._~:@!$&'()*+,;=%-]+$
@@ -1158,6 +1163,10 @@ export interface BusinessProfile {
   id: number;
   slug: string;
   cityId: string;
+  /** Provider key of the listing this profile was created from (public provider identifier, not personal data). */
+  listingSource?: string;
+  /** Opaque provider listing identifier; together with `cityId` and `listingSource` it is the intake's listing key. */
+  listingId?: string;
   name: string;
   /** @nullable */
   address?: string | null;

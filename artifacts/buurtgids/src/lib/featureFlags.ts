@@ -18,12 +18,15 @@ export function parseFlag(value: unknown): boolean {
 }
 
 export function readFeatureFlags(env: Record<string, unknown> = import.meta.env): FeatureFlags {
+  const accounts = parseFlag(env.VITE_ACCOUNTS_ENABLED);
+  const businessIntake = parseFlag(env.VITE_BUSINESS_INTAKE_ENABLED);
   return {
-    accounts: parseFlag(env.VITE_ACCOUNTS_ENABLED),
-    businessIntake: parseFlag(env.VITE_BUSINESS_INTAKE_ENABLED),
+    accounts,
+    businessIntake,
     businessPublication: parseFlag(env.VITE_BUSINESS_PUBLICATION_ENABLED),
     consumerRegistration: parseFlag(env.VITE_CONSUMER_REGISTRATION_ENABLED),
-    businessOnboarding: parseFlag(env.VITE_BUSINESS_ONBOARDING_ENABLED),
+    // Mirrors the server's effective gate: needs accounts and business intake too.
+    businessOnboarding: parseFlag(env.VITE_BUSINESS_ONBOARDING_ENABLED) && accounts && businessIntake,
   };
 }
 

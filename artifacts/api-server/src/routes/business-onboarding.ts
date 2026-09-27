@@ -3,21 +3,26 @@ import { Router, type IRouter } from "express";
 import { sendApiError, unknownFieldErrors } from "../lib/apiError";
 import { buildIntent, INTENT_FIELDS } from "../lib/businessOnboarding";
 import { getFeatureFlags, type FeatureFlagSource } from "../lib/featureFlags";
+import { requireAppUser, type RequireAppUserOptions } from "../middlewares/requireAppUser";
 import { requireFlag } from "../middlewares/requireFlag";
 
 export type BusinessOnboardingRouterOptions = {
   flags?: FeatureFlagSource;
+  resolveIdentity?: RequireAppUserOptions["resolveIdentity"];
 };
 
 /**
- * v0.5.2 business onboarding surface. Every route is behind the
- * `businessOnboarding` gate (BOPS-001) and answers 404 while it is closed.
+ * v0.5.2 business onboarding surface. Every route is behind the effective
+ * `businessOnboarding` gate (BOPS-001; 404 while closed) and requires a
+ * verified, active application account — the gate is checked first so a
+ * closed area never reveals whether a caller is signed in.
  */
 export function createBusinessOnboardingRouter(options: BusinessOnboardingRouterOptions = {}): IRouter {
   const router: IRouter = Router();
   const flags = options.flags ?? getFeatureFlags;
 
   router.use("/business-onboarding", requireFlag("businessOnboarding", flags));
+  router.use("/business-onboarding", requireAppUser({ resolveIdentity: options.resolveIdentity, requireVerified: true }));
 
   router.post("/business-onboarding/intent", (req, res): void => {
     const unknown = unknownFieldErrors(req.body, INTENT_FIELDS);

@@ -82,15 +82,6 @@ export default function ConsumerRegisterPage() {
   const [fieldIssues, setFieldIssues] = useState<ApiFieldError[]>([]);
   const [formError, setFormError] = useState<string | null>(null);
   const mutation = useRequestConsumerRegistration();
-
-  if (!featureFlags.consumerRegistration) {
-    return (
-      <AccountShell language={language} onLanguageChange={setLanguage} eyebrow={register.eyebrow} title={register.title} testId="page-register" headingTestId="heading-register">
-        <RegistrationUnavailable language={language} />
-      </AccountShell>
-    );
-  }
-
   const issueFor = (field: string) => fieldMessage(register, fieldIssues.find((issue) => issue.field === field));
   const formErrorRef = useRef<HTMLParagraphElement>(null);
   const [focusRequest, setFocusRequest] = useState(0);
@@ -103,6 +94,14 @@ export default function ConsumerRegisterPage() {
     else formErrorRef.current?.focus();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusRequest]);
+
+  if (!featureFlags.consumerRegistration) {
+    return (
+      <AccountShell language={language} onLanguageChange={setLanguage} eyebrow={register.eyebrow} title={register.title} testId="page-register" headingTestId="heading-register">
+        <RegistrationUnavailable language={language} />
+      </AccountShell>
+    );
+  }
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();

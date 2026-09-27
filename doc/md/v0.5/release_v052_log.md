@@ -151,9 +151,9 @@ new suite.
 development environment only; production stays off (pending user decision, as
 for the v0.5.1 flags). Existing unit suites updated for the new flag key.
 
-**API (BENT-002/003):** `POST /business-onboarding/intent` — stateless and
-unauthenticated; validates `context ∈ {registration, account_home, listing}`
-and an optional `listingSource`/`listingId` pair (both or neither; strict
+**API (BENT-002/003):** `POST /business-onboarding/intent` — stateless;
+validates `context ∈ {registration, account_home, listing}` and an optional
+listing key `cityId`/`listingSource`/`listingId` (all or none; strict
 character sets; unknown fields refused) and answers the canonical local return
 path `/account/bedrijf/toevoegen?context=…[&listingSource&listingId]`. Nothing
 is stored, so resuming after verification, sign-in or a reload replays no
@@ -178,7 +178,9 @@ and web) already admit the business-step path with its query string.
 - Account home: "Business" panel → `?context=account_home`.
 - Public business page (`/bedrijf/:slug`), unclaimed only: "Is this your
   business?" → `?context=listing&listingSource=buurtplaza_profile&listingId=<id>`.
-  Not on the map hover card (map behaviour unchanged).
+  Not on the map hover card (map behaviour unchanged). The public profile now
+  exposes `listingSource`/`listingId` (provider identifiers, not personal
+  data) so the entry carries the intake's real listing key.
 - New `BusinessOnboardingIntroPage` at `/account/bedrijf/toevoegen`: requires
   a session (redirects to sign-in with itself, query included, as `terug`);
   asks the server to confirm the intent on open (a malformed listing reference
@@ -203,3 +205,36 @@ typecheck clean. Dev API: `/api/readiness` reports `businessOnboarding: true`;
 intent round-trip verified with curl.
 
 Duration: ≈14:55 – 15:27 CEST.
+
+**Architect review (after Phase 2) — findings and resolution (15:28 – 15:40):**
+
+1. *Gate not composite.* Fixed: `businessOnboarding` is now an effective flag
+   (`own switch && accounts && businessIntake`) on the server, in the web
+   mirror and therefore in `/api/readiness`; unit-tested
+   (`featureFlags.test.ts`).
+2. *Intent route unauthenticated.* Fixed: the gate is checked first (404 for
+   everyone while closed), then `requireAppUser({ requireVerified: true })`
+   → 401 anonymous, 403 unverified/suspended/deleted. The intro page is
+   already session-gated, and the registration entry never calls the
+   endpoint, so nothing user-facing changed. Suite now needs the database
+   (account row provisioning); 7/7.
+3. *Listing entry lost its target.* Fixed: the listing reference is the
+   intake's listing key (`cityId`, `listingSource`, `listingId`, from the
+   public profile); a confirmed listing intent's Start hands over to the
+   existing `/bedrijf-nieuw?kind=existing_listing&…` step, other contexts
+   to the lookup. Reference is still shape-checked only; the Phase 3 wizard
+   resolves and re-verifies the listing server-side (as before, never a
+   proof of ownership).
+4. *Stale confirmation on intent change.* Fixed: every intent transition
+   clears the previous confirmation before asking again; e2e race test added
+   (pushState to a new context while the answer is pending).
+5. *Return allow-list drift.* `/account/beveiliging` added to the server
+   registration allow-list; server unit test now mirrors the web list for
+   the v0.5.1/v0.5.2 destinations.
+6. *Hook order in `ConsumerRegisterPage`.* Hooks moved above the
+   flag-off early return.
+
+Re-verified: business-onboarding e2e 13/13; usability, account, business and
+credential suites 55/55; api business-onboarding 7/0, account-foundation
+26/0, business-intake 14/0; workspace typecheck clean; dev API anonymous
+intent → 401, readiness `businessOnboarding: true`.

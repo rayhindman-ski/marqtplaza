@@ -755,11 +755,13 @@ paths:
       tags: [business-onboarding]
       summary: Turn a business-onboarding entry point into an allow-listed return reference
       description: |
-        Stateless and unauthenticated: validates the entry context and optional listing reference
-        and answers with the canonical local return path for the business step. Nothing is stored
-        and no personal data is accepted, so resuming after verification, sign-in or a reload never
-        replays a write (BENT-002, BENT-003). Clients use the 404 to hide entry points when the
-        server gate is closed even if their own mirror flag is on.
+        Stateless: validates the entry context and optional listing reference and answers with the
+        canonical local return path for the business step. Nothing is stored and no personal data is
+        accepted, so resuming after verification, sign-in or a reload never replays a write
+        (BENT-002, BENT-003). Requires a verified, active account; the gate is checked before the
+        session so a closed area answers 404 for everyone. Clients use the 404 to hide entry points
+        when the server gate is closed even if their own mirror flag is on. The reference is checked
+        for shape only; the business step resolves the listing itself.
       requestBody:
         required: true
         content:
@@ -775,6 +777,18 @@ paths:
                 $ref: "#/components/schemas/BusinessOnboardingIntent"
         "400":
           description: Validation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Sign-in required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: Account unverified, suspended or deleted
           content:
             application/json:
               schema:
@@ -3024,15 +3038,19 @@ components:
       properties:
         context:
           $ref: "#/components/schemas/BusinessOnboardingContext"
+        cityId:
+          type: string
+          description: Required with `listingSource` and `listingId`; the intake's city key.
+          pattern: "^[a-z]{3}$"
         listingSource:
           type: string
-          description: Required with `listingId`; the listing provider key (e.g. `google_maps`, `curated`).
+          description: Required with `cityId` and `listingId`; the listing provider key (e.g. `google_maps`, `curated`).
           minLength: 1
           maxLength: 40
           pattern: "^[a-z][a-z0-9_]*$"
         listingId:
           type: string
-          description: Required with `listingSource`; opaque provider listing identifier.
+          description: Required with `cityId` and `listingSource`; opaque provider listing identifier.
           minLength: 1
           maxLength: 200
           pattern: "^[A-Za-z0-9._~:@!$&'()*+,;=%-]+$"
@@ -4159,6 +4177,12 @@ components:
           type: string
         cityId:
           type: string
+        listingSource:
+          type: string
+          description: Provider key of the listing this profile was created from (public provider identifier, not personal data).
+        listingId:
+          type: string
+          description: Opaque provider listing identifier; together with `cityId` and `listingSource` it is the intake's listing key.
         name:
           type: string
         address:

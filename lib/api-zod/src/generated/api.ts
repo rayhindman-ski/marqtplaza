@@ -695,13 +695,16 @@ export const ConsumeConsumerRegistrationLinkResponse = zod.object({
 
 
 /**
- * Stateless and unauthenticated: validates the entry context and optional listing reference
- * and answers with the canonical local return path for the business step. Nothing is stored
- * and no personal data is accepted, so resuming after verification, sign-in or a reload never
- * replays a write (BENT-002, BENT-003). Clients use the 404 to hide entry points when the
- * server gate is closed even if their own mirror flag is on.
+ * Stateless: validates the entry context and optional listing reference and answers with the
+ * canonical local return path for the business step. Nothing is stored and no personal data is
+ * accepted, so resuming after verification, sign-in or a reload never replays a write
+ * (BENT-002, BENT-003). Requires a verified, active account; the gate is checked before the
+ * session so a closed area answers 404 for everyone. Clients use the 404 to hide entry points
+ * when the server gate is closed even if their own mirror flag is on. The reference is checked
+ * for shape only; the business step resolves the listing itself.
  * @summary Turn a business-onboarding entry point into an allow-listed return reference
  */
+export const recordBusinessOnboardingIntentBodyCityIdRegExp = new RegExp('^[a-z]{3}$');
 export const recordBusinessOnboardingIntentBodyListingSourceMax = 40;
 
 
@@ -714,8 +717,9 @@ export const recordBusinessOnboardingIntentBodyListingIdRegExp = new RegExp('^[A
 
 export const RecordBusinessOnboardingIntentBody = zod.object({
   "context": zod.enum(['registration', 'account_home', 'listing']).describe('Where the business intent was expressed; stored later on the claim, never in the URL as free text.'),
-  "listingSource": zod.string().min(1).max(recordBusinessOnboardingIntentBodyListingSourceMax).regex(recordBusinessOnboardingIntentBodyListingSourceRegExp).optional().describe('Required with `listingId`; the listing provider key (e.g. `google_maps`, `curated`).'),
-  "listingId": zod.string().min(1).max(recordBusinessOnboardingIntentBodyListingIdMax).regex(recordBusinessOnboardingIntentBodyListingIdRegExp).optional().describe('Required with `listingSource`; opaque provider listing identifier.')
+  "cityId": zod.string().regex(recordBusinessOnboardingIntentBodyCityIdRegExp).optional().describe('Required with `listingSource` and `listingId`; the intake\'s city key.'),
+  "listingSource": zod.string().min(1).max(recordBusinessOnboardingIntentBodyListingSourceMax).regex(recordBusinessOnboardingIntentBodyListingSourceRegExp).optional().describe('Required with `cityId` and `listingId`; the listing provider key (e.g. `google_maps`, `curated`).'),
+  "listingId": zod.string().min(1).max(recordBusinessOnboardingIntentBodyListingIdMax).regex(recordBusinessOnboardingIntentBodyListingIdRegExp).optional().describe('Required with `cityId` and `listingSource`; opaque provider listing identifier.')
 })
 
 export const RecordBusinessOnboardingIntentResponse = zod.object({
@@ -1861,6 +1865,8 @@ export const GetMyBusinessClaimsResponseItem = zod.object({
   "id": zod.number(),
   "slug": zod.string(),
   "cityId": zod.string(),
+  "listingSource": zod.string().optional().describe('Provider key of the listing this profile was created from (public provider identifier, not personal data).'),
+  "listingId": zod.string().optional().describe('Opaque provider listing identifier; together with `cityId` and `listingSource` it is the intake\'s listing key.'),
   "name": zod.string(),
   "address": zod.string().nullish(),
   "neighborhood": zod.string().nullish(),
@@ -1952,6 +1958,8 @@ export const CreateBusinessClaimResponse = zod.object({
   "id": zod.number(),
   "slug": zod.string(),
   "cityId": zod.string(),
+  "listingSource": zod.string().optional().describe('Provider key of the listing this profile was created from (public provider identifier, not personal data).'),
+  "listingId": zod.string().optional().describe('Opaque provider listing identifier; together with `cityId` and `listingSource` it is the intake\'s listing key.'),
   "name": zod.string(),
   "address": zod.string().nullish(),
   "neighborhood": zod.string().nullish(),
@@ -2010,6 +2018,8 @@ export const GetBusinessClaimModerationResponseItem = zod.object({
   "id": zod.number(),
   "slug": zod.string(),
   "cityId": zod.string(),
+  "listingSource": zod.string().optional().describe('Provider key of the listing this profile was created from (public provider identifier, not personal data).'),
+  "listingId": zod.string().optional().describe('Opaque provider listing identifier; together with `cityId` and `listingSource` it is the intake\'s listing key.'),
   "name": zod.string(),
   "address": zod.string().nullish(),
   "neighborhood": zod.string().nullish(),
@@ -2077,6 +2087,8 @@ export const DecideBusinessClaimResponse = zod.object({
   "id": zod.number(),
   "slug": zod.string(),
   "cityId": zod.string(),
+  "listingSource": zod.string().optional().describe('Provider key of the listing this profile was created from (public provider identifier, not personal data).'),
+  "listingId": zod.string().optional().describe('Opaque provider listing identifier; together with `cityId` and `listingSource` it is the intake\'s listing key.'),
   "name": zod.string(),
   "address": zod.string().nullish(),
   "neighborhood": zod.string().nullish(),
@@ -2240,6 +2252,8 @@ export const CreateBusinessIntakeDraftResponse = zod.object({
   "id": zod.number(),
   "slug": zod.string(),
   "cityId": zod.string(),
+  "listingSource": zod.string().optional().describe('Provider key of the listing this profile was created from (public provider identifier, not personal data).'),
+  "listingId": zod.string().optional().describe('Opaque provider listing identifier; together with `cityId` and `listingSource` it is the intake\'s listing key.'),
   "name": zod.string(),
   "address": zod.string().nullish(),
   "neighborhood": zod.string().nullish(),
@@ -2297,6 +2311,8 @@ export const GetBusinessClaimResponse = zod.object({
   "id": zod.number(),
   "slug": zod.string(),
   "cityId": zod.string(),
+  "listingSource": zod.string().optional().describe('Provider key of the listing this profile was created from (public provider identifier, not personal data).'),
+  "listingId": zod.string().optional().describe('Opaque provider listing identifier; together with `cityId` and `listingSource` it is the intake\'s listing key.'),
   "name": zod.string(),
   "address": zod.string().nullish(),
   "neighborhood": zod.string().nullish(),
@@ -2408,6 +2424,8 @@ export const UpdateBusinessClaimResponse = zod.object({
   "id": zod.number(),
   "slug": zod.string(),
   "cityId": zod.string(),
+  "listingSource": zod.string().optional().describe('Provider key of the listing this profile was created from (public provider identifier, not personal data).'),
+  "listingId": zod.string().optional().describe('Opaque provider listing identifier; together with `cityId` and `listingSource` it is the intake\'s listing key.'),
   "name": zod.string(),
   "address": zod.string().nullish(),
   "neighborhood": zod.string().nullish(),
@@ -2475,6 +2493,8 @@ export const SubmitBusinessClaimResponse = zod.object({
   "id": zod.number(),
   "slug": zod.string(),
   "cityId": zod.string(),
+  "listingSource": zod.string().optional().describe('Provider key of the listing this profile was created from (public provider identifier, not personal data).'),
+  "listingId": zod.string().optional().describe('Opaque provider listing identifier; together with `cityId` and `listingSource` it is the intake\'s listing key.'),
   "name": zod.string(),
   "address": zod.string().nullish(),
   "neighborhood": zod.string().nullish(),
@@ -2540,6 +2560,8 @@ export const WithdrawBusinessClaimResponse = zod.object({
   "id": zod.number(),
   "slug": zod.string(),
   "cityId": zod.string(),
+  "listingSource": zod.string().optional().describe('Provider key of the listing this profile was created from (public provider identifier, not personal data).'),
+  "listingId": zod.string().optional().describe('Opaque provider listing identifier; together with `cityId` and `listingSource` it is the intake\'s listing key.'),
   "name": zod.string(),
   "address": zod.string().nullish(),
   "neighborhood": zod.string().nullish(),
@@ -2572,6 +2594,8 @@ export const GetMyBusinessProfilesResponseItem = zod.object({
   "id": zod.number(),
   "slug": zod.string(),
   "cityId": zod.string(),
+  "listingSource": zod.string().optional().describe('Provider key of the listing this profile was created from (public provider identifier, not personal data).'),
+  "listingId": zod.string().optional().describe('Opaque provider listing identifier; together with `cityId` and `listingSource` it is the intake\'s listing key.'),
   "name": zod.string(),
   "address": zod.string().nullish(),
   "neighborhood": zod.string().nullish(),
@@ -2655,6 +2679,8 @@ export const UpdateBusinessProfileResponse = zod.object({
   "id": zod.number(),
   "slug": zod.string(),
   "cityId": zod.string(),
+  "listingSource": zod.string().optional().describe('Provider key of the listing this profile was created from (public provider identifier, not personal data).'),
+  "listingId": zod.string().optional().describe('Opaque provider listing identifier; together with `cityId` and `listingSource` it is the intake\'s listing key.'),
   "name": zod.string(),
   "address": zod.string().nullish(),
   "neighborhood": zod.string().nullish(),
@@ -2808,6 +2834,8 @@ export const GetBusinessProfileResponse = zod.object({
   "id": zod.number(),
   "slug": zod.string(),
   "cityId": zod.string(),
+  "listingSource": zod.string().optional().describe('Provider key of the listing this profile was created from (public provider identifier, not personal data).'),
+  "listingId": zod.string().optional().describe('Opaque provider listing identifier; together with `cityId` and `listingSource` it is the intake\'s listing key.'),
   "name": zod.string(),
   "address": zod.string().nullish(),
   "neighborhood": zod.string().nullish(),
@@ -2910,6 +2938,8 @@ export const GetBusinessRevisionWorkspaceResponse = zod.object({
   "id": zod.number(),
   "slug": zod.string(),
   "cityId": zod.string(),
+  "listingSource": zod.string().optional().describe('Provider key of the listing this profile was created from (public provider identifier, not personal data).'),
+  "listingId": zod.string().optional().describe('Opaque provider listing identifier; together with `cityId` and `listingSource` it is the intake\'s listing key.'),
   "name": zod.string(),
   "address": zod.string().nullish(),
   "neighborhood": zod.string().nullish(),
@@ -3093,6 +3123,8 @@ export const UpdateBusinessRevisionResponse = zod.object({
   "id": zod.number(),
   "slug": zod.string(),
   "cityId": zod.string(),
+  "listingSource": zod.string().optional().describe('Provider key of the listing this profile was created from (public provider identifier, not personal data).'),
+  "listingId": zod.string().optional().describe('Opaque provider listing identifier; together with `cityId` and `listingSource` it is the intake\'s listing key.'),
   "name": zod.string(),
   "address": zod.string().nullish(),
   "neighborhood": zod.string().nullish(),
@@ -3227,6 +3259,8 @@ export const SubmitBusinessRevisionResponse = zod.object({
   "id": zod.number(),
   "slug": zod.string(),
   "cityId": zod.string(),
+  "listingSource": zod.string().optional().describe('Provider key of the listing this profile was created from (public provider identifier, not personal data).'),
+  "listingId": zod.string().optional().describe('Opaque provider listing identifier; together with `cityId` and `listingSource` it is the intake\'s listing key.'),
   "name": zod.string(),
   "address": zod.string().nullish(),
   "neighborhood": zod.string().nullish(),
@@ -3359,6 +3393,8 @@ export const DiscardBusinessRevisionResponse = zod.object({
   "id": zod.number(),
   "slug": zod.string(),
   "cityId": zod.string(),
+  "listingSource": zod.string().optional().describe('Provider key of the listing this profile was created from (public provider identifier, not personal data).'),
+  "listingId": zod.string().optional().describe('Opaque provider listing identifier; together with `cityId` and `listingSource` it is the intake\'s listing key.'),
   "name": zod.string(),
   "address": zod.string().nullish(),
   "neighborhood": zod.string().nullish(),
@@ -3571,6 +3607,8 @@ export const ReviewBusinessClaimResponse = zod.object({
   "id": zod.number(),
   "slug": zod.string(),
   "cityId": zod.string(),
+  "listingSource": zod.string().optional().describe('Provider key of the listing this profile was created from (public provider identifier, not personal data).'),
+  "listingId": zod.string().optional().describe('Opaque provider listing identifier; together with `cityId` and `listingSource` it is the intake\'s listing key.'),
   "name": zod.string(),
   "address": zod.string().nullish(),
   "neighborhood": zod.string().nullish(),

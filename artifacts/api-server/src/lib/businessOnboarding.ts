@@ -12,13 +12,14 @@ export const BUSINESS_ONBOARDING_PATH = "/account/bedrijf/toevoegen";
 export const BUSINESS_ONBOARDING_CONTEXTS = ["registration", "account_home", "listing"] as const;
 export type BusinessOnboardingContext = (typeof BUSINESS_ONBOARDING_CONTEXTS)[number];
 
-export const INTENT_FIELDS: ReadonlySet<string> = new Set(["context", "listingSource", "listingId"]);
+export const INTENT_FIELDS: ReadonlySet<string> = new Set(["context", "cityId", "listingSource", "listingId"]);
 
+const CITY_ID = /^[a-z]{3}$/;
 const LISTING_SOURCE = /^[a-z][a-z0-9_]*$/;
 const LISTING_ID = /^[A-Za-z0-9._~:@!$&'()*+,;=%-]+$/;
 
-export type IntentInput = { context?: unknown; listingSource?: unknown; listingId?: unknown };
-export type IntentIssue = { field: "context" | "listingSource" | "listingId"; code: string };
+export type IntentInput = { context?: unknown; cityId?: unknown; listingSource?: unknown; listingId?: unknown };
+export type IntentIssue = { field: "context" | "cityId" | "listingSource" | "listingId"; code: string };
 export type Intent = { context: BusinessOnboardingContext; returnRef: string };
 
 export function isBusinessOnboardingContext(value: unknown): value is BusinessOnboardingContext {
@@ -29,9 +30,19 @@ export function buildIntent(input: IntentInput): { ok: true; value: Intent } | {
   const issues: IntentIssue[] = [];
   if (!isBusinessOnboardingContext(input.context)) issues.push({ field: "context", code: "invalid" });
 
+  // A listing reference is the intake's own key: city + provider + provider id, all or none.
+  const hasCity = input.cityId !== undefined;
   const hasSource = input.listingSource !== undefined;
   const hasId = input.listingId !== undefined;
-  if (hasSource !== hasId) issues.push({ field: hasSource ? "listingId" : "listingSource", code: "required_together" });
+  const present = [hasCity, hasSource, hasId].filter(Boolean).length;
+  if (present > 0 && present < 3) {
+    if (!hasCity) issues.push({ field: "cityId", code: "required_together" });
+    if (!hasSource) issues.push({ field: "listingSource", code: "required_together" });
+    if (!hasId) issues.push({ field: "listingId", code: "required_together" });
+  }
+  if (hasCity && (typeof input.cityId !== "string" || !CITY_ID.test(input.cityId))) {
+    issues.push({ field: "cityId", code: "invalid" });
+  }
   if (hasSource && (typeof input.listingSource !== "string" || input.listingSource.length > 40 || !LISTING_SOURCE.test(input.listingSource))) {
     issues.push({ field: "listingSource", code: "invalid" });
   }
@@ -42,7 +53,8 @@ export function buildIntent(input: IntentInput): { ok: true; value: Intent } | {
 
   const context = input.context as BusinessOnboardingContext;
   const params = new URLSearchParams({ context });
-  if (hasSource && hasId) {
+  if (hasCity && hasSource && hasId) {
+    params.set("cityId", input.cityId as string);
     params.set("listingSource", input.listingSource as string);
     params.set("listingId", input.listingId as string);
   }

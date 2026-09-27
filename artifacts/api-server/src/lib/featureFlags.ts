@@ -15,7 +15,7 @@ export const FEATURE_FLAG_ENV_VARS: Readonly<Record<FeatureFlagName, string>> = 
   businessPublication: "BUSINESS_PUBLICATION_ENABLED",
   /** v0.5.1 registration foundation; independent of `accounts` so it can stay off on its own. */
   consumerRegistration: "CONSUMER_REGISTRATION_ENABLED",
-  /** v0.5.2 business onboarding enrichment; independent of `businessIntake` so the enrichment can stay off on its own. */
+  /** v0.5.2 business onboarding enrichment; effective only together with `accounts` and `businessIntake`. */
   businessOnboarding: "BUSINESS_ONBOARDING_ENABLED",
 };
 
@@ -28,12 +28,16 @@ export function parseFlag(value: string | undefined): boolean {
 export function readFeatureFlags(
   env: Record<string, string | undefined> = process.env,
 ): FeatureFlags {
+  const accounts = parseFlag(env[FEATURE_FLAG_ENV_VARS.accounts]);
+  const businessIntake = parseFlag(env[FEATURE_FLAG_ENV_VARS.businessIntake]);
   return {
-    accounts: parseFlag(env[FEATURE_FLAG_ENV_VARS.accounts]),
-    businessIntake: parseFlag(env[FEATURE_FLAG_ENV_VARS.businessIntake]),
+    accounts,
+    businessIntake,
     businessPublication: parseFlag(env[FEATURE_FLAG_ENV_VARS.businessPublication]),
     consumerRegistration: parseFlag(env[FEATURE_FLAG_ENV_VARS.consumerRegistration]),
-    businessOnboarding: parseFlag(env[FEATURE_FLAG_ENV_VARS.businessOnboarding]),
+    // Effective gate: the onboarding enrichment needs a session (accounts) and
+    // the intake it enriches (businessIntake); its own switch alone never opens it.
+    businessOnboarding: parseFlag(env[FEATURE_FLAG_ENV_VARS.businessOnboarding]) && accounts && businessIntake,
   };
 }
 

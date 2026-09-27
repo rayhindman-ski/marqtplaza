@@ -79,6 +79,8 @@ export function serialiseProfile(profile: BusinessProfile) {
     id: profile.id,
     slug: profile.slug,
     cityId: profile.cityId,
+    listingSource: profile.listingSource,
+    listingId: profile.listingId,
     name: profile.name,
     address: profile.address,
     neighborhood: profile.neighborhood,

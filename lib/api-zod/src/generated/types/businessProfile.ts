@@ -11,6 +11,10 @@ export interface BusinessProfile {
   id: number;
   slug: string;
   cityId: string;
+  /** Provider key of the listing this profile was created from (public provider identifier, not personal data). */
+  listingSource?: string;
+  /** Opaque provider listing identifier; together with `cityId` and `listingSource` it is the intake's listing key. */
+  listingId?: string;
   name: string;
   /** @nullable */
   address?: string | null;

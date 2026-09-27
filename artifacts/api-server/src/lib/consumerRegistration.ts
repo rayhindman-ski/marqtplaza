@@ -128,6 +128,7 @@ const RETURN_REF_EXACT_PATHS: ReadonlySet<string> = new Set([
   "/bedrijf-nieuw",
   "/bedrijf-claim",
   "/mijn-bedrijf",
+  "/account/beveiliging",
   "/account/bedrijf/toevoegen",
 ]);
 const RETURN_REF_PREFIX_PATHS = ["/activiteiten/den-haag/", "/nieuws/", "/bedrijf/"] as const;

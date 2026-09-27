@@ -10,14 +10,19 @@ import type { BusinessOnboardingContext } from './businessOnboardingContext';
 export interface BusinessOnboardingIntentInput {
   context: BusinessOnboardingContext;
   /**
-     * Required with `listingId`; the listing provider key (e.g. `google_maps`, `curated`).
+     * Required with `listingSource` and `listingId`; the intake's city key.
+     * @pattern ^[a-z]{3}$
+     */
+  cityId?: string;
+  /**
+     * Required with `cityId` and `listingId`; the listing provider key (e.g. `google_maps`, `curated`).
      * @minLength 1
      * @maxLength 40
      * @pattern ^[a-z][a-z0-9_]*$
      */
   listingSource?: string;
   /**
-     * Required with `listingSource`; opaque provider listing identifier.
+     * Required with `cityId` and `listingSource`; opaque provider listing identifier.
      * @minLength 1
      * @maxLength 200
      * @pattern ^[A-Za-z0-9._~:@!$&'()*+,;=%-]+$

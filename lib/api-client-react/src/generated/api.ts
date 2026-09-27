@@ -1728,11 +1728,13 @@ export const getRecordBusinessOnboardingIntentUrl = () => {
 }
 
 /**
- * Stateless and unauthenticated: validates the entry context and optional listing reference
- * and answers with the canonical local return path for the business step. Nothing is stored
- * and no personal data is accepted, so resuming after verification, sign-in or a reload never
- * replays a write (BENT-002, BENT-003). Clients use the 404 to hide entry points when the
- * server gate is closed even if their own mirror flag is on.
+ * Stateless: validates the entry context and optional listing reference and answers with the
+ * canonical local return path for the business step. Nothing is stored and no personal data is
+ * accepted, so resuming after verification, sign-in or a reload never replays a write
+ * (BENT-002, BENT-003). Requires a verified, active account; the gate is checked before the
+ * session so a closed area answers 404 for everyone. Clients use the 404 to hide entry points
+ * when the server gate is closed even if their own mirror flag is on. The reference is checked
+ * for shape only; the business step resolves the listing itself.
  * @summary Turn a business-onboarding entry point into an allow-listed return reference
  */
 export const recordBusinessOnboardingIntent = async (businessOnboardingIntentInput: BusinessOnboardingIntentInput, options?: Parameters<typeof customFetch>[1]): Promise<BusinessOnboardingIntent> => {

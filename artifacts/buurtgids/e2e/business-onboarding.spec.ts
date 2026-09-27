@@ -28,11 +28,13 @@ function stubIntent(page: Page, options: { disabled?: boolean } = {}) {
     if (!allowed.has(body.context)) {
       return json(route, { code: 'VALIDATION_FAILED', messageKey: 'errors.validation_failed', correlationId: 'e2e', fieldErrors: [{ field: 'context', code: 'invalid' }] }, 400);
     }
-    if ((body.listingSource === undefined) !== (body.listingId === undefined) || (body.listingId && /\s/.test(body.listingId))) {
+    const parts = [body.cityId, body.listingSource, body.listingId].filter((v) => v !== undefined).length;
+    if ((parts > 0 && parts < 3) || (body.listingId && /\s/.test(body.listingId))) {
       return json(route, { code: 'VALIDATION_FAILED', messageKey: 'errors.validation_failed', correlationId: 'e2e', fieldErrors: [{ field: 'listingId', code: 'invalid' }] }, 400);
     }
     const params = new URLSearchParams({ context: body.context });
     if (body.listingSource) {
+      params.set('cityId', body.cityId);
       params.set('listingSource', body.listingSource);
       params.set('listingId', body.listingId);
     }
@@ -141,10 +143,10 @@ test.describe('business onboarding entry points (v0.5.2)', () => {
     expect(intent.calls.every((call) => JSON.stringify(call) === JSON.stringify({ context: 'registration' }))).toBe(true);
   });
 
-  test('an unclaimed public listing offers "is this your business?" carrying only the opaque profile reference', async ({ page }) => {
+  test('an unclaimed public listing offers "is this your business?" carrying only the listing key', async ({ page }) => {
     await page.route('**/api/business-profiles/public/kapper-e2e', (route) =>
       json(route, {
-        id: 41, slug: 'kapper-e2e', cityId: 'dhg', name: 'Kapper E2E', address: null, neighborhood: null, latitude: null, longitude: null,
+        id: 41, slug: 'kapper-e2e', cityId: 'dhg', listingSource: 'google_maps', listingId: 'ChIJ-kapper', name: 'Kapper E2E', address: null, neighborhood: null, latitude: null, longitude: null,
         sourceUrl: null, tagline: null, description: null, websiteUrl: null, phone: null, email: null, openingHours: null,
         logoUrl: null, coverUrl: null, isClaimed: false, claimedAt: null, publicationStatus: 'published', approvedRevisionVersion: null,
         content: null, provenance: null, deals: [], createdAt: '2026-09-01T10:00:00.000Z', updatedAt: '2026-09-01T10:00:00.000Z',
@@ -154,15 +156,15 @@ test.describe('business onboarding entry points (v0.5.2)', () => {
     await page.goto('/bedrijf/kapper-e2e');
     const link = page.getByTestId('link-listing-claim-intent');
     await expect(link).toHaveText('Is dit jouw bedrijf?');
-    await expect(link).toHaveAttribute('href', /\/account\/bedrijf\/toevoegen\?context=listing&listingSource=buurtplaza_profile&listingId=41$/);
+    await expect(link).toHaveAttribute('href', /\/account\/bedrijf\/toevoegen\?context=listing&cityId=dhg&listingSource=google_maps&listingId=ChIJ-kapper$/);
     await link.click();
-    await expect(page).toHaveURL(/\/sign-in\?terug=%2Faccount%2Fbedrijf%2Ftoevoegen%3Fcontext%3Dlisting%26listingSource%3Dbuurtplaza_profile%26listingId%3D41$/);
+    await expect(page).toHaveURL(/\/sign-in\?terug=%2Faccount%2Fbedrijf%2Ftoevoegen%3Fcontext%3Dlisting%26cityId%3Ddhg%26listingSource%3Dgoogle_maps%26listingId%3DChIJ-kapper$/);
   });
 
   test('a claimed listing shows no claim entry', async ({ page }) => {
     await page.route('**/api/business-profiles/public/claimed-e2e', (route) =>
       json(route, {
-        id: 42, slug: 'claimed-e2e', cityId: 'dhg', name: 'Claimed E2E', address: null, neighborhood: null, latitude: null, longitude: null,
+        id: 42, slug: 'claimed-e2e', cityId: 'dhg', listingSource: 'google_maps', listingId: 'ChIJ-claimed', name: 'Claimed E2E', address: null, neighborhood: null, latitude: null, longitude: null,
         sourceUrl: null, tagline: null, description: null, websiteUrl: null, phone: null, email: null, openingHours: null,
         logoUrl: null, coverUrl: null, isClaimed: true, claimedAt: '2026-09-01T10:00:00.000Z', publicationStatus: 'published', approvedRevisionVersion: null,
         content: null, provenance: null, deals: [], createdAt: '2026-09-01T10:00:00.000Z', updatedAt: '2026-09-01T10:00:00.000Z',
@@ -179,12 +181,51 @@ test.describe('business onboarding entry points (v0.5.2)', () => {
     await stubAccount(page);
     const intent = stubIntent(page);
     await intent.install();
-    await page.goto(`${BUSINESS_STEP}?context=listing&listingSource=buurtplaza_profile&listingId=${encodeURIComponent('41 OR 1=1')}&e2eAccountAuth=1`);
+    await page.goto(`${BUSINESS_STEP}?context=listing&cityId=dhg&listingSource=google_maps&listingId=${encodeURIComponent('41 OR 1=1')}&e2eAccountAuth=1`);
     await expect(page.getByTestId('button-business-start')).not.toHaveAttribute('aria-disabled', 'true');
     await expect(page.getByTestId('status-business-listing')).toHaveCount(0);
     expect(intent.calls).toHaveLength(2);
     expect(intent.calls[1]).toEqual({ context: 'listing' });
     await expect(page.getByTestId('error-business-intent')).toHaveCount(0);
+  });
+
+  test('a confirmed listing intent hands over to the existing-listing intake step with the listing key', async ({ page }) => {
+    await signIn(page);
+    await stubAccount(page);
+    const intent = stubIntent(page);
+    await intent.install();
+    await page.goto(`${BUSINESS_STEP}?context=listing&cityId=dhg&listingSource=google_maps&listingId=ChIJ-kapper&e2eAccountAuth=1`);
+    await expect(page.getByTestId('status-business-listing')).toBeVisible();
+    await expect(page.getByTestId('button-business-start')).toHaveAttribute(
+      'href',
+      /\/bedrijf-nieuw\?kind=existing_listing&cityId=dhg&listingSource=google_maps&listingId=ChIJ-kapper&terug=/,
+    );
+    expect(intent.calls).toEqual([{ context: 'listing', cityId: 'dhg', listingSource: 'google_maps', listingId: 'ChIJ-kapper' }]);
+  });
+
+  test('changing the intent in place drops the previous confirmation until the new one is answered', async ({ page }) => {
+    await signIn(page);
+    await stubAccount(page);
+    let release: (() => void) | null = null;
+    let delayNext = false;
+    await page.route('**/api/business-onboarding/intent', async (route) => {
+      const body = route.request().postDataJSON();
+      if (delayNext) await new Promise<void>((resolve) => { release = resolve; });
+      const params = new URLSearchParams({ context: body.context });
+      return json(route, { context: body.context, returnRef: `${BUSINESS_STEP}?${params.toString()}` });
+    });
+    await page.goto(`${BUSINESS_STEP}?context=account_home&e2eAccountAuth=1`);
+    const start = page.getByTestId('button-business-start');
+    await expect(start).toHaveAttribute('href', /context%3Daccount_home$/);
+    delayNext = true;
+    await page.evaluate((path) => history.pushState(null, '', path), `${BUSINESS_STEP}?context=registration`);
+    await expect(start).toHaveAttribute('aria-disabled', 'true');
+    await expect(start).not.toHaveAttribute('href', /account_home/);
+    await expect.poll(() => release !== null).toBe(true);
+    release!();
+    await expect(start).not.toHaveAttribute('aria-disabled', 'true');
+    await expect(start).toHaveAttribute('href', /context%3Dregistration$/);
+    await expect(page.getByTestId('status-business-resume')).toBeVisible();
   });
 
   test('when the server gate is closed the step explains it is not open yet and offers the account', async ({ page }) => {

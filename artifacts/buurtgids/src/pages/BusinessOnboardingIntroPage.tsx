@@ -6,7 +6,7 @@ import { useRecordBusinessOnboardingIntent, type ApiError, type BusinessOnboardi
 
 import { AccountLoading, AccountShell } from '@/components/account/AccountShell';
 import { useAccountAuth } from '@/lib/accountAuth';
-import { BUSINESS_ONBOARDING_PATH } from '@/lib/businessIntent';
+import { BUSINESS_ONBOARDING_PATH, type BusinessIntentListing } from '@/lib/businessIntent';
 import { featureFlags } from '@/lib/featureFlags';
 import { accountErrorMessage, accountTranslations, type Language } from '@/lib/i18n';
 import { withReturnPath } from '@/lib/returnPath';
@@ -23,15 +23,16 @@ import { useAppLanguage } from '@/lib/useAppLanguage';
 
 const CONTEXTS: ReadonlySet<string> = new Set(['registration', 'account_home', 'listing']);
 
-type ParsedIntent = { context: BusinessOnboardingContext; listing: { source: string; id: string } | null };
+type ParsedIntent = { context: BusinessOnboardingContext; listing: BusinessIntentListing | null };
 
 export function parseIntentSearch(search: string): ParsedIntent {
   const params = new URLSearchParams(search.startsWith('?') ? search.slice(1) : search);
   const rawContext = params.get('context');
   const context = (rawContext && CONTEXTS.has(rawContext) ? rawContext : 'account_home') as BusinessOnboardingContext;
+  const cityId = params.get('cityId');
   const source = params.get('listingSource');
   const id = params.get('listingId');
-  return { context, listing: source && id ? { source, id } : null };
+  return { context, listing: cityId && source && id ? { cityId, source, id } : null };
 }
 
 function apiErrorFrom(error: unknown): ApiError | null {
@@ -71,9 +72,12 @@ export default function BusinessOnboardingIntroPage() {
   useEffect(() => {
     if (!signedIn || unavailable) return;
     let cancelled = false;
+    // A new intent (URL change) invalidates the previous confirmation; Start waits for this one.
+    setConfirmed(null);
+    setFailure(null);
     const payload = {
       context: intent.context,
-      ...(intent.listing ? { listingSource: intent.listing.source, listingId: intent.listing.id } : {}),
+      ...(intent.listing ? { cityId: intent.listing.cityId, listingSource: intent.listing.source, listingId: intent.listing.id } : {}),
     };
     const run = async (body: typeof payload, listingDropped: boolean) => {
       try {
@@ -120,6 +124,16 @@ export default function BusinessOnboardingIntroPage() {
   if (unavailable) return shell(<BusinessOnboardingUnavailable language={language} />);
 
   const listingKept = Boolean(confirmed && intent.listing && !confirmed.listingDropped);
+  // Interim hand-over until the Phase 3 wizard: a confirmed listing goes straight
+  // to the existing-listing intake step; anything else starts at the lookup.
+  const startHref = (() => {
+    const back = confirmed?.returnRef ?? BUSINESS_ONBOARDING_PATH;
+    if (listingKept && intent.listing) {
+      const params = new URLSearchParams({ kind: 'existing_listing', cityId: intent.listing.cityId, listingSource: intent.listing.source, listingId: intent.listing.id });
+      return withReturnPath(`/bedrijf-nieuw?${params.toString()}`, back);
+    }
+    return withReturnPath('/bedrijf-zoeken', back);
+  })();
 
   return shell(
     <div className="space-y-6">
@@ -160,7 +174,7 @@ export default function BusinessOnboardingIntroPage() {
         </ol>
         <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center">
           <Link
-            href={withReturnPath('/bedrijf-zoeken', confirmed?.returnRef ?? BUSINESS_ONBOARDING_PATH)}
+            href={startHref}
             data-testid="button-business-start"
             aria-disabled={!confirmed || undefined}
             className={`inline-flex items-center justify-center rounded-full bg-primary px-5 py-2.5 text-sm font-bold text-primary-foreground hover:bg-primary/90 ${confirmed ? '' : 'pointer-events-none opacity-60'}`}

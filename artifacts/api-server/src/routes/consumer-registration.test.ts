@@ -162,6 +162,10 @@ describe("normalization helpers (REG-006, REG-007)", () => {
     assert.equal(sanitizeReturnRef("/activiteiten/den-haag?buurt=zeeheldenkwartier"), "/activiteiten/den-haag?buurt=zeeheldenkwartier");
     assert.equal(sanitizeReturnRef("/activiteiten/den-haag/zeeheldenkwartier/"), "/activiteiten/den-haag/zeeheldenkwartier");
     assert.equal(sanitizeReturnRef("/"), "/");
+    // Mirrors the web allow-list (returnPath.ts): every destination the web offers as `terug` must survive here.
+    for (const path of ["/account/beveiliging", "/account/bedrijf/toevoegen?context=registration", "/account/bedrijf/toevoegen?context=listing&cityId=dhg&listingSource=google_maps&listingId=ChIJ-x"]) {
+      assert.equal(sanitizeReturnRef(path), path);
+    }
     assert.equal(sanitizeReturnRef("/not-a-route"), null, "only allow-listed internal routes survive (SEC-009)");
     assert.equal(sanitizeReturnRef("/account/register/complete?token=x"), null);
     assert.equal(sanitizeReturnRef("https://evil.example/"), null);

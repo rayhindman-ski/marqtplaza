@@ -2,16 +2,20 @@ import { RETURN_PATH_PARAM, sanitizeReturnPath } from './returnPath';
 
 /**
  * Business-onboarding intent (BENT-002): only ever an allow-listed local path
- * carrying the entry context and, from a listing, an opaque provider pair.
+ * carrying the entry context and, from a listing, the intake's listing key
+ * (city, provider, opaque provider id).
  * Mirrors the server's `buildIntent`; the business step asks the server to
  * confirm the reference before anything is written.
  */
 export const BUSINESS_ONBOARDING_PATH = '/account/bedrijf/toevoegen';
 export type BusinessIntentContext = 'registration' | 'account_home' | 'listing';
 
-export function businessIntentRef(context: BusinessIntentContext, listing?: { source: string; id: string }): string {
+export type BusinessIntentListing = { cityId: string; source: string; id: string };
+
+export function businessIntentRef(context: BusinessIntentContext, listing?: BusinessIntentListing): string {
   const params = new URLSearchParams({ context });
   if (listing) {
+    params.set('cityId', listing.cityId);
     params.set('listingSource', listing.source);
     params.set('listingId', listing.id);
   }
