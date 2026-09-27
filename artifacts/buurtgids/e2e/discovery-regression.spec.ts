@@ -635,9 +635,22 @@ test('main search external-source setting controls discovery mode and persists',
   await expect(page.getByText('Stored postcode result').first()).toBeVisible();
   const mapPin = page.locator('[data-map-pin][data-event-id="postcode-result"]');
   await mapPin.hover();
-  await expect(page.getByTestId('map-preview-website-postcode-result')).toContainText(
-    'example.com/stored-postcode-result',
-  );
+  const previewWebsite = page.getByTestId('map-preview-website-postcode-result');
+  await expect(previewWebsite).toContainText('example.com/stored-postcode-result');
+  // The hover card must survive the pointer travelling from the pin onto the
+  // card, and the website inside it must be a real, clickable link.
+  await previewWebsite.hover();
+  await page.waitForTimeout(400);
+  await expect(previewWebsite).toBeVisible();
+  const previewLink = previewWebsite.getByRole('link');
+  await expect(previewLink).toHaveAttribute('href', 'https://example.com/stored-postcode-result');
+  await expect(previewLink).toHaveAttribute('target', '_blank');
+  const [popup] = await Promise.all([page.waitForEvent('popup'), previewLink.click()]);
+  await popup.close();
+  // Clicking inside the card is not a marker click: the listing stays unselected.
+  await expect(mapPin).toHaveCount(1);
+  await page.mouse.move(5, 5);
+  await expect(previewWebsite).toBeHidden();
   await expect(page.getByText('Local-only search.')).toBeVisible();
   await expect(page.getByTestId('listing-website-postcode-result')).toHaveAttribute(
     'href',

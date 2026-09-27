@@ -432,3 +432,23 @@ override, user-independent cache key) — both fixed and covered by tests.
 
 Observation (not changed): a non-JSON/failed `/api/weather` answer crashes
 `WeatherCard` (`data.current` undefined) in the dev overlay; tracked as debt.
+
+### 2026-09-27 — Map hover card stays open and its website is clickable
+
+Request: the hover card on a map pin disappeared as soon as the pointer left
+the pin, so the website shown on it could never be clicked.
+
+- All three map renderers (Google, tile fallback, schematic fallback) now
+  track hover on the pin *and* its card, with a 180 ms grace period and an
+  invisible bridge over the gap below the pin, so the pointer can travel onto
+  the card. The card hides once the pointer leaves both.
+- The card is interactive; the website line is a real link (new tab,
+  `noopener`). Clicks inside the card are not marker clicks or map gestures.
+- Keyboard focus/blur behaviour is unchanged apart from the same grace period.
+- Regression: the map suite hovers a pin, moves onto the card, asserts it is
+  still visible, clicks the website link (popup) and checks the listing was
+  not selected; card hides after leaving.
+
+Verification: typecheck clean; map 11/11, usability 9/9; Google-map path
+checked in a scripted browser run (card visible after moving onto it, link
+href correct, hides after leaving).

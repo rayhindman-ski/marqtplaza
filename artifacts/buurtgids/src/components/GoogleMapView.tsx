@@ -350,6 +350,29 @@ function getCategoryIcon(marker: MapPoint) {
   return getSubcategoryIcon(marker);
 }
 
+/** Grace period before a hover card hides, so the pointer can travel from
+ * the pin onto the card (and its website link) without the card vanishing. */
+const MARKER_PREVIEW_HIDE_DELAY_MS = 180;
+
+function useMarkerHover(setHoveredMarkerId: (id: string | null) => void) {
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => { if (timerRef.current) clearTimeout(timerRef.current); }, []);
+  return useMemo(() => ({
+    show: (id: string) => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+      timerRef.current = null;
+      setHoveredMarkerId(id);
+    },
+    hide: () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+      timerRef.current = setTimeout(() => {
+        timerRef.current = null;
+        setHoveredMarkerId(null);
+      }, MARKER_PREVIEW_HIDE_DELAY_MS);
+    },
+  }), [setHoveredMarkerId]);
+}
+
 function MarkerPreview({
   marker,
   language,
@@ -361,12 +384,17 @@ function MarkerPreview({
   const t = translations[language];
   const websiteUrl = marker.officialUrl ?? marker.sourceUrl;
 
+  // The card stays interactive so the website link is clickable; the `pt-2`
+  // bridges the gap below the pin so the pointer never leaves the wrapper.
   return (
     <div
       data-marker-preview
       role="tooltip"
-      className="pointer-events-none absolute left-1/2 top-full z-50 mt-2 w-56 -translate-x-1/2 rounded-xl border-2 border-border bg-card p-3 text-left shadow-2xl ring-2 ring-background/80"
+      className="absolute left-1/2 top-full z-50 w-56 -translate-x-1/2 pt-2"
+      onPointerDown={(event) => event.stopPropagation()}
+      onClick={(event) => event.stopPropagation()}
     >
+    <div className="rounded-xl border-2 border-border bg-card p-3 text-left shadow-2xl ring-2 ring-background/80">
       <p className="truncate text-sm font-extrabold text-foreground">{marker.name}</p>
       <p className="mt-0.5 text-[11px] font-bold uppercase tracking-wide text-primary">
         {t.categories[marker.category]}
@@ -375,9 +403,13 @@ function MarkerPreview({
       <p className="mt-2 text-[11px] font-bold text-secondary">{copy.details}</p>
       {websiteUrl && (
         <p data-testid={`map-preview-website-${marker.id}`} className="mt-2 truncate text-[11px] font-bold text-primary">
-          {language === 'nl' ? 'Website' : 'Website'}: {websiteUrl.replace(/^https?:\/\/(www\.)?/i, '').replace(/\/$/, '')}
+          Website:{' '}
+          <a href={websiteUrl} target="_blank" rel="noopener noreferrer" className="underline-offset-2 hover:underline">
+            {websiteUrl.replace(/^https?:\/\/(www\.)?/i, '').replace(/\/$/, '')}
+          </a>
         </p>
       )}
+    </div>
     </div>
   );
 }
@@ -841,6 +873,7 @@ function CoordinateMapFallback({
   const neighborhoodAreas = getNeighborhoodAreas(locationId, displayedNeighborhoods);
   const mapCopy = MAP_COPY[language];
   const [hoveredMarkerId, setHoveredMarkerId] = useState<string | null>(null);
+  const hover = useMarkerHover(setHoveredMarkerId);
   const [containerRef, containerSize] = useElementSize<HTMLDivElement>();
 
   if (points.length === 0 && neighborhoodAreas.length === 0) {
@@ -1014,6 +1047,8 @@ function CoordinateMapFallback({
         return (
           <div
             key={point.id}
+            onMouseEnter={() => hover.show(point.id)}
+            onMouseLeave={() => hover.hide()}
             className={`absolute -translate-x-1/2 -translate-y-1/2 ${
               hoveredMarkerId === point.id ? 'z-50' : isSelected ? 'z-20' : 'z-10'
             }`}
@@ -1028,10 +1063,8 @@ function CoordinateMapFallback({
               data-event-id={point.id}
               data-marker-color={color}
               onClick={() => onMarkerClick(point.id)}
-              onMouseEnter={() => setHoveredMarkerId(point.id)}
-              onMouseLeave={() => setHoveredMarkerId(null)}
-              onFocus={() => setHoveredMarkerId(point.id)}
-              onBlur={() => setHoveredMarkerId(null)}
+              onFocus={() => hover.show(point.id)}
+              onBlur={() => hover.hide()}
               className={className.replace(' -translate-x-1/2 -translate-y-1/2', '')}
               style={style}
               aria-describedby={hoveredMarkerId === point.id ? previewId : undefined}
@@ -1235,6 +1268,7 @@ function TileMapView({
     : selectedNeighborhoods;
   const neighborhoodAreas = getNeighborhoodAreas(locationId, displayedNeighborhoods);
   const [hoveredMarkerId, setHoveredMarkerId] = useState<string | null>(null);
+  const hover = useMarkerHover(setHoveredMarkerId);
   const center = latLngToWorld(viewport.center, viewport.zoom);
   const mapLeft = center.x - size.width / 2;
   const mapTop = center.y - size.height / 2;
@@ -1447,6 +1481,8 @@ function TileMapView({
         return (
           <div
             key={point.id}
+            onMouseEnter={() => hover.show(point.id)}
+            onMouseLeave={() => hover.hide()}
             className={`absolute -translate-x-1/2 -translate-y-1/2 ${
               hoveredMarkerId === point.id ? 'z-50' : isSelected ? 'z-20' : 'z-10'
             }`}
@@ -1462,10 +1498,8 @@ function TileMapView({
                 event.stopPropagation();
                 onMarkerClick(point.id);
               }}
-              onMouseEnter={() => setHoveredMarkerId(point.id)}
-              onMouseLeave={() => setHoveredMarkerId(null)}
-              onFocus={() => setHoveredMarkerId(point.id)}
-              onBlur={() => setHoveredMarkerId(null)}
+              onFocus={() => hover.show(point.id)}
+              onBlur={() => hover.hide()}
               className={className.replace(' -translate-x-1/2 -translate-y-1/2', '')}
               style={style}
               aria-describedby={hoveredMarkerId === point.id ? previewId : undefined}
@@ -1651,19 +1685,19 @@ function GoogleMapCanvas({
       preview.setAttribute('role', 'tooltip');
       preview.style.cssText = [
         'position:absolute',
-        'top:calc(100% + 10px)',
+        'top:100%',
         'left:50%',
         'z-index:3',
         'width:224px',
         'transform:translateX(-50%)',
         'border:1px solid hsl(var(--border) / 0.8)',
+        'margin-top:10px',
         'border-radius:12px',
         'background:hsl(var(--card))',
         'padding:12px',
         'text-align:left',
         'box-shadow:0 12px 28px rgba(0,0,0,0.18)',
         'font-family:inherit',
-        'pointer-events:none',
         'opacity:0',
         'visibility:hidden',
         'transition:opacity 160ms ease, visibility 160ms ease',
@@ -1685,13 +1719,25 @@ function GoogleMapCanvas({
       if (websiteUrl) {
         const website = document.createElement('p');
         website.setAttribute('data-map-preview-website', marker.id);
-        website.textContent = `Website: ${websiteUrl.replace(/^https?:\/\/(www\.)?/i, '').replace(/\/$/, '')}`;
         website.style.cssText = 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:8px;font-size:11px;font-weight:800;color:hsl(var(--primary));';
+        const link = document.createElement('a');
+        link.href = websiteUrl;
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        link.textContent = websiteUrl.replace(/^https?:\/\/(www\.)?/i, '').replace(/\/$/, '');
+        link.style.cssText = 'color:inherit;text-decoration:underline;text-underline-offset:2px;';
+        website.append('Website: ', link);
         preview.append(website);
       }
-      wrapper.append(element, preview);
+      // Invisible bridge over the gap below the pin keeps the pointer inside the
+      // wrapper on its way to the card; only present while the card is shown.
+      const bridge = document.createElement('div');
+      bridge.setAttribute('aria-hidden', 'true');
+      bridge.style.cssText = 'position:absolute;top:100%;left:50%;width:224px;height:12px;transform:translateX(-50%);display:none;';
+      wrapper.append(element, bridge, preview);
 
       const showPreview = () => {
+        bridge.style.display = 'block';
         preview.style.opacity = '1';
         preview.style.visibility = 'visible';
         element.setAttribute('aria-describedby', previewId);
@@ -1699,16 +1745,26 @@ function GoogleMapCanvas({
         wrapper.dispatchEvent(new CustomEvent('marker-preview-visibility', { detail: { visible: true } }));
       };
       const hidePreview = () => {
+        bridge.style.display = 'none';
         preview.style.opacity = '0';
         preview.style.visibility = 'hidden';
         element.removeAttribute('aria-describedby');
         wrapper.style.zIndex = isSelected ? '100' : '1';
         wrapper.dispatchEvent(new CustomEvent('marker-preview-visibility', { detail: { visible: false } }));
       };
-      element.addEventListener('mouseenter', showPreview);
-      element.addEventListener('mouseleave', hidePreview);
-      element.addEventListener('focus', showPreview);
-      element.addEventListener('blur', hidePreview);
+      // Hover is tracked on the wrapper (pin + card) with a grace period so the
+      // pointer can travel from the pin onto the card and click the website.
+      let hideTimer: ReturnType<typeof setTimeout> | null = null;
+      const cancelHide = () => { if (hideTimer) { clearTimeout(hideTimer); hideTimer = null; } };
+      const scheduleHide = () => { cancelHide(); hideTimer = setTimeout(hidePreview, MARKER_PREVIEW_HIDE_DELAY_MS); };
+      wrapper.addEventListener('mouseenter', () => { cancelHide(); showPreview(); });
+      wrapper.addEventListener('mouseleave', scheduleHide);
+      // Clicks inside the card must not count as marker clicks or map gestures.
+      for (const type of ['pointerdown', 'mousedown', 'click', 'dblclick'] as const) {
+        preview.addEventListener(type, (event) => event.stopPropagation());
+      }
+      element.addEventListener('focus', () => { cancelHide(); showPreview(); });
+      element.addEventListener('blur', scheduleHide);
 
       return wrapper;
     },

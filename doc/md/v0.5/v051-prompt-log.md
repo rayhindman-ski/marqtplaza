@@ -219,3 +219,18 @@ precedence. Account cache keyed per user. Two new e2e tests plus unit tests.
 Details in `release_v051_log.md`.
 
 **Duration:** 13:45 → 14:35 CEST (≈50 minutes).
+
+### Prompt 12
+
+**Received:** 2026-09-27 ≈14:38 CEST (screenshot of a Food & drink pin hover card with a website line)
+
+> ok on the mouse - hoverover , i have no posibility to click the website, do
+> not remove the card if the mouse is over the map-card for the icon. that is
+> annoying ! Fix it !
+
+**Response (summary):** Hover card now stays open while the pointer is over
+the pin or the card (grace period + bridge over the gap), the website is a
+real link, clicks inside the card do not select the marker. Applied to all
+three map renderers; regression added. Details in `release_v051_log.md`.
+
+**Duration:** 14:38 → 14:58 CEST (≈20 minutes).
