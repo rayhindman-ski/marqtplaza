@@ -34,6 +34,7 @@ import {
 } from "@workspace/api-zod";
 
 import { sendApiError, unknownFieldErrors } from "../lib/apiError";
+import { computeSignals } from "../lib/businessSignals";
 import { notifyUser } from "../lib/lifecycleNotifications";
 import {
   ClaimConflictError,
@@ -917,15 +918,26 @@ export function createBusinessIntakeRouter(options: BusinessIntakeRouterOptions 
     // New-business drafts are re-checked against public listings and published
     // profiles at submission. Candidates are shown to the representative, who must
     // either claim one instead or explicitly confirm that the business is new.
-    if (body.data.confirmNoDuplicate !== true) {
-      const current = await findOwnClaim(params.data.id, claimantId);
-      if (current && current.profile.listingSource === SELF_REPORTED_LISTING_SOURCE && EDITABLE_CLAIM_STATUSES.has(current.claim.status)) {
-        const query = normaliseLookupQuery(current.profile.name);
-        const found = query.length >= 2 ? await findPublicMatches(query, current.profile.id) : { matches: [], truncated: false };
-        if (found === "unavailable") {
+    // The same public look-alike search feeds the advisory duplicate signal (BVER-002).
+    let signalCandidates: { name: string }[] = [];
+    const current = await findOwnClaim(params.data.id, claimantId);
+    if (current && EDITABLE_CLAIM_STATUSES.has(current.claim.status)) {
+      const query = normaliseLookupQuery(current.profile.name);
+      const found = query.length >= 2 ? await findPublicMatches(query, current.profile.id) : { matches: [], truncated: false };
+      const isNewBusiness = current.profile.listingSource === SELF_REPORTED_LISTING_SOURCE;
+      if (found === "unavailable") {
+        if (isNewBusiness && body.data.confirmNoDuplicate !== true) {
           sendApiError(req, res, "DEPENDENCY_UNAVAILABLE");
           return;
         }
+        // Signals are advisory; an unavailable look-up must not block an existing-listing claim.
+      } else {
+        // The claimed listing itself is not a duplicate of itself.
+        signalCandidates = found.matches
+          .filter((match) => !(match.listingSource === current.profile.listingSource && match.listingId === current.profile.listingId))
+          .map((match) => ({ name: match.name }));
+      }
+      if (isNewBusiness && body.data.confirmNoDuplicate !== true && found !== "unavailable") {
         if (found.matches.length > 0) {
           req.log?.info?.(
             { event: "business_intake.duplicate_candidates", claimId: current.claim.id, candidates: found.matches.length },
@@ -979,6 +991,13 @@ export function createBusinessIntakeRouter(options: BusinessIntakeRouterOptions 
             // Submitting is the act of declaring authority: record when and which text version.
             authorityDeclaredAt: new Date(),
             authorityVersion: AUTHORITY_DECLARATION_VERSION,
+            signals: computeSignals({
+              evidenceDomain: locked.evidenceDomain,
+              evidenceKvk: locked.evidenceKvk,
+              profileName: profile.name,
+              profileWebsiteUrl: profile.websiteUrl,
+              candidates: signalCandidates,
+            }),
             reviewNote: null,
             reviewedAt: null,
             reviewedBy: null,
@@ -988,7 +1007,7 @@ export function createBusinessIntakeRouter(options: BusinessIntakeRouterOptions 
         // Confirmation commits with the submission; nothing is sent from here.
         await notifyUser(tx, {
           clerkUserId: claim.claimantId,
-          eventCode: nextStatus === "disputed" ? "claim.disputed" : "claim.submitted",
+          eventCode: nextStatus === "disputed" ? "claim.disputed" : claim.onboardingContext ? "business.onboarding_received" : "claim.submitted",
           idempotencyKey: `claim:${claim.id}:v${claim.version}:${nextStatus}`,
           payload: { claimId: claim.id, businessProfileId: profile.id, businessName: profile.name, status: nextStatus },
         });

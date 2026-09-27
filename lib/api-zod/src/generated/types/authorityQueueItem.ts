@@ -5,8 +5,11 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { AuthorityQueueItemOnboardingContext } from './authorityQueueItemOnboardingContext';
+import type { AuthorityQueueItemRelationshipKind } from './authorityQueueItemRelationshipKind';
 import type { BusinessIntakeKind } from './businessIntakeKind';
 import type { BusinessProfileSummary } from './businessProfileSummary';
+import type { BusinessSignals } from './businessSignals';
 import type { ClaimStatus } from './claimStatus';
 
 export interface AuthorityQueueItem {
@@ -16,9 +19,25 @@ export interface AuthorityQueueItem {
   kind: BusinessIntakeKind;
   relationship: string;
   /** @nullable */
+  relationshipKind: AuthorityQueueItemRelationshipKind;
+  /** @nullable */
   authorityDeclaration: string | null;
   /** @nullable */
+  authorityDeclaredAt: string | null;
+  /** @nullable */
+  authorityVersion: string | null;
+  /** @nullable */
   evidenceReference: string | null;
+  /**
+     * Reviewer-only; never in public or member payloads.
+     * @nullable
+     */
+  evidenceKvk: string | null;
+  /** @nullable */
+  evidenceDomain: string | null;
+  /** @nullable */
+  onboardingContext: AuthorityQueueItemOnboardingContext;
+  signals: BusinessSignals | null;
   /** @nullable */
   message: string | null;
   contactName: string;

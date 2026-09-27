@@ -308,3 +308,49 @@ added. Reviewer surface for the new fields and the signals column are
 Phase 4.
 
 Duration: ≈18:06 – 18:35 CEST.
+
+### 2026-09-27 — Phase 4: verification signals and review surface
+
+**Signals (BVER-002/003):** `lib/businessSignals.ts` — pure, versioned
+(`version: 1`), computed inside the submit transaction from the claimant's
+evidence and what the directory already holds: `domainMatch`
+(match/mismatch/unknown; hosts normalised, `www.` and subdomains tolerated),
+`kvkFormatOk` (true/false/null when absent), `duplicateScore` (token
+Jaccard against the same public look-alike search that drives the
+duplicate gate, excluding the claimed listing itself) with up to three
+candidate names, and `computedAt`. No external service is called. When the
+look-alike search is unavailable an existing-listing claim still submits
+(signals are advisory); a new-business submission keeps its 503 unless the
+claimant already confirmed no duplicate. Unit tests 4/4.
+
+**Reviewer surface (BVER-001/004):** `AuthorityQueueItem` now carries
+`relationshipKind`, `authorityDeclaredAt`, `authorityVersion`, `evidenceKvk`,
+`evidenceDomain`, `onboardingContext` (pre-journey rows read as `legacy`)
+and `signals` (nullable). Deviation from the plan, recorded: no separate
+`GET /business-claims/:id/signals` — the reviewer already loads the queue
+item and the signals belong to the same reviewer-only DTO, so a second
+round trip would add surface without adding a boundary. The claimant DTO
+does not carry signals (asserted in the intake test). `BusinessReviewPanel`
+shows role + wording, declaration date/version, origin, KvK/domain, and a
+"Signalen (advies, geen besluit)" block; legacy claims say "Geen signalen".
+
+**Approval idempotency (BVER-005):** `POST /review/claims/:id/decision` with
+`approve` against an already-approved claim replays the committed result
+(200, current claim) only when the audit row shows the *same reviewer*
+approved the *same reviewed version*; any other reviewer or version still
+gets 409. Membership stays at exactly one owner (existing unique index +
+`onConflictDoNothing`). Test extended in `business-publication.test.ts`.
+
+**Lifecycle (BVER-006):** new event `business.onboarding_received` (NL/EN)
+used at submit when the claim carries an onboarding context; claims without
+a context keep `claim.submitted` unchanged. Idempotency key unchanged
+(`claim:<id>:v<version>:submitted`), so re-enable/retry cannot double-send.
+
+**Evidence:** api `test:business-intake` 15/0 (signals stored, outbox event
+code, claimant DTO without signals); `test:business-publication` 25 pass /
+2 fail — the two failures are the pre-existing freshness tests, untouched
+since Phase 0; account-lifecycle 22/22 (template registry still complete);
+e2e `business-moderation` 9/9 with the new reviewer assertions;
+`usability-regression` 15/15; workspace typecheck clean.
+
+Duration: ≈18:36 – 18:43 CEST.

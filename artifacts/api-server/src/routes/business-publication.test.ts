@@ -484,6 +484,11 @@ describe("business publication routes", () => {
     assert.equal(item.version, 3);
     assert.equal(item.authorityDeclaration, "I run this shop daily.");
     assert.equal(item.evidenceReference, "KvK 12345678");
+    // v0.5.2: journey fields and advisory signals are on the reviewer item; older claims read as legacy.
+    assert.equal(item.onboardingContext, "legacy");
+    assert.equal(item.relationshipKind, null);
+    assert.equal(item.evidenceKvk, null);
+    assert.equal(item.signals, null);
     assert.ok(!("contactEmail" in item), "no e-mail in the queue");
     assert.ok(!JSON.stringify(queue.body).includes("claire@example.com"));
 
@@ -546,6 +551,35 @@ describe("business publication routes", () => {
     assert.equal(members.length, 1);
     assert.equal(members[0].userId, users.claimant);
     assert.equal(members[0].role, "owner");
+
+    // v0.5.2 BVER-005: the same reviewer retrying the same approval gets the committed
+    // result again; nobody else and no other version does, and no second owner appears.
+    const retry = await request(`/api/review/claims/${claimId}/decision`, {
+      method: "POST",
+      ...asReviewer,
+      body: json({ decision: "approve", expectedVersion: 5 }),
+    });
+    assert.equal(retry.status, 200);
+    assert.equal(retry.body.status, "approved");
+    assert.equal(retry.body.version, approve.body.version);
+    const otherVersion = await request(`/api/review/claims/${claimId}/decision`, {
+      method: "POST",
+      ...asReviewer,
+      body: json({ decision: "approve", expectedVersion: 6 }),
+    });
+    assert.equal(otherVersion.status, 409);
+    const otherReviewer = await request(`/api/review/claims/${claimId}/decision`, {
+      method: "POST",
+      userId: `${users.reviewer}-other`,
+      editor: true,
+      body: json({ decision: "approve", expectedVersion: 5 }),
+    });
+    assert.equal(otherReviewer.status, 409);
+    const membersAfter = await db
+      .select()
+      .from(businessMembersTable)
+      .where(eq(businessMembersTable.businessProfileId, claimProfileId));
+    assert.equal(membersAfter.length, 1);
     const audit = await db
       .select()
       .from(businessReviewsTable)

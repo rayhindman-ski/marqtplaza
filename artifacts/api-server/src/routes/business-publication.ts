@@ -44,7 +44,8 @@ import {
 
 import { sendApiError, unknownFieldErrors } from "../lib/apiError";
 import { claimKind, serialiseClaim, serialiseProfile } from "../lib/businessClaims";
-import { applyClaimDecision } from "../lib/claimDecisions";
+import { applyClaimDecision, findCommittedApproval } from "../lib/claimDecisions";
+import { readSignals } from "../lib/businessSignals";
 import { notifyBusinessOwners } from "../lib/lifecycleNotifications";
 import {
   CHECKABLE_FIELDS,
@@ -624,8 +625,16 @@ export function createBusinessPublicationRouter(options: BusinessPublicationRout
         status: claim.status,
         kind: claimKind(profile),
         relationship: claim.relationship,
+        relationshipKind: claim.relationshipKind,
         authorityDeclaration: claim.authorityDeclaration,
+        authorityDeclaredAt: claim.authorityDeclaredAt?.toISOString() ?? null,
+        authorityVersion: claim.authorityVersion,
         evidenceReference: claim.evidenceReference,
+        evidenceKvk: claim.evidenceKvk,
+        evidenceDomain: claim.evidenceDomain,
+        // Claims from before the journey carry no context; reviewers see them as legacy.
+        onboardingContext: claim.onboardingContext ?? "legacy",
+        signals: readSignals(claim.signals),
         message: claim.message,
         contactName: claim.contactName,
         submittedAt: claim.updatedAt.toISOString(),
@@ -671,9 +680,17 @@ export function createBusinessPublicationRouter(options: BusinessPublicationRout
       case "not_found":
         sendApiError(req, res, "NOT_FOUND");
         return;
-      case "not_reviewable":
+      case "not_reviewable": {
+        // A retried approval (same reviewer, same reviewed version) replays the committed
+        // result instead of failing: the network may have dropped the first answer (BVER-005).
+        const replay = body.data.decision === "approve" ? await findCommittedApproval(params.data.id, reviewerId, body.data.expectedVersion) : null;
+        if (replay) {
+          res.json(ReviewBusinessClaimResponse.parse(serialiseClaim(replay.claim, replay.profile)));
+          return;
+        }
         sendApiError(req, res, "VERSION_CONFLICT", { fieldErrors: [{ field: "status", code: "not_reviewable" }] });
         return;
+      }
       case "stale":
         sendApiError(req, res, "VERSION_CONFLICT", { expectedVersion: outcome.currentVersion });
         return;

@@ -1285,6 +1285,53 @@ export interface BusinessProfileSummary {
   publicationStatus: PublicationStatus;
 }
 
+export type BusinessSignalsDomainMatch = typeof BusinessSignalsDomainMatch[keyof typeof BusinessSignalsDomainMatch];
+
+
+export const BusinessSignalsDomainMatch = {
+  match: 'match',
+  mismatch: 'mismatch',
+  unknown: 'unknown',
+} as const;
+
+/**
+ * Advisory verification signals computed when the claim was submitted. Never a decision.
+ */
+export interface BusinessSignals {
+  version: number;
+  domainMatch: BusinessSignalsDomainMatch;
+  /** @nullable */
+  kvkFormatOk: boolean | null;
+  duplicateScore: number;
+  duplicateCandidates: string[];
+  computedAt: string;
+}
+
+/**
+ * @nullable
+ */
+export type AuthorityQueueItemRelationshipKind = typeof AuthorityQueueItemRelationshipKind[keyof typeof AuthorityQueueItemRelationshipKind] | null;
+
+
+export const AuthorityQueueItemRelationshipKind = {
+  owner: 'owner',
+  manager: 'manager',
+  representative: 'representative',
+} as const;
+
+/**
+ * @nullable
+ */
+export type AuthorityQueueItemOnboardingContext = typeof AuthorityQueueItemOnboardingContext[keyof typeof AuthorityQueueItemOnboardingContext] | null;
+
+
+export const AuthorityQueueItemOnboardingContext = {
+  registration: 'registration',
+  account_home: 'account_home',
+  listing: 'listing',
+  legacy: 'legacy',
+} as const;
+
 export interface AuthorityQueueItem {
   id: number;
   version: number;
@@ -1292,9 +1339,25 @@ export interface AuthorityQueueItem {
   kind: BusinessIntakeKind;
   relationship: string;
   /** @nullable */
+  relationshipKind: AuthorityQueueItemRelationshipKind;
+  /** @nullable */
   authorityDeclaration: string | null;
   /** @nullable */
+  authorityDeclaredAt: string | null;
+  /** @nullable */
+  authorityVersion: string | null;
+  /** @nullable */
   evidenceReference: string | null;
+  /**
+     * Reviewer-only; never in public or member payloads.
+     * @nullable
+     */
+  evidenceKvk: string | null;
+  /** @nullable */
+  evidenceDomain: string | null;
+  /** @nullable */
+  onboardingContext: AuthorityQueueItemOnboardingContext;
+  signals: BusinessSignals | null;
   /** @nullable */
   message: string | null;
   contactName: string;

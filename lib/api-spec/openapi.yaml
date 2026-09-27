@@ -3984,9 +3984,30 @@ components:
         publicationStatus:
           $ref: "#/components/schemas/PublicationStatus"
 
+    BusinessSignals:
+      type: object
+      description: Advisory verification signals computed when the claim was submitted. Never a decision.
+      required: [version, domainMatch, kvkFormatOk, duplicateScore, duplicateCandidates, computedAt]
+      properties:
+        version:
+          type: number
+        domainMatch:
+          type: string
+          enum: [match, mismatch, unknown]
+        kvkFormatOk:
+          type: ["boolean", "null"]
+        duplicateScore:
+          type: number
+        duplicateCandidates:
+          type: array
+          items:
+            type: string
+        computedAt:
+          type: string
+
     AuthorityQueueItem:
       type: object
-      required: [id, version, status, kind, relationship, authorityDeclaration, evidenceReference, message, contactName, submittedAt, createdAt, profile, canDecide]
+      required: [id, version, status, kind, relationship, relationshipKind, authorityDeclaration, authorityDeclaredAt, authorityVersion, evidenceReference, evidenceKvk, evidenceDomain, onboardingContext, signals, message, contactName, submittedAt, createdAt, profile, canDecide]
       properties:
         id:
           type: number
@@ -3998,10 +4019,29 @@ components:
           $ref: "#/components/schemas/BusinessIntakeKind"
         relationship:
           type: string
+        relationshipKind:
+          type: ["string", "null"]
+          enum: [owner, manager, representative, null]
         authorityDeclaration:
+          type: ["string", "null"]
+        authorityDeclaredAt:
+          type: ["string", "null"]
+        authorityVersion:
           type: ["string", "null"]
         evidenceReference:
           type: ["string", "null"]
+        evidenceKvk:
+          type: ["string", "null"]
+          description: Reviewer-only; never in public or member payloads.
+        evidenceDomain:
+          type: ["string", "null"]
+        onboardingContext:
+          type: ["string", "null"]
+          enum: [registration, account_home, listing, legacy, null]
+        signals:
+          oneOf:
+            - $ref: "#/components/schemas/BusinessSignals"
+            - type: "null"
         message:
           type: ["string", "null"]
         contactName:

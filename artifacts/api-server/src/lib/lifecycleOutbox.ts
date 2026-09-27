@@ -26,6 +26,7 @@ type Tx = Pick<typeof db, "insert" | "select" | "update">;
 
 export const LIFECYCLE_EVENT_CODES = [
   "claim.submitted",
+  "business.onboarding_received",
   "claim.disputed",
   "claim.approved",
   "claim.rejected",

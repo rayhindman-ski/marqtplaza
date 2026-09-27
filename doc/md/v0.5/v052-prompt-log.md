@@ -97,3 +97,9 @@ confirmation. Progress lines above and below.
 
 ### Progress — Phase 4 (verification signals and review surface)
 
+- 18:36 start (after Phase 3 push `c80f014`).
+- 18:39 `businessSignals.ts` + unit tests 4/4; submit stores signals; onboarding template.
+- 18:41 reviewer queue DTO extended; idempotent approval replay; api suites green (2 pre-existing freshness failures unchanged).
+- 18:42 review panel shows role/evidence/origin/signals; e2e moderation 9/9, usability 15/15.
+- 18:43 phase log; commit + push; architect review next.
+

@@ -74,6 +74,24 @@ const TEMPLATES: Record<LifecycleEventCode, Record<LifecycleLocale, Template>> =
       body: (v) => wrapEn([`We received your claim for ${v.businessName}.`, "An editor will review it; you will hear from us once a decision has been made."]),
     },
   },
+  "business.onboarding_received": {
+    nl: {
+      subject: (v) => `Je bedrijfsaanmelding voor ${v.businessName} is ontvangen`,
+      body: (v) => wrapNl([
+        `We hebben je aanmelding voor ${v.businessName} ontvangen, inclusief je verklaring van bevoegdheid.`,
+        "Een redacteur controleert de aanmelding handmatig. Tot die tijd blijft je persoonlijke account gewoon werken en verandert er niets aan de vermelding.",
+        "Je volgt de status onder Mijn bedrijf.",
+      ]),
+    },
+    en: {
+      subject: (v) => `Your business registration for ${v.businessName} has been received`,
+      body: (v) => wrapEn([
+        `We received your registration for ${v.businessName}, including your declaration of authority.`,
+        "An editor checks the registration manually. Until then your personal account keeps working and nothing changes on the listing.",
+        "You can follow the status under My business.",
+      ]),
+    },
+  },
   "claim.disputed": {
     nl: {
       subject: (v) => `Je claim voor ${v.businessName} wordt betwist`,

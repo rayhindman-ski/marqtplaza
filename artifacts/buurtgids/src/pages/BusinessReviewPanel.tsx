@@ -220,9 +220,24 @@ export function BusinessReviewPanel({ section, enabled }: { section: 'authority'
                 </CardHeader>
                 <CardContent className="grid sm:grid-cols-2 gap-4 text-sm">
                   <div><p className="text-xs font-bold uppercase text-muted-foreground">{copy.contactName}</p><p>{item.contactName}</p></div>
-                  <div><p className="text-xs font-bold uppercase text-muted-foreground">{copy.relationship}</p><p>{item.relationship}</p></div>
-                  <div className="sm:col-span-2"><p className="text-xs font-bold uppercase text-muted-foreground">{copy.authorityDeclaration}</p><p className="whitespace-pre-wrap">{item.authorityDeclaration}</p></div>
+                  <div><p className="text-xs font-bold uppercase text-muted-foreground">{copy.relationship}</p><p>{item.relationshipKind ? `${copy.relationshipKinds[item.relationshipKind]} · ` : ''}{item.relationship}</p></div>
+                  <div className="sm:col-span-2"><p className="text-xs font-bold uppercase text-muted-foreground">{copy.authorityDeclaration}</p><p className="whitespace-pre-wrap">{item.authorityDeclaration}</p>
+                    {item.authorityDeclaredAt ? <p className="mt-1 text-xs text-muted-foreground" data-testid={`authority-declared-${item.id}`}>{copy.authorityDeclaredAt} {new Date(item.authorityDeclaredAt).toLocaleDateString(language === 'nl' ? 'nl-NL' : 'en-GB')}{item.authorityVersion ? ` (${item.authorityVersion})` : ''}</p> : null}
+                  </div>
+                  <div><p className="text-xs font-bold uppercase text-muted-foreground">{copy.onboardingContext}</p><p data-testid={`onboarding-context-${item.id}`}>{copy.onboardingContexts[item.onboardingContext ?? 'legacy']}</p></div>
+                  {item.evidenceKvk && <div><p className="text-xs font-bold uppercase text-muted-foreground">{copy.evidenceKvk}</p><p data-testid={`evidence-kvk-${item.id}`}>{item.evidenceKvk}</p></div>}
+                  {item.evidenceDomain && <div><p className="text-xs font-bold uppercase text-muted-foreground">{copy.evidenceDomain}</p><p>{item.evidenceDomain}</p></div>}
                   {item.evidenceReference && <div><p className="text-xs font-bold uppercase text-muted-foreground">{copy.evidenceReference}</p><p>{item.evidenceReference}</p></div>}
+                  <div className="sm:col-span-2 rounded-lg border border-border/60 bg-muted/30 p-3" data-testid={`signals-${item.id}`}>
+                    <p className="text-xs font-bold uppercase text-muted-foreground">{copy.signalsTitle}</p>
+                    {item.signals ? (
+                      <dl className="mt-2 grid gap-1 sm:grid-cols-3">
+                        <div><dt className="text-xs text-muted-foreground">{copy.signalDomain}</dt><dd>{copy.signalDomainValues[item.signals.domainMatch]}</dd></div>
+                        <div><dt className="text-xs text-muted-foreground">{copy.signalKvk}</dt><dd>{copy.signalKvkValues[item.signals.kvkFormatOk === null ? 'none' : item.signals.kvkFormatOk ? 'ok' : 'bad']}</dd></div>
+                        <div><dt className="text-xs text-muted-foreground">{copy.signalDuplicate}</dt><dd>{item.signals.duplicateScore > 0 ? `${Math.round(item.signals.duplicateScore * 100)}%${item.signals.duplicateCandidates.length ? ` · ${item.signals.duplicateCandidates.join(', ')}` : ''}` : copy.signalDuplicateNone}</dd></div>
+                      </dl>
+                    ) : <p className="mt-1 text-xs text-muted-foreground">{copy.signalsMissing}</p>}
+                  </div>
                   {item.message && <div className="sm:col-span-2"><p className="text-xs font-bold uppercase text-muted-foreground">{copy.message}</p><p className="whitespace-pre-wrap">{item.message}</p></div>}
                   {item.profile.sourceUrl && (
                     <a href={item.profile.sourceUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-primary hover:underline">

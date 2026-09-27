@@ -13,6 +13,7 @@ import {
   db,
   externalQueriesTable,
   externalResultsTable,
+  lifecycleOutboxTable,
   pool,
   userQueriesTable,
 } from "@workspace/db";
@@ -664,6 +665,21 @@ describe("business intake routes", () => {
     assert.equal(submitted.body.authorityVersion, "2026-09-v052");
     assert.ok(typeof submitted.body.authorityDeclaredAt === "string" && !Number.isNaN(Date.parse(submitted.body.authorityDeclaredAt)));
     assert.equal(submitted.body.onboardingContext, "account_home");
+    assert.ok(!("signals" in submitted.body), "signals are reviewer-facing, not part of the claimant DTO");
+
+    // Phase 4: advisory signals are stored with the submission; the claimant gets the onboarding receipt.
+    const [row] = await db.select({ signals: businessClaimsTable.signals }).from(businessClaimsTable).where(eq(businessClaimsTable.id, created.body.id));
+    const signals = row?.signals as Record<string, unknown> | null;
+    assert.ok(signals, "signals stored at submit");
+    assert.equal(signals.version, 1);
+    assert.equal(signals.kvkFormatOk, null, "the KvK was cleared before submit, so there is nothing to format-check");
+    assert.equal(signals.domainMatch, "unknown", "no website on the profile, so the domain cannot be compared");
+    assert.equal(typeof signals.duplicateScore, "number");
+    const outbox = await db
+      .select({ eventCode: lifecycleOutboxTable.eventCode })
+      .from(lifecycleOutboxTable)
+      .where(eq(lifecycleOutboxTable.idempotencyKey, `claim:${created.body.id}:v${submitted.body.version}:submitted`));
+    assert.deepEqual(outbox.map((entry) => entry.eventCode), ["business.onboarding_received"]);
 
     const publicProfile = await request(`/api/business-profiles/public/${created.body.profile.slug}`, { userId: null });
     assert.equal(publicProfile.status, 404, "still unpublished; evidence never reaches a public payload");

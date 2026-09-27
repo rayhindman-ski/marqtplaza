@@ -39,6 +39,12 @@ function installServer(page: Page) {
       id, version: 1, status: 'submitted', kind: id % 2 ? 'existing_listing' : 'new_business', relationship: 'eigenaar',
       authorityDeclaration: `Ik ben bevoegd voor bedrijf ${id}.`, evidenceReference: null, message: null,
       contactName: `Contact ${id}`, submittedAt: NOW, createdAt: NOW,
+      // v0.5.2: claim 1 came through the journey with evidence and signals; the rest are legacy.
+      relationshipKind: id === 1 ? 'manager' : null,
+      authorityDeclaredAt: id === 1 ? NOW : null, authorityVersion: id === 1 ? '2026-09-v052' : null,
+      evidenceKvk: id === 1 ? '12345678' : null, evidenceDomain: id === 1 ? 'claim-bedrijf-1.nl' : null,
+      onboardingContext: id === 1 ? 'listing' : 'legacy',
+      signals: id === 1 ? { version: 1, domainMatch: 'mismatch', kvkFormatOk: true, duplicateScore: 0.67, duplicateCandidates: ['Claim Bedrijf Oud'], computedAt: NOW } : null,
       profile: profile(100 + id, `Claim Bedrijf ${id}`),
       // Claim 3 belongs to the signed-in reviewer: the API says they cannot decide.
       canDecide: id !== 3,
@@ -204,6 +210,18 @@ test.describe('business moderation screen', () => {
 
     const queue = page.getByTestId('review-authority');
     await expect(queue.getByTestId('authority-item-1')).toBeVisible();
+    // v0.5.2 reviewer surface: role, evidence, origin and advisory signals; legacy claims say so.
+    const first = queue.getByTestId('authority-item-1');
+    await expect(first).toContainText('Bedrijfsleider · eigenaar');
+    await expect(first.getByTestId('evidence-kvk-1')).toHaveText('12345678');
+    await expect(first.getByTestId('onboarding-context-1')).toHaveText('vermelding');
+    await expect(first.getByTestId('authority-declared-1')).toContainText('2026-09-v052');
+    await expect(first.getByTestId('signals-1')).toContainText('Signalen (advies, geen besluit)');
+    await expect(first.getByTestId('signals-1')).toContainText('wijkt af');
+    await expect(first.getByTestId('signals-1')).toContainText('geldig formaat');
+    await expect(first.getByTestId('signals-1')).toContainText('67% · Claim Bedrijf Oud');
+    await expect(queue.getByTestId('signals-2')).toContainText('ingediend vóór v0.5.2');
+    await expect(queue.getByTestId('onboarding-context-2')).toHaveText('eerdere aanvraag');
     await expect(queue.locator('[data-testid^="authority-item-"]')).toHaveCount(PAGE_SIZE);
     await expect(queue.getByTestId('authority-item-21')).toHaveCount(0);
 

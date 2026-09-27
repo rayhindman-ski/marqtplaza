@@ -214,3 +214,37 @@ export async function applyClaimDecision(input: ClaimDecisionInput): Promise<Cla
     throw error;
   }
 }
+
+/**
+ * The committed result of an approval this reviewer already made against
+ * `reviewedVersion`, or `null`. Lets a retried approval answer with the same
+ * outcome instead of a conflict; the audit row is the source of truth, so a
+ * different reviewer or a different version never replays.
+ */
+export async function findCommittedApproval(
+  claimId: number,
+  reviewerId: string,
+  reviewedVersion: number,
+): Promise<{ claim: BusinessClaim; profile: BusinessProfile } | null> {
+  const [audit] = await db
+    .select({ id: businessReviewsTable.id })
+    .from(businessReviewsTable)
+    .where(
+      and(
+        eq(businessReviewsTable.targetType, "claim"),
+        eq(businessReviewsTable.targetId, claimId),
+        eq(businessReviewsTable.targetVersion, reviewedVersion),
+        eq(businessReviewsTable.reviewerUserId, reviewerId),
+        eq(businessReviewsTable.decision, "approve"),
+      ),
+    )
+    .limit(1);
+  if (!audit) return null;
+  const [row] = await db
+    .select({ claim: businessClaimsTable, profile: businessProfilesTable })
+    .from(businessClaimsTable)
+    .innerJoin(businessProfilesTable, eq(businessClaimsTable.businessProfileId, businessProfilesTable.id))
+    .where(and(eq(businessClaimsTable.id, claimId), eq(businessClaimsTable.status, "approved")))
+    .limit(1);
+  return row ?? null;
+}
