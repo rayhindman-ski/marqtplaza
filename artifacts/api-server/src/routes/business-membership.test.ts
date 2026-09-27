@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { after, before, describe, it } from "node:test";
 import type { AddressInfo } from "node:net";
 import express from "express";
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 
 import {
   appUsersTable,
@@ -11,6 +11,7 @@ import {
   businessMemberEventsTable,
   businessMembersTable,
   businessProfilesTable,
+  businessReviewsTable,
   consumerPreferencesTable,
   db,
   lifecycleOutboxTable,
@@ -21,6 +22,9 @@ import { createInvitationRecipientResolver, createEmailDeliveryLoader, type Outb
 import { dispatchLifecycleOutbox } from "../lib/lifecycleOutbox";
 import { createBusinessMembershipRouter } from "./business-membership";
 import { createAccountLifecycleRouter } from "./account-lifecycle";
+import { createBusinessPublicationRouter } from "./business-publication";
+import { createBusinessesRouter } from "./businesses";
+import { sanitizeReturnRef } from "../lib/consumerRegistration";
 
 /**
  * v0.5.2 membership and business lifecycle (BMEM-T01…T07, BSEC cross-business
@@ -33,12 +37,16 @@ const users = {
   second: `user_bmem_second_${runId}`,
   manager: `user_bmem_manager_${runId}`,
   outsider: `user_bmem_outsider_${runId}`,
+  rollback: `user_bmem_rollback_${runId}`,
+  retry: `user_bmem_retry_${runId}`,
 };
 const emails: Record<string, string | null> = {
   [users.owner]: `owner-${runId}@example.test`,
   [users.second]: `second-${runId}@example.test`,
   [users.manager]: `manager-${runId}@example.test`,
   [users.outsider]: `outsider-${runId}@example.test`,
+  [users.rollback]: `rollback-${runId}@example.test`,
+  [users.retry]: `retry-${runId}@example.test`,
 };
 const allUsers = Object.values(users);
 const ALL_DELETION_SCOPES = ["account_profile", "preferences", "consents", "saved_events", "business_memberships"];
@@ -50,7 +58,7 @@ const now = () => clock;
 function identityFromHeaders(req: express.Request): Identity | null {
   const userId = req.header("x-test-user-id");
   if (!userId) return null;
-  return { userId, emailVerified: req.header("x-test-unverified") !== "1", isEditor: false };
+  return { userId, emailVerified: req.header("x-test-unverified") !== "1", isEditor: req.header("x-test-editor") === "1" };
 }
 
 const app = express();
@@ -67,30 +75,38 @@ app.use(
   }),
 );
 app.use("/api", createAccountLifecycleRouter({ flags: () => flags, resolveIdentity: identityFromHeaders }));
+app.use("/api", createBusinessPublicationRouter({ flags: () => flags, resolveIdentity: identityFromHeaders, now }));
+app.use("/api", createBusinessesRouter({ flags: () => flags, getUserId: (req) => req.header("x-test-user-id") ?? null }));
 
 let server: ReturnType<typeof app.listen>;
 let baseUrl = "";
 let businessId = 0;
 let otherBusinessId = 0;
 
-async function request(path: string, init: { method?: string; userId?: string | null; body?: unknown } = {}) {
+async function request(path: string, init: { method?: string; userId?: string | null; body?: unknown; editor?: boolean } = {}) {
   const headers: Record<string, string> = { "content-type": "application/json" };
   if (init.userId !== null) headers["x-test-user-id"] = init.userId ?? users.owner;
+  if (init.editor) headers["x-test-editor"] = "1";
   const result = await fetch(`${baseUrl}/api${path}`, { method: init.method ?? "GET", headers, body: init.body === undefined ? undefined : JSON.stringify(init.body) });
   const text = await result.text();
   return { status: result.status, body: text ? JSON.parse(text) : null };
 }
 
 const sent: OutboundEmail[] = [];
+let failNextSends = 0;
 async function dispatchInvitations() {
   const deliver = createEmailDeliveryLoader({
     senderAddress: "noreply@buurtplaza.test",
     transport: async (email) => {
       sent.push(email);
+      if (failNextSends > 0) {
+        failNextSends -= 1;
+        return { kind: "transient_failure", errorCode: "provider_timeout" };
+      }
       return { kind: "accepted", providerMessageId: `msg-${sent.length}-${runId}` };
     },
     resolveRecipient: async () => ({ kind: "not_found" }),
-    resolveInvitationRecipient: createInvitationRecipientResolver({ baseUrl: "https://buurtplaza.test", now }),
+    resolveInvitationRecipient: createInvitationRecipientResolver({ baseUrl: "https://buurtplaza.test", tokenSecret: `test-secret-${runId}`, now }),
   });
   return dispatchLifecycleOutbox({ deliver, now, limit: 200 });
 }
@@ -109,6 +125,7 @@ async function cleanup() {
     if (invitations.length > 0) {
       await db.delete(lifecycleOutboxTable).where(inArray(lifecycleOutboxTable.recipientInvitationId, invitations.map((row) => row.id)));
     }
+    await db.delete(businessReviewsTable).where(and(eq(businessReviewsTable.targetType, "publication"), inArray(businessReviewsTable.targetId, ids)));
     await db.delete(businessProfilesTable).where(inArray(businessProfilesTable.id, ids));
   }
   await db.delete(businessMembersTable).where(inArray(businessMembersTable.userId, allUsers));
@@ -289,6 +306,65 @@ describe("business membership routes", () => {
     }
   });
 
+  it("BOPS-T03: rollback rehearsal — flag off hides the routes, keeps every row, and re-enabling sends nothing twice", async () => {
+    const rollbackUser = users.rollback;
+    const invited = await request(`/businesses/${businessId}/invitations`, { method: "POST", body: { email: emails[rollbackUser], role: "manager" } });
+    assert.equal(invited.status, 201, JSON.stringify(invited.body));
+    const sentBefore = sent.length;
+    await dispatchInvitations();
+    const first = sent.filter((entry) => entry.to === emails[rollbackUser]);
+    assert.equal(first.length, 1, "one invitation e-mail after the first dispatch");
+    const token = tokenFromEmail(first[0]);
+
+    // A second invitation is still *queued* (not dispatched) when the flag goes off.
+    const queuedInvite = await request(`/businesses/${businessId}/invitations`, { method: "POST", body: { email: `queued-${runId}@example.test`, role: "manager" } });
+    assert.equal(queuedInvite.status, 201, JSON.stringify(queuedInvite.body));
+
+    flags = { ...flags, businessOnboarding: false };
+    try {
+      for (const [method, path, body] of [
+        ["GET", `/businesses/${businessId}/members`],
+        ["POST", `/businesses/${businessId}/invitations`, { email: "x@example.test", role: "manager" }],
+        ["POST", "/business-invitations/accept", { token }],
+        ["POST", `/businesses/${businessId}/close`, { confirm: true }],
+      ] as [string, string, unknown?][]) {
+        const res = await request(path, { method, body, userId: rollbackUser });
+        assert.equal(res.status, 404, `${method} ${path} while the flag is off`);
+        assert.equal(res.body.code, "FEATURE_DISABLED");
+      }
+      // The outbox still drains while the flag is off: the queued invitation goes out exactly once,
+      // the already-sent one is not re-sent, and nothing new can be queued (routes are 404).
+      await dispatchInvitations();
+      assert.equal(sent.length, sentBefore + 2, "queued mail drained once; no duplicate of the sent one");
+      const [queuedRow] = await db.select().from(lifecycleOutboxTable).where(eq(lifecycleOutboxTable.recipientInvitationId, queuedInvite.body.id));
+      assert.equal(queuedRow.status, "accepted", "queued invitation row preserved and handed to the provider during rollback");
+      const [row] = await db.select().from(businessInvitationsTable).where(eq(businessInvitationsTable.id, invited.body.id));
+      assert.ok(row && row.acceptedAt === null && row.revokedAt === null, "invitation row preserved and still open");
+      const tokens = await db.select().from(businessInvitationTokensTable).where(eq(businessInvitationTokensTable.invitationId, invited.body.id));
+      assert.equal(tokens.length, 1, "token digest preserved");
+    } finally {
+      flags = { ...flags, businessOnboarding: true };
+    }
+
+    // Re-enabled: the same link still works, and the outbox sends neither invitation again.
+    await dispatchInvitations();
+    assert.equal(sent.length, sentBefore + 2, "no duplicate send after re-enable");
+    assert.equal(sent.filter((entry) => entry.to === emails[rollbackUser]).length, 1, "no duplicate send after re-enable");
+    const queuedRevoke = await request(`/businesses/${businessId}/invitations/${queuedInvite.body.id}`, { method: "DELETE" });
+    assert.equal(queuedRevoke.status, 200, "rehearsal invitation revoked so later tests see the original team");
+    const accepted = await request("/business-invitations/accept", { method: "POST", userId: rollbackUser, body: { token } });
+    assert.equal(accepted.status, 200, JSON.stringify(accepted.body));
+    assert.equal(accepted.body.accepted, true);
+    const listing = await request(`/businesses/${businessId}/members`);
+    const before = listing.body.members.length;
+    const own = await request(`/businesses/${businessId}/members`, { userId: rollbackUser });
+    const me = own.body.members.find((member: { isSelf: boolean }) => member.isSelf);
+    assert.ok(me, "accepted invitee is listed");
+    const removed = await request(`/businesses/${businessId}/members/${me.id}`, { method: "DELETE", userId: rollbackUser });
+    assert.equal(before - 1, (await request(`/businesses/${businessId}/members`)).body.members.length);
+    assert.equal(removed.status, 200, "owner removes the rehearsal member so later tests see the original team");
+  });
+
   it("BMEM-T02: managers see members but cannot invite, change roles, transfer, remove others, or close", async () => {
     const listing = await request(`/businesses/${businessId}/members`, { userId: users.manager });
     assert.equal(listing.status, 200);
@@ -391,6 +467,81 @@ describe("business membership routes", () => {
     assert.equal(events.filter((event) => event.action === "closed").length, 1, "closing twice writes one audit row");
     const invite = await request(`/businesses/${businessId}/invitations`, { method: "POST", body: { email: "late@example.test", role: "manager" } });
     assert.equal(invite.status, 409, "closed businesses take no new members");
+
+    // Closure is terminal for the listing: neither a reviewer nor an owner can bring it back or edit it.
+    const republish = await request(`/review/businesses/${businessId}/publication`, {
+      method: "POST",
+      userId: `user_bmem_reviewer_${runId}`,
+      editor: true,
+      body: { action: "publish", expectedRevisionVersion: 0 },
+    });
+    assert.equal(republish.status, 409, JSON.stringify(republish.body));
+    assert.deepEqual(republish.body.fieldErrors, [{ field: "publicationStatus", code: "invalid_transition" }]);
+    const draft = await request(`/business-profiles/${businessId}/revision`, { method: "PATCH", body: { expectedVersion: 0, nl: { tagline: "terug?" } } });
+    assert.equal(draft.status, 404, "closed business has no editable revision");
+    const legacyEdit = await request(`/business-profiles/${businessId}`, { method: "PATCH", body: { tagline: "terug?" } });
+    assert.equal(legacyEdit.status, 403, "legacy owner edit route treats a closed business as not owned");
+    const [afterAll] = await db.select().from(businessProfilesTable).where(eq(businessProfilesTable.id, businessId));
+    assert.equal(afterAll.publicationStatus, "unpublished");
+    // Closing is the existing publication action: one unpublish review row, taken by the owner, reason "closed".
+    const reviews = await db.select().from(businessReviewsTable).where(and(eq(businessReviewsTable.targetType, "publication"), eq(businessReviewsTable.targetId, businessId)));
+    assert.deepEqual(reviews.map((row) => [row.decision, row.reasonCode, row.reviewerUserId]), [["unpublish", "closed", users.owner]]);
+
+    // A draft closes the same way: it ends unpublished (never an editable draft again) and is unreachable through review.
+    const draftId = await seedBusiness("draft", users.owner, "draft");
+    const closedDraft = await request(`/businesses/${draftId}/close`, { method: "POST", body: { confirm: true } });
+    assert.equal(closedDraft.status, 200, JSON.stringify(closedDraft.body));
+    assert.equal(closedDraft.body.publicationStatus, "unpublished");
+    const [draftRow] = await db.select().from(businessProfilesTable).where(eq(businessProfilesTable.id, draftId));
+    assert.equal(draftRow.publicationStatus, "unpublished");
+    assert.ok(draftRow.closedAt);
+    const draftRepublish = await request(`/review/businesses/${draftId}/publication`, {
+      method: "POST",
+      userId: `user_bmem_reviewer_${runId}`,
+      editor: true,
+      body: { action: "publish", expectedRevisionVersion: 0 },
+    });
+    assert.equal(draftRepublish.status, 409);
+  });
+
+  it("BOPS-T02: a transient send failure retries with the very same link, and a re-invite supersedes it", async () => {
+    const retryUser = users.retry;
+    const invited = await request(`/businesses/${otherBusinessId}/invitations`, { method: "POST", userId: users.outsider, body: { email: emails[retryUser], role: "manager" } });
+    assert.equal(invited.status, 201, JSON.stringify(invited.body));
+    failNextSends = 1;
+    await dispatchInvitations();
+    const firstAttempt = sent.filter((entry) => entry.to === emails[retryUser]);
+    assert.equal(firstAttempt.length, 1, "first attempt reached the provider");
+    const [row] = await db.select().from(lifecycleOutboxTable).where(eq(lifecycleOutboxTable.recipientInvitationId, invited.body.id));
+    assert.equal(row.status, "queued", "transient failure leaves the row queued");
+    clock = new Date(clock.getTime() + 10 * 60_000);
+    await dispatchInvitations();
+    const attempts = sent.filter((entry) => entry.to === emails[retryUser]);
+    assert.equal(attempts.length, 2, "the retry sent again");
+    assert.equal(tokenFromEmail(attempts[1]), tokenFromEmail(attempts[0]), "the retry carries the same link");
+    const digests = await db.select().from(businessInvitationTokensTable).where(eq(businessInvitationTokensTable.invitationId, invited.body.id));
+    assert.equal(digests.length, 1, "one digest per outbox row, however many attempts");
+    assert.equal(digests[0].supersededAt, null);
+
+    // Revoke + re-invite: a new outbox row derives a new token and supersedes the old link.
+    const revoked = await request(`/businesses/${otherBusinessId}/invitations/${invited.body.id}`, { method: "DELETE", userId: users.outsider });
+    assert.equal(revoked.status, 200);
+    const again = await request(`/businesses/${otherBusinessId}/invitations`, { method: "POST", userId: users.outsider, body: { email: emails[retryUser], role: "manager" } });
+    assert.equal(again.status, 201, JSON.stringify(again.body));
+    await dispatchInvitations();
+    const latest = sent.filter((entry) => entry.to === emails[retryUser]).at(-1)!;
+    assert.notEqual(tokenFromEmail(latest), tokenFromEmail(attempts[0]), "a re-invite mints a different link");
+    const stale = await request("/business-invitations/accept", { method: "POST", userId: retryUser, body: { token: tokenFromEmail(attempts[0]) } });
+    assert.equal(stale.status, 409);
+    assert.equal(stale.body.reason, "invalid", "a superseded link is indistinguishable from an unknown one");
+    const fresh = await request("/business-invitations/accept", { method: "POST", userId: retryUser, body: { token: tokenFromEmail(latest) } });
+    assert.equal(fresh.status, 200, JSON.stringify(fresh.body));
+  });
+
+  it("invitation return refs are stored without the token", () => {
+    assert.equal(sanitizeReturnRef("/account/uitnodiging?token=abc123&x=1"), "/account/uitnodiging?x=1");
+    assert.equal(sanitizeReturnRef("/account/uitnodiging"), "/account/uitnodiging");
+    assert.equal(sanitizeReturnRef("/account/uitnodiging/../beveiliging?token=abc"), "/account/beveiliging");
   });
 
   it("BMEM-T07: membership changes leave consumer preferences untouched", async () => {

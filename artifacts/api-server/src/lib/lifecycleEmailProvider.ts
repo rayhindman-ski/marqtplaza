@@ -176,14 +176,23 @@ export function buildInvitationLink(baseUrl: string, token: string): string {
  * Resolve an open invitation to its address and mint the single-use token
  * for this send. The token lives as long as the invitation itself.
  */
-export function createInvitationRecipientResolver(options: { baseUrl: string | null; now?: () => Date }): InvitationRecipientResolver {
+export function createInvitationRecipientResolver(options: { baseUrl: string | null; tokenSecret?: string | null; now?: () => Date }): InvitationRecipientResolver {
   const now = options.now ?? (() => new Date());
+  const tokenSecret = options.tokenSecret === undefined ? process.env.SESSION_SECRET ?? null : options.tokenSecret;
+  let tokenSecretMissingLogged = false;
   return async (message) => {
     if (message.recipientInvitationId === null) return { kind: "closed" };
     if (!options.baseUrl) {
       if (!registrationLinkNotConfiguredLogged) {
         registrationLinkNotConfiguredLogged = true;
         logger.warn({ event: "registration_link_base_not_configured" }, "CONSUMER_REGISTRATION_LINK_BASE_URL is not set; invitation emails stay queued");
+      }
+      return { kind: "not_configured" };
+    }
+    if (!tokenSecret) {
+      if (!tokenSecretMissingLogged) {
+        tokenSecretMissingLogged = true;
+        logger.warn({ event: "invitation_token_secret_not_configured" }, "SESSION_SECRET is not set; invitation emails stay queued");
       }
       return { kind: "not_configured" };
     }
@@ -200,7 +209,7 @@ export function createInvitationRecipientResolver(options: { baseUrl: string | n
       }
       const newest = await newestInvitationOutboxId(tx, invitation.id);
       if (newest !== null && newest !== message.id) return { kind: "superseded" as const };
-      const issued = await issueInvitationToken(tx, { invitationId: invitation.id, outboxId: message.id, now: at, expiresAt: invitation.expiresAt });
+      const issued = await issueInvitationToken(tx, { invitationId: invitation.id, outboxId: message.id, secret: tokenSecret, now: at, expiresAt: invitation.expiresAt });
       return {
         kind: "found" as const,
         recipient: { email: invitation.normalizedEmail, locale: invitation.locale },

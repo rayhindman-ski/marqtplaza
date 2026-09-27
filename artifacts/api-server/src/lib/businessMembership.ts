@@ -1,6 +1,6 @@
-import { createHash, randomBytes } from "node:crypto";
+import { createHash, createHmac } from "node:crypto";
 
-import { and, asc, desc, eq, isNull, ne } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, ne } from "drizzle-orm";
 
 import {
   BUSINESS_MEMBER_ROLES,
@@ -8,7 +8,9 @@ import {
   businessInvitationsTable,
   businessMemberEventsTable,
   businessMembersTable,
+  businessProfileRevisionsTable,
   businessProfilesTable,
+  businessReviewsTable,
   db,
   lifecycleOutboxTable,
   type BusinessMemberEventAction,
@@ -54,8 +56,15 @@ export function isMemberRole(value: unknown): value is BusinessMemberRole {
 
 // ------------------------------------------------------------------ tokens ---
 
-export function generateInvitationToken(): string {
-  return randomBytes(32).toString("base64url");
+/**
+ * Derive the single-use token for one outbox send. The token is an HMAC of
+ * the invitation and outbox row under a server secret, so a transient-failure
+ * retry of the *same* outbox row reproduces the *same* link (BOPS-T02) while
+ * only the digest is ever stored. A new outbox row (re-invite) derives a new
+ * token and supersedes the old one.
+ */
+export function deriveInvitationToken(secret: string, invitationId: number, outboxId: number): string {
+  return createHmac("sha256", secret).update(`business-invitation:${invitationId}:${outboxId}`, "utf8").digest("base64url");
 }
 
 export function digestInvitationToken(token: string): string {
@@ -65,13 +74,13 @@ export function digestInvitationToken(token: string): string {
 const TOKEN_SHAPE = /^[A-Za-z0-9_-]{32,128}$/;
 
 /**
- * Mint a token for one outbox row. Tokens of *other* rows are superseded;
- * tokens already minted for the same row stay valid because a provider may
- * deduplicate a retried send and deliver the first body.
+ * Mint (or re-derive) the token for one outbox row. Tokens of *other* rows
+ * are superseded; the token of this row is stable across retries, so the
+ * digest is inserted at most once.
  */
 export async function issueInvitationToken(
-  tx: Pick<typeof db, "insert" | "update">,
-  input: { invitationId: number; outboxId: number | null; now: Date; expiresAt: Date },
+  tx: Pick<typeof db, "insert" | "update" | "select">,
+  input: { invitationId: number; outboxId: number; secret: string; now: Date; expiresAt: Date },
 ): Promise<{ token: string }> {
   await tx
     .update(businessInvitationTokensTable)
@@ -81,16 +90,24 @@ export async function issueInvitationToken(
         eq(businessInvitationTokensTable.invitationId, input.invitationId),
         isNull(businessInvitationTokensTable.usedAt),
         isNull(businessInvitationTokensTable.supersededAt),
-        input.outboxId === null ? undefined : ne(businessInvitationTokensTable.outboxId, input.outboxId),
+        ne(businessInvitationTokensTable.outboxId, input.outboxId),
       ),
     );
-  const token = generateInvitationToken();
-  await tx.insert(businessInvitationTokensTable).values({
-    invitationId: input.invitationId,
-    tokenDigest: digestInvitationToken(token),
-    outboxId: input.outboxId,
-    expiresAt: input.expiresAt,
-  });
+  const token = deriveInvitationToken(input.secret, input.invitationId, input.outboxId);
+  const digest = digestInvitationToken(token);
+  const existing = await tx
+    .select({ id: businessInvitationTokensTable.id })
+    .from(businessInvitationTokensTable)
+    .where(and(eq(businessInvitationTokensTable.invitationId, input.invitationId), eq(businessInvitationTokensTable.outboxId, input.outboxId)))
+    .limit(1);
+  if (existing.length === 0) {
+    await tx.insert(businessInvitationTokensTable).values({
+      invitationId: input.invitationId,
+      tokenDigest: digest,
+      outboxId: input.outboxId,
+      expiresAt: input.expiresAt,
+    });
+  }
   return { token };
 }
 
@@ -121,6 +138,7 @@ async function lockProfile(tx: Tx, businessProfileId: number) {
       name: businessProfilesTable.name,
       publicationStatus: businessProfilesTable.publicationStatus,
       closedAt: businessProfilesTable.closedAt,
+      approvedRevisionId: businessProfilesTable.approvedRevisionId,
     })
     .from(businessProfilesTable)
     .where(eq(businessProfilesTable.id, businessProfileId))
@@ -416,7 +434,7 @@ export async function removeMember(input: {
     if (!self && actor.role !== "owner") return fail({ kind: "forbidden" });
     if (target.role === "owner" && ownersAmong(members).length <= 1) return fail({ kind: "last_owner" });
     await tx.delete(businessMembersTable).where(eq(businessMembersTable.id, target.id));
-    await recordEvent(tx, { businessProfileId: input.businessProfileId, actorUserId: input.actorUserId, targetUserId: target.userId, action: self ? "left" : "removed" });
+    await recordEvent(tx, { businessProfileId: input.businessProfileId, actorUserId: input.actorUserId, targetUserId: target.userId, action: self ? "left" : "removed", reasonCode: self ? "member_left" : `removed_by_owner:${target.role}` });
     if (!self) {
       await enqueueLifecycleMessage(tx, {
         eventCode: "business.member_removed",
@@ -447,7 +465,7 @@ export async function transferOwnership(input: {
     // Atomic swap: the target becomes owner, the actor steps down to manager. Owner count never drops below one.
     await tx.update(businessMembersTable).set({ role: "owner" }).where(eq(businessMembersTable.id, target.id));
     await tx.update(businessMembersTable).set({ role: "manager" }).where(eq(businessMembersTable.id, actor.id));
-    await recordEvent(tx, { businessProfileId: input.businessProfileId, actorUserId: input.actorUserId, targetUserId: target.userId, action: "transferred" });
+    await recordEvent(tx, { businessProfileId: input.businessProfileId, actorUserId: input.actorUserId, targetUserId: target.userId, action: "transferred", reasonCode: `owner_to_manager:${actor.role}` });
     await enqueueLifecycleMessage(tx, {
       eventCode: "business.ownership_transferred",
       recipientClerkUserId: target.userId,
@@ -478,18 +496,52 @@ export async function closeBusiness(input: {
     if (!actor || actor.role !== "owner") return fail({ kind: "forbidden" });
     if (profile.closedAt) return ok({ publicationStatus: profile.publicationStatus, alreadyClosed: true });
     const from = profile.publicationStatus;
-    // Published and suspended listings leave the public directory; drafts and unpublished rows only gain the closed marker.
-    const to = from === "published" || from === "suspended" ? "unpublished" : from;
-    await tx
+    if (from === "archived") return fail({ kind: "not_found" });
+    // BMEM-006: closing *is* the existing publication action "unpublish", taken
+    // by the owner instead of a reviewer. Every non-archived status ends
+    // `unpublished` (a closed draft must not read as an editable draft), the
+    // same publication-review row is written (decision `unpublish`, reason
+    // `closed`, version = the approved revision or 0), and the closed marker
+    // makes the transition terminal for publish/suspend/edit routes.
+    const to = "unpublished";
+    const [updated] = await tx
       .update(businessProfilesTable)
       .set({ publicationStatus: to, closedAt: input.now })
-      .where(and(eq(businessProfilesTable.id, profile.id), eq(businessProfilesTable.publicationStatus, from)));
+      .where(and(eq(businessProfilesTable.id, profile.id), eq(businessProfilesTable.publicationStatus, from), isNull(businessProfilesTable.closedAt)))
+      .returning({ id: businessProfilesTable.id });
+    if (!updated) return fail({ kind: "invalid_transition", status: from });
+    const [approved] = profile.approvedRevisionId
+      ? await tx.select({ version: businessProfileRevisionsTable.version }).from(businessProfileRevisionsTable).where(eq(businessProfileRevisionsTable.id, profile.approvedRevisionId)).limit(1)
+      : [];
+    await tx.insert(businessReviewsTable).values({
+      targetType: "publication",
+      targetId: profile.id,
+      targetVersion: approved?.version ?? 0,
+      reviewerUserId: input.actorUserId,
+      decision: "unpublish",
+      reasonCode: "closed",
+      reason: null,
+    });
     await recordEvent(tx, { businessProfileId: profile.id, actorUserId: input.actorUserId, action: "closed", reasonCode: from });
     // Open invitations cannot be accepted into a closed business.
     await tx
       .update(businessInvitationsTable)
       .set({ revokedAt: input.now })
       .where(and(eq(businessInvitationsTable.businessProfileId, profile.id), isNull(businessInvitationsTable.acceptedAt), isNull(businessInvitationsTable.revokedAt)));
+    // …and their queued (not yet sent) e-mails and unused tokens go with them, exactly as on explicit revocation.
+    const invitationIds = (
+      await tx.select({ id: businessInvitationsTable.id }).from(businessInvitationsTable).where(eq(businessInvitationsTable.businessProfileId, profile.id))
+    ).map((row) => row.id);
+    if (invitationIds.length > 0) {
+      await tx
+        .update(lifecycleOutboxTable)
+        .set({ status: "cancelled", cancelledAt: input.now })
+        .where(and(inArray(lifecycleOutboxTable.recipientInvitationId, invitationIds), eq(lifecycleOutboxTable.status, "queued")));
+      await tx
+        .update(businessInvitationTokensTable)
+        .set({ supersededAt: input.now })
+        .where(and(inArray(businessInvitationTokensTable.invitationId, invitationIds), isNull(businessInvitationTokensTable.usedAt), isNull(businessInvitationTokensTable.supersededAt)));
+    }
     await notifyBusinessOwners(tx, {
       businessProfileId: profile.id,
       eventCode: "business.closed",

@@ -37,6 +37,8 @@ const BUSINESS_TEAM_PATH = /^\/account\/bedrijf\/[1-9][0-9]{0,9}\/(team|sluiten)
 
 const SEGMENT = /^[A-Za-z0-9._~:@!$&'()*+,;=%-]+$/;
 
+const SECRET_PARAMS = ['token'];
+
 function stripBase(pathname: string, basePath: string): string | null {
   const base = basePath.replace(/\/$/, '');
   if (!base) return pathname;
@@ -78,6 +80,10 @@ export function sanitizeReturnPath(candidate: unknown, basePath = ''): string | 
   const local = stripBase(pathname, basePath) ?? (basePath ? null : pathname);
   if (!local || !isAllowedPathname(local)) return null;
 
+  // Secrets never ride along in a return path (they would end up in sign-in
+  // redirect URLs, referrers and server-side registration rows). The invitation
+  // page keeps its token in the browser instead — see invitationHandoff.
+  for (const key of SECRET_PARAMS) parsed.searchParams.delete(key);
   return `${local}${parsed.search}${parsed.hash}`;
 }
 

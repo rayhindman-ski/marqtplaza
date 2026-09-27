@@ -119,3 +119,13 @@ confirmation. Progress lines above and below.
 - 19:27 team, close and invitation pages; account home business list; routes + return-path allowlist; i18n parity.
 - 19:33 e2e `business-membership` 4/4; usability gate 21/21 (three new screens budgeted); lifecycle test exception for invitation mail; account suites green.
 - 19:36 phase log; commit + push. Phase 6 next.
+
+### Progress — Phase 6 (hardening and release evidence)
+
+- 19:37 start (after Phase 5 push `09aa175`); rate limits confirmed, log scan clean.
+- 19:45 BOPS-T03 rollback rehearsal test stabilised (own rehearsal member; 11/11).
+- 19:55 full regression: api suites, map / usability / account workflows, remaining e2e suites; v042/v043 failures traced to the branch base (pre-existing).
+- 20:00 architect review round 1: FAIL (3 severe, 4 moderate) — closure reversible, invitation lost across registration, retry minted new tokens.
+- 20:08 fixes: terminal closure across publication/edit routes; token-free return refs + browser-parked token; HMAC-derived per-row token; close cancels queued mail; reason codes; gate-before-validation.
+- 20:11 round 2: FAIL on one point (draft closure / review row) — closing now is the publication unpublish action for every status, with the review row; queued-rollback and full registration journey tests added.
+- 20:15 round 3: PASS. Phase log + convergence record written; commit + push. v0.5.2 Phases 0–6 complete; production flag off pending user approvals.

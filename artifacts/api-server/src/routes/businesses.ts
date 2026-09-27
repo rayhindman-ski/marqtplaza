@@ -157,6 +157,8 @@ async function findOwnedProfile(profileId: number, userId: string) {
         eq(businessMembersTable.role, "owner"),
       ),
     );
+  // Closed businesses (BMEM-006) accept no owner edits.
+  if (row?.profile.closedAt) return undefined;
   return row;
 }
 

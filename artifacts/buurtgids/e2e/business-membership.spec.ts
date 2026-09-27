@@ -194,14 +194,31 @@ test.describe('business membership (v0.5.2)', () => {
       if (body.token === 'stale-token') return json(route, { accepted: false, reason: 'expired' }, 409);
       return json(route, { accepted: true, businessId: 41, businessName: 'Kapper Centrum', role: 'manager' });
     });
-    // Signed out: no write happens, and both links carry the invitation as return path.
+    // Signed out: no write happens; both links return to the bare invitation page and the
+    // token is parked in the browser instead of travelling through sign-in or registration URLs.
     await page.goto('/account/uitnodiging?token=fresh-token');
     await expect(page.getByTestId('heading-business-invitation')).toHaveText('Uitnodiging voor een bedrijfsteam');
-    await expect(page.getByTestId('link-invitation-sign-in')).toHaveAttribute('href', /\/sign-in\?terug=%2Faccount%2Fuitnodiging%3Ftoken%3Dfresh-token$/);
-    await expect(page.getByTestId('link-invitation-register')).toHaveAttribute('href', /\/account\/register\?terug=%2Faccount%2Fuitnodiging%3Ftoken%3Dfresh-token$/);
+    await expect(page.getByTestId('link-invitation-sign-in')).toHaveAttribute('href', /\/sign-in\?terug=%2Faccount%2Fuitnodiging$/);
+    await expect(page.getByTestId('link-invitation-register')).toHaveAttribute('href', /\/account\/register\?terug=%2Faccount%2Fuitnodiging$/);
     expect(accepts).toEqual([]);
+    await expect
+      .poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('buurtplaza.invitation-handoff') ?? 'null')?.token ?? null))
+      .toBe('fresh-token');
+    // The registration form sends only the bare return path to the server.
+    const registrations: unknown[] = [];
+    await page.route('**/api/consumer-registration', (route) => {
+      registrations.push(route.request().postDataJSON());
+      return json(route, { status: 'queued' }, 202);
+    });
+    await page.getByTestId('link-invitation-register').click();
+    await expect(page).toHaveURL(/\/account\/register\?terug=%2Faccount%2Fuitnodiging$/);
 
     await signIn(page);
+    // Back on the bare page after sign-in: the parked token is re-attached and used only on accept.
+    await page.goto('/account/uitnodiging?e2eAccountAuth=1');
+    await expect(page.getByTestId('button-invitation-accept')).toBeVisible();
+    expect(accepts).toEqual([]);
+    expect(registrations).toEqual([]);
     await page.goto('/account/uitnodiging?token=wrong-address-token&e2eAccountAuth=1');
     expect(accepts).toEqual([]);
     await page.getByTestId('button-invitation-accept').click();
@@ -214,7 +231,59 @@ test.describe('business membership (v0.5.2)', () => {
     await expect(page.getByTestId('status-invitation-accepted')).toContainText('Je bent nu beheerder van Kapper Centrum.');
     await expect(page.getByTestId('link-invitation-team')).toHaveAttribute('href', /\/account\/bedrijf\/41\/team$/);
     expect(accepts).toEqual([{ token: 'wrong-address-token' }, { token: 'stale-token' }, { token: 'fresh-token' }]);
+    // Accepting clears the parked token; the bare page now reports a missing invitation.
     await page.goto('/account/uitnodiging?e2eAccountAuth=1');
     await expect(page.getByTestId('status-invitation-missing')).toBeVisible();
+    expect(await page.evaluate(() => localStorage.getItem('buurtplaza.invitation-handoff'))).toBeNull();
+  });
+
+  test('journey: invitation → e-mail registration → password step → back to the invitation → accepted', async ({ page }) => {
+    const REG_TOKEN = 'B'.repeat(43);
+    const registrations: Record<string, unknown>[] = [];
+    const accepts: unknown[] = [];
+    await page.addInitScript(() => localStorage.setItem('buurtplaza-language', 'nl'));
+    await page.route('**/api/consumer-registration', (route) => {
+      registrations.push(route.request().postDataJSON());
+      return json(route, { status: 'accepted', linkLifetimeMinutes: 60 }, 202);
+    });
+    await page.route(/\/api\/consumer-registration\/verify(\?.*)?$/, (route) => {
+      if (route.request().method() === 'GET') return json(route, { state: 'valid', canResend: false, locale: 'nl', expiresAt: '2030-01-01T00:00:00.000Z' });
+      // The server hands back the *bare* return ref it stored — no token was ever persisted.
+      return json(route, { state: 'valid', canResend: false, locale: 'nl', handoff: { email: 'invitee@example.org', returnRef: '/account/uitnodiging' } });
+    });
+    await page.route('**/api/business-invitations/accept', (route) => {
+      accepts.push(route.request().postDataJSON());
+      return json(route, { accepted: true, businessId: 41, businessName: 'Kapper Centrum', role: 'manager' });
+    });
+
+    // 1. Signed out, the e-mailed link opens; the visitor chooses to register.
+    await page.goto('/account/uitnodiging?token=journey-token');
+    await page.getByTestId('link-invitation-register').click();
+    await expect(page).toHaveURL(/\/account\/register\?terug=%2Faccount%2Fuitnodiging$/);
+    await page.getByTestId('input-register-name').fill('Nieuwe Beheerder');
+    await page.getByTestId('input-register-email').fill('invitee@example.org');
+    await page.getByTestId('input-register-phone').fill('+31612345678');
+    await page.getByTestId('button-register-submit').click();
+    await expect(page).toHaveURL(/\/account\/register\/check-email$/);
+    expect(registrations).toHaveLength(1);
+    expect(registrations[0].returnRef).toBe('/account/uitnodiging');
+    expect(JSON.stringify(registrations[0])).not.toContain('journey-token');
+
+    // 2. The registration e-mail link is consumed; the password step follows with the bare return ref.
+    await page.goto(`/account/register/complete?token=${REG_TOKEN}`);
+    await page.getByTestId('button-register-continue').click();
+    await page.getByTestId('button-register-set-password').click();
+    await expect(page).toHaveURL(/\/sign-up\?terug=%2Faccount%2Fuitnodiging$/);
+    expect(page.url()).not.toContain('journey-token');
+
+    // 3. Once signed in (password created), the invitation page re-attaches the parked token and accepts on click only.
+    await signIn(page);
+    await page.goto('/account/uitnodiging?e2eAccountAuth=1');
+    await expect(page.getByTestId('button-invitation-accept')).toBeVisible();
+    expect(accepts).toEqual([]);
+    await page.getByTestId('button-invitation-accept').click();
+    await expect(page.getByTestId('status-invitation-accepted')).toContainText('Kapper Centrum');
+    expect(accepts).toEqual([{ token: 'journey-token' }]);
+    expect(await page.evaluate(() => localStorage.getItem('buurtplaza.invitation-handoff'))).toBeNull();
   });
 });

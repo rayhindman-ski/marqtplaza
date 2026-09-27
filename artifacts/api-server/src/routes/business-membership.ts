@@ -194,13 +194,14 @@ export function createBusinessMembershipRouter(options: BusinessMembershipRouter
   });
 
   router.post("/businesses/:id/invitations", async (req, res): Promise<void> => {
+    // Membership first: an outsider learns nothing from validation errors (404 before 400).
+    const gate = await requireBusinessRole(req, res, "owner");
+    if (!gate) return;
     const unknown = unknownFieldErrors(req.body, INVITE_FIELDS);
     if (unknown.length > 0) {
       sendApiError(req, res, "VALIDATION_FAILED", { fieldErrors: unknown });
       return;
     }
-    const gate = await requireBusinessRole(req, res, "owner");
-    if (!gate) return;
     const body = bodyOf(req);
     const fieldErrors: { field: string; code: string }[] = [];
     if (typeof body.email !== "string" || body.email.trim().length === 0) fieldErrors.push({ field: "email", code: "required" });
@@ -287,13 +288,14 @@ export function createBusinessMembershipRouter(options: BusinessMembershipRouter
   });
 
   router.patch("/businesses/:id/members/:memberId", async (req, res): Promise<void> => {
+    // Membership first: an outsider learns nothing from validation errors (404 before 400).
+    const gate = await requireBusinessRole(req, res, "owner");
+    if (!gate) return;
     const unknown = unknownFieldErrors(req.body, ROLE_FIELDS);
     if (unknown.length > 0) {
       sendApiError(req, res, "VALIDATION_FAILED", { fieldErrors: unknown });
       return;
     }
-    const gate = await requireBusinessRole(req, res, "owner");
-    if (!gate) return;
     const memberId = positiveInt(req.params.memberId);
     if (!memberId) {
       sendApiError(req, res, "NOT_FOUND");
@@ -329,13 +331,14 @@ export function createBusinessMembershipRouter(options: BusinessMembershipRouter
   });
 
   router.post("/businesses/:id/ownership/transfer", async (req, res): Promise<void> => {
+    // Membership first: an outsider learns nothing from validation errors (404 before 400).
+    const gate = await requireBusinessRole(req, res, "owner");
+    if (!gate) return;
     const unknown = unknownFieldErrors(req.body, TRANSFER_FIELDS);
     if (unknown.length > 0) {
       sendApiError(req, res, "VALIDATION_FAILED", { fieldErrors: unknown });
       return;
     }
-    const gate = await requireBusinessRole(req, res, "owner");
-    if (!gate) return;
     const memberId = positiveInt(bodyOf(req).memberId);
     if (!memberId) {
       sendApiError(req, res, "VALIDATION_FAILED", { fieldErrors: [{ field: "memberId", code: "required" }] });
@@ -351,13 +354,14 @@ export function createBusinessMembershipRouter(options: BusinessMembershipRouter
   });
 
   router.post("/businesses/:id/close", async (req, res): Promise<void> => {
+    // Membership first: an outsider learns nothing from validation errors (404 before 400).
+    const gate = await requireBusinessRole(req, res, "owner");
+    if (!gate) return;
     const unknown = unknownFieldErrors(req.body, CLOSE_FIELDS);
     if (unknown.length > 0) {
       sendApiError(req, res, "VALIDATION_FAILED", { fieldErrors: unknown });
       return;
     }
-    const gate = await requireBusinessRole(req, res, "owner");
-    if (!gate) return;
     if (bodyOf(req).confirm !== true) {
       sendApiError(req, res, "VALIDATION_FAILED", { fieldErrors: [{ field: "confirm", code: "required" }] });
       return;

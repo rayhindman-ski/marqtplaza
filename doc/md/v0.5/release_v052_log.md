@@ -463,3 +463,107 @@ pair fails.
 `usability-regression` 21/21, `business-onboarding` + `account-preferences`
 + `account-privacy` + `business-moderation` green; returnPath unit 7/7;
 i18n parity 12/12; workspace typecheck clean; API server restarted cleanly.
+
+### 2026-09-27 — Phase 6: hardening and release evidence
+
+**Window:** 19:37 – 20:15 CEST.
+
+**Rate limits (BSEC):** already present from Phase 5 and re-checked: sliding
+window on invitations per account per hour and on accept attempts per
+network per ten minutes; no permanent blocks, no addresses in the limiter
+keys. **Log scan:** every membership log line goes through `safeErrorSummary`
+or carries only event codes, outbox ids and locales; no address, token or
+link is logged (grep over `business-membership.ts`, `businessMembership.ts`,
+`lifecycleEmailProvider.ts`).
+
+**Rollback rehearsal (BOPS-T03, automated):** with one invitation already sent
+and a second one still queued, the flag goes off → every membership route
+answers 404 `FEATURE_DISABLED`; the outbox keeps draining (the queued mail
+goes out exactly once, the sent one is not re-sent); invitation and token rows
+are preserved; flag on again → nothing is sent twice and the original link
+still accepts.
+
+**Architect review (Phases 5–6) — three rounds, final verdict PASS.** First
+round FAIL with three severe and four moderate findings; all fixed:
+
+1. *Closure was reversible.* A reviewer could republish a closed business and
+   the legacy owner PATCH still edited it. Fix: `closed_at` is terminal —
+   member/owner revision routes return 404, the reviewer publication
+   transition refuses with `invalid_transition`, the legacy owner edit route
+   treats the business as not owned. Second round added: closing now *is* the
+   existing publication action for every non-archived status (drafts end
+   `unpublished` too) and writes the same `business_reviews` row
+   (`unpublish` / reason `closed`, taken by the owner) inside the closing
+   transaction.
+2. *Registering from an invitation lost the invitation.* The server
+   return-ref allow-list refused `/account/uitnodiging`, and simply allowing
+   the token-bearing URL would have persisted the raw token on the
+   registration row. Fix: both allow-lists (API + web) admit the page and
+   **strip the `token` parameter**; the browser parks the token
+   (`lib/invitationHandoff.ts`, `localStorage` because e-mail registration
+   finishes in a new tab; 7-day cap; cleared on accept or a terminal
+   refusal) and the invitation page re-attaches it when opened without a URL
+   token. The token therefore never travels through sign-in redirects,
+   registration rows or referrers.
+3. *Retries minted a new token each time.* Fix: the token is derived
+   (HMAC-SHA256 under `SESSION_SECRET`) from the invitation and outbox row,
+   so a transient-failure retry of the same row reproduces the identical link
+   with a single stored digest; a re-invite (new outbox row) derives a new
+   token and supersedes the old. Missing secret → mail stays queued
+   (`invitation_token_secret_not_configured`, logged once).
+4. Moderate: close cancels queued invitation mails and supersedes unused
+   tokens (as explicit revoke already did); removed/transferred audit rows
+   carry reason codes; the membership gate now runs before body validation
+   on the four `:id` write routes (outsiders get 404, never 400).
+
+**Full regression (after the fixes):** api `business-membership` 13/13 (new:
+BOPS-T02 same-link retry + supersede, BOPS-T03 rollback with a queued
+message, closure of a draft + review row + republish/edit refusals, return-ref
+token stripping), `business-intake` 15/15, `business-onboarding` 7/7,
+`account-foundation` 26/26, `account-lifecycle` 22/22, `consumer-registration`
+27/27, `events-quota` 28/28, `business-publication` 25 pass / 2 fail (the two
+pre-existing fact-check freshness tests, unchanged since Phase 0). e2e:
+map-regression 11/11; usability-regression 21/21 (budgets unchanged);
+account-regression (live Clerk) 25/25 on the second run — the first run had a
+single failure in `account-preferences` that did not reproduce and is noted
+as flaky-once, not hidden; business-membership 5/5 (new full journey:
+invitation → e-mail registration → password step → back → accept);
+business-onboarding 13/13, business-intake 7/7, business-review,
+business-moderation, consumer-registration, credential-lifecycle,
+clerk-verification-recovery, account-support, account-privacy,
+signup-stale-step, saved-events-sync all green. Web unit (returnPath, i18n)
+green; workspace typecheck clean; API server restarted cleanly.
+
+**Pre-existing, not touched (recorded):** `v042-release.spec.ts` and
+`v043-release.spec.ts` fail identically on the branch base `cd44cc9` (main)
+— strict-mode locator collisions in the map/list surfaces. Under the standing
+"no map/list/card/filter change" constraint they are left as they are and
+listed as debt, not as v0.5.2 evidence.
+
+**Convergence record — flag state per environment (2026-09-27):**
+
+| Flag | Development | Production |
+| --- | --- | --- |
+| `BUSINESS_ONBOARDING_ENABLED` / `VITE_BUSINESS_ONBOARDING_ENABLED` | on (preview only) | **off** — stays off per §14 until §13 item 11 approvals and §15 policy values are recorded by the user |
+| `CONSUMER_REGISTRATION_ENABLED` (v0.5.1) | on | off |
+| `ACCOUNTS_ENABLED`, `BUSINESS_INTAKE_ENABLED`, `BUSINESS_PUBLICATION_ENABLED` | on | off |
+| `LIFECYCLE_DELIVERY_PROVIDER`, `CONSUMER_REGISTRATION_LINK_BASE_URL` | unset (tests inject a transport) | unset |
+| `SESSION_SECRET` (now also derives invitation tokens) | set | must be set before the flag goes on |
+
+`businessOnboarding` is an effective flag (`own switch && accounts &&
+businessIntake`), so it fails closed whenever either dependency is off. A
+development flag is never gate evidence (same rule as the 002 convergence
+record). Provisional policy values remain provisional: KvK optional,
+invitations 7 days, no automatic approval, auto sign-in after password
+creation.
+
+**§13 status:** 1–10 have automated or live-Clerk evidence in this log
+(items 2 and 8 additionally via the rollback rehearsal and log scan); item 11
+(stakeholder approval) is owed by the user. Manual owed checks, unchanged
+from 002: keyboard-only completion with a screen reader, real identities in a
+deployed environment.
+
+**Debt carried forward:** `account.password_changed` template (no Clerk
+`user.updated` webhook); brand-orange AA recolour (budgeted per screen);
+WeatherCard throws when `/api/weather` lacks `current`; the two publication
+freshness tests; v042/v043 locator collisions.

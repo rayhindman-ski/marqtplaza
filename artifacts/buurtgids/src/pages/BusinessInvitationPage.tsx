@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useSearch } from 'wouter';
 import { useQueryClient } from '@tanstack/react-query';
 import { MailCheck } from 'lucide-react';
@@ -17,6 +17,7 @@ import { useAccountAuth } from '@/lib/accountAuth';
 import { featureFlags } from '@/lib/featureFlags';
 import { accountErrorMessage, accountTranslations, formatCopy } from '@/lib/i18n';
 import { withReturnPath } from '@/lib/returnPath';
+import { clearInvitationHandoff, peekInvitationHandoff, storeInvitationHandoff } from '@/lib/invitationHandoff';
 import { useAppLanguage } from '@/lib/useAppLanguage';
 import { roleLabel } from './BusinessMembersPage';
 
@@ -33,24 +34,34 @@ export default function BusinessInvitationPage() {
   const copy = accountTranslations[language];
   const text = copy.invitation;
   const search = useSearch();
-  const token = new URLSearchParams(search).get('token') ?? '';
+  const urlToken = new URLSearchParams(search).get('token') ?? '';
+  // A token in the URL wins; otherwise pick up the one parked before sign-in/registration.
+  const [parkedToken] = useState(() => (urlToken ? null : peekInvitationHandoff()));
+  const token = urlToken || parkedToken || '';
   const auth = useAccountAuth();
   const queryClient = useQueryClient();
   const accept = useAcceptBusinessInvitation();
   const [result, setResult] = useState<BusinessInvitationAccepted | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const returnPath = `${BUSINESS_INVITATION_PATH}?token=${encodeURIComponent(token)}`;
+  // The return path is the bare page: the token is parked in the browser, never in a redirect URL.
+  const returnPath = BUSINESS_INVITATION_PATH;
+  const needsSignIn = auth.isLoaded && !auth.isSignedIn && Boolean(urlToken);
+  useEffect(() => {
+    if (needsSignIn) storeInvitationHandoff(urlToken);
+  }, [needsSignIn, urlToken]);
 
   async function onAccept() {
     setError(null);
     try {
       const accepted = await accept.mutateAsync({ data: { token } });
+      clearInvitationHandoff();
       setResult(accepted);
       await queryClient.invalidateQueries({ queryKey: getGetAccountMeQueryKey() });
     } catch (failure) {
       const data = (failure as { data?: ApiError | BusinessInvitationRejected } | null)?.data;
       if (data && 'reason' in data) {
+        if (data.reason !== 'email_mismatch') clearInvitationHandoff();
         setError(text[data.reason]);
         return;
       }

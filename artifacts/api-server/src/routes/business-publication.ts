@@ -215,7 +215,9 @@ async function findMemberProfile(profileId: number, userId: string): Promise<Mem
     .innerJoin(businessProfilesTable, eq(businessMembersTable.businessProfileId, businessProfilesTable.id))
     .where(and(eq(businessMembersTable.businessProfileId, profileId), eq(businessMembersTable.userId, userId)))
     .limit(1);
-  if (!row || row.profile.publicationStatus === "archived") return null;
+  // A closed business (BMEM-006) is read-only for its members: no drafts,
+  // submissions or edits after closure.
+  if (!row || row.profile.publicationStatus === "archived" || row.profile.closedAt) return null;
   return row;
 }
 
@@ -1081,6 +1083,9 @@ export function createBusinessPublicationRouter(options: BusinessPublicationRout
         .where(eq(businessProfilesTable.id, existing.id))
         .for("update");
       if (!profile) return { kind: "invalid_transition", status: "archived" };
+      // A closed business can never be (re)published or suspended through review;
+      // closure is terminal for the public listing (BMEM-006).
+      if (profile.closedAt) return { kind: "invalid_transition", status: "closed" };
       const [approved] = profile.approvedRevisionId
         ? await tx
             .select()

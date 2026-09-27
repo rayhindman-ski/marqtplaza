@@ -130,7 +130,10 @@ const RETURN_REF_EXACT_PATHS: ReadonlySet<string> = new Set([
   "/mijn-bedrijf",
   "/account/beveiliging",
   "/account/bedrijf/toevoegen",
+  "/account/uitnodiging",
 ]);
+/** Query parameters that are secrets in transit and must never be persisted with a return ref. */
+const RETURN_REF_SECRET_PARAMS = ["token"] as const;
 const RETURN_REF_PREFIX_PATHS = ["/activiteiten/den-haag/", "/nieuws/", "/bedrijf/"] as const;
 const RETURN_REF_SEGMENT = /^[A-Za-z0-9._~:@!$&'()*+,;=%-]+$/;
 
@@ -158,6 +161,9 @@ export function sanitizeReturnRef(raw: string | undefined | null): string | null
   if (parsed.origin !== "https://internal.invalid") return null;
   const pathname = parsed.pathname.replace(/\/+$/, "") || "/";
   if (!isAllowedReturnPathname(pathname)) return null;
+  // An invitation return ref is stored on the registration row; the invitation
+  // token itself stays in the browser (the web app re-attaches it after sign-in).
+  for (const key of RETURN_REF_SECRET_PARAMS) parsed.searchParams.delete(key);
   return `${pathname}${parsed.search}${parsed.hash}`;
 }
 

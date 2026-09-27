@@ -72,4 +72,10 @@ describe('carryReturnPath', () => {
     assert.equal(carryReturnPath('/sign-up/verify-email-address', '?terug=%2Faccount'), '/sign-up/verify-email-address');
     assert.equal(carryReturnPath('/sign-up/verify-email-address', ''), '/sign-up/verify-email-address');
   });
+
+  it('strips secret query parameters so an invitation token never travels in a return path', () => {
+    assert.equal(sanitizeReturnPath('/account/uitnodiging?token=abc'), '/account/uitnodiging');
+    assert.equal(sanitizeReturnPath('/account/uitnodiging?token=abc&lang=en'), '/account/uitnodiging?lang=en');
+    assert.equal(sanitizeReturnPath('/account/uitnodiging'), '/account/uitnodiging');
+  });
 });
