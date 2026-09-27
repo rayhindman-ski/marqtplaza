@@ -390,11 +390,13 @@ function MarkerPreview({
     <div
       data-marker-preview
       role="tooltip"
-      className="absolute left-1/2 top-full z-50 w-56 -translate-x-1/2 pt-2"
+      className="pointer-events-none absolute left-1/2 top-full z-50 w-56 -translate-x-1/2 pt-2"
       onPointerDown={(event) => event.stopPropagation()}
       onClick={(event) => event.stopPropagation()}
     >
-    <div className="rounded-xl border-2 border-border bg-card p-3 text-left shadow-2xl ring-2 ring-background/80">
+    {/* Pin-wide bridge over the gap; narrow so neighbouring pins stay reachable. */}
+    <div aria-hidden="true" className="pointer-events-auto absolute left-1/2 top-0 h-2 w-12 -translate-x-1/2" />
+    <div className="pointer-events-auto rounded-xl border-2 border-border bg-card p-3 text-left shadow-2xl ring-2 ring-background/80">
       <p className="truncate text-sm font-extrabold text-foreground">{marker.name}</p>
       <p className="mt-0.5 text-[11px] font-bold uppercase tracking-wide text-primary">
         {t.categories[marker.category]}
@@ -1049,6 +1051,8 @@ function CoordinateMapFallback({
             key={point.id}
             onMouseEnter={() => hover.show(point.id)}
             onMouseLeave={() => hover.hide()}
+            onFocus={() => hover.show(point.id)}
+            onBlur={() => hover.hide()}
             className={`absolute -translate-x-1/2 -translate-y-1/2 ${
               hoveredMarkerId === point.id ? 'z-50' : isSelected ? 'z-20' : 'z-10'
             }`}
@@ -1063,8 +1067,6 @@ function CoordinateMapFallback({
               data-event-id={point.id}
               data-marker-color={color}
               onClick={() => onMarkerClick(point.id)}
-              onFocus={() => hover.show(point.id)}
-              onBlur={() => hover.hide()}
               className={className.replace(' -translate-x-1/2 -translate-y-1/2', '')}
               style={style}
               aria-describedby={hoveredMarkerId === point.id ? previewId : undefined}
@@ -1483,6 +1485,8 @@ function TileMapView({
             key={point.id}
             onMouseEnter={() => hover.show(point.id)}
             onMouseLeave={() => hover.hide()}
+            onFocus={() => hover.show(point.id)}
+            onBlur={() => hover.hide()}
             className={`absolute -translate-x-1/2 -translate-y-1/2 ${
               hoveredMarkerId === point.id ? 'z-50' : isSelected ? 'z-20' : 'z-10'
             }`}
@@ -1498,8 +1502,6 @@ function TileMapView({
                 event.stopPropagation();
                 onMarkerClick(point.id);
               }}
-              onFocus={() => hover.show(point.id)}
-              onBlur={() => hover.hide()}
               className={className.replace(' -translate-x-1/2 -translate-y-1/2', '')}
               style={style}
               aria-describedby={hoveredMarkerId === point.id ? previewId : undefined}
@@ -1685,13 +1687,14 @@ function GoogleMapCanvas({
       preview.setAttribute('role', 'tooltip');
       preview.style.cssText = [
         'position:absolute',
-        'top:100%',
+        // The wrapper is a 1px anchor at the pin centre, so the card starts
+        // below the pin's bottom edge and never covers the pin itself.
+        `top:${size / 2 + 10}px`,
         'left:50%',
         'z-index:3',
         'width:224px',
         'transform:translateX(-50%)',
         'border:1px solid hsl(var(--border) / 0.8)',
-        'margin-top:10px',
         'border-radius:12px',
         'background:hsl(var(--card))',
         'padding:12px',
@@ -1733,7 +1736,8 @@ function GoogleMapCanvas({
       // wrapper on its way to the card; only present while the card is shown.
       const bridge = document.createElement('div');
       bridge.setAttribute('aria-hidden', 'true');
-      bridge.style.cssText = 'position:absolute;top:100%;left:50%;width:224px;height:12px;transform:translateX(-50%);display:none;';
+      // Narrow (pin-wide) so it cannot cover neighbouring pins.
+      bridge.style.cssText = `position:absolute;top:${size / 2}px;left:50%;width:${size}px;height:12px;transform:translateX(-50%);display:none;`;
       wrapper.append(element, bridge, preview);
 
       const showPreview = () => {
@@ -1756,15 +1760,25 @@ function GoogleMapCanvas({
       // pointer can travel from the pin onto the card and click the website.
       let hideTimer: ReturnType<typeof setTimeout> | null = null;
       const cancelHide = () => { if (hideTimer) { clearTimeout(hideTimer); hideTimer = null; } };
-      const scheduleHide = () => { cancelHide(); hideTimer = setTimeout(hidePreview, MARKER_PREVIEW_HIDE_DELAY_MS); };
+      const scheduleHide = () => {
+        cancelHide();
+        hideTimer = setTimeout(() => {
+          hideTimer = null;
+          // Marker content may have been rebuilt meanwhile; never touch the
+          // overlay on behalf of detached content.
+          if (wrapper.isConnected) hidePreview();
+        }, MARKER_PREVIEW_HIDE_DELAY_MS);
+      };
       wrapper.addEventListener('mouseenter', () => { cancelHide(); showPreview(); });
       wrapper.addEventListener('mouseleave', scheduleHide);
+      // Keyboard: the card stays open while focus is on the pin or on the
+      // website link inside the card (focusin/focusout bubble, focus/blur don't).
+      wrapper.addEventListener('focusin', () => { cancelHide(); showPreview(); });
+      wrapper.addEventListener('focusout', scheduleHide);
       // Clicks inside the card must not count as marker clicks or map gestures.
       for (const type of ['pointerdown', 'mousedown', 'click', 'dblclick'] as const) {
         preview.addEventListener(type, (event) => event.stopPropagation());
       }
-      element.addEventListener('focus', () => { cancelHide(); showPreview(); });
-      element.addEventListener('blur', scheduleHide);
 
       return wrapper;
     },

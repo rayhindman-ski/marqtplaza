@@ -233,4 +233,4 @@ the pin or the card (grace period + bridge over the gap), the website is a
 real link, clicks inside the card do not select the marker. Applied to all
 three map renderers; regression added. Details in `release_v051_log.md`.
 
-**Duration:** 14:38 → 14:58 CEST (≈20 minutes).
+**Duration:** 14:38 → 15:20 CEST (≈42 minutes, incl. review fixes).

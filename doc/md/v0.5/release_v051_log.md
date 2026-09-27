@@ -452,3 +452,11 @@ the pin, so the website shown on it could never be clicked.
 Verification: typecheck clean; map 11/11, usability 9/9; Google-map path
 checked in a scripted browser run (card visible after moving onto it, link
 href correct, hides after leaving).
+
+Architect review follow-up (same day): the Google card started 10 px below
+the pin *centre* and therefore covered the pin's lower half now that it is
+interactive; it now starts below the pin's edge, the hover bridge is
+pin-wide instead of card-wide so neighbouring pins stay reachable, keyboard
+focus anywhere inside pin + card keeps it open (focusin/focusout; Tab from
+pin to link verified in the map suite and on the Google path), and pending
+hide timers ignore detached marker content after a rebuild.

@@ -651,6 +651,16 @@ test('main search external-source setting controls discovery mode and persists',
   await expect(mapPin).toHaveCount(1);
   await page.mouse.move(5, 5);
   await expect(previewWebsite).toBeHidden();
+  // Keyboard: focusing the pin opens the card and tabbing onto the link keeps it open.
+  await mapPin.focus();
+  await expect(previewWebsite).toBeVisible();
+  await page.keyboard.press('Tab');
+  await page.waitForTimeout(400);
+  await expect(previewLink).toBeFocused();
+  await expect(previewWebsite).toBeVisible();
+  await page.keyboard.press('Shift+Tab');
+  await page.keyboard.press('Shift+Tab');
+  await expect(previewWebsite).toBeHidden();
   await expect(page.getByText('Local-only search.')).toBeVisible();
   await expect(page.getByTestId('listing-website-postcode-result')).toHaveAttribute(
     'href',
