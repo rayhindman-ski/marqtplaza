@@ -187,3 +187,18 @@ is reported as open debt for a product decision. Regression workflows now use
 separate ports. Details in `release_v051_log.md`.
 
 **Duration:** 07:27 → 08:02 CEST (≈35 minutes).
+
+### Prompt 10
+
+**Received:** 2026-09-27 ≈13:12 CEST (screenshot of Food & drink subcategory chips next to coloured pins)
+
+> see how the sub-category filter buttons are matched with the icon's color
+> for a distinct location... add the icon's symbol to the sub-category's
+> filter button. adjust / reduce font size if required
+
+**Response (summary):** Chips now show the marker's Lucide icon next to the
+label (no font change needed). Unified the Google marker glyph source with
+the fallback map and chips (the hand-copied SVG table had drifted). Added a
+chip-equals-pin regression assertion. Details in `release_v051_log.md`.
+
+**Duration:** 13:12 → 13:40 CEST (≈28 minutes).

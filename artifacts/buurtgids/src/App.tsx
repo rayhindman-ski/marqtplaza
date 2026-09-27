@@ -49,6 +49,7 @@ import { DiscoveryResultsMap } from './components/DiscoveryResultsMap';
 import type { MapViewport } from './components/GoogleMapView';
 import { NeighborhoodSelectionMap } from './components/NeighborhoodSelectionMap';
 import { getSubcategoryColor } from './lib/mapColors';
+import { getSubcategoryIcon } from './components/GoogleMapView';
 import CaptureView from './pages/CaptureView';
 import SourceDirectoryView from './pages/SourceDirectoryView';
 import EventReviewView from './pages/EventReviewView';
@@ -642,6 +643,19 @@ function topLevelForMarker(marker: Marker): ListingSection {
   if (marker.category === 'Food & Drink') return 'food-drink';
   if (marker.category === 'Social map') return 'social-map';
   return 'events';
+}
+
+function subcategoryIconFor(subcategory: FilterSubcategory) {
+  if (FOOD_TYPES.includes(subcategory as FoodType)) {
+    return getSubcategoryIcon({ category: 'Food & Drink', foodType: subcategory as FoodType });
+  }
+  if (EVENT_CATEGORIES.includes(subcategory as Category)) {
+    return getSubcategoryIcon({ category: subcategory as Category });
+  }
+  if (SOCIAL_MAP_CATEGORIES.includes(subcategory as SocialMapCategory)) {
+    return getSubcategoryIcon({ category: 'Social map', socialCategory: subcategory as SocialMapCategory });
+  }
+  return getSubcategoryIcon({ category: 'Businesses', businessCategory: subcategory as BusinessCategory });
 }
 
 function subcategoryLabelFor(subcategory: FilterSubcategory, language: Language): string {
@@ -2781,10 +2795,11 @@ function DiscoveryState({
                       {sectionSubcategories.map((subcategory) => {
                         const isChecked = subcategories[subcategory];
                         const color = getSubcategoryColor(subcategory);
+                        const SubcategoryIcon = subcategoryIconFor(subcategory);
                         return (
                           <label
                             key={subcategory}
-                            className="flex min-h-8 cursor-pointer items-center gap-1.5 rounded-lg border px-2 py-1.5 text-[10px] font-semibold transition-all hover:brightness-95"
+                            className="flex min-h-8 cursor-pointer items-center gap-1.5 rounded-lg border px-2 py-1.5 text-[10px] font-semibold leading-tight transition-all hover:brightness-95"
                             style={{
                               backgroundColor: isChecked ? color : `${color}1f`,
                               borderColor: isChecked ? color : `${color}66`,
@@ -2798,7 +2813,8 @@ function DiscoveryState({
                               onChange={() => toggleSubcategory(subcategory)}
                               className="h-3.5 w-3.5 shrink-0 accent-white"
                             />
-                            <span>{subcategoryLabelFor(subcategory, language)}</span>
+                            <SubcategoryIcon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" data-subcategory-icon={subcategory} />
+                            <span className="min-w-0 truncate">{subcategoryLabelFor(subcategory, language)}</span>
                           </label>
                         );
                       })}

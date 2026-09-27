@@ -221,6 +221,24 @@ test('keeps discovery filters, map pins, routes, and translations in sync', asyn
   await expect(page.locator('[data-map-cluster]')).toHaveCount(0);
   expect(listIds).toContain('qualifying-event');
 
+  // The subcategory filter chip carries the same glyph and colour as the pin,
+  // so a visitor can match a marker to its filter at a glance.
+  const familyPin = page.locator('[data-map-pin][data-event-id="qualifying-event"]');
+  const categoriesToggle = page.getByRole('button', { name: /^Top-level categories/i });
+  if ((await categoriesToggle.getAttribute('aria-expanded')) !== 'true') await categoriesToggle.click();
+  const familyChip = page.locator('[data-subcategory-icon="Family"]');
+  await expect(familyChip).toHaveCount(1);
+  const pinGlyph = await familyPin.locator('svg').first().evaluate((svg) => svg.innerHTML);
+  const chipGlyph = await familyChip.evaluate((svg) => svg.innerHTML);
+  expect(chipGlyph).toEqual(pinGlyph);
+  const pinColor = await familyPin.getAttribute('data-marker-color');
+  const chipColor = await familyChip.evaluate((svg) => {
+    const chip = svg.closest('label') as HTMLElement;
+    return chip.style.backgroundColor || chip.style.color;
+  });
+  const toRgb = (hex: string) => `rgb(${[1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16)).join(', ')})`;
+  expect(chipColor).toEqual(toRgb(pinColor ?? ''));
+
   const exactCard = page.locator('#event-qualifying-event');
   const routeLinks = exactCard.locator('a[href*="google.com/maps/dir"]');
   await expect(routeLinks).toHaveCount(4);

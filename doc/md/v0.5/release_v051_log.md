@@ -382,3 +382,23 @@ workflow **`usability-regression`**):
 
 Verification: typecheck clean, i18n parity 12/12, usability 9/9, map 11/11,
 account suites 22/22 (live Clerk sign-up included).
+
+### 2026-09-27 — Subcategory filter chips carry the pin glyph
+
+Request: the subcategory filter buttons already share the map pin colour;
+add the pin's symbol to each button so a marker can be matched to its filter
+at a glance.
+
+- Each subcategory chip (events, food & drink, businesses, social map) now
+  shows the same Lucide icon as its map marker, left of the label; labels
+  truncate rather than wrap, font size unchanged (10px) since the chips fit.
+- The Google marker glyphs were a hand-copied table of SVG path strings that
+  had drifted from the Lucide icons used by the fallback map (e.g. Family).
+  Removed; markers now render their inner SVG from the same Lucide component
+  (`getSubcategoryIcon`, exported) — one glyph source for pins, fallback
+  pins and chips.
+- Regression: the map suite asserts the Family chip's SVG markup and colour
+  equal the Family pin's.
+
+Verification: typecheck clean; map regression 11/11; usability 9/9; Google
+pins visually checked on the dev map.
