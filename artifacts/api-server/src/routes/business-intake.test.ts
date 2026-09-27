@@ -595,6 +595,80 @@ describe("business intake routes", () => {
     assert.ok(!JSON.stringify(aliceList.body).includes("KvK 12345678"), "competing claimant evidence is never exposed");
   });
 
+  it("stores the v0.5.2 onboarding fields, format-checks KvK, and stamps the authority declaration at submit", async () => {
+    const badKvk = await request("/api/businesses", {
+      method: "POST",
+      body: JSON.stringify({
+        kind: "new_business",
+        business: { name: `Kvk Zaak ${runId}`, category: "Retail", neighborhood: "Bezuidenhout" },
+        ...baseDraft,
+        relationshipKind: "owner",
+        evidenceKvk: "1234567",
+        onboardingContext: "registration",
+      }),
+    });
+    assert.equal(badKvk.status, 400, JSON.stringify(badKvk.body));
+    assert.equal(badKvk.body.code, "VALIDATION_FAILED");
+
+    const badContext = await request("/api/businesses", {
+      method: "POST",
+      body: JSON.stringify({
+        kind: "new_business",
+        business: { name: `Kvk Zaak ${runId}`, category: "Retail", neighborhood: "Bezuidenhout" },
+        ...baseDraft,
+        onboardingContext: "legacy",
+      }),
+    });
+    assert.equal(badContext.status, 400, "legacy is a server-only context");
+
+    const created = await request("/api/businesses", {
+      method: "POST",
+      body: JSON.stringify({
+        kind: "new_business",
+        business: { name: `Kvk Zaak ${runId}`, category: "Retail", neighborhood: "Bezuidenhout" },
+        ...baseDraft,
+        relationshipKind: "manager",
+        evidenceKvk: "12345678",
+        evidenceDomain: "kvkzaak.example",
+        onboardingContext: "account_home",
+      }),
+    });
+    assert.equal(created.status, 201, JSON.stringify(created.body));
+    assert.equal(created.body.relationshipKind, "manager");
+    assert.equal(created.body.evidenceKvk, "12345678");
+    assert.equal(created.body.evidenceDomain, "kvkzaak.example");
+    assert.equal(created.body.onboardingContext, "account_home");
+    assert.equal(created.body.authorityDeclaredAt, null, "a draft has not declared anything yet");
+
+    const contextRewrite = await request(`/api/business-claims/${created.body.id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ expectedVersion: 1, onboardingContext: "listing" }),
+    });
+    assert.equal(contextRewrite.status, 400, "the journey origin is fixed at creation");
+    assert.equal(contextRewrite.body.code, "UNKNOWN_FIELD");
+
+    const edited = await request(`/api/business-claims/${created.body.id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ expectedVersion: 1, relationshipKind: "owner", evidenceKvk: null }),
+    });
+    assert.equal(edited.status, 200, JSON.stringify(edited.body));
+    assert.equal(edited.body.relationshipKind, "owner");
+    assert.equal(edited.body.evidenceKvk, null);
+    assert.equal(edited.body.evidenceDomain, "kvkzaak.example", "untouched fields survive a partial update");
+
+    const submitted = await request(`/api/business-claims/${created.body.id}/submit`, {
+      method: "POST",
+      body: JSON.stringify({ expectedVersion: 2 }),
+    });
+    assert.equal(submitted.status, 200, JSON.stringify(submitted.body));
+    assert.equal(submitted.body.authorityVersion, "2026-09-v052");
+    assert.ok(typeof submitted.body.authorityDeclaredAt === "string" && !Number.isNaN(Date.parse(submitted.body.authorityDeclaredAt)));
+    assert.equal(submitted.body.onboardingContext, "account_home");
+
+    const publicProfile = await request(`/api/business-profiles/public/${created.body.profile.slug}`, { userId: null });
+    assert.equal(publicProfile.status, 404, "still unpublished; evidence never reaches a public payload");
+  });
+
   it("keeps new-business drafts private until publication and archives them on withdrawal", async () => {
     const created = await request("/api/businesses", {
       method: "POST",

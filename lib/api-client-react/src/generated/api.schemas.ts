@@ -125,6 +125,24 @@ export type BusinessIntakeDraftInputListing = {
   listingId: string;
 };
 
+export type ClaimRelationshipKind = typeof ClaimRelationshipKind[keyof typeof ClaimRelationshipKind];
+
+
+export const ClaimRelationshipKind = {
+  owner: 'owner',
+  manager: 'manager',
+  representative: 'representative',
+} as const;
+
+export type ClaimOnboardingContext = typeof ClaimOnboardingContext[keyof typeof ClaimOnboardingContext];
+
+
+export const ClaimOnboardingContext = {
+  registration: 'registration',
+  account_home: 'account_home',
+  listing: 'listing',
+} as const;
+
 export interface BusinessIntakeDraftInput {
   kind: BusinessIntakeKind;
   /** Required for `existing_listing`; resolved server-side, never trusted for facts. */
@@ -157,6 +175,19 @@ export interface BusinessIntakeDraftInput {
      * @maxLength 400
      */
   evidenceReference?: string;
+  relationshipKind?: ClaimRelationshipKind;
+  /**
+     * Optional KvK number (8 digits). Format-checked only; private to claimant and reviewers.
+     * @pattern ^[0-9]{8}$
+     */
+  evidenceKvk?: string;
+  /**
+     * Optional domain the claimant says they control (host only, lower case). Private.
+     * @maxLength 253
+     * @pattern ^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$
+     */
+  evidenceDomain?: string;
+  onboardingContext?: ClaimOnboardingContext;
   /** @maxLength 1200 */
   message?: string;
 }
@@ -189,6 +220,18 @@ export interface BusinessClaimUpdateInput {
      * @nullable
      */
   evidenceReference?: string | null;
+  relationshipKind?: ClaimRelationshipKind;
+  /**
+     * @nullable
+     * @pattern ^[0-9]{8}$
+     */
+  evidenceKvk?: string | null;
+  /**
+     * @maxLength 253
+     * @nullable
+     * @pattern ^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$
+     */
+  evidenceDomain?: string | null;
   /**
      * @maxLength 1200
      * @nullable
@@ -1409,6 +1452,31 @@ export interface BusinessListingReference {
   sourceUrl?: string;
 }
 
+/**
+ * @nullable
+ */
+export type BusinessClaimRelationshipKind = typeof BusinessClaimRelationshipKind[keyof typeof BusinessClaimRelationshipKind] | null;
+
+
+export const BusinessClaimRelationshipKind = {
+  owner: 'owner',
+  manager: 'manager',
+  representative: 'representative',
+} as const;
+
+/**
+ * @nullable
+ */
+export type BusinessClaimOnboardingContext = typeof BusinessClaimOnboardingContext[keyof typeof BusinessClaimOnboardingContext] | null;
+
+
+export const BusinessClaimOnboardingContext = {
+  registration: 'registration',
+  account_home: 'account_home',
+  listing: 'listing',
+  legacy: 'legacy',
+} as const;
+
 export interface BusinessClaim {
   id: number;
   businessProfileId: number;
@@ -1439,6 +1507,27 @@ export interface BusinessClaim {
      * @nullable
      */
   evidenceReference?: string | null;
+  /** @nullable */
+  relationshipKind?: BusinessClaimRelationshipKind;
+  /**
+     * Only returned to the claimant and reviewers.
+     * @nullable
+     */
+  evidenceKvk?: string | null;
+  /**
+     * Only returned to the claimant and reviewers.
+     * @nullable
+     */
+  evidenceDomain?: string | null;
+  /** @nullable */
+  onboardingContext?: BusinessClaimOnboardingContext;
+  /**
+     * When the claimant last confirmed the authority declaration (set on submit).
+     * @nullable
+     */
+  authorityDeclaredAt?: string | null;
+  /** @nullable */
+  authorityVersion?: string | null;
   /** @nullable */
   withdrawnAt?: string | null;
   createdAt: string;

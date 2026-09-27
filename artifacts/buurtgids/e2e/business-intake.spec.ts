@@ -226,3 +226,61 @@ test.describe('business intake', () => {
     await expect(page).toHaveURL(/bedrijf-nieuw\?kind=existing_listing/);
   });
 });
+test.describe('business onboarding journey (v0.5.2)', () => {
+  test('lookup carries the journey context and return path; the draft records the context, role and evidence; the receipt leads back', async ({ page }) => {
+    await signIn(page);
+    const server = await installServer(page);
+    await page.addInitScript(() => window.localStorage.setItem('buurtplaza-language', 'nl'));
+
+    const back = '/account/bedrijf/toevoegen?context=account_home';
+    await page.goto(`/bedrijf-zoeken?context=account_home&terug=${encodeURIComponent(back)}&e2eAccountAuth=1`);
+    const steps = page.getByTestId('business-journey-steps');
+    await expect(steps).toBeVisible();
+    await expect(steps.locator('[aria-current="step"]')).toHaveText(/Bedrijf zoeken/);
+    await expect(page.getByRole('link', { name: 'Mijn bedrijf staat er niet bij' }).first()).toHaveAttribute('href', /kind=new_business&context=account_home&terug=%2Faccount%2Fbedrijf%2Ftoevoegen%3Fcontext%3Daccount_home/);
+
+    await page.getByTestId('input-business-search').fill('Koffie');
+    await page.getByRole('button', { name: 'Dit bedrijf claimen' }).click();
+    await expect(page).toHaveURL(/\/bedrijf-nieuw\?kind=existing_listing.*context=account_home.*terug=/);
+    await expect(page.getByTestId('business-journey-steps').locator('[aria-current="step"]')).toHaveText(/Gegevens en bevoegdheid/);
+
+    await fillCommon(page);
+    await page.getByTestId('select-relationship-kind').selectOption('manager');
+    await page.getByTestId('input-evidence-kvk').fill('1234');
+    await page.getByRole('button', { name: 'Indienen voor beoordeling' }).click();
+    await expect(page.getByText('Een KvK-nummer bestaat uit precies 8 cijfers.')).toBeVisible();
+    expect(server.requests.filter((item) => item.method === 'POST' && item.path === '/api/businesses')).toHaveLength(0);
+
+    await page.getByTestId('input-evidence-kvk').fill('12345678');
+    await page.getByTestId('input-evidence-domain').fill('Koffie-Hoek.nl');
+    await expect(page.getByTestId('text-authority-confirm')).toContainText('verklaar je dat je bevoegd bent');
+    await page.getByRole('button', { name: 'Indienen voor beoordeling' }).click();
+
+    await expect(page.getByTestId('business-claim-receipt')).toBeVisible();
+    const create = server.requests.find((item) => item.method === 'POST' && item.path === '/api/businesses');
+    expect(create?.body).toMatchObject({
+      kind: 'existing_listing', relationshipKind: 'manager', relationship: 'Eigenaar',
+      evidenceKvk: '12345678', evidenceDomain: 'koffie-hoek.nl', onboardingContext: 'account_home',
+    });
+    expect(create?.body).not.toHaveProperty('name');
+    await expect(page.getByTestId('business-journey-steps').locator('[aria-current="step"]')).toHaveText(/Controle/);
+    await expect(page.getByTestId('link-journey-return')).toHaveAttribute('href', back);
+  });
+
+  test('without a journey context the intake works as before: no steps, no context field, role label used as relationship', async ({ page }) => {
+    await signIn(page);
+    const server = await installServer(page);
+    await page.addInitScript(() => window.localStorage.setItem('buurtplaza-language', 'nl'));
+    await page.goto('/bedrijf-nieuw?kind=existing_listing&cityId=dhg&listingSource=google_maps&listingId=place-7&e2eAccountAuth=1');
+    await expect(page.getByTestId('business-journey-steps')).toHaveCount(0);
+    await page.getByLabel(/Jouw naam/).fill('Sam Ondernemer');
+    await page.getByLabel(/Zakelijk e-mailadres/).fill('sam@example.nl');
+    await page.getByLabel(/Verklaring van bevoegdheid/).fill('Ik ben de geregistreerde eigenaar van deze onderneming.');
+    await page.getByRole('button', { name: 'Concept opslaan' }).click();
+    await expect(page.getByText('Concept opgeslagen')).toBeVisible();
+    const create = server.requests.find((item) => item.method === 'POST' && item.path === '/api/businesses');
+    expect(create?.body).toMatchObject({ relationshipKind: 'owner', relationship: 'Eigenaar' });
+    expect(create?.body).not.toHaveProperty('onboardingContext');
+    expect(create?.body).not.toHaveProperty('evidenceKvk');
+  });
+});

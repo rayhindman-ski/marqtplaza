@@ -69,3 +69,31 @@ observed times. Phase 3 starts next (18:06).
 ### Progress — Phase 3 (business profile capture)
 
 - 18:06 start.
+- 18:10 schema extension on `business_claims` pushed to development.
+- 18:16 OpenAPI + intake route + claim DTO; clients regenerated; typecheck clean.
+- 18:20 api `test:business-intake` 15/0 with the new v0.5.2 test.
+- 18:28 journey across intro → lookup → draft → receipt; e2e 20/20 (intake + onboarding).
+- 18:33 usability gate: step pill recoloured to stay within the contrast budget; 15/15.
+- 18:35 phase log written; commit + push.
+
+### Prompt 4
+
+**Received:** 2026-09-27 ≈18:04 CEST
+
+> what have you done in the last 20 minutes?
+
+**Response:** Reported honestly: only the prompt-log update; no Phase 3 code
+yet at that time.
+
+### Prompt 5
+
+**Received:** 2026-09-27 ≈18:05 CEST
+
+> stop waiting on my messages !!! do the work - I am expecting v052 to be
+> implemented phase 0-6 completely
+
+**Response:** Acknowledged; Phases 3–6 run back to back without pausing for
+confirmation. Progress lines above and below.
+
+### Progress — Phase 4 (verification signals and review surface)
+

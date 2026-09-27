@@ -12,7 +12,9 @@ import { featureFlags } from '@/lib/featureFlags';
 import { businessIntakeTranslations } from '@/lib/i18n';
 import { accountErrorMessage } from '@/lib/i18n';
 import { useAppLanguage } from '@/lib/useAppLanguage';
-import { withReturnPath } from '@/lib/returnPath';
+import { RETURN_PATH_PARAM, sanitizeReturnPath, withReturnPath } from '@/lib/returnPath';
+import { journeyContextFromSearch, withJourney } from '@/lib/businessIntent';
+import { BusinessJourneySteps } from '@/components/BusinessJourneySteps';
 
 function apiErrorFrom(error: unknown): ApiError | null {
   const data = (error as { data?: unknown } | null)?.data;
@@ -26,6 +28,11 @@ export default function BusinessLookupPage() {
   const [, setLocation] = useLocation();
   const [value, setValue] = useState('');
   const [query, setQuery] = useState('');
+  // Journey (v0.5.2): keep the entry context and return path on every next step.
+  const journeyContext = journeyContextFromSearch(window.location.search);
+  const journeyReturn = journeyContext ? sanitizeReturnPath(new URLSearchParams(window.location.search).get(RETURN_PATH_PARAM)) : null;
+  const nextHref = (params: URLSearchParams) => `/bedrijf-nieuw?${withJourney(params, journeyContext, journeyReturn).toString()}`;
+  const newBusinessHref = nextHref(new URLSearchParams({ kind: 'new_business' }));
   useEffect(() => {
     const timer = window.setTimeout(() => setQuery(value.trim()), 400);
     return () => window.clearTimeout(timer);
@@ -44,6 +51,7 @@ export default function BusinessLookupPage() {
   const error = apiErrorFrom(lookup.error);
   return (
     <main className="container mx-auto max-w-3xl px-4 py-12" data-testid="page-business-lookup">
+      {journeyContext ? <BusinessJourneySteps language={language} current="find" /> : null}
       <h1 className="font-serif text-4xl font-semibold" data-testid="heading-business-lookup">{copy.lookupTitle}</h1>
       <p className="mt-2 text-muted-foreground">{copy.lookupIntro}</p>
       <div className="mt-8">
@@ -69,15 +77,15 @@ export default function BusinessLookupPage() {
                   <p className="text-sm text-muted-foreground">{[match.neighborhood, match.category].filter(Boolean).join(' · ')}</p>
                   {match.isClaimed ? <Badge className="mt-2" variant="secondary">{copy.claimed}</Badge> : null}
                 </div>
-                <Button type="button" onClick={() => setLocation(`/bedrijf-nieuw?${params}`)}>{copy.claim}</Button>
+                <Button type="button" onClick={() => setLocation(nextHref(params))}>{copy.claim}</Button>
               </CardContent>
             </Card>
           );
         })}
-        {lookup.data && lookup.data.matches.length === 0 ? <p>{copy.noResults} <Link className="font-bold text-primary underline" href="/bedrijf-nieuw?kind=new_business">{copy.addNew}</Link></p> : null}
+        {lookup.data && lookup.data.matches.length === 0 ? <p>{copy.noResults} <Link className="font-bold text-primary underline" href={newBusinessHref}>{copy.addNew}</Link></p> : null}
         {lookup.data?.truncated ? <p className="text-sm text-muted-foreground">{copy.truncated}</p> : null}
       </div>
-      <Button asChild variant="outline" className="mt-8"><Link href="/bedrijf-nieuw?kind=new_business">{copy.addNew}</Link></Button>
+      <Button asChild variant="outline" className="mt-8"><Link href={newBusinessHref}>{copy.addNew}</Link></Button>
     </main>
   );
 }

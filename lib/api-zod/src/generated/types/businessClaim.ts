@@ -5,6 +5,8 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { BusinessClaimOnboardingContext } from './businessClaimOnboardingContext';
+import type { BusinessClaimRelationshipKind } from './businessClaimRelationshipKind';
 import type { BusinessIntakeKind } from './businessIntakeKind';
 import type { BusinessProfile } from './businessProfile';
 import type { ClaimNextAction } from './claimNextAction';
@@ -40,6 +42,27 @@ export interface BusinessClaim {
      * @nullable
      */
   evidenceReference?: string | null;
+  /** @nullable */
+  relationshipKind?: BusinessClaimRelationshipKind;
+  /**
+     * Only returned to the claimant and reviewers.
+     * @nullable
+     */
+  evidenceKvk?: string | null;
+  /**
+     * Only returned to the claimant and reviewers.
+     * @nullable
+     */
+  evidenceDomain?: string | null;
+  /** @nullable */
+  onboardingContext?: BusinessClaimOnboardingContext;
+  /**
+     * When the claimant last confirmed the authority declaration (set on submit).
+     * @nullable
+     */
+  authorityDeclaredAt?: string | null;
+  /** @nullable */
+  authorityVersion?: string | null;
   /** @nullable */
   withdrawnAt?: string | null;
   createdAt: string;

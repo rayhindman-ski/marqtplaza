@@ -1858,6 +1858,12 @@ export const GetMyBusinessClaimsResponseItem = zod.object({
   "kind": zod.enum(['existing_listing', 'new_business']).optional().describe('Whether a claim targets a current public listing or a new business that is not listed yet.'),
   "authorityDeclaration": zod.string().nullish().describe('Only returned to the claimant and reviewers; never to other claimants.'),
   "evidenceReference": zod.string().nullish().describe('Only returned to the claimant and reviewers; never to other claimants.'),
+  "relationshipKind": zod.union([zod.literal('owner'),zod.literal('manager'),zod.literal('representative'),zod.literal(null)]).nullish(),
+  "evidenceKvk": zod.string().nullish().describe('Only returned to the claimant and reviewers.'),
+  "evidenceDomain": zod.string().nullish().describe('Only returned to the claimant and reviewers.'),
+  "onboardingContext": zod.union([zod.literal('registration'),zod.literal('account_home'),zod.literal('listing'),zod.literal('legacy'),zod.literal(null)]).nullish(),
+  "authorityDeclaredAt": zod.string().nullish().describe('When the claimant last confirmed the authority declaration (set on submit).'),
+  "authorityVersion": zod.string().nullish(),
   "withdrawnAt": zod.string().nullish(),
   "createdAt": zod.string(),
   "updatedAt": zod.string(),
@@ -1951,6 +1957,12 @@ export const CreateBusinessClaimResponse = zod.object({
   "kind": zod.enum(['existing_listing', 'new_business']).optional().describe('Whether a claim targets a current public listing or a new business that is not listed yet.'),
   "authorityDeclaration": zod.string().nullish().describe('Only returned to the claimant and reviewers; never to other claimants.'),
   "evidenceReference": zod.string().nullish().describe('Only returned to the claimant and reviewers; never to other claimants.'),
+  "relationshipKind": zod.union([zod.literal('owner'),zod.literal('manager'),zod.literal('representative'),zod.literal(null)]).nullish(),
+  "evidenceKvk": zod.string().nullish().describe('Only returned to the claimant and reviewers.'),
+  "evidenceDomain": zod.string().nullish().describe('Only returned to the claimant and reviewers.'),
+  "onboardingContext": zod.union([zod.literal('registration'),zod.literal('account_home'),zod.literal('listing'),zod.literal('legacy'),zod.literal(null)]).nullish(),
+  "authorityDeclaredAt": zod.string().nullish().describe('When the claimant last confirmed the authority declaration (set on submit).'),
+  "authorityVersion": zod.string().nullish(),
   "withdrawnAt": zod.string().nullish(),
   "createdAt": zod.string(),
   "updatedAt": zod.string(),
@@ -2011,6 +2023,12 @@ export const GetBusinessClaimModerationResponseItem = zod.object({
   "kind": zod.enum(['existing_listing', 'new_business']).optional().describe('Whether a claim targets a current public listing or a new business that is not listed yet.'),
   "authorityDeclaration": zod.string().nullish().describe('Only returned to the claimant and reviewers; never to other claimants.'),
   "evidenceReference": zod.string().nullish().describe('Only returned to the claimant and reviewers; never to other claimants.'),
+  "relationshipKind": zod.union([zod.literal('owner'),zod.literal('manager'),zod.literal('representative'),zod.literal(null)]).nullish(),
+  "evidenceKvk": zod.string().nullish().describe('Only returned to the claimant and reviewers.'),
+  "evidenceDomain": zod.string().nullish().describe('Only returned to the claimant and reviewers.'),
+  "onboardingContext": zod.union([zod.literal('registration'),zod.literal('account_home'),zod.literal('listing'),zod.literal('legacy'),zod.literal(null)]).nullish(),
+  "authorityDeclaredAt": zod.string().nullish().describe('When the claimant last confirmed the authority declaration (set on submit).'),
+  "authorityVersion": zod.string().nullish(),
   "withdrawnAt": zod.string().nullish(),
   "createdAt": zod.string(),
   "updatedAt": zod.string(),
@@ -2080,6 +2098,12 @@ export const DecideBusinessClaimResponse = zod.object({
   "kind": zod.enum(['existing_listing', 'new_business']).optional().describe('Whether a claim targets a current public listing or a new business that is not listed yet.'),
   "authorityDeclaration": zod.string().nullish().describe('Only returned to the claimant and reviewers; never to other claimants.'),
   "evidenceReference": zod.string().nullish().describe('Only returned to the claimant and reviewers; never to other claimants.'),
+  "relationshipKind": zod.union([zod.literal('owner'),zod.literal('manager'),zod.literal('representative'),zod.literal(null)]).nullish(),
+  "evidenceKvk": zod.string().nullish().describe('Only returned to the claimant and reviewers.'),
+  "evidenceDomain": zod.string().nullish().describe('Only returned to the claimant and reviewers.'),
+  "onboardingContext": zod.union([zod.literal('registration'),zod.literal('account_home'),zod.literal('listing'),zod.literal('legacy'),zod.literal(null)]).nullish(),
+  "authorityDeclaredAt": zod.string().nullish().describe('When the claimant last confirmed the authority declaration (set on submit).'),
+  "authorityVersion": zod.string().nullish(),
   "withdrawnAt": zod.string().nullish(),
   "createdAt": zod.string(),
   "updatedAt": zod.string(),
@@ -2202,6 +2226,11 @@ export const createBusinessIntakeDraftBodyAuthorityDeclarationMax = 1200;
 
 export const createBusinessIntakeDraftBodyEvidenceReferenceMax = 400;
 
+export const createBusinessIntakeDraftBodyEvidenceKvkRegExp = new RegExp('^[0-9]{8}$');
+export const createBusinessIntakeDraftBodyEvidenceDomainMax = 253;
+
+
+export const createBusinessIntakeDraftBodyEvidenceDomainRegExp = new RegExp('^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$');
 export const createBusinessIntakeDraftBodyMessageMax = 1200;
 
 
@@ -2225,6 +2254,10 @@ export const CreateBusinessIntakeDraftBody = zod.object({
   "relationship": zod.string().min(createBusinessIntakeDraftBodyRelationshipMin).max(createBusinessIntakeDraftBodyRelationshipMax),
   "authorityDeclaration": zod.string().min(createBusinessIntakeDraftBodyAuthorityDeclarationMin).max(createBusinessIntakeDraftBodyAuthorityDeclarationMax).describe('The representative\'s own statement of their authority over the business (private).'),
   "evidenceReference": zod.string().max(createBusinessIntakeDraftBodyEvidenceReferenceMax).optional().describe('Optional URL or short text reference supporting the declaration (private). No uploads.'),
+  "relationshipKind": zod.enum(['owner', 'manager', 'representative']).optional(),
+  "evidenceKvk": zod.string().regex(createBusinessIntakeDraftBodyEvidenceKvkRegExp).optional().describe('Optional KvK number (8 digits). Format-checked only; private to claimant and reviewers.'),
+  "evidenceDomain": zod.string().max(createBusinessIntakeDraftBodyEvidenceDomainMax).regex(createBusinessIntakeDraftBodyEvidenceDomainRegExp).optional().describe('Optional domain the claimant says they control (host only, lower case). Private.'),
+  "onboardingContext": zod.enum(['registration', 'account_home', 'listing']).optional(),
   "message": zod.string().max(createBusinessIntakeDraftBodyMessageMax).optional()
 })
 
@@ -2245,6 +2278,12 @@ export const CreateBusinessIntakeDraftResponse = zod.object({
   "kind": zod.enum(['existing_listing', 'new_business']).optional().describe('Whether a claim targets a current public listing or a new business that is not listed yet.'),
   "authorityDeclaration": zod.string().nullish().describe('Only returned to the claimant and reviewers; never to other claimants.'),
   "evidenceReference": zod.string().nullish().describe('Only returned to the claimant and reviewers; never to other claimants.'),
+  "relationshipKind": zod.union([zod.literal('owner'),zod.literal('manager'),zod.literal('representative'),zod.literal(null)]).nullish(),
+  "evidenceKvk": zod.string().nullish().describe('Only returned to the claimant and reviewers.'),
+  "evidenceDomain": zod.string().nullish().describe('Only returned to the claimant and reviewers.'),
+  "onboardingContext": zod.union([zod.literal('registration'),zod.literal('account_home'),zod.literal('listing'),zod.literal('legacy'),zod.literal(null)]).nullish(),
+  "authorityDeclaredAt": zod.string().nullish().describe('When the claimant last confirmed the authority declaration (set on submit).'),
+  "authorityVersion": zod.string().nullish(),
   "withdrawnAt": zod.string().nullish(),
   "createdAt": zod.string(),
   "updatedAt": zod.string(),
@@ -2304,6 +2343,12 @@ export const GetBusinessClaimResponse = zod.object({
   "kind": zod.enum(['existing_listing', 'new_business']).optional().describe('Whether a claim targets a current public listing or a new business that is not listed yet.'),
   "authorityDeclaration": zod.string().nullish().describe('Only returned to the claimant and reviewers; never to other claimants.'),
   "evidenceReference": zod.string().nullish().describe('Only returned to the claimant and reviewers; never to other claimants.'),
+  "relationshipKind": zod.union([zod.literal('owner'),zod.literal('manager'),zod.literal('representative'),zod.literal(null)]).nullish(),
+  "evidenceKvk": zod.string().nullish().describe('Only returned to the claimant and reviewers.'),
+  "evidenceDomain": zod.string().nullish().describe('Only returned to the claimant and reviewers.'),
+  "onboardingContext": zod.union([zod.literal('registration'),zod.literal('account_home'),zod.literal('listing'),zod.literal('legacy'),zod.literal(null)]).nullish(),
+  "authorityDeclaredAt": zod.string().nullish().describe('When the claimant last confirmed the authority declaration (set on submit).'),
+  "authorityVersion": zod.string().nullish(),
   "withdrawnAt": zod.string().nullish(),
   "createdAt": zod.string(),
   "updatedAt": zod.string(),
@@ -2366,6 +2411,11 @@ export const updateBusinessClaimBodyAuthorityDeclarationMax = 1200;
 
 export const updateBusinessClaimBodyEvidenceReferenceMax = 400;
 
+export const updateBusinessClaimBodyEvidenceKvkRegExp = new RegExp('^[0-9]{8}$');
+export const updateBusinessClaimBodyEvidenceDomainMax = 253;
+
+
+export const updateBusinessClaimBodyEvidenceDomainRegExp = new RegExp('^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$');
 export const updateBusinessClaimBodyMessageMax = 1200;
 
 export const updateBusinessClaimBodyBusinessNameMin = 2;
@@ -2390,6 +2440,9 @@ export const UpdateBusinessClaimBody = zod.object({
   "relationship": zod.string().min(updateBusinessClaimBodyRelationshipMin).max(updateBusinessClaimBodyRelationshipMax).optional(),
   "authorityDeclaration": zod.string().min(updateBusinessClaimBodyAuthorityDeclarationMin).max(updateBusinessClaimBodyAuthorityDeclarationMax).optional(),
   "evidenceReference": zod.string().max(updateBusinessClaimBodyEvidenceReferenceMax).nullish(),
+  "relationshipKind": zod.enum(['owner', 'manager', 'representative']).optional(),
+  "evidenceKvk": zod.string().regex(updateBusinessClaimBodyEvidenceKvkRegExp).nullish(),
+  "evidenceDomain": zod.string().max(updateBusinessClaimBodyEvidenceDomainMax).regex(updateBusinessClaimBodyEvidenceDomainRegExp).nullish(),
   "message": zod.string().max(updateBusinessClaimBodyMessageMax).nullish(),
   "business": zod.object({
   "name": zod.string().min(updateBusinessClaimBodyBusinessNameMin).max(updateBusinessClaimBodyBusinessNameMax),
@@ -2417,6 +2470,12 @@ export const UpdateBusinessClaimResponse = zod.object({
   "kind": zod.enum(['existing_listing', 'new_business']).optional().describe('Whether a claim targets a current public listing or a new business that is not listed yet.'),
   "authorityDeclaration": zod.string().nullish().describe('Only returned to the claimant and reviewers; never to other claimants.'),
   "evidenceReference": zod.string().nullish().describe('Only returned to the claimant and reviewers; never to other claimants.'),
+  "relationshipKind": zod.union([zod.literal('owner'),zod.literal('manager'),zod.literal('representative'),zod.literal(null)]).nullish(),
+  "evidenceKvk": zod.string().nullish().describe('Only returned to the claimant and reviewers.'),
+  "evidenceDomain": zod.string().nullish().describe('Only returned to the claimant and reviewers.'),
+  "onboardingContext": zod.union([zod.literal('registration'),zod.literal('account_home'),zod.literal('listing'),zod.literal('legacy'),zod.literal(null)]).nullish(),
+  "authorityDeclaredAt": zod.string().nullish().describe('When the claimant last confirmed the authority declaration (set on submit).'),
+  "authorityVersion": zod.string().nullish(),
   "withdrawnAt": zod.string().nullish(),
   "createdAt": zod.string(),
   "updatedAt": zod.string(),
@@ -2486,6 +2545,12 @@ export const SubmitBusinessClaimResponse = zod.object({
   "kind": zod.enum(['existing_listing', 'new_business']).optional().describe('Whether a claim targets a current public listing or a new business that is not listed yet.'),
   "authorityDeclaration": zod.string().nullish().describe('Only returned to the claimant and reviewers; never to other claimants.'),
   "evidenceReference": zod.string().nullish().describe('Only returned to the claimant and reviewers; never to other claimants.'),
+  "relationshipKind": zod.union([zod.literal('owner'),zod.literal('manager'),zod.literal('representative'),zod.literal(null)]).nullish(),
+  "evidenceKvk": zod.string().nullish().describe('Only returned to the claimant and reviewers.'),
+  "evidenceDomain": zod.string().nullish().describe('Only returned to the claimant and reviewers.'),
+  "onboardingContext": zod.union([zod.literal('registration'),zod.literal('account_home'),zod.literal('listing'),zod.literal('legacy'),zod.literal(null)]).nullish(),
+  "authorityDeclaredAt": zod.string().nullish().describe('When the claimant last confirmed the authority declaration (set on submit).'),
+  "authorityVersion": zod.string().nullish(),
   "withdrawnAt": zod.string().nullish(),
   "createdAt": zod.string(),
   "updatedAt": zod.string(),
@@ -2553,6 +2618,12 @@ export const WithdrawBusinessClaimResponse = zod.object({
   "kind": zod.enum(['existing_listing', 'new_business']).optional().describe('Whether a claim targets a current public listing or a new business that is not listed yet.'),
   "authorityDeclaration": zod.string().nullish().describe('Only returned to the claimant and reviewers; never to other claimants.'),
   "evidenceReference": zod.string().nullish().describe('Only returned to the claimant and reviewers; never to other claimants.'),
+  "relationshipKind": zod.union([zod.literal('owner'),zod.literal('manager'),zod.literal('representative'),zod.literal(null)]).nullish(),
+  "evidenceKvk": zod.string().nullish().describe('Only returned to the claimant and reviewers.'),
+  "evidenceDomain": zod.string().nullish().describe('Only returned to the claimant and reviewers.'),
+  "onboardingContext": zod.union([zod.literal('registration'),zod.literal('account_home'),zod.literal('listing'),zod.literal('legacy'),zod.literal(null)]).nullish(),
+  "authorityDeclaredAt": zod.string().nullish().describe('When the claimant last confirmed the authority declaration (set on submit).'),
+  "authorityVersion": zod.string().nullish(),
   "withdrawnAt": zod.string().nullish(),
   "createdAt": zod.string(),
   "updatedAt": zod.string(),
@@ -3600,6 +3671,12 @@ export const ReviewBusinessClaimResponse = zod.object({
   "kind": zod.enum(['existing_listing', 'new_business']).optional().describe('Whether a claim targets a current public listing or a new business that is not listed yet.'),
   "authorityDeclaration": zod.string().nullish().describe('Only returned to the claimant and reviewers; never to other claimants.'),
   "evidenceReference": zod.string().nullish().describe('Only returned to the claimant and reviewers; never to other claimants.'),
+  "relationshipKind": zod.union([zod.literal('owner'),zod.literal('manager'),zod.literal('representative'),zod.literal(null)]).nullish(),
+  "evidenceKvk": zod.string().nullish().describe('Only returned to the claimant and reviewers.'),
+  "evidenceDomain": zod.string().nullish().describe('Only returned to the claimant and reviewers.'),
+  "onboardingContext": zod.union([zod.literal('registration'),zod.literal('account_home'),zod.literal('listing'),zod.literal('legacy'),zod.literal(null)]).nullish(),
+  "authorityDeclaredAt": zod.string().nullish().describe('When the claimant last confirmed the authority declaration (set on submit).'),
+  "authorityVersion": zod.string().nullish(),
   "withdrawnAt": zod.string().nullish(),
   "createdAt": zod.string(),
   "updatedAt": zod.string(),

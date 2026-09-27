@@ -10,6 +10,7 @@ import { BUSINESS_ONBOARDING_PATH, type BusinessIntentListing } from '@/lib/busi
 import { featureFlags } from '@/lib/featureFlags';
 import { accountErrorMessage, accountTranslations, type Language } from '@/lib/i18n';
 import { withReturnPath } from '@/lib/returnPath';
+import { BusinessJourneySteps } from '@/components/BusinessJourneySteps';
 import { useAppLanguage } from '@/lib/useAppLanguage';
 
 /**
@@ -124,19 +125,21 @@ export default function BusinessOnboardingIntroPage() {
   if (unavailable) return shell(<BusinessOnboardingUnavailable language={language} />);
 
   const listingKept = Boolean(confirmed && intent.listing && !confirmed.listingDropped);
-  // Interim hand-over until the Phase 3 wizard: a confirmed listing goes straight
-  // to the existing-listing intake step; anything else starts at the lookup.
+  // Journey hand-over: a confirmed listing goes straight to the details step for
+  // that listing; anything else starts at "find business". The context travels along.
   const startHref = (() => {
     const back = confirmed?.returnRef ?? BUSINESS_ONBOARDING_PATH;
+    const context = confirmed?.context ?? intent.context;
     if (listingKept && intent.listing) {
-      const params = new URLSearchParams({ kind: 'existing_listing', cityId: intent.listing.cityId, listingSource: intent.listing.source, listingId: intent.listing.id });
+      const params = new URLSearchParams({ kind: 'existing_listing', cityId: intent.listing.cityId, listingSource: intent.listing.source, listingId: intent.listing.id, context });
       return withReturnPath(`/bedrijf-nieuw?${params.toString()}`, back);
     }
-    return withReturnPath('/bedrijf-zoeken', back);
+    return withReturnPath(`/bedrijf-zoeken?context=${context}`, back);
   })();
 
   return shell(
     <div className="space-y-6">
+      <BusinessJourneySteps language={language} current="explain" />
       {confirmed?.context === 'registration' ? (
         <p data-testid="status-business-resume" role="status" className="rounded-2xl border border-border/80 bg-muted/40 px-4 py-3 text-sm leading-6 text-muted-foreground">
           {business.resumeNotice}

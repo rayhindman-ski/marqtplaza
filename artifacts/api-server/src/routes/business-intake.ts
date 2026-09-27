@@ -3,6 +3,7 @@ import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { Router, type IRouter, type Request, type RequestHandler, type Response } from "express";
 
 import {
+  AUTHORITY_DECLARATION_VERSION,
   OPEN_CLAIM_STATUSES,
   SELF_REPORTED_LISTING_SOURCE,
   businessClaimsTable,
@@ -101,6 +102,10 @@ const DRAFT_FIELDS: ReadonlySet<string> = new Set([
   "relationship",
   "authorityDeclaration",
   "evidenceReference",
+  "relationshipKind",
+  "evidenceKvk",
+  "evidenceDomain",
+  "onboardingContext",
   "message",
 ]);
 const UPDATE_FIELDS: ReadonlySet<string> = new Set([
@@ -110,6 +115,9 @@ const UPDATE_FIELDS: ReadonlySet<string> = new Set([
   "relationship",
   "authorityDeclaration",
   "evidenceReference",
+  "relationshipKind",
+  "evidenceKvk",
+  "evidenceDomain",
   "message",
   "business",
 ]);
@@ -686,6 +694,11 @@ export function createBusinessIntakeRouter(options: BusinessIntakeRouterOptions 
       relationship: input.relationship.trim(),
       authorityDeclaration: input.authorityDeclaration.trim(),
       evidenceReference: trimmedOrNull(input.evidenceReference),
+      relationshipKind: input.relationshipKind ?? null,
+      evidenceKvk: trimmedOrNull(input.evidenceKvk),
+      evidenceDomain: trimmedOrNull(input.evidenceDomain),
+      // The journey context is fixed at creation; a resumed draft keeps its origin.
+      onboardingContext: input.onboardingContext ?? null,
       message: trimmedOrNull(input.message),
       status: "draft" as const,
       idempotencyKey: rawKey ?? null,
@@ -858,6 +871,9 @@ export function createBusinessIntakeRouter(options: BusinessIntakeRouterOptions 
           ...(input.relationship !== undefined ? { relationship: input.relationship.trim() } : {}),
           ...(input.authorityDeclaration !== undefined ? { authorityDeclaration: input.authorityDeclaration.trim() } : {}),
           ...(input.evidenceReference !== undefined ? { evidenceReference: trimmedOrNull(input.evidenceReference) } : {}),
+          ...(input.relationshipKind !== undefined ? { relationshipKind: input.relationshipKind } : {}),
+          ...(input.evidenceKvk !== undefined ? { evidenceKvk: trimmedOrNull(input.evidenceKvk) } : {}),
+          ...(input.evidenceDomain !== undefined ? { evidenceDomain: trimmedOrNull(input.evidenceDomain) } : {}),
           ...(input.message !== undefined ? { message: trimmedOrNull(input.message) } : {}),
           version: locked.version + 1,
         })
@@ -960,6 +976,9 @@ export function createBusinessIntakeRouter(options: BusinessIntakeRouterOptions 
           .set({
             status: nextStatus,
             version: locked.version + 1,
+            // Submitting is the act of declaring authority: record when and which text version.
+            authorityDeclaredAt: new Date(),
+            authorityVersion: AUTHORITY_DECLARATION_VERSION,
             reviewNote: null,
             reviewedAt: null,
             reviewedBy: null,

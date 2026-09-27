@@ -27,8 +27,14 @@ import { Textarea } from '@/components/ui/textarea';
 import { useAccountAuth } from '@/lib/accountAuth';
 import { featureFlags } from '@/lib/featureFlags';
 import { accountErrorMessage, businessIntakeTranslations, LANGUAGE_OPTIONS, type Language } from '@/lib/i18n';
-import { withReturnPath } from '@/lib/returnPath';
+import { RETURN_PATH_PARAM, sanitizeReturnPath, withReturnPath } from '@/lib/returnPath';
+import { journeyContextFromSearch, type BusinessIntentContext } from '@/lib/businessIntent';
+import { BusinessJourneySteps } from '@/components/BusinessJourneySteps';
 import { useAppLanguage } from '@/lib/useAppLanguage';
+
+const RELATIONSHIP_KINDS = ['owner', 'manager', 'representative'] as const;
+const KVK = /^[0-9]{8}$/;
+const DOMAIN = /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$/;
 
 const schema = z.object({
   name: z.string().max(160),
@@ -38,9 +44,12 @@ const schema = z.object({
   websiteUrl: z.string().url().optional().or(z.literal('')),
   contactName: z.string().min(2).max(120),
   contactEmail: z.string().email().max(254),
-  relationship: z.string().min(2).max(120),
+  relationshipKind: z.enum(RELATIONSHIP_KINDS),
+  relationship: z.string().max(120),
   authorityDeclaration: z.string().min(10).max(1200),
   evidenceReference: z.string().max(400),
+  evidenceKvk: z.string().regex(KVK, 'kvk').or(z.literal('')),
+  evidenceDomain: z.string().max(253).regex(DOMAIN, 'domain').or(z.literal('')),
   message: z.string().max(1200),
 });
 const newBusinessSchema = schema.extend({
@@ -49,7 +58,11 @@ const newBusinessSchema = schema.extend({
   neighborhood: z.string().min(2).max(120),
 });
 type Values = z.infer<typeof schema>;
-const defaults: Values = { name: '', category: '', neighborhood: '', address: '', websiteUrl: '', contactName: '', contactEmail: '', relationship: '', authorityDeclaration: '', evidenceReference: '', message: '' };
+const defaults: Values = { name: '', category: '', neighborhood: '', address: '', websiteUrl: '', contactName: '', contactEmail: '', relationshipKind: 'owner', relationship: '', authorityDeclaration: '', evidenceReference: '', evidenceKvk: '', evidenceDomain: '', message: '' };
+
+function relationshipKindOf(value: string | null | undefined): Values['relationshipKind'] {
+  return (RELATIONSHIP_KINDS as readonly string[]).includes(value ?? '') ? (value as Values['relationshipKind']) : 'owner';
+}
 
 function apiErrorFrom(error: unknown): ApiError | null {
   const data = (error as { data?: unknown } | null)?.data;
@@ -68,6 +81,9 @@ export default function BusinessDraftPage() {
   const kind = params.get('kind');
   const identity = { cityId: params.get('cityId'), listingSource: params.get('listingSource'), listingId: params.get('listingId') };
   const validNew = kind === 'new_business';
+  // Journey (v0.5.2): the entry context is recorded on the draft; the return path leads back after the receipt.
+  const journeyContext: BusinessIntentContext | null = journeyContextFromSearch(window.location.search);
+  const journeyReturn = sanitizeReturnPath(params.get(RETURN_PATH_PARAM));
   const validExisting = kind === 'existing_listing' && Object.values(identity).every(Boolean);
   const valid = claimId !== null || validNew || validExisting;
   const key = useRef(crypto.randomUUID());
@@ -107,9 +123,12 @@ export default function BusinessDraftPage() {
       websiteUrl: item.kind === 'new_business' ? item.profile.websiteUrl ?? '' : '',
       contactName: item.contactName,
       contactEmail: item.contactEmail,
-      relationship: item.relationship,
+      relationshipKind: relationshipKindOf(item.relationshipKind),
+      relationship: item.relationshipKind ? item.relationship : '',
       authorityDeclaration: item.authorityDeclaration ?? '',
       evidenceReference: item.evidenceReference ?? '',
+      evidenceKvk: item.evidenceKvk ?? '',
+      evidenceDomain: item.evidenceDomain ?? '',
       message: item.message ?? '',
     });
   }, [claimQuery.data, form]);
@@ -151,6 +170,12 @@ export default function BusinessDraftPage() {
   };
 
   const save = async (values: Values): Promise<BusinessClaim> => {
+    // `relationship` stays the human wording (required by the intake); the structured kind travels alongside.
+    const relationship = values.relationship.trim().length >= 2 ? values.relationship.trim() : copy.relationshipKinds[values.relationshipKind];
+    const authority = {
+      relationship, relationshipKind: values.relationshipKind,
+      authorityDeclaration: values.authorityDeclaration,
+    };
     const business = {
       name: values.name, category: values.category, neighborhood: values.neighborhood,
       address: values.address || undefined, websiteUrl: values.websiteUrl || undefined,
@@ -160,9 +185,9 @@ export default function BusinessDraftPage() {
         id: claim.id,
         data: {
           expectedVersion: claim.version ?? 1,
-          contactName: values.contactName, contactEmail: values.contactEmail, relationship: values.relationship,
-          authorityDeclaration: values.authorityDeclaration,
+          contactName: values.contactName, contactEmail: values.contactEmail, ...authority,
           evidenceReference: values.evidenceReference || null, message: values.message || null,
+          evidenceKvk: values.evidenceKvk || null, evidenceDomain: values.evidenceDomain || null,
           ...(claim.kind === 'new_business' ? { business } : {}),
         },
       });
@@ -173,15 +198,17 @@ export default function BusinessDraftPage() {
     const data: BusinessIntakeDraftInput = {
       kind: validNew ? 'new_business' : 'existing_listing',
       ...(validNew ? { business } : { listing: { cityId: identity.cityId!, listingSource: identity.listingSource!, listingId: identity.listingId! } }),
-      contactName: values.contactName, contactEmail: values.contactEmail, relationship: values.relationship,
-      authorityDeclaration: values.authorityDeclaration,
+      contactName: values.contactName, contactEmail: values.contactEmail, ...authority,
       evidenceReference: values.evidenceReference || undefined, message: values.message || undefined,
+      evidenceKvk: values.evidenceKvk || undefined, evidenceDomain: values.evidenceDomain || undefined,
+      ...(journeyContext ? { onboardingContext: journeyContext } : {}),
     };
     const saved = await create.mutateAsync({ data });
     setCurrent(saved);
     queryClient.setQueryData(getGetBusinessClaimQueryKey(saved.id), saved);
     const testParam = auth.isTestAuth ? '&e2eAccountAuth=1' : '';
-    setLocation(`/bedrijf-nieuw?claim=${saved.id}&locale=${language}${testParam}`, { replace: true });
+    const journeyParams = `${journeyContext ? `&context=${journeyContext}` : ''}${journeyReturn ? `&${RETURN_PATH_PARAM}=${encodeURIComponent(journeyReturn)}` : ''}`;
+    setLocation(`/bedrijf-nieuw?claim=${saved.id}&locale=${language}${testParam}${journeyParams}`, { replace: true });
     return saved;
   };
 
@@ -243,11 +270,13 @@ export default function BusinessDraftPage() {
         <div className="mb-6 flex justify-end">
           <ClaimLanguageSelector language={language} onLanguageChange={changeLanguage} />
         </div>
+        {journeyContext ? <BusinessJourneySteps language={language} current="review" /> : null}
         <Card><CardHeader><CardTitle>{copy.receiptTitle}</CardTitle></CardHeader><CardContent className="space-y-5">
           <Badge>{copy.status[claim.status]}</Badge>
           <p>{claim.status === 'withdrawn' ? copy.withdrawn : copy.receiptBody}</p>
           <div className="flex flex-wrap gap-3"><Button asChild><Link href="/mijn-bedrijf">{copy.myBusiness}</Link></Button>
             <Button asChild variant="outline"><Link href="/bedrijf-zoeken">{copy.backToLookup}</Link></Button>
+            {journeyReturn ? <Button asChild variant="ghost"><Link href={journeyReturn} data-testid="link-journey-return">{copy.backToJourney}</Link></Button> : null}
             {open ? <Button variant="destructive" onClick={() => void onWithdraw()} disabled={withdraw.isPending}>{copy.withdraw}</Button> : null}
           </div>
         </CardContent></Card>
@@ -262,6 +291,7 @@ export default function BusinessDraftPage() {
       <div className="mb-6 flex justify-end">
         <ClaimLanguageSelector language={language} onLanguageChange={changeLanguage} />
       </div>
+      {journeyContext ? <BusinessJourneySteps language={language} current="details" /> : null}
       <h1 className="font-serif text-4xl font-semibold">{copy.draftTitle}</h1>
       {!isNew ? <p className="mt-2 text-muted-foreground">{copy.existingIntro}</p> : null}
       {claim?.status === 'changes_requested' ? <div role="alert" className="mt-6 rounded-xl border border-amber-300 bg-amber-50 p-4"><strong>{copy.changesTitle}</strong><p>{claim.reviewNote}</p></div> : null}
@@ -310,10 +340,18 @@ export default function BusinessDraftPage() {
           <Field label={copy.websiteUrl} error={form.formState.errors.websiteUrl?.message}><Input type="url" {...form.register('websiteUrl')} /></Field></> : null}
         <Field label={copy.contactName} error={form.formState.errors.contactName?.message}><Input {...form.register('contactName')} /></Field>
         <Field label={copy.contactEmail} error={form.formState.errors.contactEmail?.message}><Input type="email" {...form.register('contactEmail')} /></Field>
+        <Field label={copy.relationshipKind} help={copy.relationshipKindHelp} error={form.formState.errors.relationshipKind?.message}>
+          <select data-testid="select-relationship-kind" className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" {...form.register('relationshipKind')}>
+            {RELATIONSHIP_KINDS.map((value) => <option key={value} value={value}>{copy.relationshipKinds[value]}</option>)}
+          </select>
+        </Field>
         <Field label={copy.relationship} error={form.formState.errors.relationship?.message}><Input {...form.register('relationship')} /></Field>
         <Field label={copy.authority} help={copy.authorityHelp} error={form.formState.errors.authorityDeclaration?.message}><Textarea {...form.register('authorityDeclaration')} /></Field>
+        <Field label={copy.evidenceKvk} help={copy.evidenceKvkHelp} error={form.formState.errors.evidenceKvk ? copy.evidenceKvkInvalid : undefined}><Input inputMode="numeric" data-testid="input-evidence-kvk" {...form.register('evidenceKvk')} /></Field>
+        <Field label={copy.evidenceDomain} help={copy.evidenceDomainHelp} error={form.formState.errors.evidenceDomain ? copy.evidenceDomainInvalid : undefined}><Input data-testid="input-evidence-domain" {...form.register('evidenceDomain', { setValueAs: (v: string) => v.trim().toLowerCase() })} /></Field>
         <Field label={copy.evidence} help={copy.evidenceHelp} error={form.formState.errors.evidenceReference?.message}><Input {...form.register('evidenceReference')} /></Field>
         <Field label={copy.message} error={form.formState.errors.message?.message}><Textarea {...form.register('message')} /></Field>
+        <p className="text-sm text-muted-foreground" data-testid="text-authority-confirm">{copy.authorityConfirm}</p>
         <div className="flex flex-wrap gap-3"><Button type="button" variant="outline" onClick={() => void onSave()} disabled={busy}>{busy ? copy.saving : copy.save}</Button>
           <Button type="button" onClick={() => void onSubmit()} disabled={busy}>{copy.submit}</Button>
           {open ? <Button type="button" variant="destructive" onClick={() => void onWithdraw()}>{copy.withdraw}</Button> : null}

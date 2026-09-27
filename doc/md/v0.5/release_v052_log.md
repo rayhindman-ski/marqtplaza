@@ -238,3 +238,73 @@ Re-verified: business-onboarding e2e 13/13; usability, account, business and
 credential suites 55/55; api business-onboarding 7/0, account-foundation
 26/0, business-intake 14/0; workspace typecheck clean; dev API anonymous
 intent → 401, readiness `businessOnboarding: true`.
+
+### 2026-09-27 — Phase 3: business profile capture (journey + authority)
+
+**Approach.** The plan's wizard is realised across the existing intake pages
+rather than as a new form stack (plan §2.3: "reuses `BusinessLookupPage` and
+`BusinessClaimView` internals as steps"). The intro page is step 1
+("Uitleg"), `/bedrijf-zoeken` is step 2 ("Bedrijf zoeken"), `/bedrijf-nieuw`
+is step 3 ("Gegevens en bevoegdheid") and its receipt is step 4
+("Controle"). A `context` query parameter and the allow-listed `terug`
+return path travel from step to step; without them the intake behaves
+exactly as in v0.5.0/v0.5.1 (no step indicator, no context field sent).
+
+**Schema (BPROF-006/007/011, BVER-001 groundwork) — additive on
+`business_claims`:** `relationship_kind` (check owner|manager|representative),
+`authority_declared_at`, `authority_version`, `evidence_kvk` (check
+`^[0-9]{8}$`), `evidence_domain`, `onboarding_context` (check
+registration|account_home|listing|legacy), `signals` jsonb (filled in
+Phase 4). All constraints named; applied to development with `drizzle-kit
+push` (no drift reported). `relationship` (free text) is kept: it remains
+the claimant's own wording; the structured kind sits beside it.
+
+**API (BPROF-003/006/007/010):** `BusinessIntakeDraftInput` and
+`BusinessClaimUpdateInput` accept `relationshipKind`, `evidenceKvk`,
+`evidenceDomain`; the draft input additionally accepts `onboardingContext`
+(client values only — `legacy` is server-side and refused; the context is
+fixed at creation, so it is an unknown field on PATCH). Unknown-field
+rejection lists extended. Submitting stamps `authorityDeclaredAt = now()`
+and `authorityVersion = "2026-09-v052"` — submission *is* the declaration.
+`BusinessClaim` (claimant/reviewer DTO) returns the new fields; the public
+profile payload is untouched (evidence never leaves the private DTO).
+Clients regenerated. Server-derived geography and the existing
+client-coordinate rejection are unchanged (BPROF-004 was already enforced
+by `rejectClientFields`).
+
+**Web (BPROF-001/002/005/008/009):**
+
+- `BusinessJourneySteps` indicator (4 steps, `aria-current="step"`), shown
+  only when a journey context is present. Current step uses the dark
+  foreground pill, not brand orange, so the contrast budget is unchanged.
+- Intro page Start → `/bedrijf-zoeken?context=…&terug=<intent>`; a confirmed
+  listing intent → `/bedrijf-nieuw?kind=existing_listing&…&context=listing&terug=<intent>`.
+- Lookup page forwards `context` + `terug` on every claim/new-business link.
+- Draft page: role select (owner / manager / representative) with the free
+  relationship field now optional (the role label is sent as `relationship`
+  when left empty), KvK (8 digits, client + server checked), domain (host
+  only, lower-cased), declaration notice above the actions, `onboardingContext`
+  sent once on creation, the journey parameters kept across the
+  create→edit URL replace, and a "Back to your account" link on the receipt
+  that follows the allow-listed return path.
+- NL/EN copy under `businessIntakeTranslations`; parity test 12/12.
+
+**Tests / evidence:**
+
+- api `test:business-intake` 15/0 (new: stores the v0.5.2 fields, refuses a
+  7-digit KvK and the `legacy` context, refuses context rewrite on PATCH,
+  partial updates keep untouched evidence, submit stamps declaration time and
+  version, public profile still 404 for a draft).
+- e2e `business-intake.spec.ts` 7/7 (new: journey lookup → details →
+  receipt with context/role/evidence payload and return link; no-context
+  intake unchanged), `business-onboarding.spec.ts` 13/13 (Start hrefs now
+  carry `context`), `usability-regression` 15/15 (budget unchanged 4/4),
+  `business-review`, `consumer-registration`, `account-preferences` green.
+- Workspace typecheck clean.
+
+**Not done in this phase (recorded):** the v0.5.1 draft claim already
+provides BPROF-009 persistence per claimant/profile — no new draft store was
+added. Reviewer surface for the new fields and the signals column are
+Phase 4.
+
+Duration: ≈18:06 – 18:35 CEST.

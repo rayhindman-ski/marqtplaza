@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { ClaimRelationshipKind } from './claimRelationshipKind';
 import type { NewBusinessFacts } from './newBusinessFacts';
 
 export interface BusinessClaimUpdateInput {
@@ -35,6 +36,18 @@ export interface BusinessClaimUpdateInput {
      * @nullable
      */
   evidenceReference?: string | null;
+  relationshipKind?: ClaimRelationshipKind;
+  /**
+     * @nullable
+     * @pattern ^[0-9]{8}$
+     */
+  evidenceKvk?: string | null;
+  /**
+     * @maxLength 253
+     * @nullable
+     * @pattern ^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$
+     */
+  evidenceDomain?: string | null;
   /**
      * @maxLength 1200
      * @nullable

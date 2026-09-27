@@ -1,9 +1,11 @@
 import {
+  check,
   boolean,
   date,
   doublePrecision,
   index,
   integer,
+  jsonb,
   pgTable,
   serial,
   text,
@@ -106,6 +108,15 @@ export const CLAIM_STATUSES = [
 export type ClaimStatus = (typeof CLAIM_STATUSES)[number];
 /** Listing source recorded for businesses created through the intake draft flow. */
 export const SELF_REPORTED_LISTING_SOURCE = "self_reported";
+/** Structured relationship of the claimant to the business (v0.5.2 BPROF-006). */
+export const CLAIM_RELATIONSHIP_KINDS = ["owner", "manager", "representative"] as const;
+export type ClaimRelationshipKind = (typeof CLAIM_RELATIONSHIP_KINDS)[number];
+/** Where the onboarding journey started (v0.5.2 BVER-001); `legacy` for claims predating the journey. */
+export const CLAIM_ONBOARDING_CONTEXTS = ["registration", "account_home", "listing", "legacy"] as const;
+export type ClaimOnboardingContext = (typeof CLAIM_ONBOARDING_CONTEXTS)[number];
+/** Version of the authority declaration text the claimant agreed to. */
+export const AUTHORITY_DECLARATION_VERSION = "2026-09-v052";
+
 export const OPEN_CLAIM_STATUSES = [
   "pending",
   "submitted",
@@ -134,6 +145,19 @@ export const businessClaimsTable = pgTable(
     authorityDeclaration: text("authority_declaration"),
     /** URL or short text reference supporting the declaration (private). */
     evidenceReference: text("evidence_reference"),
+    /** v0.5.2: structured relationship; `relationship` keeps the claimant's wording. */
+    relationshipKind: text("relationship_kind"),
+    /** v0.5.2: when the claimant last confirmed the authority declaration (set at submit). */
+    authorityDeclaredAt: timestamp("authority_declared_at", { withTimezone: true }),
+    authorityVersion: text("authority_version"),
+    /** v0.5.2: optional KvK number (8 digits); reviewer/claimant only. */
+    evidenceKvk: text("evidence_kvk"),
+    /** v0.5.2: optional business domain the claimant says they control; reviewer/claimant only. */
+    evidenceDomain: text("evidence_domain"),
+    /** v0.5.2: journey entry context; null for claims created before the journey existed. */
+    onboardingContext: text("onboarding_context"),
+    /** v0.5.2: advisory verification signals computed at submit (Phase 4). */
+    signals: jsonb("signals").$type<Record<string, unknown>>(),
     /** Optimistic-concurrency version; every claimant or reviewer change increments it. */
     version: integer("version").notNull().default(1),
     withdrawnAt: timestamp("withdrawn_at", { withTimezone: true }),
@@ -169,6 +193,15 @@ export const businessClaimsTable = pgTable(
     uniqueIndex("business_claims_claimant_idempotency_unique")
       .on(table.claimantId, table.idempotencyKey)
       .where(sql`${table.idempotencyKey} is not null`),
+    check(
+      "business_claims_relationship_kind_check",
+      sql`${table.relationshipKind} is null or ${table.relationshipKind} in ('owner', 'manager', 'representative')`,
+    ),
+    check(
+      "business_claims_onboarding_context_check",
+      sql`${table.onboardingContext} is null or ${table.onboardingContext} in ('registration', 'account_home', 'listing', 'legacy')`,
+    ),
+    check("business_claims_evidence_kvk_check", sql`${table.evidenceKvk} is null or ${table.evidenceKvk} ~ '^[0-9]{8}$'`),
   ],
 );
 

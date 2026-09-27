@@ -7,6 +7,8 @@
  */
 import type { BusinessIntakeDraftInputListing } from './businessIntakeDraftInputListing';
 import type { BusinessIntakeKind } from './businessIntakeKind';
+import type { ClaimOnboardingContext } from './claimOnboardingContext';
+import type { ClaimRelationshipKind } from './claimRelationshipKind';
 import type { NewBusinessFacts } from './newBusinessFacts';
 
 export interface BusinessIntakeDraftInput {
@@ -41,6 +43,19 @@ export interface BusinessIntakeDraftInput {
      * @maxLength 400
      */
   evidenceReference?: string;
+  relationshipKind?: ClaimRelationshipKind;
+  /**
+     * Optional KvK number (8 digits). Format-checked only; private to claimant and reviewers.
+     * @pattern ^[0-9]{8}$
+     */
+  evidenceKvk?: string;
+  /**
+     * Optional domain the claimant says they control (host only, lower case). Private.
+     * @maxLength 253
+     * @pattern ^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$
+     */
+  evidenceDomain?: string;
+  onboardingContext?: ClaimOnboardingContext;
   /** @maxLength 1200 */
   message?: string;
 }

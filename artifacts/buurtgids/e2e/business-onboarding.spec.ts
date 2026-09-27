@@ -125,7 +125,7 @@ test.describe('business onboarding entry points (v0.5.2)', () => {
     await expect(page.getByTestId('status-business-resume')).toHaveCount(0);
     const start = page.getByTestId('button-business-start');
     await expect(start).not.toHaveAttribute('aria-disabled', 'true');
-    await expect(start).toHaveAttribute('href', /\/bedrijf-zoeken\?terug=%2Faccount%2Fbedrijf%2Ftoevoegen%3Fcontext%3Daccount_home$/);
+    await expect(start).toHaveAttribute('href', /\/bedrijf-zoeken\?context=account_home&terug=%2Faccount%2Fbedrijf%2Ftoevoegen%3Fcontext%3Daccount_home$/);
     expect(intent.calls).toEqual([{ context: 'account_home' }]);
     // No personal data in the intent call or the URL.
     expect(page.url()).not.toMatch(/e2e@example|user-e2e/);
@@ -198,7 +198,7 @@ test.describe('business onboarding entry points (v0.5.2)', () => {
     await expect(page.getByTestId('status-business-listing')).toBeVisible();
     await expect(page.getByTestId('button-business-start')).toHaveAttribute(
       'href',
-      /\/bedrijf-nieuw\?kind=existing_listing&cityId=dhg&listingSource=google_maps&listingId=ChIJ-kapper&terug=/,
+      /\/bedrijf-nieuw\?kind=existing_listing&cityId=dhg&listingSource=google_maps&listingId=ChIJ-kapper&context=listing&terug=/,
     );
     expect(intent.calls).toEqual([{ context: 'listing', cityId: 'dhg', listingSource: 'google_maps', listingId: 'ChIJ-kapper' }]);
   });

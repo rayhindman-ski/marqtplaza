@@ -2882,9 +2882,29 @@ components:
           type: string
           maxLength: 400
           description: Optional URL or short text reference supporting the declaration (private). No uploads.
+        relationshipKind:
+          $ref: "#/components/schemas/ClaimRelationshipKind"
+        evidenceKvk:
+          type: string
+          pattern: "^[0-9]{8}$"
+          description: Optional KvK number (8 digits). Format-checked only; private to claimant and reviewers.
+        evidenceDomain:
+          type: string
+          maxLength: 253
+          pattern: "^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$"
+          description: Optional domain the claimant says they control (host only, lower case). Private.
+        onboardingContext:
+          $ref: "#/components/schemas/ClaimOnboardingContext"
         message:
           type: string
           maxLength: 1200
+
+    ClaimRelationshipKind:
+      type: string
+      enum: [owner, manager, representative]
+    ClaimOnboardingContext:
+      type: string
+      enum: [registration, account_home, listing]
 
     BusinessClaimUpdateInput:
       type: object
@@ -2912,6 +2932,15 @@ components:
         evidenceReference:
           type: ["string", "null"]
           maxLength: 400
+        relationshipKind:
+          $ref: "#/components/schemas/ClaimRelationshipKind"
+        evidenceKvk:
+          type: ["string", "null"]
+          pattern: "^[0-9]{8}$"
+        evidenceDomain:
+          type: ["string", "null"]
+          maxLength: 253
+          pattern: "^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$"
         message:
           type: ["string", "null"]
           maxLength: 1200
@@ -4267,6 +4296,23 @@ components:
         evidenceReference:
           type: ["string", "null"]
           description: Only returned to the claimant and reviewers; never to other claimants.
+        relationshipKind:
+          type: ["string", "null"]
+          enum: [owner, manager, representative, null]
+        evidenceKvk:
+          type: ["string", "null"]
+          description: Only returned to the claimant and reviewers.
+        evidenceDomain:
+          type: ["string", "null"]
+          description: Only returned to the claimant and reviewers.
+        onboardingContext:
+          type: ["string", "null"]
+          enum: [registration, account_home, listing, legacy, null]
+        authorityDeclaredAt:
+          type: ["string", "null"]
+          description: When the claimant last confirmed the authority declaration (set on submit).
+        authorityVersion:
+          type: ["string", "null"]
         withdrawnAt:
           type: ["string", "null"]
         createdAt:
