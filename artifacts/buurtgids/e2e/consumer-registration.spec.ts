@@ -113,6 +113,28 @@ test.describe('consumer registration (v0.5.1)', () => {
     expect(seen).toEqual(['GET', 'POST']);
   });
 
+  test('v0.5.2: a consumed link hands the verified address to password creation without putting it in the URL', async ({ page }) => {
+    await page.route(/\/api\/consumer-registration\/verify(\?.*)?$/, (route) => {
+      if (route.request().method() === 'GET') {
+        return json(route, { state: 'valid', canResend: false, locale: 'nl', expiresAt: '2030-01-01T00:00:00.000Z' });
+      }
+      return json(route, { state: 'valid', canResend: false, locale: 'nl', handoff: { email: 'noor@example.com', returnRef: '/account/bedrijf/toevoegen' } });
+    });
+    await page.goto(`/account/register/complete?token=${TOKEN}`);
+    await page.getByTestId('button-register-continue').click();
+    await expect(page.getByTestId('status-register-link-done')).toBeVisible();
+    // The link locale (nl) only applies when the browser has no stored language; this fresh browser has none.
+    await expect(page.getByTestId('status-register-link-done')).toContainText('Volgende stap: je wachtwoord');
+    await expect(page.getByTestId('status-register-link-done')).toContainText('toevoegen van je bedrijf');
+    await page.getByTestId('button-register-set-password').click();
+    await expect(page).toHaveURL(/\/sign-up\?terug=%2Faccount%2Fbedrijf%2Ftoevoegen$/);
+    expect(page.url()).not.toContain('noor');
+    expect(page.url()).not.toContain(TOKEN);
+    // The address waits for the sign-up card in tab-scoped storage only.
+    expect(await page.evaluate(() => sessionStorage.getItem('buurtplaza.credential-handoff'))).toContain('noor@example.com');
+    expect(await page.evaluate(() => Object.keys(localStorage).some((key) => (localStorage.getItem(key) ?? '').includes('noor@example.com')))).toBe(false);
+  });
+
   test('used, expired and superseded links show their own state with the right follow-up', async ({ page }) => {
     const states = ['used', 'expired', 'superseded'] as const;
     for (const state of states) {

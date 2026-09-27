@@ -120,6 +120,87 @@ test.describe('live Clerk sign-up', () => {
       await expect(page.getByRole('link', { name: /my account|mijn account/i })).toBeVisible({ timeout: 30_000 });
     }
 
+    if (liveBase) {
+      // v0.5.2 credential lifecycle on the same identity: change the password
+      // (current password = recent-auth proof), sign out, recover with the
+      // reset code, and confirm the retired password no longer signs in.
+      const changed = `${password}-v2`;
+      await page.goto(`${liveBase}/account/beveiliging`);
+      await expect(page.getByTestId('heading-account-security')).toBeVisible({ timeout: 30_000 });
+      await page.getByTestId('input-current-password').fill(password);
+      await page.getByTestId('input-new-password').fill(changed);
+      await page.getByTestId('input-confirm-password').fill(changed);
+      await page.getByTestId('button-change-password-submit').click();
+      await expect(page.getByTestId('status-change-password-done')).toBeVisible({ timeout: 30_000 });
+      expect(fapiRequests.some((r) => /POST \/v1\/me\/change_password/.test(r)), 'password change went to the identity provider').toBe(true);
+
+      // A wrong current password is refused with the app's own copy.
+      await page.getByTestId('input-current-password').fill('definitely-not-it');
+      await page.getByTestId('input-new-password').fill(`${changed}-x`);
+      await page.getByTestId('input-confirm-password').fill(`${changed}-x`);
+      await page.getByTestId('button-change-password-submit').click();
+      await expect(page.getByTestId('input-current-password-error').or(page.getByTestId('error-change-password'))).toBeVisible({ timeout: 30_000 });
+
+      await page.evaluate(async () => {
+        const clerk = (window as unknown as { Clerk?: { signOut(): Promise<void> } }).Clerk;
+        await clerk?.signOut();
+      });
+
+      await page.goto(`${liveBase}/account/wachtwoord-vergeten?terug=${terug}`);
+      await expect(page.getByTestId('heading-forgot-password')).toBeVisible({ timeout: 30_000 });
+      await page.getByTestId('input-forgot-email').fill(email);
+      await page.getByTestId('button-forgot-password-submit').click();
+      await expect(page.getByTestId('status-forgot-password-sent')).toBeVisible({ timeout: 30_000 });
+      expect(page.url()).not.toContain('clerk_test');
+      await page.getByTestId('button-forgot-password-enter-code').click();
+      await expect(page.getByTestId('form-reset-password')).toBeVisible({ timeout: 30_000 });
+
+      // Wrong code first: field-level error, form keeps its state.
+      const recovered = `${password}-v3`;
+      await page.getByTestId('input-reset-code').fill('000000');
+      await page.getByTestId('input-reset-password').fill(recovered);
+      await page.getByTestId('input-reset-password-confirm').fill(recovered);
+      await page.getByTestId('button-reset-password-submit').click();
+      await expect(page.getByTestId('error-reset-code')).toBeVisible({ timeout: 30_000 });
+      await expect(page.getByTestId('input-reset-password')).toHaveValue(recovered);
+
+      await page.getByTestId('input-reset-code').fill(TEST_CODE);
+      await page.getByTestId('button-reset-password-submit').click();
+      await expect(page.getByTestId('status-reset-password-done')).toBeVisible({ timeout: 60_000 });
+      await page.getByTestId('button-reset-password-continue').click();
+      await page.waitForURL((url) => url.pathname === '/activiteiten/den-haag/zeeheldenkwartier', { timeout: 30_000 });
+
+      // The reset signed this browser in; other sessions were revoked on request.
+      await page.goto(`${liveBase}/account/beveiliging`);
+      await expect(page.getByTestId('heading-account-security')).toBeVisible({ timeout: 30_000 });
+      await expect(page.getByTestId('status-sessions-count')).toBeVisible({ timeout: 30_000 });
+      await page.evaluate(async () => {
+        const clerk = (window as unknown as { Clerk?: { signOut(): Promise<void> } }).Clerk;
+        await clerk?.signOut();
+      });
+
+      // The retired password is refused; the recovered one signs in.
+      await page.goto(`${liveBase}/sign-in`);
+      const identifier = page.locator('input[name="identifier"]');
+      await expect(identifier).toBeVisible({ timeout: 30_000 });
+      await identifier.fill(email);
+      await page.locator('.cl-formButtonPrimary').click();
+      const pwd = page.locator('input[name="password"]');
+      await expect(pwd).toBeVisible({ timeout: 30_000 });
+      await pwd.fill(changed);
+      await page.locator('.cl-formButtonPrimary').click();
+      await expect(page.locator('.cl-formFieldErrorText, .cl-alertText').first()).toBeVisible({ timeout: 30_000 });
+      await expect(page.locator('.cl-formButtonPrimary')).toBeEnabled({ timeout: 30_000 });
+      await pwd.fill(recovered);
+      await pwd.press('Enter');
+      await page.waitForURL((url) => url.pathname === '/account', { timeout: 60_000 });
+      await expect(page.getByTestId('heading-account')).toBeVisible({ timeout: 30_000 });
+
+      const bodies = fapiRequests.join('\n');
+      expect(bodies).not.toContain(password);
+      expect(bodies).not.toContain(recovered);
+    }
+
     const attempt = fapiRequests.find((r) => /POST \/v1\/client\/sign_ups\/[^/]+\/attempt_verification/.test(r));
     expect(attempt, 'e-mail code verification was attempted through the Clerk sign-up').toBeTruthy();
     test.info().annotations.push(

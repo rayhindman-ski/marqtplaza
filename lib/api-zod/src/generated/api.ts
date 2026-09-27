@@ -660,7 +660,11 @@ export const InspectConsumerRegistrationLinkResponse = zod.object({
   "state": zod.enum(['valid', 'expired', 'used', 'superseded', 'invalid']).describe('Explicit link states (REG-015). `valid` on GET means the link may be consumed; on POST it means\nthe handoff was reached. `unavailable` is reported by the API as 503, never as a state.\n'),
   "canResend": zod.boolean().describe('Whether the resend journey applies to this state.'),
   "locale": zod.enum(['nl', 'en']).optional(),
-  "expiresAt": zod.coerce.date().optional().describe('Only for `valid`; when the link stops working.')
+  "expiresAt": zod.coerce.date().optional().describe('Only for `valid`; when the link stops working.'),
+  "handoff": zod.object({
+  "email": zod.string().describe('The verified address, normalized.'),
+  "returnRef": zod.string().nullish().describe('Allow-listed local return path recorded at request time, if any.')
+}).optional().describe('Present only in the response of a successful consume (never on inspection). Lets the\nclient open the identity provider\'s password step with the verified address prefilled\nand resume the allow-listed return destination afterwards. The caller proved control of\nthe mailbox by presenting the single-use token.\n')
 })
 
 
@@ -681,7 +685,11 @@ export const ConsumeConsumerRegistrationLinkResponse = zod.object({
   "state": zod.enum(['valid', 'expired', 'used', 'superseded', 'invalid']).describe('Explicit link states (REG-015). `valid` on GET means the link may be consumed; on POST it means\nthe handoff was reached. `unavailable` is reported by the API as 503, never as a state.\n'),
   "canResend": zod.boolean().describe('Whether the resend journey applies to this state.'),
   "locale": zod.enum(['nl', 'en']).optional(),
-  "expiresAt": zod.coerce.date().optional().describe('Only for `valid`; when the link stops working.')
+  "expiresAt": zod.coerce.date().optional().describe('Only for `valid`; when the link stops working.'),
+  "handoff": zod.object({
+  "email": zod.string().describe('The verified address, normalized.'),
+  "returnRef": zod.string().nullish().describe('Allow-listed local return path recorded at request time, if any.')
+}).optional().describe('Present only in the response of a successful consume (never on inspection). Lets the\nclient open the identity provider\'s password step with the verified address prefilled\nand resume the allow-listed return destination afterwards. The caller proved control of\nthe mailbox by presenting the single-use token.\n')
 })
 
 

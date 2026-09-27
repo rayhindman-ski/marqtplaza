@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link } from 'wouter';
+import { Link, useLocation } from 'wouter';
 import { CheckCircle2, Clock, LinkIcon } from 'lucide-react';
 
 import {
@@ -12,7 +12,9 @@ import {
 
 import { AccountShell } from '@/components/account/AccountShell';
 import { Button } from '@/components/ui/button';
+import { storeCredentialHandoff } from '@/lib/credentialHandoff';
 import { featureFlags } from '@/lib/featureFlags';
+import { withReturnPath } from '@/lib/returnPath';
 import { accountErrorMessage, accountTranslations, formatCopy, type Language } from '@/lib/i18n';
 import { hasStoredLanguage, useAppLanguage } from '@/lib/useAppLanguage';
 import { RegistrationUnavailable, apiErrorFrom } from './ConsumerRegisterPage';
@@ -57,13 +59,17 @@ export default function ConsumerRegisterCompletePage() {
   const consume = useConsumeConsumerRegistrationLink();
   const [result, setResult] = useState<ConsumerRegistrationLinkState | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [, navigate] = useLocation();
 
   // The link's locale is only a fallback for a browser that has not chosen a
   // language yet (e.g. the email was opened on another device). A language the
   // visitor already picked in this browser always wins, as on every other page.
+  // Read before the language hook persists its default on mount, otherwise a
+  // fresh browser always looks like it already chose a language.
+  const [hadStoredLanguage] = useState(() => hasStoredLanguage());
   useEffect(() => {
     const locale = inspect.data?.locale;
-    if (locale && locale !== language && !hasStoredLanguage()) setLanguage(locale);
+    if (locale && locale !== language && !hadStoredLanguage) setLanguage(locale);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [inspect.data?.locale]);
 
@@ -99,6 +105,17 @@ export default function ConsumerRegisterCompletePage() {
   }
 
   const canResend = result?.canResend ?? inspect.data?.canResend ?? phase === 'invalid';
+
+  // v0.5.2 credential handoff: the consume response carries the verified
+  // address once; the password itself is created at the identity provider.
+  const handoff = result?.state === 'valid' ? result.handoff ?? null : null;
+  const returnRef = handoff?.returnRef ?? null;
+  const isBusinessReturn = returnRef === '/account/bedrijf/toevoegen';
+  function onSetPassword() {
+    if (!handoff) return;
+    storeCredentialHandoff({ email: handoff.email });
+    navigate(withReturnPath('/sign-up', returnRef));
+  }
 
   return (
     <AccountShell
@@ -142,10 +159,23 @@ export default function ConsumerRegisterCompletePage() {
             <CheckCircle2 className="mt-1 h-6 w-6 shrink-0 text-primary" aria-hidden="true" />
             <div>
               <h2 className="font-serif text-2xl font-semibold text-foreground">{register.doneTitle}</h2>
-              <p className="mt-2 text-sm leading-6 text-muted-foreground">{register.doneBody}</p>
-              <Link href="/" className="mt-5 inline-flex items-center justify-center rounded-full bg-primary px-4 py-2 text-sm font-bold text-primary-foreground hover:bg-primary/90">
-                {copy.back}
-              </Link>
+              {handoff ? (
+                <>
+                  <h3 className="mt-3 text-base font-bold text-foreground">{register.doneNextTitle}</h3>
+                  <p className="mt-2 text-sm leading-6 text-muted-foreground">{register.doneNextBody}</p>
+                  {isBusinessReturn ? <p className="mt-1 text-sm leading-6 text-muted-foreground">{register.doneNextBusiness}</p> : null}
+                  <Button type="button" data-testid="button-register-set-password" onClick={onSetPassword} className="mt-5 rounded-full">
+                    {register.setPassword}
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <p className="mt-2 text-sm leading-6 text-muted-foreground">{register.doneBody}</p>
+                  <Link href="/" className="mt-5 inline-flex items-center justify-center rounded-full bg-primary px-4 py-2 text-sm font-bold text-primary-foreground hover:bg-primary/90">
+                    {copy.back}
+                  </Link>
+                </>
+              )}
             </div>
           </div>
         ) : null}

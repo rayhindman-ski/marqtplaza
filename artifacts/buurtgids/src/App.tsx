@@ -74,6 +74,9 @@ import AccountPrivacyPage from './pages/AccountPrivacyPage';
 import ConsumerRegisterPage from './pages/ConsumerRegisterPage';
 import ConsumerRegisterCheckEmailPage from './pages/ConsumerRegisterCheckEmailPage';
 import ConsumerRegisterCompletePage from './pages/ConsumerRegisterCompletePage';
+import ForgotPasswordPage, { FORGOT_PASSWORD_PATH, RESET_PASSWORD_PATH } from './pages/ForgotPasswordPage';
+import AccountSecurityPage from './pages/AccountSecurityPage';
+import { clearCredentialHandoff, peekCredentialHandoff } from './lib/credentialHandoff';
 import { useAccountAuth } from './lib/accountAuth';
 import { accountDiscoveryDefaults, type AccountDiscoveryDefaults } from './lib/accountDiscoveryDefaults';
 import { featureFlags } from './lib/featureFlags';
@@ -3767,6 +3770,9 @@ export default function App() {
           <Route path="/account/register/check-email" component={ConsumerRegisterCheckEmailPage} />
           <Route path="/account/register/complete" component={ConsumerRegisterCompletePage} />
           <Route path="/account/voorkeuren" component={AccountPreferencesPage} />
+          <Route path={FORGOT_PASSWORD_PATH} component={ForgotPasswordPage} />
+          <Route path={RESET_PASSWORD_PATH} component={ForgotPasswordPage} />
+          <Route path="/account/beveiliging" component={AccountSecurityPage} />
           <Route path="/account/privacy" component={AccountPrivacyPage} />
           <Route path="/account/*?" component={AccountPage} />
           <Route path="/bedrijf-aanmelden" component={BusinessOnboardingPage} />
@@ -4507,11 +4513,15 @@ function AuthPageFrame({ testId, children }: { testId: string; children: React.R
 function SignUpPage() {
   const redirects = useClerkRedirects();
   useStaleSignUpStepRecovery();
+  // v0.5.2: after the registration link is consumed the verified address is
+  // prefilled (tab-scoped storage, never the URL); the password is created here.
+  const [handoff] = useState(() => peekCredentialHandoff());
   return (
     <AuthPageFrame testId="page-sign-up">
       <SignUp
         routing="path"
         path={`${basePath}/sign-up`}
+        initialValues={handoff ? { emailAddress: handoff.email } : undefined}
         signInUrl={redirects.signInUrl}
         forceRedirectUrl={redirects.signUpTarget}
         signInForceRedirectUrl={redirects.signInTarget}
@@ -4534,6 +4544,7 @@ function ApiAuthTokenBridge() {
       return;
     }
 
+    clearCredentialHandoff();
     setAuthTokenGetter(() => getToken());
     return () => setAuthTokenGetter(null);
   }, [getToken, isSignedIn, userId]);
@@ -4565,15 +4576,23 @@ function ClerkProviderWithRouter({ children }: { children: React.ReactNode }) {
 
 function SignInPage() {
   const redirects = useClerkRedirects();
+  const [language] = useAppLanguage();
+  const search = useSearch();
+  const forgotHref = withReturnPath(FORGOT_PASSWORD_PATH, resolveReturnPath(search, ''));
   return (
     <AuthPageFrame testId="page-sign-in">
-      <SignIn
-        routing="path"
-        path={`${basePath}/sign-in`}
-        signUpUrl={redirects.signUpUrl}
-        forceRedirectUrl={redirects.signInTarget}
-        signUpForceRedirectUrl={redirects.signUpTarget}
-      />
+      <div className="flex flex-col items-center gap-4">
+        <SignIn
+          routing="path"
+          path={`${basePath}/sign-in`}
+          signUpUrl={redirects.signUpUrl}
+          forceRedirectUrl={redirects.signInTarget}
+          signUpForceRedirectUrl={redirects.signUpTarget}
+        />
+        <Link href={forgotHref} data-testid="link-forgot-password" className="text-sm font-bold text-primary hover:underline">
+          {accountTranslations[language].security.forgotLink}
+        </Link>
+      </div>
     </AuthPageFrame>
   );
 }

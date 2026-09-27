@@ -128,6 +128,7 @@ const RETURN_REF_EXACT_PATHS: ReadonlySet<string> = new Set([
   "/bedrijf-nieuw",
   "/bedrijf-claim",
   "/mijn-bedrijf",
+  "/account/bedrijf/toevoegen",
 ]);
 const RETURN_REF_PREFIX_PATHS = ["/activiteiten/den-haag/", "/nieuws/", "/bedrijf/"] as const;
 const RETURN_REF_SEGMENT = /^[A-Za-z0-9._~:@!$&'()*+,;=%-]+$/;
@@ -321,8 +322,18 @@ export type ResendOutcome =
   | { kind: "suppressed"; reason: "unknown" | "cooldown" | "resend_budget" | "already_verified" };
 
 export type LinkState =
-  | { state: "valid"; registrationId: number; locale: "nl" | "en"; expiresAt: Date }
+  | { state: "valid"; registrationId: number; locale: "nl" | "en"; expiresAt: Date; handoff?: LinkHandoff }
   | { state: "expired" | "used" | "superseded" | "invalid"; locale?: "nl" | "en" };
+
+/**
+ * Credential handoff (v0.5.2, BCRED-001). Returned only by `consume`, never by
+ * `inspect`: the verified address and the allow-listed return reference let
+ * the client open the identity provider's password step with the address
+ * prefilled. The consumer proved control of the mailbox by presenting the
+ * single-use token, so disclosing the address back to that same caller does
+ * not reveal anything new (REG-008 stays intact for inspection and requests).
+ */
+export type LinkHandoff = { email: string; returnRef: string | null };
 
 const UNIQUE_VIOLATION = "23505";
 
@@ -502,7 +513,7 @@ export function createConsumerRegistrationService(options: ConsumerRegistrationS
           throw new RegistrationClosedError();
         }
         logger.info({ event: "consumer_registration.verified", registrationId: found.registration.id }, "Registration link consumed");
-        return current;
+        return { ...current, handoff: { email: found.registration.normalizedEmail, returnRef: found.registration.returnRef } };
         });
       } catch (error) {
         if (error instanceof RegistrationClosedError) return { state: "expired" };
@@ -528,7 +539,7 @@ export type ConsumerRegistrationService = ReturnType<typeof createConsumerRegist
 
 type TokenWithRegistration = {
   token: { id: number; expiresAt: Date; usedAt: Date | null; supersededAt: Date | null };
-  registration: { id: number; status: string; locale: string; expiresAt: Date };
+  registration: { id: number; status: string; locale: string; expiresAt: Date; normalizedEmail: string; returnRef: string | null };
 };
 
 async function loadTokenWithRegistration(tx: Tx, digest: string, lock = false): Promise<TokenWithRegistration | null> {
@@ -542,6 +553,8 @@ async function loadTokenWithRegistration(tx: Tx, digest: string, lock = false): 
       status: consumerRegistrationsTable.status,
       locale: consumerRegistrationsTable.locale,
       registrationExpiresAt: consumerRegistrationsTable.expiresAt,
+      normalizedEmail: consumerRegistrationsTable.normalizedEmail,
+      returnRef: consumerRegistrationsTable.returnRef,
     })
     .from(consumerRegistrationTokensTable)
     .innerJoin(consumerRegistrationsTable, eq(consumerRegistrationsTable.id, consumerRegistrationTokensTable.registrationId))
@@ -551,7 +564,14 @@ async function loadTokenWithRegistration(tx: Tx, digest: string, lock = false): 
   if (!row) return null;
   return {
     token: { id: row.tokenId, expiresAt: row.tokenExpiresAt, usedAt: row.usedAt, supersededAt: row.supersededAt },
-    registration: { id: row.registrationId, status: row.status, locale: row.locale, expiresAt: row.registrationExpiresAt },
+    registration: {
+      id: row.registrationId,
+      status: row.status,
+      locale: row.locale,
+      expiresAt: row.registrationExpiresAt,
+      normalizedEmail: row.normalizedEmail,
+      returnRef: row.returnRef,
+    },
   };
 }
 

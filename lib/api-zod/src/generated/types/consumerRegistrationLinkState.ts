@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { AccountLocale } from './accountLocale';
+import type { ConsumerRegistrationHandoff } from './consumerRegistrationHandoff';
 import type { ConsumerRegistrationLinkStatus } from './consumerRegistrationLinkStatus';
 
 export interface ConsumerRegistrationLinkState {
@@ -15,4 +16,5 @@ export interface ConsumerRegistrationLinkState {
   locale?: AccountLocale;
   /** Only for `valid`; when the link stops working. */
   expiresAt?: Date;
+  handoff?: ConsumerRegistrationHandoff;
 }

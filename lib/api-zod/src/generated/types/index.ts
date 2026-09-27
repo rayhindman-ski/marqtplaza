@@ -93,6 +93,7 @@ export * from './consentState';
 export * from './consumerPreferences';
 export * from './consumerRegistrationAccepted';
 export * from './consumerRegistrationAcceptedStatus';
+export * from './consumerRegistrationHandoff';
 export * from './consumerRegistrationLinkState';
 export * from './consumerRegistrationLinkStatus';
 export * from './consumerRegistrationRequestInput';

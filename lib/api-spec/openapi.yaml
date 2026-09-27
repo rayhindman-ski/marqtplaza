@@ -3055,6 +3055,25 @@ components:
           type: string
           format: date-time
           description: Only for `valid`; when the link stops working.
+        handoff:
+          $ref: "#/components/schemas/ConsumerRegistrationHandoff"
+
+    ConsumerRegistrationHandoff:
+      type: object
+      description: |
+        Present only in the response of a successful consume (never on inspection). Lets the
+        client open the identity provider's password step with the verified address prefilled
+        and resume the allow-listed return destination afterwards. The caller proved control of
+        the mailbox by presenting the single-use token.
+      required: [email]
+      properties:
+        email:
+          type: string
+          description: The verified address, normalized.
+        returnRef:
+          type: string
+          nullable: true
+          description: Allow-listed local return path recorded at request time, if any.
 
     AccountStatus:
       type: string

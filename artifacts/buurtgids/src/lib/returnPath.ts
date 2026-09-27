@@ -25,6 +25,8 @@ const EXACT_PATHS = new Set([
   '/bedrijf-nieuw',
   '/bedrijf-claim',
   '/mijn-bedrijf',
+  '/account/beveiliging',
+  '/account/bedrijf/toevoegen',
 ]);
 
 const PREFIX_PATHS = ['/activiteiten/den-haag/', '/nieuws/', '/bedrijf/'];

@@ -80,6 +80,7 @@ function linkStateResponse(state: LinkState) {
     canResend: canResendFrom(state.state),
     ...(state.locale ? { locale: state.locale } : {}),
     ...(state.state === "valid" ? { expiresAt: state.expiresAt } : {}),
+    ...(state.state === "valid" && state.handoff ? { handoff: state.handoff } : {}),
   };
 }
 

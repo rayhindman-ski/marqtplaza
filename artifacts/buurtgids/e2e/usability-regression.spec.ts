@@ -23,6 +23,8 @@ const SCREENS: Screen[] = [
   { name: 'homepage', path: '/', ready: 'input-postcode-search' },
   { name: 'discovery', path: '/activiteiten/den-haag', ready: 'discovery-results-map' },
   { name: 'consumer-register', path: '/account/register', ready: 'page-register' },
+  { name: 'forgot-password', path: '/account/wachtwoord-vergeten', ready: 'form-forgot-password' },
+  { name: 'reset-password', path: '/account/wachtwoord-herstellen', ready: 'status-reset-password-no-flow' },
 ];
 
 const VIEWPORTS = [
@@ -47,6 +49,10 @@ const COLOR_CONTRAST_BUDGET: Record<string, number> = {
   'discovery@phone': 2,
   'consumer-register@desktop': 5,
   'consumer-register@phone': 5,
+  'forgot-password@desktop': 4,
+  'forgot-password@phone': 4,
+  'reset-password@desktop': 3,
+  'reset-password@phone': 3,
 };
 
 async function stubNetwork(page: Page) {

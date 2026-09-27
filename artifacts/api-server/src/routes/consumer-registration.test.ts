@@ -322,6 +322,7 @@ describe("delivery and link states (§12.2, §12.3)", () => {
     assert.equal(inspect.body.canResend, false);
     assert.equal(inspect.body.locale, "nl");
     assert.equal(inspect.headers.get("cache-control"), "no-store");
+    assert.equal("handoff" in inspect.body, false, "inspection never discloses the address (prefetch safety)");
 
     const again = await request(`/consumer-registration/verify?token=${firstToken}`);
     assert.equal(again.body.state, "valid", "inspection must not burn the link (prefetch safety)");
@@ -329,6 +330,8 @@ describe("delivery and link states (§12.2, §12.3)", () => {
     const consume = await request("/consumer-registration/verify", { method: "POST", body: json({ token: firstToken }) });
     assert.equal(consume.status, 200);
     assert.equal(consume.body.state, "valid");
+    // v0.5.2 credential handoff: the single consume answers with the verified address and the stored return reference.
+    assert.deepEqual(consume.body.handoff, { email: mail("first"), returnRef: "/activiteiten/den-haag?buurt=x" });
 
     const registration = (await registrationFor(mail("first")))!;
     assert.equal(registration.status, "verified");
@@ -337,6 +340,7 @@ describe("delivery and link states (§12.2, §12.3)", () => {
     const replay = await request("/consumer-registration/verify", { method: "POST", body: json({ token: firstToken }) });
     assert.equal(replay.body.state, "used");
     assert.equal(replay.body.canResend, false);
+    assert.equal("handoff" in replay.body, false, "a replayed token must not disclose the address again");
     const replayGet = await request(`/consumer-registration/verify?token=${firstToken}`);
     assert.equal(replayGet.body.state, "used");
   });

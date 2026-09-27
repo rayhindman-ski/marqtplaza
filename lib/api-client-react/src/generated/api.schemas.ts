@@ -372,6 +372,19 @@ export const ConsumerRegistrationLinkStatus = {
   invalid: 'invalid',
 } as const;
 
+/**
+ * Present only in the response of a successful consume (never on inspection). Lets the
+ * client open the identity provider's password step with the verified address prefilled
+ * and resume the allow-listed return destination afterwards. The caller proved control of
+ * the mailbox by presenting the single-use token.
+ */
+export interface ConsumerRegistrationHandoff {
+  /** The verified address, normalized. */
+  email: string;
+  /** Allow-listed local return path recorded at request time, if any. */
+  returnRef?: string | null;
+}
+
 export interface ConsumerRegistrationLinkState {
   state: ConsumerRegistrationLinkStatus;
   /** Whether the resend journey applies to this state. */
@@ -379,6 +392,7 @@ export interface ConsumerRegistrationLinkState {
   locale?: AccountLocale;
   /** Only for `valid`; when the link stops working. */
   expiresAt?: string;
+  handoff?: ConsumerRegistrationHandoff;
 }
 
 /**

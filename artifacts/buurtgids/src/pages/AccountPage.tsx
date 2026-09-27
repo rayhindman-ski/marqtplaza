@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link, Redirect, useSearch } from 'wouter';
 import { useClerk, UserProfile } from '@clerk/react';
 import { useQueryClient } from '@tanstack/react-query';
-import { BookmarkCheck, ClipboardList, LogOut, Mail, ShieldCheck, Trash2, UserRound } from 'lucide-react';
+import { BookmarkCheck, ClipboardList, LogOut, Mail, ShieldCheck, Trash2, UserRound, KeyRound } from 'lucide-react';
 
 import {
   getGetAccountConsentsQueryKey,
@@ -134,6 +134,22 @@ export default function AccountPage() {
             </section>
           ) : null}
           {me ? <ConsentPanel language={language} enabled={accountsOn} verified={me.capabilities.isVerified} /> : null}
+          <section data-testid="account-security-link-panel" className="mb-6 flex flex-col gap-4 rounded-3xl border border-border/80 bg-card p-6 shadow-sm sm:flex-row sm:items-center sm:justify-between sm:p-8">
+            <div>
+              <p className="flex items-center gap-2 text-xs font-extrabold uppercase tracking-[0.16em] text-primary">
+                <KeyRound className="h-4 w-4" aria-hidden="true" />
+                {copy.security.link}
+              </p>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">{copy.security.linkBody}</p>
+            </div>
+            <Link
+              href="/account/beveiliging"
+              data-testid="link-account-security"
+              className="inline-flex shrink-0 items-center justify-center rounded-full border border-border px-4 py-2 text-sm font-bold text-foreground hover:border-primary/50 hover:text-primary"
+            >
+              {copy.security.link}
+            </Link>
+          </section>
           {me ? (
             <section data-testid="account-privacy-link-panel" className="mb-6 flex flex-col gap-4 rounded-3xl border border-border/80 bg-card p-6 shadow-sm sm:flex-row sm:items-center sm:justify-between sm:p-8">
               <div>
