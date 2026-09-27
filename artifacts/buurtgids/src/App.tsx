@@ -27,6 +27,8 @@ import {
   useGetListings,
   useGetListing,
   useGetWeather,
+  useGetAccountMe,
+  getGetAccountMeQueryKey,
 } from '@workspace/api-client-react';
 import {
   LOCATIONS,
@@ -73,6 +75,7 @@ import ConsumerRegisterPage from './pages/ConsumerRegisterPage';
 import ConsumerRegisterCheckEmailPage from './pages/ConsumerRegisterCheckEmailPage';
 import ConsumerRegisterCompletePage from './pages/ConsumerRegisterCompletePage';
 import { useAccountAuth } from './lib/accountAuth';
+import { accountDiscoveryDefaults, type AccountDiscoveryDefaults } from './lib/accountDiscoveryDefaults';
 import { featureFlags } from './lib/featureFlags';
 import { carryReturnPath, resolveReturnPath, withReturnPath } from './lib/returnPath';
 import BusinessOnboardingPage from './pages/BusinessOnboardingPage';
@@ -2024,6 +2027,29 @@ function SavedCategorySection({
     </div>
   );
 }
+/**
+ * A signed-in visitor's saved neighborhoods and interests. `undefined` while
+ * the answer is still unknown (auth or account loading), `null` when there is
+ * nothing to apply (anonymous, feature off, no preferences, or request failed).
+ */
+function useAccountDiscoveryDefaults(): AccountDiscoveryDefaults | null | undefined {
+  const auth = useAccountAuth();
+  const enabled = featureFlags.accounts && auth.isLoaded && auth.isSignedIn;
+  // Key the cache by user so an account switch in the same session can never
+  // surface the previous visitor's saved preferences.
+  const meQuery = useGetAccountMe({
+    query: { enabled, queryKey: [...getGetAccountMeQueryKey(), auth.userId ?? null], retry: false, staleTime: 60_000 },
+  });
+  return useMemo(() => {
+    if (!featureFlags.accounts) return null;
+    if (!auth.isLoaded) return undefined;
+    if (!auth.isSignedIn) return null;
+    if (meQuery.isPending) return undefined;
+    if (meQuery.isError || !meQuery.data) return null;
+    return accountDiscoveryDefaults(meQuery.data.preferences);
+  }, [auth.isLoaded, auth.isSignedIn, meQuery.isPending, meQuery.isError, meQuery.data]);
+}
+
 function DiscoveryState({
   language,
   userRole,
@@ -2036,6 +2062,7 @@ function DiscoveryState({
   initialScope = 'local',
   urlErrors = [],
   restorePrevious,
+  hasExplicitScope = false,
   onBack,
   onLanguageChange,
   savedIds,
@@ -2054,6 +2081,8 @@ function DiscoveryState({
   initialScope?: 'local' | 'web';
   urlErrors?: readonly { code: string; parameter: string }[];
   restorePrevious?: boolean;
+  /** True when the URL itself names a scope (neighborhood, postcode, section, restore). */
+  hasExplicitScope?: boolean;
   onBack: () => void;
   onLanguageChange: (language: Language) => void;
   savedIds: Set<string>;
@@ -2093,6 +2122,9 @@ function DiscoveryState({
   const [sidebarWidth, setSidebarWidth] = useState(420);
   const sidebarResizeRef = useRef<{ pointerId: number; startX: number; startWidth: number } | null>(null);
   const initialScopeEffectRef = useRef(true);
+  // Set by every filter mutator; late-arriving account defaults must never
+  // override a choice the visitor already made on this screen.
+  const filtersTouchedRef = useRef(false);
   const hasSearchArea = Boolean(
     initialPostcode?.trim()
     || initialNeighborhood?.trim()
@@ -2209,6 +2241,7 @@ function DiscoveryState({
   if (!location) return null;
 
   const toggleTopLevelCategory = (section: ListingSection) => {
+    filtersTouchedRef.current = true;
     const isEnabling = !topLevelCategories[section];
     setTopLevelCategories((previous) => ({
       ...previous,
@@ -2231,18 +2264,21 @@ function DiscoveryState({
   };
 
   const selectAllCategories = () => {
+    filtersTouchedRef.current = true;
     setTopLevelCategories(allTopLevelState());
     setSubcategories(allSubcategoryState());
     setSelectedMarker(null);
   };
 
   const deselectAllCategories = () => {
+    filtersTouchedRef.current = true;
     setTopLevelCategories(noTopLevelState());
     setSubcategories(noSubcategoryState());
     setSelectedMarker(null);
   };
 
   const toggleSubcategory = (subcategory: FilterSubcategory) => {
+    filtersTouchedRef.current = true;
     setSubcategories((previous) => ({
       ...previous,
       [subcategory]: !previous[subcategory],
@@ -2282,6 +2318,7 @@ function DiscoveryState({
   const handleClusterMarkerClick = handleMarkerClick;
 
   const toggleNeighborhood = (neighborhood: string, additive = false) => {
+    filtersTouchedRef.current = true;
     setSelectedNeighborhoods((current) => {
       const next = additive
         ? current.includes(neighborhood)
@@ -2295,18 +2332,21 @@ function DiscoveryState({
   };
 
   const selectAllNeighborhoods = () => {
+    filtersTouchedRef.current = true;
     setSelectedNeighborhoods([]);
     setNeighborhoodSelection('all');
     setSelectedMarker(null);
   };
 
   const deselectAllNeighborhoods = () => {
+    filtersTouchedRef.current = true;
     setSelectedNeighborhoods([]);
     setNeighborhoodSelection('none');
     setSelectedMarker(null);
   };
 
   const toggleQuickFilter = (filter: DiscoveryQuickFilter) => {
+    filtersTouchedRef.current = true;
     const isActivating = !quickFilters.has(filter);
     if (isActivating && ['today', 'week', 'weekend', 'free', 'low-cost', 'meal', 'family', 'indoor'].includes(filter)) {
       setTopLevelCategories((current) => ({ ...current, events: true }));
@@ -2345,6 +2385,35 @@ function DiscoveryState({
     setNeighborhoodSelection(initialNeighborhoods?.length || initialNeighborhood ? 'some' : 'all');
     setSelectedMarker(null);
   }, [initialNeighborhood, initialNeighborhoods, initialPostcode, listingSection, restoredState]);
+
+  // A signed-in visitor who opens the map without naming a scope starts from
+  // their saved neighborhoods and interests instead of the generic defaults.
+  // Applied once, and only while the filters are still untouched, so it can
+  // never override a choice the visitor already made on this screen.
+  const accountDefaults = useAccountDiscoveryDefaults();
+  const accountDefaultsAppliedRef = useRef(false);
+  useEffect(() => {
+    if (accountDefaultsAppliedRef.current || accountDefaults === undefined) return;
+    accountDefaultsAppliedRef.current = true;
+    if (!accountDefaults || restoredState || hasExplicitScope || initialPostcode) return;
+    if (filtersTouchedRef.current) return;
+    if (accountDefaults.neighborhoods.length > 0) {
+      setSelectedNeighborhoods(accountDefaults.neighborhoods);
+      setNeighborhoodSelection('some');
+    }
+    if (accountDefaults.sections.length > 0) {
+      setTopLevelCategories(Object.fromEntries(
+        TOP_LEVEL_SECTIONS.map((section) => [section, accountDefaults.sections.includes(section)]),
+      ) as Record<ListingSection, boolean>);
+      setSubcategories((current) => Object.fromEntries(
+        Object.keys(current).map((subcategory) => [
+          subcategory,
+          accountDefaults.subcategories.includes(subcategory as BusinessCategory | FoodType),
+        ]),
+      ) as Record<FilterSubcategory, boolean>);
+    }
+    setSelectedMarker(null);
+  }, [accountDefaults, restoredState, hasExplicitScope, initialPostcode]);
 
   useEffect(() => {
     persistDiscoveryReturnState();
@@ -2834,7 +2903,7 @@ function DiscoveryState({
               <input
                 type="search"
                 value={postcodeFilter}
-                onChange={(event) => setPostcodeFilter(event.target.value)}
+                onChange={(event) => { filtersTouchedRef.current = true; setPostcodeFilter(event.target.value); }}
                 placeholder={t.postcodeFilterPlaceholder}
                 className="h-9 w-full rounded-lg border border-border/70 bg-card px-2.5 text-xs font-medium text-foreground outline-none placeholder:text-muted-foreground/70 focus:border-primary focus:ring-2 focus:ring-primary/20"
               />
@@ -3604,6 +3673,8 @@ function MainApp({ initialLocationId }: { initialLocationId?: string } = {}) {
         initialScope={parsedUrlState.scope}
         urlErrors={initialUrlErrors.current}
         restorePrevious={new URLSearchParams(window.location.search).get('restore') === '1'}
+        hasExplicitScope={['neighborhood', 'neighborhoods', 'postcode', 'section', 'restore']
+          .some((key) => new URLSearchParams(window.location.search).has(key))}
         onBack={() => {
           setScreen({ kind: 'search' });
           navigate('/');

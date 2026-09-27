@@ -202,3 +202,20 @@ the fallback map and chips (the hand-copied SVG table had drifted). Added a
 chip-equals-pin regression assertion. Details in `release_v051_log.md`.
 
 **Duration:** 13:12 → 13:40 CEST (≈28 minutes).
+
+### Prompt 11
+
+**Received:** 2026-09-27 ≈13:45 CEST (screenshot of the discovery sidebar with the default Events selection)
+
+> these are showing a default selection on the first time login. but i just
+> registered and my neighborhoods and interests are defined, these should be
+> reflected in the initial map display instead of some hardcoded default
+> filters
+
+**Response (summary):** Signed-in visitors now open the map on their saved
+neighborhoods and interests when the URL names no scope; explicit URLs,
+restored state and any filter choice made before the account loads take
+precedence. Account cache keyed per user. Two new e2e tests plus unit tests.
+Details in `release_v051_log.md`.
+
+**Duration:** 13:45 → 14:35 CEST (≈50 minutes).

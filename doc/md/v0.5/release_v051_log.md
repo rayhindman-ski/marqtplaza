@@ -402,3 +402,33 @@ at a glance.
 
 Verification: typecheck clean; map regression 11/11; usability 9/9; Google
 pins visually checked on the dev map.
+
+### 2026-09-27 — Discovery map starts from the account's saved preferences
+
+Request: after registering, the map still opened on the generic defaults
+(Events, all neighborhoods); the visitor's saved neighborhoods and interests
+should shape the initial display instead.
+
+- New `src/lib/accountDiscoveryDefaults.ts` resolves the stored controlled
+  ids (`dhg:<slug>` → neighborhood name, `category:<slug>` → business
+  category; "Food & Drink" → the food-drink section with all food types).
+  Unresolvable ids are ignored, never guessed.
+- `DiscoveryState` applies those defaults once, only when the URL names no
+  scope (`neighborhood`, `postcode`, `section`, `restore`), no return state
+  is being restored, and the visitor has not touched any filter yet. Every
+  filter mutator marks the screen as touched, so a late account response can
+  never override a choice already made.
+- The account query is keyed by user id so a sign-out/sign-in in the same
+  session cannot surface another account's preferences.
+- Anonymous visitors, explicit URLs and the `restore=1` path are unchanged.
+- Regression: account suite gains (a) saved neighborhoods + interests
+  pre-selected, unknown id ignored, explicit URL wins; (b) delayed account
+  response after the visitor picked a neighborhood leaves that choice intact.
+  Unit tests cover the id mapping.
+
+Verification: typecheck clean; account (incl. live Clerk), map and usability
+suites 44/44; unit 3/3. Architect review found two issues (late-response
+override, user-independent cache key) — both fixed and covered by tests.
+
+Observation (not changed): a non-JSON/failed `/api/weather` answer crashes
+`WeatherCard` (`data.current` undefined) in the dev overlay; tracked as debt.

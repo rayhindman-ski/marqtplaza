@@ -60,6 +60,15 @@ function baseMe(overrides: Partial<Me> = {}): Me {
   };
 }
 
+const stubWeather = (page: Page) => page.route('**/api/weather*', (route) => route.fulfill({
+  contentType: 'application/json',
+  body: JSON.stringify({
+    cityId: 'dhg', locationName: 'Den Haag', fetchedAt: new Date().toISOString(),
+    current: { temperature: 18, apparentTemperature: 18, precipitation: 0, windSpeed: 5, weatherCode: 0, condition: 'clear', isDay: true },
+    forecast: [], provider: 'open-meteo',
+  }),
+}));
+
 type Recorded = { method: string; path: string; body: unknown; auth: string | undefined };
 
 type FakeAccountServer = {
@@ -178,6 +187,87 @@ test.describe('consumer account journey', () => {
     await page.evaluate(() => window.__setAccountTestAuth?.({ userId: 'user-e2e' }));
     await expect(page.getByTestId('link-create-account')).toHaveCount(0);
     await expect(page.getByRole('link', { name: /^(my account|mijn account)$/i }).first()).toHaveAttribute('href', /^\/account\?terug=/);
+  });
+
+  test('a registered visitor opens the map on their saved neighborhoods and interests', async ({ page }) => {
+    const listingsRequests: URL[] = [];
+    await stubWeather(page);
+    await page.route('**/api/listings*', (route) => {
+      listingsRequests.push(new URL(route.request().url()));
+      return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ source: 'curated', listings: [] }) });
+    });
+    await installAccountServer(page, {
+      preferences: {
+        revision: 3,
+        neighborhoodIds: ['dhg:zeeheldenkwartier', 'dhg:statenkwartier', 'dhg:does-not-exist'],
+        interestIds: ['category:food-and-drink'],
+        unresolvedNeighborhoodIds: ['dhg:does-not-exist'],
+        unresolvedInterestIds: [],
+        updatedAt: new Date().toISOString(),
+      },
+    });
+    await signIn(page);
+    await page.goto('/activiteiten/den-haag?e2eAccountAuth=1');
+
+    // Neighborhoods come from the account, unknown ids are ignored.
+    const neighborhoods = page.locator('[data-neighborhood-list]');
+    await expect(neighborhoods.getByRole('button', { name: 'Zeeheldenkwartier', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    await expect(neighborhoods.getByRole('button', { name: 'Statenkwartier', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    await expect(neighborhoods.getByRole('button', { name: 'Centrum', exact: true })).toHaveAttribute('aria-pressed', 'false');
+    // Interests select the matching top-level category instead of the generic "events" start.
+    const openCategories = async () => {
+      const toggle = page.getByRole('button', { name: /^Top-level categories/i });
+      if ((await toggle.getAttribute('aria-expanded')) !== 'true') await toggle.click();
+    };
+    await openCategories();
+    await expect(page.getByRole('checkbox', { name: 'Food & drink', exact: true })).toBeChecked();
+    await expect(page.getByRole('checkbox', { name: 'Events', exact: true })).not.toBeChecked();
+    await expect.poll(() => listingsRequests.some((request) =>
+      (request.searchParams.get('neighborhoods') ?? '').split(',').sort().join(',') === 'Statenkwartier,Zeeheldenkwartier')).toBe(true);
+
+    // An explicit scope in the URL always wins over the saved preferences.
+    await page.goto('/activiteiten/den-haag?e2eAccountAuth=1&section=businesses&neighborhood=centrum');
+    await expect(neighborhoods.getByRole('button', { name: 'Centrum', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    await expect(neighborhoods.getByRole('button', { name: 'Zeeheldenkwartier', exact: true })).toHaveAttribute('aria-pressed', 'false');
+    await openCategories();
+    await expect(page.getByRole('checkbox', { name: 'Businesses', exact: true })).toBeChecked();
+    await expect(page.getByRole('checkbox', { name: 'Food & drink', exact: true })).not.toBeChecked();
+  });
+
+  test('saved preferences never override a choice made while the account was still loading', async ({ page }) => {
+    await stubWeather(page);
+    await page.route('**/api/listings*', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ source: 'curated', listings: [] }) }));
+    let releaseMe: () => void = () => {};
+    const meGate = new Promise<void>((resolve) => { releaseMe = resolve; });
+    await installAccountServer(page, {
+      preferences: {
+        revision: 1,
+        neighborhoodIds: ['dhg:zeeheldenkwartier'],
+        interestIds: ['category:food-and-drink'],
+        unresolvedNeighborhoodIds: [],
+        unresolvedInterestIds: [],
+        updatedAt: new Date().toISOString(),
+      },
+    });
+    // Hold the account answer until the visitor has picked a neighborhood.
+    await page.route('**/api/account/me', async (route) => {
+      await meGate;
+      await route.fallback();
+    });
+    await signIn(page);
+    await page.goto('/activiteiten/den-haag?e2eAccountAuth=1');
+    const neighborhoods = page.locator('[data-neighborhood-list]');
+    await neighborhoods.getByRole('button', { name: 'Centrum', exact: true }).click();
+    await expect(neighborhoods.getByRole('button', { name: 'Centrum', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    releaseMe();
+    // Give the late response every chance to (wrongly) apply.
+    await page.waitForTimeout(1_000);
+    await expect(neighborhoods.getByRole('button', { name: 'Centrum', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    await expect(neighborhoods.getByRole('button', { name: 'Zeeheldenkwartier', exact: true })).toHaveAttribute('aria-pressed', 'false');
+    const toggle = page.getByRole('button', { name: /^Top-level categories/i });
+    if ((await toggle.getAttribute('aria-expanded')) !== 'true') await toggle.click();
+    await expect(page.getByRole('checkbox', { name: 'Events', exact: true })).toBeChecked();
+    await expect(page.getByRole('checkbox', { name: 'Food & drink', exact: true })).not.toBeChecked();
   });
 
   test('signed-out visitors are sent to sign-in with a safe return path', async ({ page }) => {
