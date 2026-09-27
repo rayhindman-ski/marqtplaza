@@ -6,13 +6,22 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { BusinessSignalsDomainMatch } from './businessSignalsDomainMatch';
+import type { BusinessSignalsEmailDomainMatch } from './businessSignalsEmailDomainMatch';
+import type { BusinessSignalsGeographyBasis } from './businessSignalsGeographyBasis';
 
 /**
  * Advisory verification signals computed when the claim was submitted. Never a decision.
  */
 export interface BusinessSignals {
   version: number;
+  /** Claimant's stated business domain against the profile's website host. */
   domainMatch: BusinessSignalsDomainMatch;
+  /** Domain of the claimant's contact e-mail against the profile's website host (public mailbox providers count as unknown). */
+  emailDomainMatch: BusinessSignalsEmailDomainMatch;
+  /** True when the compared website was supplied by the claimant (new business) rather than by the directory. */
+  websiteSelfReported: boolean;
+  /** @nullable */
+  geographyBasis: BusinessSignalsGeographyBasis;
   /** @nullable */
   kvkFormatOk: boolean | null;
   duplicateScore: number;

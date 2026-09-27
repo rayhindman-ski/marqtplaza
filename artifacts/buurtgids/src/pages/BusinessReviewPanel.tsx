@@ -233,10 +233,13 @@ export function BusinessReviewPanel({ section, enabled }: { section: 'authority'
                     {item.signals ? (
                       <dl className="mt-2 grid gap-1 sm:grid-cols-3">
                         <div><dt className="text-xs text-muted-foreground">{copy.signalDomain}</dt><dd>{copy.signalDomainValues[item.signals.domainMatch]}</dd></div>
+                        <div><dt className="text-xs text-muted-foreground">{copy.signalEmailDomain}</dt><dd>{copy.signalDomainValues[item.signals.emailDomainMatch]}</dd></div>
+                        {item.signals.geographyBasis ? <div><dt className="text-xs text-muted-foreground">{copy.signalGeography}</dt><dd>{copy.signalGeographyValues[item.signals.geographyBasis]}</dd></div> : null}
                         <div><dt className="text-xs text-muted-foreground">{copy.signalKvk}</dt><dd>{copy.signalKvkValues[item.signals.kvkFormatOk === null ? 'none' : item.signals.kvkFormatOk ? 'ok' : 'bad']}</dd></div>
                         <div><dt className="text-xs text-muted-foreground">{copy.signalDuplicate}</dt><dd>{item.signals.duplicateScore > 0 ? `${Math.round(item.signals.duplicateScore * 100)}%${item.signals.duplicateCandidates.length ? ` · ${item.signals.duplicateCandidates.join(', ')}` : ''}` : copy.signalDuplicateNone}</dd></div>
                       </dl>
                     ) : <p className="mt-1 text-xs text-muted-foreground">{copy.signalsMissing}</p>}
+                    {item.signals?.websiteSelfReported ? <p className="mt-2 text-xs text-amber-800" data-testid={`signal-self-reported-${item.id}`}>{copy.signalWebsiteSelfReported}</p> : null}
                   </div>
                   {item.message && <div className="sm:col-span-2"><p className="text-xs font-bold uppercase text-muted-foreground">{copy.message}</p><p className="whitespace-pre-wrap">{item.message}</p></div>}
                   {item.profile.sourceUrl && (

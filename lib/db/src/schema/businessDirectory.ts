@@ -54,6 +54,10 @@ export const businessProfilesTable = pgTable(
     createdByUserId: text("created_by_user_id"),
     /** Self-reported business category for new-business drafts; null for listing-derived rows. */
     category: text("category"),
+    /** v0.5.2: taxonomy subcategory for self-reported businesses (food type for Food & Drink). */
+    subcategory: text("subcategory"),
+    /** v0.5.2: how the neighbourhood/coordinates were established for a self-reported business. */
+    geographyBasis: text("geography_basis"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true })
       .notNull()

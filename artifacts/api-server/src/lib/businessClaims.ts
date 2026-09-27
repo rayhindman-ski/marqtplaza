@@ -99,6 +99,8 @@ export function serialiseProfile(profile: BusinessProfile) {
     claimedAt: profile.claimedAt?.toISOString() ?? null,
     publicationStatus: profile.publicationStatus,
     category: profile.category,
+    subcategory: profile.subcategory,
+    geographyBasis: profile.geographyBasis,
     createdAt: profile.createdAt.toISOString(),
     updatedAt: profile.updatedAt.toISOString(),
   };

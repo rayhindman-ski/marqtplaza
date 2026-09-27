@@ -354,3 +354,59 @@ e2e `business-moderation` 9/9 with the new reviewer assertions;
 `usability-regression` 15/15; workspace typecheck clean.
 
 Duration: ≈18:36 – 18:43 CEST.
+
+## Architect review after Phase 4 — findings and remediation (2026-09-27, 18:44 – 19:01 CEST)
+
+The review (Phases 3–4, git diff + spec) returned FAIL with two severe and
+four moderate findings. All six are fixed in this entry; nothing was
+deferred.
+
+1. **Severe — BPROF-003/004 not enforced for a new business.** The capture
+   accepted any free-text category, no address, no phone/website, and took
+   the neighbourhood from the client. Fix: `lib/businessFacts.ts`. Category
+   must be one of the directory's `BusinessCategory` values; for *Food &
+   Drink* the food type is the subcategory. Drafts stay partial (BPROF-009)
+   but `POST /business-claims/:id/submit` now requires an address with a
+   Dutch postcode, a subcategory where the category has them, and a phone
+   number or website — returned as `fieldErrors` the form maps onto fields.
+   Geography is derived server-side at submit: stored listings at the same
+   postcode (and house number when present) give coordinates → official
+   polygon → neighbourhood (`address_match`); otherwise a declared official
+   neighbourhood is kept but marked `declared_official`; otherwise the
+   submit is refused (`unknown_neighborhood`). No external geocoder (no
+   network in this environment); the basis is stored on the profile
+   (`geography_basis`) and shown to the reviewer. New DB columns:
+   `business_profiles.subcategory`, `business_profiles.geography_basis`.
+2. **Severe — BPROF-001 lookup matched name only.** `lookup` and the
+   duplicate re-check now also match postcode, address fragment and
+   website host (URL queries are reduced to the host; bare postcodes are
+   normalised to `1234 AB`). Applies to stored listings and published
+   profiles alike.
+3. **Moderate — self-asserted domain signal.** Signals gained
+   `emailDomainMatch` (contact e-mail domain vs website; public mailbox
+   providers read as *unknown*), `websiteSelfReported` (true for a new
+   business, so a match corroborates nothing — the panel says so) and
+   `geographyBasis`. Signals version stays 1 (never shipped).
+4. **Moderate — role pre-selected.** The form no longer defaults to
+   *owner*: the role is an explicit choice (empty option, validation
+   message), and hydration keeps legacy relationship wording unless it
+   merely echoed a role label.
+5. **Moderate — "claim this listing instead" lost the journey.** The link
+   now carries `context`, `terug` and the e2e auth opt-in.
+6. **Moderate — legacy moderation endpoint without replay.**
+   `PATCH /business-claims/moderation/:id` applies the same same-reviewer,
+   same-version approval replay as the review router.
+
+**Form (BPROF-005):** every field carries an *openbaar* / *niet openbaar*
+marker; category, food type and neighbourhood are selects from the
+directory's taxonomy and the official Hague neighbourhoods; address help
+names the postcode; phone added.
+
+**Evidence:** api `test:business-intake` 15/0 (submit-time field errors,
+address-derived neighbourhood overruling the declared one, declared-official
+fallback, new signal fields); `businessFacts` unit 3/3; `businessSignals`
+unit 5/5; `test:business-publication` 25 pass / 2 pre-existing freshness
+failures; account-lifecycle 22/22; e2e `business-intake` 7/7,
+`business-onboarding` 13/13, `business-moderation` 9/9,
+`usability-regression` 15/15; i18n parity 15/15; workspace typecheck clean;
+API server restarted cleanly.

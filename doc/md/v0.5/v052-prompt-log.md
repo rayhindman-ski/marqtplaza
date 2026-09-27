@@ -103,3 +103,10 @@ confirmation. Progress lines above and below.
 - 18:42 review panel shows role/evidence/origin/signals; e2e moderation 9/9, usability 15/15.
 - 18:43 phase log; commit + push; architect review next.
 
+
+### Progress — Architect review after Phase 4 and remediation
+
+- 18:44 architect review (Phases 3–4): FAIL, 2 severe + 4 moderate findings.
+- 18:50 `businessFacts.ts` (taxonomy, required facts at submit, address-derived geography), lookup by postcode/address/website, extra signals, legacy endpoint replay; DB columns pushed; clients regenerated.
+- 18:57 form: taxonomy selects, phone, public/private markers, explicit role, journey-preserving claim link, server field errors; reviewer panel shows new signals.
+- 19:01 api + e2e suites green; typecheck clean; log entry; commit + push. Phase 5 next.

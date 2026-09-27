@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { computeSignals, domainMatch, duplicateScore, hostOf, kvkFormatOk, nameSimilarity, readSignals } from "./businessSignals";
+import { computeSignals, domainMatch, emailDomainMatch, duplicateScore, hostOf, kvkFormatOk, nameSimilarity, readSignals } from "./businessSignals";
 
 describe("business verification signals (BVER-002, BPROF-007)", () => {
   it("checks the KvK format only", () => {
@@ -45,14 +45,20 @@ describe("business verification signals (BVER-002, BPROF-007)", () => {
     const signals = computeSignals({
       evidenceDomain: "koffiehoek.nl",
       evidenceKvk: "12345678",
+      contactEmail: "eigenaar@koffiehoek.nl",
       profileName: "Koffie om de Hoek",
       profileWebsiteUrl: "https://www.koffiehoek.nl",
+      websiteSelfReported: false,
+      geographyBasis: null,
       candidates: [{ name: "Koffie Hoek" }],
       now,
     });
     assert.deepEqual(signals, {
       version: 1,
       domainMatch: "match",
+      emailDomainMatch: "match",
+      websiteSelfReported: false,
+      geographyBasis: null,
       kvkFormatOk: true,
       duplicateScore: 0.67,
       duplicateCandidates: ["Koffie Hoek"],
@@ -61,5 +67,12 @@ describe("business verification signals (BVER-002, BPROF-007)", () => {
     assert.deepEqual(readSignals(JSON.parse(JSON.stringify(signals))), signals);
     assert.equal(readSignals(null), null);
     assert.equal(readSignals({ version: 99 }), null);
+  });
+
+  it("treats public mailbox providers as unknown and business mailboxes as evidence", () => {
+    assert.equal(emailDomainMatch("jan@gmail.com", "https://koffiehoek.nl"), "unknown");
+    assert.equal(emailDomainMatch("jan@koffiehoek.nl", "https://www.koffiehoek.nl"), "match");
+    assert.equal(emailDomainMatch("jan@anders.nl", "https://koffiehoek.nl"), "mismatch");
+    assert.equal(emailDomainMatch("jan@koffiehoek.nl", null), "unknown");
   });
 });

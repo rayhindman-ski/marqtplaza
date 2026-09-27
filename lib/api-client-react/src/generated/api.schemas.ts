@@ -89,7 +89,28 @@ export interface BusinessLookupResponse {
 }
 
 /**
- * Public facts for a business that is not listed yet. Stored privately until publication review.
+ * Normalized category for business and food-and-drink listings.
+ */
+export type BusinessCategory = typeof BusinessCategory[keyof typeof BusinessCategory];
+
+
+export const BusinessCategory = {
+  'Retail_&_Shopping': 'Retail & Shopping',
+  'Food_&_Drink': 'Food & Drink',
+  'Health_&_Wellness': 'Health & Wellness',
+  'Beauty_&_Personal_Care': 'Beauty & Personal Care',
+  Professional_Services: 'Professional Services',
+  'Finance_&_Legal': 'Finance & Legal',
+  'Home_&_Repair': 'Home & Repair',
+  'Automotive_&_Mobility': 'Automotive & Mobility',
+  'Education_&_Childcare': 'Education & Childcare',
+  'Hospitality_&_Travel': 'Hospitality & Travel',
+  'Arts,_Culture_&_Entertainment': 'Arts, Culture & Entertainment',
+  'Fitness_&_Sports': 'Fitness & Sports',
+} as const;
+
+/**
+ * Public facts for a business that is not listed yet. Stored privately until publication review. `category` must be a `BusinessCategory`; `subcategory` is the food type for Food & Drink. A draft may be partial; submitting requires an address with a Dutch postcode and at least one of phone or website (BPROF-003). Neighbourhood and coordinates are derived server-side from the address (BPROF-004); the declared neighbourhood is only kept when nothing can be derived and it is an official one.
  */
 export interface NewBusinessFacts {
   /**
@@ -97,20 +118,32 @@ export interface NewBusinessFacts {
      * @maxLength 160
      */
   name: string;
+  category: BusinessCategory;
   /**
-     * @minLength 2
      * @maxLength 80
+     * @nullable
      */
-  category: string;
+  subcategory?: string | null;
   /**
      * @minLength 2
      * @maxLength 120
      */
   neighborhood: string;
-  /** @maxLength 240 */
-  address?: string;
-  /** @maxLength 400 */
-  websiteUrl?: string;
+  /**
+     * @maxLength 240
+     * @nullable
+     */
+  address?: string | null;
+  /**
+     * @maxLength 400
+     * @nullable
+     */
+  websiteUrl?: string | null;
+  /**
+     * @maxLength 40
+     * @nullable
+     */
+  phone?: string | null;
 }
 
 /**
@@ -1202,6 +1235,19 @@ export const BusinessOwnerState = {
   unpublished: 'unpublished',
 } as const;
 
+/**
+ * How a self-reported business's neighbourhood/coordinates were established at submit; null before submit and for listing-derived profiles.
+ * @nullable
+ */
+export type BusinessProfileGeographyBasis = typeof BusinessProfileGeographyBasis[keyof typeof BusinessProfileGeographyBasis] | null;
+
+
+export const BusinessProfileGeographyBasis = {
+  address_match: 'address_match',
+  declared_official: 'declared_official',
+  unresolved: 'unresolved',
+} as const;
+
 export interface BusinessProfile {
   id: number;
   slug: string;
@@ -1247,6 +1293,16 @@ export interface BusinessProfile {
      */
   category?: string | null;
   /**
+     * Taxonomy subcategory of a new-business draft (food type for Food & Drink); null otherwise.
+     * @nullable
+     */
+  subcategory?: string | null;
+  /**
+     * How a self-reported business's neighbourhood/coordinates were established at submit; null before submit and for listing-derived profiles.
+     * @nullable
+     */
+  geographyBasis?: BusinessProfileGeographyBasis;
+  /**
      * Version of the approved revision when publication review is enabled; null when the profile is served from its columns.
      * @nullable
      */
@@ -1285,6 +1341,9 @@ export interface BusinessProfileSummary {
   publicationStatus: PublicationStatus;
 }
 
+/**
+ * Claimant's stated business domain against the profile's website host.
+ */
 export type BusinessSignalsDomainMatch = typeof BusinessSignalsDomainMatch[keyof typeof BusinessSignalsDomainMatch];
 
 
@@ -1295,11 +1354,42 @@ export const BusinessSignalsDomainMatch = {
 } as const;
 
 /**
+ * Domain of the claimant's contact e-mail against the profile's website host (public mailbox providers count as unknown).
+ */
+export type BusinessSignalsEmailDomainMatch = typeof BusinessSignalsEmailDomainMatch[keyof typeof BusinessSignalsEmailDomainMatch];
+
+
+export const BusinessSignalsEmailDomainMatch = {
+  match: 'match',
+  mismatch: 'mismatch',
+  unknown: 'unknown',
+} as const;
+
+/**
+ * @nullable
+ */
+export type BusinessSignalsGeographyBasis = typeof BusinessSignalsGeographyBasis[keyof typeof BusinessSignalsGeographyBasis] | null;
+
+
+export const BusinessSignalsGeographyBasis = {
+  address_match: 'address_match',
+  declared_official: 'declared_official',
+  unresolved: 'unresolved',
+} as const;
+
+/**
  * Advisory verification signals computed when the claim was submitted. Never a decision.
  */
 export interface BusinessSignals {
   version: number;
+  /** Claimant's stated business domain against the profile's website host. */
   domainMatch: BusinessSignalsDomainMatch;
+  /** Domain of the claimant's contact e-mail against the profile's website host (public mailbox providers count as unknown). */
+  emailDomainMatch: BusinessSignalsEmailDomainMatch;
+  /** True when the compared website was supplied by the claimant (new business) rather than by the directory. */
+  websiteSelfReported: boolean;
+  /** @nullable */
+  geographyBasis: BusinessSignalsGeographyBasis;
   /** @nullable */
   kvkFormatOk: boolean | null;
   duplicateScore: number;
@@ -2475,27 +2565,6 @@ export type ListingMealType = typeof ListingMealType[keyof typeof ListingMealTyp
 export const ListingMealType = {
   'community-meal': 'community-meal',
   'food-support': 'food-support',
-} as const;
-
-/**
- * Normalized category for business and food-and-drink listings.
- */
-export type BusinessCategory = typeof BusinessCategory[keyof typeof BusinessCategory];
-
-
-export const BusinessCategory = {
-  'Retail_&_Shopping': 'Retail & Shopping',
-  'Food_&_Drink': 'Food & Drink',
-  'Health_&_Wellness': 'Health & Wellness',
-  'Beauty_&_Personal_Care': 'Beauty & Personal Care',
-  Professional_Services: 'Professional Services',
-  'Finance_&_Legal': 'Finance & Legal',
-  'Home_&_Repair': 'Home & Repair',
-  'Automotive_&_Mobility': 'Automotive & Mobility',
-  'Education_&_Childcare': 'Education & Childcare',
-  'Hospitality_&_Travel': 'Hospitality & Travel',
-  'Arts,_Culture_&_Entertainment': 'Arts, Culture & Entertainment',
-  'Fitness_&_Sports': 'Fitness & Sports',
 } as const;
 
 /**

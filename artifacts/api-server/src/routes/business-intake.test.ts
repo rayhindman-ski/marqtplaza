@@ -105,6 +105,8 @@ app.use(
       if (lookupShouldFail) throw new Error("stored results unavailable");
       return listings.filter((listing) => listing.name.toLowerCase().includes(query));
     },
+    // Address → coordinates for self-reported businesses: postcode 2593 BN sits in Bezuidenhout.
+    addressMatches: async (postcode) => (postcode === "2593BN" ? [{ lat: 52.0838, lng: 4.3283, neighborhood: null }] : []),
     resolveListing: async (cityId, source, id) => {
       const match = listings.find((listing) => listing.id === id && listing.source === source);
       return cityId === "dhg" && match ? match : null;
@@ -412,7 +414,7 @@ describe("business intake routes", () => {
 
     const renamed = await request(`/api/business-claims/${claimId}`, {
       method: "PATCH",
-      body: JSON.stringify({ expectedVersion: 1, business: { name: "Renamed", category: "Food", neighborhood: "Centrum" } }),
+      body: JSON.stringify({ expectedVersion: 1, business: { name: "Renamed", category: "Food & Drink", neighborhood: "Centrum" } }),
     });
     assert.equal(renamed.status, 409, "existing-listing facts cannot be redefined by the claimant");
 
@@ -601,7 +603,7 @@ describe("business intake routes", () => {
       method: "POST",
       body: JSON.stringify({
         kind: "new_business",
-        business: { name: `Kvk Zaak ${runId}`, category: "Retail", neighborhood: "Bezuidenhout" },
+        business: { name: `Kvk Zaak ${runId}`, category: "Retail & Shopping", neighborhood: "Bezuidenhout" },
         ...baseDraft,
         relationshipKind: "owner",
         evidenceKvk: "1234567",
@@ -615,7 +617,7 @@ describe("business intake routes", () => {
       method: "POST",
       body: JSON.stringify({
         kind: "new_business",
-        business: { name: `Kvk Zaak ${runId}`, category: "Retail", neighborhood: "Bezuidenhout" },
+        business: { name: `Kvk Zaak ${runId}`, category: "Retail & Shopping", neighborhood: "Bezuidenhout" },
         ...baseDraft,
         onboardingContext: "legacy",
       }),
@@ -626,7 +628,7 @@ describe("business intake routes", () => {
       method: "POST",
       body: JSON.stringify({
         kind: "new_business",
-        business: { name: `Kvk Zaak ${runId}`, category: "Retail", neighborhood: "Bezuidenhout" },
+        business: { name: `Kvk Zaak ${runId}`, category: "Retail & Shopping", neighborhood: "Centrum", address: "Laan van NOI 12, 2593 BN Den Haag", phone: "070 123 4567" },
         ...baseDraft,
         relationshipKind: "manager",
         evidenceKvk: "12345678",
@@ -635,6 +637,8 @@ describe("business intake routes", () => {
       }),
     });
     assert.equal(created.status, 201, JSON.stringify(created.body));
+    assert.equal(created.body.profile.phone, "070 123 4567");
+    assert.equal(created.body.profile.geographyBasis, null, "geography is derived at submit, not on a draft");
     assert.equal(created.body.relationshipKind, "manager");
     assert.equal(created.body.evidenceKvk, "12345678");
     assert.equal(created.body.evidenceDomain, "kvkzaak.example");
@@ -666,6 +670,10 @@ describe("business intake routes", () => {
     assert.ok(typeof submitted.body.authorityDeclaredAt === "string" && !Number.isNaN(Date.parse(submitted.body.authorityDeclaredAt)));
     assert.equal(submitted.body.onboardingContext, "account_home");
     assert.ok(!("signals" in submitted.body), "signals are reviewer-facing, not part of the claimant DTO");
+    // BPROF-004: the declared "Centrum" is overruled by the address; coordinates come from the directory.
+    assert.equal(submitted.body.profile.neighborhood, "Bezuidenhout");
+    assert.equal(submitted.body.profile.geographyBasis, "address_match");
+    assert.equal(typeof submitted.body.profile.latitude, "number");
 
     // Phase 4: advisory signals are stored with the submission; the claimant gets the onboarding receipt.
     const [row] = await db.select({ signals: businessClaimsTable.signals }).from(businessClaimsTable).where(eq(businessClaimsTable.id, created.body.id));
@@ -674,6 +682,9 @@ describe("business intake routes", () => {
     assert.equal(signals.version, 1);
     assert.equal(signals.kvkFormatOk, null, "the KvK was cleared before submit, so there is nothing to format-check");
     assert.equal(signals.domainMatch, "unknown", "no website on the profile, so the domain cannot be compared");
+    assert.equal(signals.emailDomainMatch, "unknown");
+    assert.equal(signals.websiteSelfReported, true, "a new business's website is the claimant's own statement");
+    assert.equal(signals.geographyBasis, "address_match");
     assert.equal(typeof signals.duplicateScore, "number");
     const outbox = await db
       .select({ eventCode: lifecycleOutboxTable.eventCode })
@@ -690,14 +701,14 @@ describe("business intake routes", () => {
       method: "POST",
       body: JSON.stringify({
         kind: "new_business",
-        business: { name: `Nieuwe Zaak ${runId}`, category: "Retail", neighborhood: "Bezuidenhout", websiteUrl: "https://nieuwezaak.example" },
+        business: { name: `Nieuwe Zaak ${runId}`, category: "Retail & Shopping", neighborhood: "Bezuidenhout", websiteUrl: "https://nieuwezaak.example" },
         ...baseDraft,
       }),
     });
     assert.equal(created.status, 201, JSON.stringify(created.body));
     assert.equal(created.body.kind, "new_business");
     assert.equal(created.body.profile.publicationStatus, "draft");
-    assert.equal(created.body.profile.category, "Retail");
+    assert.equal(created.body.profile.category, "Retail & Shopping");
     const slug: string = created.body.profile.slug;
 
     const publicProfile = await request(`/api/business-profiles/public/${slug}`, { userId: null });
@@ -708,29 +719,54 @@ describe("business intake routes", () => {
 
     const badUrl = await request(`/api/business-claims/${created.body.id}`, {
       method: "PATCH",
-      body: JSON.stringify({ expectedVersion: 1, business: { name: "X Y", category: "Retail", neighborhood: "Centrum", websiteUrl: "javascript:alert(1)" } }),
+      body: JSON.stringify({ expectedVersion: 1, business: { name: "X Y", category: "Retail & Shopping", neighborhood: "Centrum", websiteUrl: "javascript:alert(1)" } }),
     });
     assert.equal(badUrl.status, 400);
 
     const edited = await request(`/api/business-claims/${created.body.id}`, {
       method: "PATCH",
-      body: JSON.stringify({ expectedVersion: 1, business: { name: `Nieuwe Zaak ${runId} BV`, category: "Retail", neighborhood: "Centrum" } }),
+      body: JSON.stringify({ expectedVersion: 1, business: { name: `Nieuwe Zaak ${runId} BV`, category: "Retail & Shopping", neighborhood: "Centrum" } }),
     });
     assert.equal(edited.status, 200, JSON.stringify(edited.body));
     assert.equal(edited.body.profile.name, `Nieuwe Zaak ${runId} BV`);
     assert.equal(edited.body.profile.neighborhood, "Centrum");
 
-    const submitted = await request(`/api/business-claims/${created.body.id}/submit`, {
+    // BPROF-003: a draft may be partial, but submitting needs an address with a postcode.
+    const incomplete = await request(`/api/business-claims/${created.body.id}/submit`, {
       method: "POST",
       body: JSON.stringify({ expectedVersion: 2 }),
     });
-    assert.equal(submitted.status, 200);
+    assert.equal(incomplete.status, 400, JSON.stringify(incomplete.body));
+    assert.deepEqual(incomplete.body.fieldErrors, [
+      { field: "business.address", code: "required" },
+      { field: "business.phone", code: "phone_or_website_required" },
+    ]);
+    const badCategory = await request(`/api/business-claims/${created.body.id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ expectedVersion: 2, business: { name: `Nieuwe Zaak ${runId} BV`, category: "Food & Drink", subcategory: "sushi", neighborhood: "Centrum" } }),
+    });
+    assert.equal(badCategory.status, 400);
+    assert.equal(badCategory.body.fieldErrors[0].field, "business.subcategory");
+    const completed = await request(`/api/business-claims/${created.body.id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ expectedVersion: 2, business: { name: `Nieuwe Zaak ${runId} BV`, category: "Retail & Shopping", neighborhood: "Centrum", address: "Spui 1, 2511 BL Den Haag", websiteUrl: "https://nieuwezaak.example" } }),
+    });
+    assert.equal(completed.status, 200, JSON.stringify(completed.body));
+
+    const submitted = await request(`/api/business-claims/${created.body.id}/submit`, {
+      method: "POST",
+      body: JSON.stringify({ expectedVersion: 3 }),
+    });
+    assert.equal(submitted.status, 200, JSON.stringify(submitted.body));
+    // No stored listing at this postcode: the declared official neighbourhood stands, marked as declared.
+    assert.equal(submitted.body.profile.geographyBasis, "declared_official");
+    assert.equal(submitted.body.profile.latitude, null);
     assert.equal(submitted.body.status, "submitted");
     assert.equal(submitted.body.profile.publicationStatus, "draft", "submission never publishes");
 
     const withdrawn = await request(`/api/business-claims/${created.body.id}/withdraw`, {
       method: "POST",
-      body: JSON.stringify({ expectedVersion: 3 }),
+      body: JSON.stringify({ expectedVersion: 4 }),
     });
     assert.equal(withdrawn.status, 200);
     assert.equal(withdrawn.body.profile.publicationStatus, "archived");
@@ -742,7 +778,7 @@ describe("business intake routes", () => {
       userId: users.bob,
       body: JSON.stringify({
         kind: "new_business",
-        business: { name: `Bakkerij Intake ${runId}`, category: "Bakery", neighborhood: "Bezuidenhout" },
+        business: { name: `Bakkerij Intake ${runId}`, category: "Food & Drink", subcategory: "bakery", neighborhood: "Bezuidenhout", address: "Laan van NOI 12, 2593 BN Den Haag", phone: "0701234567" },
         ...baseDraft,
       }),
     });
@@ -782,7 +818,7 @@ describe("business intake routes", () => {
       userId: users.bob,
       body: JSON.stringify({
         kind: "new_business",
-        business: { name: `Unieke Zaak ${runId}`, category: "Retail", neighborhood: "Centrum" },
+        business: { name: `Unieke Zaak ${runId}`, category: "Retail & Shopping", neighborhood: "Centrum", address: "Spui 1, 2511 BL Den Haag", phone: "0701234567" },
         ...baseDraft,
       }),
     });
@@ -800,7 +836,7 @@ describe("business intake routes", () => {
       userId: users.bob,
       body: JSON.stringify({
         kind: "new_business",
-        business: { name: `Bakkerij Derde ${runId}`, category: "Bakery", neighborhood: "Centrum" },
+        business: { name: `Bakkerij Derde ${runId}`, category: "Food & Drink", subcategory: "bakery", neighborhood: "Centrum", address: "Spui 1, 2511 BL Den Haag", phone: "0701234567" },
         ...baseDraft,
       }),
     });
@@ -859,7 +895,7 @@ describe("business intake routes", () => {
     const key = `race_%_${runId}`;
     const body = JSON.stringify({
       kind: "new_business",
-      business: { name: `Race Zaak ${runId}`, category: "Retail", neighborhood: "Centrum" },
+      business: { name: `Race Zaak ${runId}`, category: "Retail & Shopping", neighborhood: "Centrum" },
       ...baseDraft,
     });
     const responses = await Promise.all(
@@ -879,7 +915,7 @@ describe("business intake routes", () => {
       headers: { "Idempotency-Key": `race_x_${runId}` },
       body: JSON.stringify({
         kind: "new_business",
-        business: { name: `Andere Zaak ${runId}`, category: "Retail", neighborhood: "Centrum" },
+        business: { name: `Andere Zaak ${runId}`, category: "Retail & Shopping", neighborhood: "Centrum" },
         ...baseDraft,
       }),
     });
@@ -892,7 +928,7 @@ describe("business intake routes", () => {
       headers: { "Idempotency-Key": key },
       body: JSON.stringify({
         kind: "new_business",
-        business: { name: `Race Zaak Anders ${runId}`, category: "Retail", neighborhood: "Centrum" },
+        business: { name: `Race Zaak Anders ${runId}`, category: "Retail & Shopping", neighborhood: "Centrum" },
         ...baseDraft,
       }),
     });
@@ -908,7 +944,7 @@ describe("business intake routes", () => {
           headers: { "Idempotency-Key": raceKey },
           body: JSON.stringify({
             kind: "new_business",
-            business: { name: `Race Variant ${index} ${runId}`, category: "Retail", neighborhood: "Centrum" },
+            business: { name: `Race Variant ${index} ${runId}`, category: "Retail & Shopping", neighborhood: "Centrum" },
             ...baseDraft,
           }),
         }),
@@ -934,7 +970,7 @@ describe("business intake routes", () => {
       headers: { "Idempotency-Key": `${raceKey}:other` },
       body: JSON.stringify({
         kind: "new_business",
-        business: { name: `Extended Key Zaak ${runId}`, category: "Retail", neighborhood: "Centrum" },
+        business: { name: `Extended Key Zaak ${runId}`, category: "Retail & Shopping", neighborhood: "Centrum" },
         ...baseDraft,
       }),
     });
@@ -945,7 +981,7 @@ describe("business intake routes", () => {
       headers: { "Idempotency-Key": raceKey },
       body: JSON.stringify({
         kind: "new_business",
-        business: { name: `Race Variant ${mixed.findIndex((r) => r.status === 201)} ${runId}`, category: "Retail", neighborhood: "Centrum" },
+        business: { name: `Race Variant ${mixed.findIndex((r) => r.status === 201)} ${runId}`, category: "Retail & Shopping", neighborhood: "Centrum" },
         ...baseDraft,
       }),
     });
@@ -963,7 +999,7 @@ describe("business intake routes", () => {
         listingSource: "google_maps",
         listingId: agedGoogleListingId,
         name: `Aged Google Zaak ${runId}`,
-        category: "Retail",
+        category: "Retail & Shopping",
         neighborhood: "Centrum",
         publicationStatus: "published",
       },

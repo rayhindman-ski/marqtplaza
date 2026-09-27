@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, or, sql } from "drizzle-orm";
 import { Router, type IRouter, type Request, type RequestHandler, type Response } from "express";
 
 import {
@@ -35,6 +35,13 @@ import {
 
 import { sendApiError, unknownFieldErrors } from "../lib/apiError";
 import { computeSignals } from "../lib/businessSignals";
+import {
+  type AddressMatchLoader,
+  type BusinessFactsInput,
+  deriveGeography,
+  validateBusinessFactsForDraft,
+  validateBusinessFactsForSubmit,
+} from "../lib/businessFacts";
 import { notifyUser } from "../lib/lifecycleNotifications";
 import {
   ClaimConflictError,
@@ -80,6 +87,8 @@ export type BusinessIntakeRouterOptions = {
   flags?: FeatureFlagSource;
   /** Public listing search used by lookup; defaults to the stored provider results. */
   lookupListings?: LookupListingsLoader;
+  /** Address→coordinates source for self-reported businesses; defaults to stored listings. */
+  addressMatches?: AddressMatchLoader;
   /** Re-resolves an existing listing from the approved provider by identity. */
   resolveListing?: ResolveListing;
   /** Per-account lookup budget per window. */
@@ -130,11 +139,28 @@ const BUSINESS_FIELDS: ReadonlySet<string> = new Set([
   "neighborhood",
   "address",
   "websiteUrl",
+  "subcategory",
+  "phone",
 ]);
 const LISTING_FIELDS: ReadonlySet<string> = new Set(["cityId", "listingSource", "listingId"]);
 
+function likeNeedle(query: string): string {
+  return `%${query.replace(/[\\%_]/g, (match) => `\\${match}`)}%`;
+}
+
+/**
+ * Lookup accepts a name, a postcode, an address fragment or a website
+ * (BPROF-001). A URL is reduced to its host without `www.`; a bare postcode is
+ * written the way Dutch addresses store it (`2512 AB`).
+ */
 function normaliseLookupQuery(value: string): string {
-  return value.trim().replace(/\s+/g, " ").toLocaleLowerCase("nl-NL");
+  let query = value.trim().replace(/\s+/g, " ").toLocaleLowerCase("nl-NL");
+  if (/^(https?:\/\/|www\.)/.test(query)) {
+    query = query.replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/[/?#].*$/, "");
+  }
+  const postcode = query.match(/^([1-9][0-9]{3})\s?([a-z]{2})$/);
+  if (postcode) query = `${postcode[1]} ${postcode[2]}`;
+  return query;
 }
 
 /**
@@ -169,6 +195,8 @@ export async function lookupStoredListings(query: string, limit: number): Promis
       select elem
       from recent, jsonb_array_elements(recent.payload) as elem
       where lower(elem->>'name') like ${needle}
+         or lower(elem->>'address') like ${needle}
+         or lower(elem->>'website') like ${needle}
     )
     select distinct on (elem->>'id')
       elem->>'id' as id,
@@ -432,6 +460,28 @@ function validPublicUrl(value: string | null | undefined): boolean {
   }
 }
 
+type NewBusinessFactsBody = {
+  name: string;
+  category: string;
+  subcategory?: string | null;
+  neighborhood: string;
+  address?: string | null;
+  websiteUrl?: string | null;
+  phone?: string | null;
+};
+
+function businessFacts(business: NewBusinessFactsBody): BusinessFactsInput {
+  return {
+    name: business.name.trim(),
+    category: business.category,
+    subcategory: trimmedOrNull(business.subcategory),
+    neighborhood: business.neighborhood.trim(),
+    address: trimmedOrNull(business.address),
+    websiteUrl: trimmedOrNull(business.websiteUrl),
+    phone: trimmedOrNull(business.phone),
+  };
+}
+
 function trimmedOrNull(value: string | null | undefined): string | null {
   if (value === null || value === undefined) return null;
   const trimmed = value.trim();
@@ -512,6 +562,7 @@ async function lockClaimantClaim(
 export function createBusinessIntakeRouter(options: BusinessIntakeRouterOptions = {}): IRouter {
   const flags = options.flags ?? getFeatureFlags;
   const lookupListings = options.lookupListings ?? lookupStoredListings;
+  const addressMatches = options.addressMatches;
   const resolveListing = options.resolveListing ?? resolveOfferedListing;
   const rate = options.lookupRateLimit ?? DEFAULT_LOOKUP_RATE_LIMIT;
   const limiter = new LookupRateLimiter(rate.limit, rate.windowMs, options.now ?? Date.now);
@@ -552,7 +603,12 @@ export function createBusinessIntakeRouter(options: BusinessIntakeRouterOptions 
         and(
           eq(businessProfilesTable.cityId, LOOKUP_CITY),
           eq(businessProfilesTable.publicationStatus, "published"),
-          sql`lower(${businessProfilesTable.name}) like ${`%${query.replace(/[\\%_]/g, (match) => `\\${match}`)}%`}`,
+          // BPROF-001: name, postcode/address and website all find the existing business.
+          or(
+            sql`lower(${businessProfilesTable.name}) like ${likeNeedle(query)}`,
+            sql`lower(${businessProfilesTable.address}) like ${likeNeedle(query)}`,
+            sql`lower(${businessProfilesTable.websiteUrl}) like ${likeNeedle(query)}`,
+          ),
         ),
       )
       .orderBy(businessProfilesTable.name)
@@ -643,6 +699,7 @@ export function createBusinessIntakeRouter(options: BusinessIntakeRouterOptions 
     if (input.kind === "existing_listing" && !input.listing) fieldErrors.push({ field: "listing", code: "required" });
     if (input.kind === "new_business" && !input.business) fieldErrors.push({ field: "business", code: "required" });
     if (!validPublicUrl(input.business?.websiteUrl)) fieldErrors.push({ field: "business.websiteUrl", code: "invalid_url" });
+    if (input.business) fieldErrors.push(...validateBusinessFactsForDraft(businessFacts(input.business)));
     if (fieldErrors.length > 0) {
       sendApiError(req, res, "VALIDATION_FAILED", { fieldErrors });
       return;
@@ -757,7 +814,7 @@ export function createBusinessIntakeRouter(options: BusinessIntakeRouterOptions 
             .limit(1);
           if (mine) throw new ClaimConflictError("You already have a draft or open claim for this business.");
         } else {
-          const business = input.business!;
+          const business = businessFacts(input.business!);
           const listingId = randomUUID();
           [profile] = await tx
             .insert(businessProfilesTable)
@@ -766,11 +823,13 @@ export function createBusinessIntakeRouter(options: BusinessIntakeRouterOptions 
               cityId: LOOKUP_CITY,
               listingSource: SELF_REPORTED_LISTING_SOURCE,
               listingId,
-              name: business.name.trim(),
-              category: business.category.trim(),
-              neighborhood: business.neighborhood.trim(),
-              address: trimmedOrNull(business.address),
-              websiteUrl: trimmedOrNull(business.websiteUrl),
+              name: business.name,
+              category: business.category,
+              subcategory: business.subcategory,
+              neighborhood: business.neighborhood,
+              address: business.address,
+              websiteUrl: business.websiteUrl,
+              phone: business.phone,
               publicationStatus: "draft",
               createdByUserId: claimantId,
             })
@@ -840,6 +899,11 @@ export function createBusinessIntakeRouter(options: BusinessIntakeRouterOptions 
       sendApiError(req, res, "VALIDATION_FAILED", { fieldErrors: [{ field: "business.websiteUrl", code: "invalid_url" }] });
       return;
     }
+    const draftErrors = input.business ? validateBusinessFactsForDraft(businessFacts(input.business)) : [];
+    if (draftErrors.length > 0) {
+      sendApiError(req, res, "VALIDATION_FAILED", { fieldErrors: draftErrors });
+      return;
+    }
     const claimantId = req.account!.identity.userId;
 
     let result: ClaimRow | "not_found" | "not_editable" | { conflict: number };
@@ -852,15 +916,21 @@ export function createBusinessIntakeRouter(options: BusinessIntakeRouterOptions 
 
       if (input.business !== undefined) {
         if (profile.listingSource !== SELF_REPORTED_LISTING_SOURCE) return "not_editable";
-        const business = input.business;
+        const business = businessFacts(input.business);
         await tx
           .update(businessProfilesTable)
           .set({
-            name: business.name.trim(),
-            category: business.category.trim(),
-            neighborhood: business.neighborhood.trim(),
-            address: trimmedOrNull(business.address),
-            websiteUrl: trimmedOrNull(business.websiteUrl),
+            name: business.name,
+            category: business.category,
+            subcategory: business.subcategory,
+            neighborhood: business.neighborhood,
+            address: business.address,
+            websiteUrl: business.websiteUrl,
+            phone: business.phone,
+            // Facts changed: geography is re-derived at the next submit.
+            latitude: null,
+            longitude: null,
+            geographyBasis: null,
           })
           .where(eq(businessProfilesTable.id, profile.id));
       }
@@ -920,8 +990,31 @@ export function createBusinessIntakeRouter(options: BusinessIntakeRouterOptions 
     // either claim one instead or explicitly confirm that the business is new.
     // The same public look-alike search feeds the advisory duplicate signal (BVER-002).
     let signalCandidates: { name: string }[] = [];
+    let geography: Awaited<ReturnType<typeof deriveGeography>> | null = null;
     const current = await findOwnClaim(params.data.id, claimantId);
     if (current && EDITABLE_CLAIM_STATUSES.has(current.claim.status)) {
+      if (current.profile.listingSource === SELF_REPORTED_LISTING_SOURCE) {
+        // BPROF-003/004: a business nobody has listed yet needs the release's required
+        // facts, and its geography comes from the address, never from the client.
+        const facts = validateBusinessFactsForSubmit({
+          name: current.profile.name,
+          category: current.profile.category ?? "",
+          subcategory: current.profile.subcategory,
+          neighborhood: current.profile.neighborhood ?? "",
+          address: current.profile.address,
+          websiteUrl: current.profile.websiteUrl,
+          phone: current.profile.phone,
+        });
+        if (facts.length > 0) {
+          sendApiError(req, res, "VALIDATION_FAILED", { fieldErrors: facts });
+          return;
+        }
+        geography = await deriveGeography(current.profile.address, current.profile.neighborhood, addressMatches);
+        if (geography.basis === "unresolved") {
+          sendApiError(req, res, "VALIDATION_FAILED", { fieldErrors: [{ field: "business.neighborhood", code: "unknown_neighborhood" }] });
+          return;
+        }
+      }
       const query = normaliseLookupQuery(current.profile.name);
       const found = query.length >= 2 ? await findPublicMatches(query, current.profile.id) : { matches: [], truncated: false };
       const isNewBusiness = current.profile.listingSource === SELF_REPORTED_LISTING_SOURCE;
@@ -983,6 +1076,20 @@ export function createBusinessIntakeRouter(options: BusinessIntakeRouterOptions 
           .limit(1);
         const nextStatus = owner || profile.isClaimed ? "disputed" : "submitted";
 
+        if (geography && profile.listingSource === SELF_REPORTED_LISTING_SOURCE) {
+          const [updated] = await tx
+            .update(businessProfilesTable)
+            .set({
+              neighborhood: geography.neighborhood,
+              latitude: geography.latitude,
+              longitude: geography.longitude,
+              geographyBasis: geography.basis,
+            })
+            .where(eq(businessProfilesTable.id, profile.id))
+            .returning();
+          if (updated) Object.assign(profile, updated);
+        }
+
         const [claim] = await tx
           .update(businessClaimsTable)
           .set({
@@ -994,8 +1101,11 @@ export function createBusinessIntakeRouter(options: BusinessIntakeRouterOptions 
             signals: computeSignals({
               evidenceDomain: locked.evidenceDomain,
               evidenceKvk: locked.evidenceKvk,
+              contactEmail: locked.contactEmail,
               profileName: profile.name,
               profileWebsiteUrl: profile.websiteUrl,
+              websiteSelfReported: profile.listingSource === SELF_REPORTED_LISTING_SOURCE,
+              geographyBasis: geography?.basis ?? null,
               candidates: signalCandidates,
             }),
             reviewNote: null,

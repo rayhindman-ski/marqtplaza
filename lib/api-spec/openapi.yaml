@@ -2816,7 +2816,12 @@ components:
 
     NewBusinessFacts:
       type: object
-      description: Public facts for a business that is not listed yet. Stored privately until publication review.
+      description: >-
+        Public facts for a business that is not listed yet. Stored privately until publication review.
+        `category` must be a `BusinessCategory`; `subcategory` is the food type for Food & Drink. A draft may be
+        partial; submitting requires an address with a Dutch postcode and at least one of phone or website
+        (BPROF-003). Neighbourhood and coordinates are derived server-side from the address (BPROF-004); the
+        declared neighbourhood is only kept when nothing can be derived and it is an official one.
       required: [name, category, neighborhood]
       properties:
         name:
@@ -2824,19 +2829,23 @@ components:
           minLength: 2
           maxLength: 160
         category:
-          type: string
-          minLength: 2
+          $ref: "#/components/schemas/BusinessCategory"
+        subcategory:
+          type: ["string", "null"]
           maxLength: 80
         neighborhood:
           type: string
           minLength: 2
           maxLength: 120
         address:
-          type: string
+          type: ["string", "null"]
           maxLength: 240
         websiteUrl:
-          type: string
+          type: ["string", "null"]
           maxLength: 400
+        phone:
+          type: ["string", "null"]
+          maxLength: 40
 
     BusinessIntakeDraftInput:
       type: object
@@ -3987,13 +3996,24 @@ components:
     BusinessSignals:
       type: object
       description: Advisory verification signals computed when the claim was submitted. Never a decision.
-      required: [version, domainMatch, kvkFormatOk, duplicateScore, duplicateCandidates, computedAt]
+      required: [version, domainMatch, emailDomainMatch, websiteSelfReported, kvkFormatOk, duplicateScore, duplicateCandidates, geographyBasis, computedAt]
       properties:
         version:
           type: number
         domainMatch:
           type: string
           enum: [match, mismatch, unknown]
+          description: Claimant's stated business domain against the profile's website host.
+        emailDomainMatch:
+          type: string
+          enum: [match, mismatch, unknown]
+          description: Domain of the claimant's contact e-mail against the profile's website host (public mailbox providers count as unknown).
+        websiteSelfReported:
+          type: boolean
+          description: True when the compared website was supplied by the claimant (new business) rather than by the directory.
+        geographyBasis:
+          type: ["string", "null"]
+          enum: [address_match, declared_official, unresolved, null]
         kvkFormatOk:
           type: ["boolean", "null"]
         duplicateScore:
@@ -4289,6 +4309,13 @@ components:
         category:
           type: ["string", "null"]
           description: Self-reported category of a new-business draft; null for listing-derived profiles.
+        subcategory:
+          type: ["string", "null"]
+          description: Taxonomy subcategory of a new-business draft (food type for Food & Drink); null otherwise.
+        geographyBasis:
+          type: ["string", "null"]
+          enum: [address_match, declared_official, unresolved, null]
+          description: How a self-reported business's neighbourhood/coordinates were established at submit; null before submit and for listing-derived profiles.
         approvedRevisionVersion:
           type: ["number", "null"]
           description: Version of the approved revision when publication review is enabled; null when the profile is served from its columns.

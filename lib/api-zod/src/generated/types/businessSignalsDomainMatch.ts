@@ -6,6 +6,9 @@
  * OpenAPI spec version: 0.1.0
  */
 
+/**
+ * Claimant's stated business domain against the profile's website host.
+ */
 export type BusinessSignalsDomainMatch = typeof BusinessSignalsDomainMatch[keyof typeof BusinessSignalsDomainMatch];
 
 

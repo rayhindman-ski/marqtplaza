@@ -1891,6 +1891,8 @@ export const GetMyBusinessClaimsResponseItem = zod.object({
   "claimedAt": zod.string().nullish(),
   "publicationStatus": zod.enum(['draft', 'unpublished', 'published', 'suspended', 'archived']).optional().describe('Business publication lifecycle. Existing profiles are `published`.\ndraft -> published (explicit reviewer publication); published <-> unpublished;\npublished -> suspended (reviewer); any -> archived (terminal). Only `published`\nprofiles and their deals are served on public routes.\n'),
   "category": zod.string().nullish().describe('Self-reported category of a new-business draft; null for listing-derived profiles.'),
+  "subcategory": zod.string().nullish().describe('Taxonomy subcategory of a new-business draft (food type for Food & Drink); null otherwise.'),
+  "geographyBasis": zod.union([zod.literal('address_match'),zod.literal('declared_official'),zod.literal('unresolved'),zod.literal(null)]).nullish().describe('How a self-reported business\'s neighbourhood\/coordinates were established at submit; null before submit and for listing-derived profiles.'),
   "approvedRevisionVersion": zod.number().nullish().describe('Version of the approved revision when publication review is enabled; null when the profile is served from its columns.'),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
@@ -1990,6 +1992,8 @@ export const CreateBusinessClaimResponse = zod.object({
   "claimedAt": zod.string().nullish(),
   "publicationStatus": zod.enum(['draft', 'unpublished', 'published', 'suspended', 'archived']).optional().describe('Business publication lifecycle. Existing profiles are `published`.\ndraft -> published (explicit reviewer publication); published <-> unpublished;\npublished -> suspended (reviewer); any -> archived (terminal). Only `published`\nprofiles and their deals are served on public routes.\n'),
   "category": zod.string().nullish().describe('Self-reported category of a new-business draft; null for listing-derived profiles.'),
+  "subcategory": zod.string().nullish().describe('Taxonomy subcategory of a new-business draft (food type for Food & Drink); null otherwise.'),
+  "geographyBasis": zod.union([zod.literal('address_match'),zod.literal('declared_official'),zod.literal('unresolved'),zod.literal(null)]).nullish().describe('How a self-reported business\'s neighbourhood\/coordinates were established at submit; null before submit and for listing-derived profiles.'),
   "approvedRevisionVersion": zod.number().nullish().describe('Version of the approved revision when publication review is enabled; null when the profile is served from its columns.'),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
@@ -2056,6 +2060,8 @@ export const GetBusinessClaimModerationResponseItem = zod.object({
   "claimedAt": zod.string().nullish(),
   "publicationStatus": zod.enum(['draft', 'unpublished', 'published', 'suspended', 'archived']).optional().describe('Business publication lifecycle. Existing profiles are `published`.\ndraft -> published (explicit reviewer publication); published <-> unpublished;\npublished -> suspended (reviewer); any -> archived (terminal). Only `published`\nprofiles and their deals are served on public routes.\n'),
   "category": zod.string().nullish().describe('Self-reported category of a new-business draft; null for listing-derived profiles.'),
+  "subcategory": zod.string().nullish().describe('Taxonomy subcategory of a new-business draft (food type for Food & Drink); null otherwise.'),
+  "geographyBasis": zod.union([zod.literal('address_match'),zod.literal('declared_official'),zod.literal('unresolved'),zod.literal(null)]).nullish().describe('How a self-reported business\'s neighbourhood\/coordinates were established at submit; null before submit and for listing-derived profiles.'),
   "approvedRevisionVersion": zod.number().nullish().describe('Version of the approved revision when publication review is enabled; null when the profile is served from its columns.'),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
@@ -2131,6 +2137,8 @@ export const DecideBusinessClaimResponse = zod.object({
   "claimedAt": zod.string().nullish(),
   "publicationStatus": zod.enum(['draft', 'unpublished', 'published', 'suspended', 'archived']).optional().describe('Business publication lifecycle. Existing profiles are `published`.\ndraft -> published (explicit reviewer publication); published <-> unpublished;\npublished -> suspended (reviewer); any -> archived (terminal). Only `published`\nprofiles and their deals are served on public routes.\n'),
   "category": zod.string().nullish().describe('Self-reported category of a new-business draft; null for listing-derived profiles.'),
+  "subcategory": zod.string().nullish().describe('Taxonomy subcategory of a new-business draft (food type for Food & Drink); null otherwise.'),
+  "geographyBasis": zod.union([zod.literal('address_match'),zod.literal('declared_official'),zod.literal('unresolved'),zod.literal(null)]).nullish().describe('How a self-reported business\'s neighbourhood\/coordinates were established at submit; null before submit and for listing-derived profiles.'),
   "approvedRevisionVersion": zod.number().nullish().describe('Version of the approved revision when publication review is enabled; null when the profile is served from its columns.'),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
@@ -2200,8 +2208,7 @@ export const CreateBusinessIntakeDraftHeader = zod.object({
 export const createBusinessIntakeDraftBodyBusinessNameMin = 2;
 export const createBusinessIntakeDraftBodyBusinessNameMax = 160;
 
-export const createBusinessIntakeDraftBodyBusinessCategoryMin = 2;
-export const createBusinessIntakeDraftBodyBusinessCategoryMax = 80;
+export const createBusinessIntakeDraftBodyBusinessSubcategoryMax = 80;
 
 export const createBusinessIntakeDraftBodyBusinessNeighborhoodMin = 2;
 export const createBusinessIntakeDraftBodyBusinessNeighborhoodMax = 120;
@@ -2209,6 +2216,8 @@ export const createBusinessIntakeDraftBodyBusinessNeighborhoodMax = 120;
 export const createBusinessIntakeDraftBodyBusinessAddressMax = 240;
 
 export const createBusinessIntakeDraftBodyBusinessWebsiteUrlMax = 400;
+
+export const createBusinessIntakeDraftBodyBusinessPhoneMax = 40;
 
 export const createBusinessIntakeDraftBodyContactNameMin = 2;
 export const createBusinessIntakeDraftBodyContactNameMax = 120;
@@ -2244,11 +2253,13 @@ export const CreateBusinessIntakeDraftBody = zod.object({
 }).optional().describe('Required for `existing_listing`; resolved server-side, never trusted for facts.'),
   "business": zod.object({
   "name": zod.string().min(createBusinessIntakeDraftBodyBusinessNameMin).max(createBusinessIntakeDraftBodyBusinessNameMax),
-  "category": zod.string().min(createBusinessIntakeDraftBodyBusinessCategoryMin).max(createBusinessIntakeDraftBodyBusinessCategoryMax),
+  "category": zod.enum(['Retail & Shopping', 'Food & Drink', 'Health & Wellness', 'Beauty & Personal Care', 'Professional Services', 'Finance & Legal', 'Home & Repair', 'Automotive & Mobility', 'Education & Childcare', 'Hospitality & Travel', 'Arts, Culture & Entertainment', 'Fitness & Sports']).describe('Normalized category for business and food-and-drink listings.'),
+  "subcategory": zod.string().max(createBusinessIntakeDraftBodyBusinessSubcategoryMax).nullish(),
   "neighborhood": zod.string().min(createBusinessIntakeDraftBodyBusinessNeighborhoodMin).max(createBusinessIntakeDraftBodyBusinessNeighborhoodMax),
-  "address": zod.string().max(createBusinessIntakeDraftBodyBusinessAddressMax).optional(),
-  "websiteUrl": zod.string().max(createBusinessIntakeDraftBodyBusinessWebsiteUrlMax).optional()
-}).optional().describe('Public facts for a business that is not listed yet. Stored privately until publication review.'),
+  "address": zod.string().max(createBusinessIntakeDraftBodyBusinessAddressMax).nullish(),
+  "websiteUrl": zod.string().max(createBusinessIntakeDraftBodyBusinessWebsiteUrlMax).nullish(),
+  "phone": zod.string().max(createBusinessIntakeDraftBodyBusinessPhoneMax).nullish()
+}).optional().describe('Public facts for a business that is not listed yet. Stored privately until publication review. `category` must be a `BusinessCategory`; `subcategory` is the food type for Food & Drink. A draft may be partial; submitting requires an address with a Dutch postcode and at least one of phone or website (BPROF-003). Neighbourhood and coordinates are derived server-side from the address (BPROF-004); the declared neighbourhood is only kept when nothing can be derived and it is an official one.'),
   "contactName": zod.string().min(createBusinessIntakeDraftBodyContactNameMin).max(createBusinessIntakeDraftBodyContactNameMax),
   "contactEmail": zod.string().min(createBusinessIntakeDraftBodyContactEmailMin).max(createBusinessIntakeDraftBodyContactEmailMax).regex(createBusinessIntakeDraftBodyContactEmailRegExp),
   "relationship": zod.string().min(createBusinessIntakeDraftBodyRelationshipMin).max(createBusinessIntakeDraftBodyRelationshipMax),
@@ -2311,6 +2322,8 @@ export const CreateBusinessIntakeDraftResponse = zod.object({
   "claimedAt": zod.string().nullish(),
   "publicationStatus": zod.enum(['draft', 'unpublished', 'published', 'suspended', 'archived']).optional().describe('Business publication lifecycle. Existing profiles are `published`.\ndraft -> published (explicit reviewer publication); published <-> unpublished;\npublished -> suspended (reviewer); any -> archived (terminal). Only `published`\nprofiles and their deals are served on public routes.\n'),
   "category": zod.string().nullish().describe('Self-reported category of a new-business draft; null for listing-derived profiles.'),
+  "subcategory": zod.string().nullish().describe('Taxonomy subcategory of a new-business draft (food type for Food & Drink); null otherwise.'),
+  "geographyBasis": zod.union([zod.literal('address_match'),zod.literal('declared_official'),zod.literal('unresolved'),zod.literal(null)]).nullish().describe('How a self-reported business\'s neighbourhood\/coordinates were established at submit; null before submit and for listing-derived profiles.'),
   "approvedRevisionVersion": zod.number().nullish().describe('Version of the approved revision when publication review is enabled; null when the profile is served from its columns.'),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
@@ -2376,6 +2389,8 @@ export const GetBusinessClaimResponse = zod.object({
   "claimedAt": zod.string().nullish(),
   "publicationStatus": zod.enum(['draft', 'unpublished', 'published', 'suspended', 'archived']).optional().describe('Business publication lifecycle. Existing profiles are `published`.\ndraft -> published (explicit reviewer publication); published <-> unpublished;\npublished -> suspended (reviewer); any -> archived (terminal). Only `published`\nprofiles and their deals are served on public routes.\n'),
   "category": zod.string().nullish().describe('Self-reported category of a new-business draft; null for listing-derived profiles.'),
+  "subcategory": zod.string().nullish().describe('Taxonomy subcategory of a new-business draft (food type for Food & Drink); null otherwise.'),
+  "geographyBasis": zod.union([zod.literal('address_match'),zod.literal('declared_official'),zod.literal('unresolved'),zod.literal(null)]).nullish().describe('How a self-reported business\'s neighbourhood\/coordinates were established at submit; null before submit and for listing-derived profiles.'),
   "approvedRevisionVersion": zod.number().nullish().describe('Version of the approved revision when publication review is enabled; null when the profile is served from its columns.'),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
@@ -2421,8 +2436,7 @@ export const updateBusinessClaimBodyMessageMax = 1200;
 export const updateBusinessClaimBodyBusinessNameMin = 2;
 export const updateBusinessClaimBodyBusinessNameMax = 160;
 
-export const updateBusinessClaimBodyBusinessCategoryMin = 2;
-export const updateBusinessClaimBodyBusinessCategoryMax = 80;
+export const updateBusinessClaimBodyBusinessSubcategoryMax = 80;
 
 export const updateBusinessClaimBodyBusinessNeighborhoodMin = 2;
 export const updateBusinessClaimBodyBusinessNeighborhoodMax = 120;
@@ -2430,6 +2444,8 @@ export const updateBusinessClaimBodyBusinessNeighborhoodMax = 120;
 export const updateBusinessClaimBodyBusinessAddressMax = 240;
 
 export const updateBusinessClaimBodyBusinessWebsiteUrlMax = 400;
+
+export const updateBusinessClaimBodyBusinessPhoneMax = 40;
 
 
 
@@ -2446,11 +2462,13 @@ export const UpdateBusinessClaimBody = zod.object({
   "message": zod.string().max(updateBusinessClaimBodyMessageMax).nullish(),
   "business": zod.object({
   "name": zod.string().min(updateBusinessClaimBodyBusinessNameMin).max(updateBusinessClaimBodyBusinessNameMax),
-  "category": zod.string().min(updateBusinessClaimBodyBusinessCategoryMin).max(updateBusinessClaimBodyBusinessCategoryMax),
+  "category": zod.enum(['Retail & Shopping', 'Food & Drink', 'Health & Wellness', 'Beauty & Personal Care', 'Professional Services', 'Finance & Legal', 'Home & Repair', 'Automotive & Mobility', 'Education & Childcare', 'Hospitality & Travel', 'Arts, Culture & Entertainment', 'Fitness & Sports']).describe('Normalized category for business and food-and-drink listings.'),
+  "subcategory": zod.string().max(updateBusinessClaimBodyBusinessSubcategoryMax).nullish(),
   "neighborhood": zod.string().min(updateBusinessClaimBodyBusinessNeighborhoodMin).max(updateBusinessClaimBodyBusinessNeighborhoodMax),
-  "address": zod.string().max(updateBusinessClaimBodyBusinessAddressMax).optional(),
-  "websiteUrl": zod.string().max(updateBusinessClaimBodyBusinessWebsiteUrlMax).optional()
-}).optional().describe('Public facts for a business that is not listed yet. Stored privately until publication review.')
+  "address": zod.string().max(updateBusinessClaimBodyBusinessAddressMax).nullish(),
+  "websiteUrl": zod.string().max(updateBusinessClaimBodyBusinessWebsiteUrlMax).nullish(),
+  "phone": zod.string().max(updateBusinessClaimBodyBusinessPhoneMax).nullish()
+}).optional().describe('Public facts for a business that is not listed yet. Stored privately until publication review. `category` must be a `BusinessCategory`; `subcategory` is the food type for Food & Drink. A draft may be partial; submitting requires an address with a Dutch postcode and at least one of phone or website (BPROF-003). Neighbourhood and coordinates are derived server-side from the address (BPROF-004); the declared neighbourhood is only kept when nothing can be derived and it is an official one.')
 })
 
 export const UpdateBusinessClaimResponse = zod.object({
@@ -2503,6 +2521,8 @@ export const UpdateBusinessClaimResponse = zod.object({
   "claimedAt": zod.string().nullish(),
   "publicationStatus": zod.enum(['draft', 'unpublished', 'published', 'suspended', 'archived']).optional().describe('Business publication lifecycle. Existing profiles are `published`.\ndraft -> published (explicit reviewer publication); published <-> unpublished;\npublished -> suspended (reviewer); any -> archived (terminal). Only `published`\nprofiles and their deals are served on public routes.\n'),
   "category": zod.string().nullish().describe('Self-reported category of a new-business draft; null for listing-derived profiles.'),
+  "subcategory": zod.string().nullish().describe('Taxonomy subcategory of a new-business draft (food type for Food & Drink); null otherwise.'),
+  "geographyBasis": zod.union([zod.literal('address_match'),zod.literal('declared_official'),zod.literal('unresolved'),zod.literal(null)]).nullish().describe('How a self-reported business\'s neighbourhood\/coordinates were established at submit; null before submit and for listing-derived profiles.'),
   "approvedRevisionVersion": zod.number().nullish().describe('Version of the approved revision when publication review is enabled; null when the profile is served from its columns.'),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
@@ -2578,6 +2598,8 @@ export const SubmitBusinessClaimResponse = zod.object({
   "claimedAt": zod.string().nullish(),
   "publicationStatus": zod.enum(['draft', 'unpublished', 'published', 'suspended', 'archived']).optional().describe('Business publication lifecycle. Existing profiles are `published`.\ndraft -> published (explicit reviewer publication); published <-> unpublished;\npublished -> suspended (reviewer); any -> archived (terminal). Only `published`\nprofiles and their deals are served on public routes.\n'),
   "category": zod.string().nullish().describe('Self-reported category of a new-business draft; null for listing-derived profiles.'),
+  "subcategory": zod.string().nullish().describe('Taxonomy subcategory of a new-business draft (food type for Food & Drink); null otherwise.'),
+  "geographyBasis": zod.union([zod.literal('address_match'),zod.literal('declared_official'),zod.literal('unresolved'),zod.literal(null)]).nullish().describe('How a self-reported business\'s neighbourhood\/coordinates were established at submit; null before submit and for listing-derived profiles.'),
   "approvedRevisionVersion": zod.number().nullish().describe('Version of the approved revision when publication review is enabled; null when the profile is served from its columns.'),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
@@ -2651,6 +2673,8 @@ export const WithdrawBusinessClaimResponse = zod.object({
   "claimedAt": zod.string().nullish(),
   "publicationStatus": zod.enum(['draft', 'unpublished', 'published', 'suspended', 'archived']).optional().describe('Business publication lifecycle. Existing profiles are `published`.\ndraft -> published (explicit reviewer publication); published <-> unpublished;\npublished -> suspended (reviewer); any -> archived (terminal). Only `published`\nprofiles and their deals are served on public routes.\n'),
   "category": zod.string().nullish().describe('Self-reported category of a new-business draft; null for listing-derived profiles.'),
+  "subcategory": zod.string().nullish().describe('Taxonomy subcategory of a new-business draft (food type for Food & Drink); null otherwise.'),
+  "geographyBasis": zod.union([zod.literal('address_match'),zod.literal('declared_official'),zod.literal('unresolved'),zod.literal(null)]).nullish().describe('How a self-reported business\'s neighbourhood\/coordinates were established at submit; null before submit and for listing-derived profiles.'),
   "approvedRevisionVersion": zod.number().nullish().describe('Version of the approved revision when publication review is enabled; null when the profile is served from its columns.'),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
@@ -2685,6 +2709,8 @@ export const GetMyBusinessProfilesResponseItem = zod.object({
   "claimedAt": zod.string().nullish(),
   "publicationStatus": zod.enum(['draft', 'unpublished', 'published', 'suspended', 'archived']).optional().describe('Business publication lifecycle. Existing profiles are `published`.\ndraft -> published (explicit reviewer publication); published <-> unpublished;\npublished -> suspended (reviewer); any -> archived (terminal). Only `published`\nprofiles and their deals are served on public routes.\n'),
   "category": zod.string().nullish().describe('Self-reported category of a new-business draft; null for listing-derived profiles.'),
+  "subcategory": zod.string().nullish().describe('Taxonomy subcategory of a new-business draft (food type for Food & Drink); null otherwise.'),
+  "geographyBasis": zod.union([zod.literal('address_match'),zod.literal('declared_official'),zod.literal('unresolved'),zod.literal(null)]).nullish().describe('How a self-reported business\'s neighbourhood\/coordinates were established at submit; null before submit and for listing-derived profiles.'),
   "approvedRevisionVersion": zod.number().nullish().describe('Version of the approved revision when publication review is enabled; null when the profile is served from its columns.'),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
@@ -2770,6 +2796,8 @@ export const UpdateBusinessProfileResponse = zod.object({
   "claimedAt": zod.string().nullish(),
   "publicationStatus": zod.enum(['draft', 'unpublished', 'published', 'suspended', 'archived']).optional().describe('Business publication lifecycle. Existing profiles are `published`.\ndraft -> published (explicit reviewer publication); published <-> unpublished;\npublished -> suspended (reviewer); any -> archived (terminal). Only `published`\nprofiles and their deals are served on public routes.\n'),
   "category": zod.string().nullish().describe('Self-reported category of a new-business draft; null for listing-derived profiles.'),
+  "subcategory": zod.string().nullish().describe('Taxonomy subcategory of a new-business draft (food type for Food & Drink); null otherwise.'),
+  "geographyBasis": zod.union([zod.literal('address_match'),zod.literal('declared_official'),zod.literal('unresolved'),zod.literal(null)]).nullish().describe('How a self-reported business\'s neighbourhood\/coordinates were established at submit; null before submit and for listing-derived profiles.'),
   "approvedRevisionVersion": zod.number().nullish().describe('Version of the approved revision when publication review is enabled; null when the profile is served from its columns.'),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
@@ -2925,6 +2953,8 @@ export const GetBusinessProfileResponse = zod.object({
   "claimedAt": zod.string().nullish(),
   "publicationStatus": zod.enum(['draft', 'unpublished', 'published', 'suspended', 'archived']).optional().describe('Business publication lifecycle. Existing profiles are `published`.\ndraft -> published (explicit reviewer publication); published <-> unpublished;\npublished -> suspended (reviewer); any -> archived (terminal). Only `published`\nprofiles and their deals are served on public routes.\n'),
   "category": zod.string().nullish().describe('Self-reported category of a new-business draft; null for listing-derived profiles.'),
+  "subcategory": zod.string().nullish().describe('Taxonomy subcategory of a new-business draft (food type for Food & Drink); null otherwise.'),
+  "geographyBasis": zod.union([zod.literal('address_match'),zod.literal('declared_official'),zod.literal('unresolved'),zod.literal(null)]).nullish().describe('How a self-reported business\'s neighbourhood\/coordinates were established at submit; null before submit and for listing-derived profiles.'),
   "approvedRevisionVersion": zod.number().nullish().describe('Version of the approved revision when publication review is enabled; null when the profile is served from its columns.'),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
@@ -3029,6 +3059,8 @@ export const GetBusinessRevisionWorkspaceResponse = zod.object({
   "claimedAt": zod.string().nullish(),
   "publicationStatus": zod.enum(['draft', 'unpublished', 'published', 'suspended', 'archived']).optional().describe('Business publication lifecycle. Existing profiles are `published`.\ndraft -> published (explicit reviewer publication); published <-> unpublished;\npublished -> suspended (reviewer); any -> archived (terminal). Only `published`\nprofiles and their deals are served on public routes.\n'),
   "category": zod.string().nullish().describe('Self-reported category of a new-business draft; null for listing-derived profiles.'),
+  "subcategory": zod.string().nullish().describe('Taxonomy subcategory of a new-business draft (food type for Food & Drink); null otherwise.'),
+  "geographyBasis": zod.union([zod.literal('address_match'),zod.literal('declared_official'),zod.literal('unresolved'),zod.literal(null)]).nullish().describe('How a self-reported business\'s neighbourhood\/coordinates were established at submit; null before submit and for listing-derived profiles.'),
   "approvedRevisionVersion": zod.number().nullish().describe('Version of the approved revision when publication review is enabled; null when the profile is served from its columns.'),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
@@ -3214,6 +3246,8 @@ export const UpdateBusinessRevisionResponse = zod.object({
   "claimedAt": zod.string().nullish(),
   "publicationStatus": zod.enum(['draft', 'unpublished', 'published', 'suspended', 'archived']).optional().describe('Business publication lifecycle. Existing profiles are `published`.\ndraft -> published (explicit reviewer publication); published <-> unpublished;\npublished -> suspended (reviewer); any -> archived (terminal). Only `published`\nprofiles and their deals are served on public routes.\n'),
   "category": zod.string().nullish().describe('Self-reported category of a new-business draft; null for listing-derived profiles.'),
+  "subcategory": zod.string().nullish().describe('Taxonomy subcategory of a new-business draft (food type for Food & Drink); null otherwise.'),
+  "geographyBasis": zod.union([zod.literal('address_match'),zod.literal('declared_official'),zod.literal('unresolved'),zod.literal(null)]).nullish().describe('How a self-reported business\'s neighbourhood\/coordinates were established at submit; null before submit and for listing-derived profiles.'),
   "approvedRevisionVersion": zod.number().nullish().describe('Version of the approved revision when publication review is enabled; null when the profile is served from its columns.'),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
@@ -3350,6 +3384,8 @@ export const SubmitBusinessRevisionResponse = zod.object({
   "claimedAt": zod.string().nullish(),
   "publicationStatus": zod.enum(['draft', 'unpublished', 'published', 'suspended', 'archived']).optional().describe('Business publication lifecycle. Existing profiles are `published`.\ndraft -> published (explicit reviewer publication); published <-> unpublished;\npublished -> suspended (reviewer); any -> archived (terminal). Only `published`\nprofiles and their deals are served on public routes.\n'),
   "category": zod.string().nullish().describe('Self-reported category of a new-business draft; null for listing-derived profiles.'),
+  "subcategory": zod.string().nullish().describe('Taxonomy subcategory of a new-business draft (food type for Food & Drink); null otherwise.'),
+  "geographyBasis": zod.union([zod.literal('address_match'),zod.literal('declared_official'),zod.literal('unresolved'),zod.literal(null)]).nullish().describe('How a self-reported business\'s neighbourhood\/coordinates were established at submit; null before submit and for listing-derived profiles.'),
   "approvedRevisionVersion": zod.number().nullish().describe('Version of the approved revision when publication review is enabled; null when the profile is served from its columns.'),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
@@ -3484,6 +3520,8 @@ export const DiscardBusinessRevisionResponse = zod.object({
   "claimedAt": zod.string().nullish(),
   "publicationStatus": zod.enum(['draft', 'unpublished', 'published', 'suspended', 'archived']).optional().describe('Business publication lifecycle. Existing profiles are `published`.\ndraft -> published (explicit reviewer publication); published <-> unpublished;\npublished -> suspended (reviewer); any -> archived (terminal). Only `published`\nprofiles and their deals are served on public routes.\n'),
   "category": zod.string().nullish().describe('Self-reported category of a new-business draft; null for listing-derived profiles.'),
+  "subcategory": zod.string().nullish().describe('Taxonomy subcategory of a new-business draft (food type for Food & Drink); null otherwise.'),
+  "geographyBasis": zod.union([zod.literal('address_match'),zod.literal('declared_official'),zod.literal('unresolved'),zod.literal(null)]).nullish().describe('How a self-reported business\'s neighbourhood\/coordinates were established at submit; null before submit and for listing-derived profiles.'),
   "approvedRevisionVersion": zod.number().nullish().describe('Version of the approved revision when publication review is enabled; null when the profile is served from its columns.'),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
@@ -3617,7 +3655,10 @@ export const GetAuthorityQueueResponse = zod.object({
   "onboardingContext": zod.union([zod.literal('registration'),zod.literal('account_home'),zod.literal('listing'),zod.literal('legacy'),zod.literal(null)]).nullable(),
   "signals": zod.union([zod.object({
   "version": zod.number(),
-  "domainMatch": zod.enum(['match', 'mismatch', 'unknown']),
+  "domainMatch": zod.enum(['match', 'mismatch', 'unknown']).describe('Claimant\'s stated business domain against the profile\'s website host.'),
+  "emailDomainMatch": zod.enum(['match', 'mismatch', 'unknown']).describe('Domain of the claimant\'s contact e-mail against the profile\'s website host (public mailbox providers count as unknown).'),
+  "websiteSelfReported": zod.boolean().describe('True when the compared website was supplied by the claimant (new business) rather than by the directory.'),
+  "geographyBasis": zod.union([zod.literal('address_match'),zod.literal('declared_official'),zod.literal('unresolved'),zod.literal(null)]).nullable(),
   "kvkFormatOk": zod.boolean().nullable(),
   "duplicateScore": zod.number(),
   "duplicateCandidates": zod.array(zod.string()),
@@ -3718,6 +3759,8 @@ export const ReviewBusinessClaimResponse = zod.object({
   "claimedAt": zod.string().nullish(),
   "publicationStatus": zod.enum(['draft', 'unpublished', 'published', 'suspended', 'archived']).optional().describe('Business publication lifecycle. Existing profiles are `published`.\ndraft -> published (explicit reviewer publication); published <-> unpublished;\npublished -> suspended (reviewer); any -> archived (terminal). Only `published`\nprofiles and their deals are served on public routes.\n'),
   "category": zod.string().nullish().describe('Self-reported category of a new-business draft; null for listing-derived profiles.'),
+  "subcategory": zod.string().nullish().describe('Taxonomy subcategory of a new-business draft (food type for Food & Drink); null otherwise.'),
+  "geographyBasis": zod.union([zod.literal('address_match'),zod.literal('declared_official'),zod.literal('unresolved'),zod.literal(null)]).nullish().describe('How a self-reported business\'s neighbourhood\/coordinates were established at submit; null before submit and for listing-derived profiles.'),
   "approvedRevisionVersion": zod.number().nullish().describe('Version of the approved revision when publication review is enabled; null when the profile is served from its columns.'),
   "createdAt": zod.string(),
   "updatedAt": zod.string()

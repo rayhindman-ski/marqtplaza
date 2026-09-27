@@ -55,7 +55,7 @@ import {
   serialiseClaim,
 } from "../lib/businessClaims";
 import { requireActiveAccount } from "../lib/accountStatus";
-import { applyClaimDecision } from "../lib/claimDecisions";
+import { applyClaimDecision, findCommittedApproval } from "../lib/claimDecisions";
 import { notifyUser } from "../lib/lifecycleNotifications";
 import {
   approvedRevisionFor,
@@ -443,9 +443,17 @@ export function createBusinessesRouter(
         case "not_found":
           res.status(404).json({ error: "Business claim not found." });
           return;
-        case "not_reviewable":
+        case "not_reviewable": {
+          // Same rule as the review router (BVER-005): the reviewer who committed this
+          // approval at this version gets the committed result again, nobody else does.
+          const replay = body.data.decision === "approve" ? await findCommittedApproval(params.data.id, editorId, body.data.expectedVersion) : null;
+          if (replay) {
+            res.json(DecideBusinessClaimResponse.parse(serialiseClaim(replay.claim, replay.profile)));
+            return;
+          }
           res.status(409).json({ error: "This claim has already been decided." });
           return;
+        }
         case "stale":
           res.status(409).json({
             error: "This claim changed since you reviewed it. Reload and review the current version.",

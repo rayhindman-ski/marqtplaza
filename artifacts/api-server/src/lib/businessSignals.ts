@@ -12,6 +12,12 @@ export type BusinessSignals = {
   version: typeof SIGNALS_VERSION;
   /** Claimant's stated domain against the profile's website host. */
   domainMatch: DomainMatch;
+  /** Domain of the claimant's contact e-mail against the profile's website host. */
+  emailDomainMatch: DomainMatch;
+  /** True when the compared website came from the claimant, not the directory. */
+  websiteSelfReported: boolean;
+  /** How the neighbourhood/coordinates were established (self-reported businesses only). */
+  geographyBasis: "address_match" | "declared_official" | "unresolved" | null;
   /** `null` when no KvK number was given. */
   kvkFormatOk: boolean | null;
   /** 0 (no similar listing) … 1 (identical name found elsewhere). */
@@ -52,6 +58,20 @@ export function domainMatch(evidenceDomain: string | null | undefined, websiteUr
   return "mismatch";
 }
 
+/** Mailbox providers whose domain says nothing about the business. */
+const PUBLIC_MAIL_HOSTS = new Set([
+  "gmail.com", "googlemail.com", "hotmail.com", "hotmail.nl", "live.nl", "live.com", "outlook.com", "outlook.nl",
+  "yahoo.com", "yahoo.nl", "icloud.com", "me.com", "ziggo.nl", "kpnmail.nl", "planet.nl", "hetnet.nl", "casema.nl",
+  "xs4all.nl", "upcmail.nl", "chello.nl", "home.nl", "telfort.nl", "protonmail.com", "proton.me",
+]);
+
+export function emailDomainMatch(contactEmail: string | null | undefined, websiteUrl: string | null | undefined): DomainMatch {
+  const at = contactEmail?.lastIndexOf("@") ?? -1;
+  const mailHost = at >= 0 ? hostOf(contactEmail!.slice(at + 1)) : null;
+  if (!mailHost || PUBLIC_MAIL_HOSTS.has(mailHost)) return "unknown";
+  return domainMatch(mailHost, websiteUrl);
+}
+
 const STOP_WORDS = new Set(["de", "het", "een", "the", "en", "and", "van", "bv", "b.v.", "vof", "v.o.f."]);
 
 export function nameTokens(name: string): Set<string> {
@@ -89,8 +109,12 @@ export function duplicateScore(name: string, candidates: readonly DuplicateCandi
 export type SignalsInput = {
   evidenceDomain: string | null | undefined;
   evidenceKvk: string | null | undefined;
+  contactEmail: string | null | undefined;
   profileName: string;
   profileWebsiteUrl: string | null | undefined;
+  /** New businesses: the website was typed by the claimant, so a match corroborates nothing. */
+  websiteSelfReported: boolean;
+  geographyBasis?: BusinessSignals["geographyBasis"];
   /** Public listings/profiles other than this claim's own profile that look alike. */
   candidates: readonly DuplicateCandidate[];
   now?: Date;
@@ -101,6 +125,9 @@ export function computeSignals(input: SignalsInput): BusinessSignals {
   return {
     version: SIGNALS_VERSION,
     domainMatch: domainMatch(input.evidenceDomain, input.profileWebsiteUrl),
+    emailDomainMatch: emailDomainMatch(input.contactEmail, input.profileWebsiteUrl),
+    websiteSelfReported: input.websiteSelfReported,
+    geographyBasis: input.geographyBasis ?? null,
     kvkFormatOk: kvkFormatOk(input.evidenceKvk),
     duplicateScore: duplicates.score,
     duplicateCandidates: duplicates.closest,

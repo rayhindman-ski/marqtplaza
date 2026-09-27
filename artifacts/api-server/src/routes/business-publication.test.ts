@@ -1382,7 +1382,7 @@ describe("business publication routes", () => {
       userId: users.claimant,
       body: json({
         kind: "new_business",
-        business: { name: `Race Zaak ${runId}`, category: "Retail", neighborhood: "Bezuidenhout" },
+        business: { name: `Race Zaak ${runId}`, category: "Retail & Shopping", neighborhood: "Bezuidenhout", address: "Spui 1, 2511 BL Den Haag", phone: "0701234567" },
         contactName: "Claire Claimant",
         contactEmail: "claire@example.com",
         relationship: "Owner",

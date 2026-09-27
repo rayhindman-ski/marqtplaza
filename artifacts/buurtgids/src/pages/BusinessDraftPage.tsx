@@ -26,25 +26,40 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { useAccountAuth } from '@/lib/accountAuth';
 import { featureFlags } from '@/lib/featureFlags';
-import { accountErrorMessage, businessIntakeTranslations, LANGUAGE_OPTIONS, type Language } from '@/lib/i18n';
+import { accountErrorMessage, businessIntakeTranslations, LANGUAGE_OPTIONS, translations, type Language } from '@/lib/i18n';
+import { BUSINESS_CATEGORIES, FOOD_TYPES, LOCATIONS, type BusinessCategory, type FoodType } from '@/lib/data';
 import { RETURN_PATH_PARAM, sanitizeReturnPath, withReturnPath } from '@/lib/returnPath';
 import { journeyContextFromSearch, type BusinessIntentContext } from '@/lib/businessIntent';
 import { BusinessJourneySteps } from '@/components/BusinessJourneySteps';
 import { useAppLanguage } from '@/lib/useAppLanguage';
 
 const RELATIONSHIP_KINDS = ['owner', 'manager', 'representative'] as const;
+const FOOD_DRINK: BusinessCategory = 'Food & Drink';
+const HAGUE_NEIGHBORHOODS: readonly string[] = LOCATIONS.find((location) => location.id === 'dhg')?.neighborhoods ?? [];
+const PHONE = /^[+0-9][0-9 ()-]{6,24}$/;
+/** Field-level codes the server may return (BPROF-003/004); anything else falls back to the generic message. */
+type FieldErrorCode = 'required' | 'invalid' | 'postcode_required' | 'phone_or_website_required' | 'unknown_neighborhood' | 'invalid_url';
+const SERVER_FIELDS: Record<string, keyof Values> = {
+  'business.name': 'name', 'business.category': 'category', 'business.subcategory': 'subcategory', 'business.neighborhood': 'neighborhood',
+  'business.address': 'address', 'business.websiteUrl': 'websiteUrl', 'business.phone': 'phone', contactName: 'contactName', contactEmail: 'contactEmail',
+  relationshipKind: 'relationshipKind', relationship: 'relationship', authorityDeclaration: 'authorityDeclaration',
+  evidenceKvk: 'evidenceKvk', evidenceDomain: 'evidenceDomain', evidenceReference: 'evidenceReference', message: 'message',
+};
 const KVK = /^[0-9]{8}$/;
 const DOMAIN = /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$/;
 
 const schema = z.object({
   name: z.string().max(160),
   category: z.string().max(80),
+  subcategory: z.string().max(80),
   neighborhood: z.string().max(120),
   address: z.string().max(240),
   websiteUrl: z.string().url().optional().or(z.literal('')),
+  phone: z.string().regex(PHONE, 'phone').or(z.literal('')),
   contactName: z.string().min(2).max(120),
   contactEmail: z.string().email().max(254),
-  relationshipKind: z.enum(RELATIONSHIP_KINDS),
+  // The role is an explicit choice (BVER-001): nothing is pre-selected on the claimant's behalf.
+  relationshipKind: z.enum(RELATIONSHIP_KINDS, { errorMap: () => ({ message: 'role' }) }),
   relationship: z.string().max(120),
   authorityDeclaration: z.string().min(10).max(1200),
   evidenceReference: z.string().max(400),
@@ -52,16 +67,18 @@ const schema = z.object({
   evidenceDomain: z.string().max(253).regex(DOMAIN, 'domain').or(z.literal('')),
   message: z.string().max(1200),
 });
+// Drafts may be partial (BPROF-009): the server enforces the required facts at submit.
 const newBusinessSchema = schema.extend({
   name: z.string().min(2).max(160),
-  category: z.string().min(2).max(80),
+  category: z.enum(BUSINESS_CATEGORIES as [BusinessCategory, ...BusinessCategory[]], { errorMap: () => ({ message: 'category' }) }),
   neighborhood: z.string().min(2).max(120),
 });
 type Values = z.infer<typeof schema>;
-const defaults: Values = { name: '', category: '', neighborhood: '', address: '', websiteUrl: '', contactName: '', contactEmail: '', relationshipKind: 'owner', relationship: '', authorityDeclaration: '', evidenceReference: '', evidenceKvk: '', evidenceDomain: '', message: '' };
+const defaults: Values = { name: '', category: '', subcategory: '', neighborhood: '', address: '', websiteUrl: '', phone: '', contactName: '', contactEmail: '', relationshipKind: '' as Values['relationshipKind'], relationship: '', authorityDeclaration: '', evidenceReference: '', evidenceKvk: '', evidenceDomain: '', message: '' };
 
 function relationshipKindOf(value: string | null | undefined): Values['relationshipKind'] {
-  return (RELATIONSHIP_KINDS as readonly string[]).includes(value ?? '') ? (value as Values['relationshipKind']) : 'owner';
+  // Legacy claims without a structured kind stay unselected; the claimant decides.
+  return (RELATIONSHIP_KINDS as readonly string[]).includes(value ?? '') ? (value as Values['relationshipKind']) : ('' as Values['relationshipKind']);
 }
 
 function apiErrorFrom(error: unknown): ApiError | null {
@@ -118,13 +135,16 @@ export default function BusinessDraftPage() {
     form.reset({
       name: item.kind === 'new_business' ? item.profile.name : '',
       category: item.kind === 'new_business' ? item.profile.category ?? '' : '',
+      subcategory: item.kind === 'new_business' ? item.profile.subcategory ?? '' : '',
       neighborhood: item.kind === 'new_business' ? item.profile.neighborhood ?? '' : '',
       address: item.kind === 'new_business' ? item.profile.address ?? '' : '',
       websiteUrl: item.kind === 'new_business' ? item.profile.websiteUrl ?? '' : '',
+      phone: item.kind === 'new_business' ? item.profile.phone ?? '' : '',
       contactName: item.contactName,
       contactEmail: item.contactEmail,
       relationshipKind: relationshipKindOf(item.relationshipKind),
-      relationship: item.relationshipKind ? item.relationship : '',
+      // Legacy wording is kept unless it merely echoes a role label, which the select now carries.
+      relationship: (Object.values(businessIntakeTranslations) as { relationshipKinds: Record<string, string> }[]).some((t) => Object.values(t.relationshipKinds).includes(item.relationship)) ? '' : item.relationship,
       authorityDeclaration: item.authorityDeclaration ?? '',
       evidenceReference: item.evidenceReference ?? '',
       evidenceKvk: item.evidenceKvk ?? '',
@@ -166,6 +186,18 @@ export default function BusinessDraftPage() {
       toast.error(error.fieldErrors?.[0]?.code === 'claim_in_review' ? copy.inReview : copy.duplicate);
       return;
     }
+    if (error?.code === 'VALIDATION_FAILED' && error.fieldErrors?.length) {
+      // Server-side facts checks land on the field they concern (BPROF-003/004).
+      let mapped = false;
+      for (const fieldError of error.fieldErrors) {
+        const field = SERVER_FIELDS[fieldError.field];
+        if (!field) continue;
+        mapped = true;
+        form.setError(field, { type: 'server', message: fieldError.code }, { shouldFocus: !mapped });
+      }
+      toast.error(mapped ? copy.fieldErrorsToast : accountErrorMessage(failure, language));
+      return;
+    }
     toast.error(accountErrorMessage(failure, language));
   };
 
@@ -177,8 +209,9 @@ export default function BusinessDraftPage() {
       authorityDeclaration: values.authorityDeclaration,
     };
     const business = {
-      name: values.name, category: values.category, neighborhood: values.neighborhood,
-      address: values.address || undefined, websiteUrl: values.websiteUrl || undefined,
+      name: values.name, category: values.category as BusinessCategory, neighborhood: values.neighborhood,
+      subcategory: values.category === FOOD_DRINK && values.subcategory ? values.subcategory : null,
+      address: values.address || null, websiteUrl: values.websiteUrl || null, phone: values.phone || null,
     };
     if (claim) {
       const saved = await update.mutateAsync({
@@ -286,6 +319,13 @@ export default function BusinessDraftPage() {
 
   const isNew = claim ? claim.kind === 'new_business' : validNew;
   const busy = create.isPending || update.isPending || submit.isPending;
+  const selectedCategory = form.watch('category');
+  const categoryLabels = translations[language].businessCategories as Record<string, string>;
+  const fieldError = (field: keyof Values): string | undefined => {
+    const message = form.formState.errors[field]?.message;
+    if (!message) return undefined;
+    return copy.fieldErrors[message as FieldErrorCode] ?? copy.fieldErrors.invalid;
+  };
   return (
     <main className="container mx-auto max-w-3xl px-4 py-12" data-testid="page-business-draft">
       <div className="mb-6 flex justify-end">
@@ -303,12 +343,16 @@ export default function BusinessDraftPage() {
           <p className="mt-1 text-sm text-amber-900">{copy.duplicateCandidatesBody}</p>
           <ul className="mt-4 space-y-3">
             {duplicateCandidates.map((candidate) => {
+              // Claiming a candidate instead keeps the journey origin and return path (v0.5.2).
               const candidateParams = new URLSearchParams({
                 kind: 'existing_listing',
                 cityId: candidate.cityId,
                 listingSource: candidate.listingSource,
                 listingId: candidate.listingId,
                 locale: language,
+                ...(journeyContext ? { context: journeyContext } : {}),
+                ...(journeyReturn ? { [RETURN_PATH_PARAM]: journeyReturn } : {}),
+                ...(auth.isTestAuth ? { e2eAccountAuth: '1' } : {}),
               });
               return (
                 <li key={`${candidate.listingSource}:${candidate.listingId}`} className="rounded-xl border border-amber-200 bg-background p-4">
@@ -333,24 +377,44 @@ export default function BusinessDraftPage() {
         </section>
       ) : null}
       <form className="mt-8 space-y-5">
-        {isNew ? <><Field label={copy.name} error={form.formState.errors.name?.message}><Input {...form.register('name')} /></Field>
-          <Field label={copy.category} error={form.formState.errors.category?.message}><Input list="business-categories" {...form.register('category')} /><datalist id="business-categories"><option value="Horeca" /><option value="Winkel" /><option value="Dienstverlening" /><option value="Zorg" /></datalist></Field>
-          <Field label={copy.neighborhood} error={form.formState.errors.neighborhood?.message}><Input {...form.register('neighborhood')} /></Field>
-          <Field label={copy.address} error={form.formState.errors.address?.message}><Input {...form.register('address')} /></Field>
-          <Field label={copy.websiteUrl} error={form.formState.errors.websiteUrl?.message}><Input type="url" {...form.register('websiteUrl')} /></Field></> : null}
-        <Field label={copy.contactName} error={form.formState.errors.contactName?.message}><Input {...form.register('contactName')} /></Field>
-        <Field label={copy.contactEmail} error={form.formState.errors.contactEmail?.message}><Input type="email" {...form.register('contactEmail')} /></Field>
-        <Field label={copy.relationshipKind} help={copy.relationshipKindHelp} error={form.formState.errors.relationshipKind?.message}>
-          <select data-testid="select-relationship-kind" className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" {...form.register('relationshipKind')}>
+        {isNew ? <><Field label={copy.name} visibility={copy.visibilityPublic} error={fieldError('name')}><Input data-testid="input-business-name" {...form.register('name')} /></Field>
+          <Field label={copy.category} visibility={copy.visibilityPublic} error={fieldError('category')}>
+            <select data-testid="select-business-category" className={SELECT_CLASS} {...form.register('category')}>
+              <option value="">{copy.categoryChoose}</option>
+              {BUSINESS_CATEGORIES.map((value) => <option key={value} value={value}>{categoryLabels[value] ?? value}</option>)}
+            </select>
+          </Field>
+          {selectedCategory === FOOD_DRINK ? (
+            <Field label={copy.subcategory} visibility={copy.visibilityPublic} error={fieldError('subcategory')}>
+              <select data-testid="select-business-subcategory" className={SELECT_CLASS} {...form.register('subcategory')}>
+                <option value="">{copy.subcategoryChoose}</option>
+                {FOOD_TYPES.map((value) => <option key={value} value={value}>{copy.foodTypes[value as FoodType]}</option>)}
+              </select>
+            </Field>
+          ) : null}
+          <Field label={copy.address} visibility={copy.visibilityPublic} help={copy.addressHelp} error={fieldError('address')}><Input data-testid="input-business-address" {...form.register('address')} /></Field>
+          <Field label={copy.neighborhood} visibility={copy.visibilityPublic} help={copy.neighborhoodHelp} error={fieldError('neighborhood')}>
+            <select data-testid="select-business-neighborhood" className={SELECT_CLASS} {...form.register('neighborhood')}>
+              <option value="">{copy.neighborhoodChoose}</option>
+              {HAGUE_NEIGHBORHOODS.map((value) => <option key={value} value={value}>{value}</option>)}
+            </select>
+          </Field>
+          <Field label={copy.phone} visibility={copy.visibilityPublic} help={copy.phoneOrWebsiteHelp} error={fieldError('phone')}><Input type="tel" data-testid="input-business-phone" {...form.register('phone')} /></Field>
+          <Field label={copy.websiteUrl} visibility={copy.visibilityPublic} error={fieldError('websiteUrl')}><Input type="url" data-testid="input-business-website" {...form.register('websiteUrl')} /></Field></> : null}
+        <Field label={copy.contactName} visibility={copy.visibilityPrivate} error={fieldError('contactName')}><Input {...form.register('contactName')} /></Field>
+        <Field label={copy.contactEmail} visibility={copy.visibilityPrivate} error={fieldError('contactEmail')}><Input type="email" {...form.register('contactEmail')} /></Field>
+        <Field label={copy.relationshipKind} visibility={copy.visibilityPrivate} help={copy.relationshipKindHelp} error={form.formState.errors.relationshipKind ? copy.relationshipKindRequired : undefined}>
+          <select data-testid="select-relationship-kind" className={SELECT_CLASS} {...form.register('relationshipKind')}>
+            <option value="">{copy.relationshipKindChoose}</option>
             {RELATIONSHIP_KINDS.map((value) => <option key={value} value={value}>{copy.relationshipKinds[value]}</option>)}
           </select>
         </Field>
-        <Field label={copy.relationship} error={form.formState.errors.relationship?.message}><Input {...form.register('relationship')} /></Field>
-        <Field label={copy.authority} help={copy.authorityHelp} error={form.formState.errors.authorityDeclaration?.message}><Textarea {...form.register('authorityDeclaration')} /></Field>
-        <Field label={copy.evidenceKvk} help={copy.evidenceKvkHelp} error={form.formState.errors.evidenceKvk ? copy.evidenceKvkInvalid : undefined}><Input inputMode="numeric" data-testid="input-evidence-kvk" {...form.register('evidenceKvk')} /></Field>
-        <Field label={copy.evidenceDomain} help={copy.evidenceDomainHelp} error={form.formState.errors.evidenceDomain ? copy.evidenceDomainInvalid : undefined}><Input data-testid="input-evidence-domain" {...form.register('evidenceDomain', { setValueAs: (v: string) => v.trim().toLowerCase() })} /></Field>
-        <Field label={copy.evidence} help={copy.evidenceHelp} error={form.formState.errors.evidenceReference?.message}><Input {...form.register('evidenceReference')} /></Field>
-        <Field label={copy.message} error={form.formState.errors.message?.message}><Textarea {...form.register('message')} /></Field>
+        <Field label={copy.relationship} visibility={copy.visibilityPrivate} error={fieldError('relationship')}><Input {...form.register('relationship')} /></Field>
+        <Field label={copy.authority} visibility={copy.visibilityPrivate} help={copy.authorityHelp} error={fieldError('authorityDeclaration')}><Textarea {...form.register('authorityDeclaration')} /></Field>
+        <Field label={copy.evidenceKvk} visibility={copy.visibilityPrivate} help={copy.evidenceKvkHelp} error={form.formState.errors.evidenceKvk ? copy.evidenceKvkInvalid : undefined}><Input inputMode="numeric" data-testid="input-evidence-kvk" {...form.register('evidenceKvk')} /></Field>
+        <Field label={copy.evidenceDomain} visibility={copy.visibilityPrivate} help={copy.evidenceDomainHelp} error={form.formState.errors.evidenceDomain ? copy.evidenceDomainInvalid : undefined}><Input data-testid="input-evidence-domain" {...form.register('evidenceDomain', { setValueAs: (v: string) => v.trim().toLowerCase() })} /></Field>
+        <Field label={copy.evidence} visibility={copy.visibilityPrivate} help={copy.evidenceHelp} error={fieldError('evidenceReference')}><Input {...form.register('evidenceReference')} /></Field>
+        <Field label={copy.message} visibility={copy.visibilityPrivate} error={fieldError('message')}><Textarea {...form.register('message')} /></Field>
         <p className="text-sm text-muted-foreground" data-testid="text-authority-confirm">{copy.authorityConfirm}</p>
         <div className="flex flex-wrap gap-3"><Button type="button" variant="outline" onClick={() => void onSave()} disabled={busy}>{busy ? copy.saving : copy.save}</Button>
           <Button type="button" onClick={() => void onSubmit()} disabled={busy}>{copy.submit}</Button>
@@ -388,8 +452,23 @@ function ClaimLanguageSelector({
   );
 }
 
-function Field({ label, help, error, children }: { label: string; help?: string; error?: string; children: React.ReactNode }) {
-  return <div><label className="block"><span className="mb-2 block text-sm font-medium">{label}</span>{children}</label>{help ? <p className="mt-1 text-xs text-muted-foreground">{help}</p> : null}{error ? <p className="mt-1 text-xs text-destructive">{error}</p> : null}</div>;
+const SELECT_CLASS = 'flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm';
+
+/** Every field says whether it ends up on the public profile (BPROF-005). */
+function Field({ label, visibility, help, error, children }: { label: string; visibility?: string; help?: string; error?: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <label className="block">
+        <span className="mb-2 flex items-center gap-2 text-sm font-medium">
+          {label}
+          {visibility ? <span className="rounded-full border border-border px-2 py-0.5 text-[11px] font-normal uppercase tracking-wide text-muted-foreground">{visibility}</span> : null}
+        </span>
+        {children}
+      </label>
+      {help ? <p className="mt-1 text-xs text-muted-foreground">{help}</p> : null}
+      {error ? <p className="mt-1 text-xs text-destructive" role="alert">{error}</p> : null}
+    </div>
+  );
 }
 function Message({ title, body, link }: { title: string; body: string; link?: string }) {
   return <main className="container mx-auto max-w-xl px-4 py-20 text-center"><Card><CardHeader><CardTitle>{title}</CardTitle></CardHeader><CardContent><p>{body}</p>{link ? <Button asChild className="mt-5"><Link href="/bedrijf-zoeken">{link}</Link></Button> : null}</CardContent></Card></main>;

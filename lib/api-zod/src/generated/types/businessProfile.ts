@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { BusinessProfileGeographyBasis } from './businessProfileGeographyBasis';
 import type { PublicationStatus } from './publicationStatus';
 
 export interface BusinessProfile {
@@ -51,6 +52,16 @@ export interface BusinessProfile {
      * @nullable
      */
   category?: string | null;
+  /**
+     * Taxonomy subcategory of a new-business draft (food type for Food & Drink); null otherwise.
+     * @nullable
+     */
+  subcategory?: string | null;
+  /**
+     * How a self-reported business's neighbourhood/coordinates were established at submit; null before submit and for listing-derived profiles.
+     * @nullable
+     */
+  geographyBasis?: BusinessProfileGeographyBasis;
   /**
      * Version of the approved revision when publication review is enabled; null when the profile is served from its columns.
      * @nullable

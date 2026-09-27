@@ -5,9 +5,10 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { BusinessCategory } from './businessCategory';
 
 /**
- * Public facts for a business that is not listed yet. Stored privately until publication review.
+ * Public facts for a business that is not listed yet. Stored privately until publication review. `category` must be a `BusinessCategory`; `subcategory` is the food type for Food & Drink. A draft may be partial; submitting requires an address with a Dutch postcode and at least one of phone or website (BPROF-003). Neighbourhood and coordinates are derived server-side from the address (BPROF-004); the declared neighbourhood is only kept when nothing can be derived and it is an official one.
  */
 export interface NewBusinessFacts {
   /**
@@ -15,18 +16,30 @@ export interface NewBusinessFacts {
      * @maxLength 160
      */
   name: string;
+  category: BusinessCategory;
   /**
-     * @minLength 2
      * @maxLength 80
+     * @nullable
      */
-  category: string;
+  subcategory?: string | null;
   /**
      * @minLength 2
      * @maxLength 120
      */
   neighborhood: string;
-  /** @maxLength 240 */
-  address?: string;
-  /** @maxLength 400 */
-  websiteUrl?: string;
+  /**
+     * @maxLength 240
+     * @nullable
+     */
+  address?: string | null;
+  /**
+     * @maxLength 400
+     * @nullable
+     */
+  websiteUrl?: string | null;
+  /**
+     * @maxLength 40
+     * @nullable
+     */
+  phone?: string | null;
 }

@@ -33,7 +33,7 @@ async function installServer(page: Page, options: { duplicateNewBusiness?: boole
     const id = nextId++;
     return {
       id, businessProfileId: id, claimantId: 'business-e2e', contactName: body.contactName,
-      contactEmail: body.contactEmail, relationship: body.relationship,
+      contactEmail: body.contactEmail, relationship: body.relationship, relationshipKind: body.relationshipKind ?? null,
       authorityDeclaration: body.authorityDeclaration, evidenceReference: body.evidenceReference ?? null,
       evidenceUrl: null, message: body.message ?? null, status: 'draft', reviewNote: null,
       version: 1, nextAction: 'submit', kind: body.kind, withdrawnAt: null, reviewedAt: null,
@@ -42,6 +42,7 @@ async function installServer(page: Page, options: { duplicateNewBusiness?: boole
         id, slug: `draft-${id}`, cityId: body.listing?.cityId ?? 'dhg',
         name: body.business?.name ?? 'Koffie om de Hoek', address: body.business?.address ?? 'Prinsestraat 1',
         neighborhood: body.business?.neighborhood ?? 'Centrum', category: body.business?.category ?? 'Horeca',
+        subcategory: body.business?.subcategory ?? null, phone: body.business?.phone ?? null, geographyBasis: null,
         websiteUrl: body.business?.websiteUrl ?? null, isClaimed: false, publicationStatus: body.kind === 'new_business' ? 'draft' : 'published',
         createdAt: now, updatedAt: now,
       },
@@ -108,6 +109,7 @@ async function installServer(page: Page, options: { duplicateNewBusiness?: boole
 async function fillCommon(page: Page) {
   await page.getByLabel(/Jouw naam|Your name/).fill('Sam Ondernemer');
   await page.getByLabel(/Zakelijk e-mailadres|Business e-mail/).fill('sam@example.nl');
+  await page.getByTestId('select-relationship-kind').selectOption('owner');
   await page.getByLabel(/Jouw relatie|Your relationship/).fill('Eigenaar');
   await page.getByLabel(/Verklaring van bevoegdheid|Authority declaration/).fill('Ik ben de geregistreerde eigenaar van deze onderneming.');
 }
@@ -163,15 +165,23 @@ test.describe('business intake', () => {
   test('creates a private new-business draft and explicitly resolves duplicate candidates', async ({ page }) => {
     await signIn(page);
     const server = await installServer(page, { duplicateNewBusiness: true });
-    await page.goto('/bedrijf-nieuw?kind=new_business&e2eAccountAuth=1');
-    await page.getByLabel(/Bedrijfsnaam|Business name/).fill('Studio Zee');
-    await page.getByLabel(/^Categorie$|^Category$/).fill('Dienstverlening');
-    await page.getByLabel(/Buurt|Neighbourhood/).fill('Zeeheldenkwartier');
+    await page.goto('/bedrijf-nieuw?kind=new_business&context=account_home&terug=%2Faccount&e2eAccountAuth=1');
+    // BPROF-005: each field says whether it becomes public.
+    await expect(page.getByLabel(/Bedrijfsnaam|Business name/)).toBeVisible();
+    await expect(page.getByText(/^openbaar$|^public$/).first()).toBeVisible();
+    await expect(page.getByText(/^niet openbaar$|^not public$/).first()).toBeVisible();
+    await page.getByTestId('input-business-name').fill('Studio Zee');
+    await page.getByTestId('select-business-category').selectOption('Food & Drink');
+    await page.getByTestId('select-business-subcategory').selectOption('cafe');
+    await page.getByTestId('select-business-neighborhood').selectOption('Zeeheldenkwartier');
+    await page.getByTestId('input-business-address').fill('Prins Hendrikstraat 1, 2518 HH');
+    await page.getByTestId('input-business-phone').fill('070 123 4567');
     await fillCommon(page);
     await page.getByRole('button', { name: /Concept opslaan|Save draft/ }).click();
     await expect(page).toHaveURL(/bedrijf-nieuw\?claim=1/);
-    expect(server.requests.find((item) => item.path === '/api/businesses')?.body.business).toMatchObject({
-      name: 'Studio Zee', category: 'Dienstverlening', neighborhood: 'Zeeheldenkwartier',
+    expect(server.requests.find((item) => item.path === '/api/businesses')?.body.business).toEqual({
+      name: 'Studio Zee', category: 'Food & Drink', subcategory: 'cafe', neighborhood: 'Zeeheldenkwartier',
+      address: 'Prins Hendrikstraat 1, 2518 HH', websiteUrl: null, phone: '070 123 4567',
     });
 
     await page.getByRole('button', { name: /Indienen voor beoordeling|Submit for review/ }).click();
@@ -185,6 +195,9 @@ test.describe('business intake', () => {
     expect(href).toContain('cityId=dhg');
     expect(href).toContain('listingSource=google_maps');
     expect(href).toContain('listingId=possible-42');
+    // The journey origin and return path travel along when the representative claims a candidate instead.
+    expect(href).toContain('context=account_home');
+    expect(href).toContain('terug=%2Faccount');
     expect(href).not.toMatch(/name=|address=/);
 
     await panel.getByRole('button', { name: /Annuleren|Cancel/ }).click();
@@ -276,6 +289,10 @@ test.describe('business onboarding journey (v0.5.2)', () => {
     await page.getByLabel(/Jouw naam/).fill('Sam Ondernemer');
     await page.getByLabel(/Zakelijk e-mailadres/).fill('sam@example.nl');
     await page.getByLabel(/Verklaring van bevoegdheid/).fill('Ik ben de geregistreerde eigenaar van deze onderneming.');
+    // The role is never pre-selected on the claimant's behalf.
+    await page.getByRole('button', { name: 'Concept opslaan' }).click();
+    await expect(page.getByText('Kies je rol voordat je opslaat.')).toBeVisible();
+    await page.getByTestId('select-relationship-kind').selectOption('owner');
     await page.getByRole('button', { name: 'Concept opslaan' }).click();
     await expect(page.getByText('Concept opgeslagen')).toBeVisible();
     const create = server.requests.find((item) => item.method === 'POST' && item.path === '/api/businesses');
