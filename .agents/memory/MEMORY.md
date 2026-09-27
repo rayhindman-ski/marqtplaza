@@ -42,3 +42,4 @@
 - [Lifecycle schema reconciliation](lifecycle-schema-reconciliation.md) — noninteractive Drizzle push may stop on rename conflicts; never guess through lifecycle schema drift.
 - [Multi-neighborhood stored results](multi-neighborhood-stored-results.md) — union saved singleton scopes so adding a selected neighborhood cannot reduce visible listings.
 - [Consumer registration links](consumer-registration-links.md) — newest outbox row mints the link, same-row retries keep the first token valid; lookup-first submit; router-scoped fail-closed handler.
+- [Business closure and invitation tokens](business-closure-and-invitation-tokens.md) — closed_at is terminal across publish/edit routes; HMAC per-outbox-row tokens; return paths strip `token`, browser parks it.
