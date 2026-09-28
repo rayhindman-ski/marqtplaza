@@ -129,3 +129,8 @@ confirmation. Progress lines above and below.
 - 20:08 fixes: terminal closure across publication/edit routes; token-free return refs + browser-parked token; HMAC-derived per-row token; close cancels queued mail; reason codes; gate-before-validation.
 - 20:11 round 2: FAIL on one point (draft closure / review row) — closing now is the publication unpublish action for every status, with the review row; queued-rollback and full registration journey tests added.
 - 20:15 round 3: PASS. Phase log + convergence record written; commit + push. v0.5.2 Phases 0–6 complete; production flag off pending user approvals.
+
+### 2026-09-28 — "accounts not available" on the published site
+
+- 07:20 user reports the account page shows the unavailable card while signed in. Diagnosis: published site with all production flags off (by design, §14); dev preview shows the full page. No v0.5.1 code lost.
+- 07:30 user decision: all v0.5.1/v0.5.2 flags on in production; env vars set; log entry; commit + push. Mail provider still unset.

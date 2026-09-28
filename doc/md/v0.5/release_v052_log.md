@@ -567,3 +567,19 @@ deployed environment.
 `user.updated` webhook); brand-orange AA recolour (budgeted per screen);
 WeatherCard throws when `/api/weather` lacks `current`; the two publication
 freshness tests; v042/v043 locator collisions.
+
+### 2026-09-28 — Production flag decision (user)
+
+The account page on the published site showed "Accounts are not available
+yet" to a signed-in visitor because every flag was still off in production
+(the §14 boundary). The user reviewed this and decided to open **everything**:
+`ACCOUNTS_ENABLED`, `CONSUMER_REGISTRATION_ENABLED`, `BUSINESS_INTAKE_ENABLED`,
+`BUSINESS_PUBLICATION_ENABLED`, `BUSINESS_ONBOARDING_ENABLED` and their `VITE_`
+mirrors are now `true` in the production environment (set 2026-09-28,
+07:30 CEST). This is the §13 item 11 approval for the flag gate, recorded
+here as the user's decision. The flags take effect on the next publish.
+
+Still unset in production and therefore still inert: `LIFECYCLE_DELIVERY_PROVIDER`
+and `CONSUMER_REGISTRATION_LINK_BASE_URL` — registration and invitation
+e-mails queue but are not sent until a provider is configured. `SESSION_SECRET`
+is present. Provisional policy values (§15) remain provisional.
