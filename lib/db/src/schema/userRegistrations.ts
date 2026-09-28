@@ -10,9 +10,11 @@ export const userRegistrationsTable = pgTable(
     name: text("name").notNull(),
     registrationType: text("registration_type").notNull(),
     email: text("email").notNull(),
-    usefulnessRating: integer("usefulness_rating").notNull(),
-    referralLikelihood: integer("referral_likelihood").notNull(),
-    desiredFeatures: text("desired_features").notNull(),
+    // Survey answers are collected only after ~two weeks of use, so a fresh
+    // registration legitimately has none of them yet.
+    usefulnessRating: integer("usefulness_rating"),
+    referralLikelihood: integer("referral_likelihood"),
+    desiredFeatures: text("desired_features"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true })
       .notNull()

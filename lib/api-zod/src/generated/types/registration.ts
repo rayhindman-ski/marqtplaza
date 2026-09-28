@@ -8,6 +8,13 @@
 import type { RegistrationInput } from './registrationInput';
 
 export type Registration = RegistrationInput & {
+  /** True once all three survey answers are stored. */
+  surveyCompleted: boolean;
   createdAt: string;
   updatedAt: string;
-};
+} & Required<Pick<RegistrationInput & {
+  /** True once all three survey answers are stored. */
+  surveyCompleted: boolean;
+  createdAt: string;
+  updatedAt: string;
+}, 'usefulnessRating' | 'referralLikelihood' | 'desiredFeatures'>>;

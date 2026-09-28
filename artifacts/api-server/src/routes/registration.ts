@@ -1,5 +1,5 @@
 import { getAuth } from "@clerk/express";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { Router, type IRouter, type Request } from "express";
 
 import { db, userRegistrationsTable, type UserRegistration } from "@workspace/db";
@@ -26,6 +26,17 @@ function currentUserId(
   return userId;
 }
 
+/** All three survey answers are present; the survey itself is only asked after ~14 days of use. */
+export function isSurveyCompleted(
+  registration: Pick<UserRegistration, "usefulnessRating" | "referralLikelihood" | "desiredFeatures">,
+): boolean {
+  return (
+    registration.usefulnessRating !== null &&
+    registration.referralLikelihood !== null &&
+    registration.desiredFeatures !== null
+  );
+}
+
 function serialiseRegistration(registration: UserRegistration) {
   return {
     name: registration.name,
@@ -34,6 +45,7 @@ function serialiseRegistration(registration: UserRegistration) {
     usefulnessRating: registration.usefulnessRating,
     referralLikelihood: registration.referralLikelihood,
     desiredFeatures: registration.desiredFeatures,
+    surveyCompleted: isSurveyCompleted(registration),
     createdAt: registration.createdAt.toISOString(),
     updatedAt: registration.updatedAt.toISOString(),
   };
@@ -80,9 +92,16 @@ export function createRegistrationRouter(
 
   const parsed = SaveRegistrationBody.safeParse(req.body);
   if (!parsed.success) {
-    res.status(400).json({ error: "Please complete all registration fields." });
+    res.status(400).json({ error: "Please complete the registration fields." });
     return;
   }
+
+  // Survey answers are optional (asked after ~14 days). A save that omits
+  // them never erases answers already stored, so re-saving name or type from
+  // the form does not wipe an earlier survey.
+  const usefulnessRating = parsed.data.usefulnessRating ?? null;
+  const referralLikelihood = parsed.data.referralLikelihood ?? null;
+  const desiredFeatures = parsed.data.desiredFeatures?.trim() || null;
 
   const [registration] = await db
     .insert(userRegistrationsTable)
@@ -91,9 +110,9 @@ export function createRegistrationRouter(
       name: parsed.data.name.trim(),
       registrationType: parsed.data.registrationType,
       email: parsed.data.email.trim().toLowerCase(),
-      usefulnessRating: parsed.data.usefulnessRating,
-      referralLikelihood: parsed.data.referralLikelihood,
-      desiredFeatures: parsed.data.desiredFeatures.trim(),
+      usefulnessRating,
+      referralLikelihood,
+      desiredFeatures,
     })
     .onConflictDoUpdate({
       target: userRegistrationsTable.userId,
@@ -101,9 +120,9 @@ export function createRegistrationRouter(
         name: parsed.data.name.trim(),
         registrationType: parsed.data.registrationType,
         email: parsed.data.email.trim().toLowerCase(),
-        usefulnessRating: parsed.data.usefulnessRating,
-        referralLikelihood: parsed.data.referralLikelihood,
-        desiredFeatures: parsed.data.desiredFeatures.trim(),
+        usefulnessRating: sql`coalesce(excluded.${sql.identifier("usefulness_rating")}, ${userRegistrationsTable.usefulnessRating})`,
+        referralLikelihood: sql`coalesce(excluded.${sql.identifier("referral_likelihood")}, ${userRegistrationsTable.referralLikelihood})`,
+        desiredFeatures: sql`coalesce(excluded.${sql.identifier("desired_features")}, ${userRegistrationsTable.desiredFeatures})`,
         updatedAt: new Date(),
       },
     })

@@ -35,6 +35,16 @@ function OnboardingSkeleton() {
 /** Browser cache of the server-side research registration status. */
 const REGISTRATION_MARKER_KEY = 'buurtplaza-onboarding-complete';
 
+/** The usefulness/referral/features survey is asked only after this much use. */
+export const SURVEY_DELAY_MS = 14 * 24 * 60 * 60 * 1000;
+
+/** True once the account is old enough for the survey; unknown creation dates never qualify. */
+export function isSurveyDue(accountCreatedAt: Date | null | undefined, now: number = Date.now()): boolean {
+  if (!accountCreatedAt) return false;
+  const created = accountCreatedAt.getTime();
+  return Number.isFinite(created) && now - created >= SURVEY_DELAY_MS;
+}
+
 export default function OnboardingPage() {
   const { isLoaded, isSignedIn } = useAuth();
   const { user } = useUser();
@@ -85,21 +95,29 @@ export default function OnboardingPage() {
     setName(registration.name);
     setRegistrationType(registration.registrationType as RegistrationType);
     setEmail(registration.email);
-    setUsefulnessRating(registration.usefulnessRating);
-    setReferralLikelihood(registration.referralLikelihood);
-    setDesiredFeatures(registration.desiredFeatures);
+    setUsefulnessRating(registration.usefulnessRating ?? null);
+    setReferralLikelihood(registration.referralLikelihood ?? null);
+    setDesiredFeatures(registration.desiredFeatures ?? '');
   }, [registrationQuery.data]);
 
   if (!isLoaded || registrationQuery.isLoading) return <OnboardingSkeleton />;
   if (!isSignedIn || !user) return <Redirect to="/sign-in" />;
+
+  // The survey is never part of sign-up: it appears here only after ~14 days
+  // of use, judged by the account's creation date.
+  const surveyDue = isSurveyDue(user.createdAt);
 
   const submit = (event: React.FormEvent) => {
     event.preventDefault();
     setError('');
     setSaved(false);
 
-    if (!name.trim() || !email.trim() || !usefulnessRating || !referralLikelihood || !desiredFeatures.trim()) {
+    if (!name.trim() || !email.trim()) {
       setError(copy.errorIncomplete);
+      return;
+    }
+    if (surveyDue && (!usefulnessRating || !referralLikelihood || !desiredFeatures.trim())) {
+      setError(copy.errorSurveyIncomplete);
       return;
     }
 
@@ -108,9 +126,11 @@ export default function OnboardingPage() {
         name: name.trim(),
         registrationType,
         email: email.trim(),
-        usefulnessRating,
-        referralLikelihood,
-        desiredFeatures: desiredFeatures.trim(),
+        // Before the survey is due the answers are simply not sent; the
+        // server keeps whatever was stored earlier.
+        ...(surveyDue
+          ? { usefulnessRating, referralLikelihood, desiredFeatures: desiredFeatures.trim() }
+          : {}),
       },
     }, {
       onSuccess: () => {
@@ -234,40 +254,53 @@ export default function OnboardingPage() {
                   </div>
                 </fieldset>
 
-                <RatingField
-                  id="registration-usefulness"
-                  label={copy.usefulnessLabel}
-                  value={usefulnessRating}
-                  onChange={setUsefulnessRating}
-                  labels={copy.usefulnessScale}
-                  ratingOf={copy.ratingOf}
-                  testId="input-usefulness-rating"
-                />
+                {surveyDue ? (
+                  <section data-testid="section-onboarding-survey" className="space-y-7 border-t border-border/70 pt-6">
+                    <div>
+                      <h2 className="text-base font-extrabold text-foreground">{copy.surveyTitle}</h2>
+                      <p className="mt-1 text-sm text-muted-foreground">{copy.surveyIntro}</p>
+                    </div>
 
-                <RatingField
-                  id="registration-referral"
-                  label={copy.referralLabel}
-                  value={referralLikelihood}
-                  onChange={setReferralLikelihood}
-                  labels={copy.referralScale}
-                  ratingOf={copy.ratingOf}
-                  testId="input-referral-likelihood"
-                />
+                    <RatingField
+                      id="registration-usefulness"
+                      label={copy.usefulnessLabel}
+                      value={usefulnessRating}
+                      onChange={setUsefulnessRating}
+                      labels={copy.usefulnessScale}
+                      ratingOf={copy.ratingOf}
+                      testId="input-usefulness-rating"
+                    />
 
-                <div className="space-y-2">
-                  <Label htmlFor="registration-desired-features">{copy.featuresLabel}</Label>
-                  <Textarea
-                    id="registration-desired-features"
-                    data-testid="input-desired-features"
-                    value={desiredFeatures}
-                    onChange={(event) => setDesiredFeatures(event.target.value)}
-                    placeholder={copy.featuresPlaceholder}
-                    className="min-h-28 resize-y"
-                    maxLength={2000}
-                    required
-                  />
-                  <p className="text-xs text-muted-foreground">{desiredFeatures.length}/2000</p>
-                </div>
+                    <RatingField
+                      id="registration-referral"
+                      label={copy.referralLabel}
+                      value={referralLikelihood}
+                      onChange={setReferralLikelihood}
+                      labels={copy.referralScale}
+                      ratingOf={copy.ratingOf}
+                      testId="input-referral-likelihood"
+                    />
+
+                    <div className="space-y-2">
+                      <Label htmlFor="registration-desired-features">{copy.featuresLabel}</Label>
+                      <Textarea
+                        id="registration-desired-features"
+                        data-testid="input-desired-features"
+                        value={desiredFeatures}
+                        onChange={(event) => setDesiredFeatures(event.target.value)}
+                        placeholder={copy.featuresPlaceholder}
+                        className="min-h-28 resize-y"
+                        maxLength={2000}
+                        required
+                      />
+                      <p className="text-xs text-muted-foreground">{desiredFeatures.length}/2000</p>
+                    </div>
+                  </section>
+                ) : (
+                  <p data-testid="text-onboarding-survey-later" className="rounded-xl border border-border/70 bg-background/60 px-4 py-3 text-xs leading-5 text-muted-foreground">
+                    {copy.surveyLater}
+                  </p>
+                )}
 
                 {error && (
                   <p data-testid="status-onboarding-error" role="alert" className="rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">

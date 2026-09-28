@@ -926,11 +926,11 @@ export const CloseBusinessResponse = zod.object({
 export const getRegistrationResponseRegistrationOneOneNameMax = 160;
 
 export const getRegistrationResponseRegistrationOneOneEmailRegExp = new RegExp('^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$');
-export const getRegistrationResponseRegistrationOneOneUsefulnessRatingMax = 5;
+export const getRegistrationResponseRegistrationOneOneUsefulnessRatingOneMax = 5;
 
-export const getRegistrationResponseRegistrationOneOneReferralLikelihoodMax = 5;
+export const getRegistrationResponseRegistrationOneOneReferralLikelihoodOneMax = 5;
 
-export const getRegistrationResponseRegistrationOneOneDesiredFeaturesMax = 2000;
+export const getRegistrationResponseRegistrationOneOneDesiredFeaturesOneMax = 2000;
 
 
 
@@ -941,10 +941,11 @@ export const GetRegistrationResponse = zod.object({
   "name": zod.string().min(1).max(getRegistrationResponseRegistrationOneOneNameMax),
   "registrationType": zod.enum(['consumer', 'business']),
   "email": zod.string().regex(getRegistrationResponseRegistrationOneOneEmailRegExp),
-  "usefulnessRating": zod.number().min(1).max(getRegistrationResponseRegistrationOneOneUsefulnessRatingMax),
-  "referralLikelihood": zod.number().min(1).max(getRegistrationResponseRegistrationOneOneReferralLikelihoodMax),
-  "desiredFeatures": zod.string().min(1).max(getRegistrationResponseRegistrationOneOneDesiredFeaturesMax)
+  "usefulnessRating": zod.union([zod.number().min(1).max(getRegistrationResponseRegistrationOneOneUsefulnessRatingOneMax),zod.null()]).describe('Survey answer; only asked once the account is at least 14 days old. Omit or send null to leave it unanswered.'),
+  "referralLikelihood": zod.union([zod.number().min(1).max(getRegistrationResponseRegistrationOneOneReferralLikelihoodOneMax),zod.null()]),
+  "desiredFeatures": zod.union([zod.string().min(1).max(getRegistrationResponseRegistrationOneOneDesiredFeaturesOneMax),zod.null()])
 }).and(zod.object({
+  "surveyCompleted": zod.boolean().describe('True once all three survey answers are stored.'),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
 })),zod.null()])
@@ -957,11 +958,11 @@ export const GetRegistrationResponse = zod.object({
 export const saveRegistrationBodyNameMax = 160;
 
 export const saveRegistrationBodyEmailRegExp = new RegExp('^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$');
-export const saveRegistrationBodyUsefulnessRatingMax = 5;
+export const saveRegistrationBodyUsefulnessRatingOneMax = 5;
 
-export const saveRegistrationBodyReferralLikelihoodMax = 5;
+export const saveRegistrationBodyReferralLikelihoodOneMax = 5;
 
-export const saveRegistrationBodyDesiredFeaturesMax = 2000;
+export const saveRegistrationBodyDesiredFeaturesOneMax = 2000;
 
 
 
@@ -969,19 +970,19 @@ export const SaveRegistrationBody = zod.object({
   "name": zod.string().min(1).max(saveRegistrationBodyNameMax),
   "registrationType": zod.enum(['consumer', 'business']),
   "email": zod.string().regex(saveRegistrationBodyEmailRegExp),
-  "usefulnessRating": zod.number().min(1).max(saveRegistrationBodyUsefulnessRatingMax),
-  "referralLikelihood": zod.number().min(1).max(saveRegistrationBodyReferralLikelihoodMax),
-  "desiredFeatures": zod.string().min(1).max(saveRegistrationBodyDesiredFeaturesMax)
+  "usefulnessRating": zod.union([zod.number().min(1).max(saveRegistrationBodyUsefulnessRatingOneMax),zod.null()]).optional().describe('Survey answer; only asked once the account is at least 14 days old. Omit or send null to leave it unanswered.'),
+  "referralLikelihood": zod.union([zod.number().min(1).max(saveRegistrationBodyReferralLikelihoodOneMax),zod.null()]).optional(),
+  "desiredFeatures": zod.union([zod.string().min(1).max(saveRegistrationBodyDesiredFeaturesOneMax),zod.null()]).optional()
 })
 
 export const saveRegistrationResponseRegistrationOneOneNameMax = 160;
 
 export const saveRegistrationResponseRegistrationOneOneEmailRegExp = new RegExp('^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$');
-export const saveRegistrationResponseRegistrationOneOneUsefulnessRatingMax = 5;
+export const saveRegistrationResponseRegistrationOneOneUsefulnessRatingOneMax = 5;
 
-export const saveRegistrationResponseRegistrationOneOneReferralLikelihoodMax = 5;
+export const saveRegistrationResponseRegistrationOneOneReferralLikelihoodOneMax = 5;
 
-export const saveRegistrationResponseRegistrationOneOneDesiredFeaturesMax = 2000;
+export const saveRegistrationResponseRegistrationOneOneDesiredFeaturesOneMax = 2000;
 
 
 
@@ -992,10 +993,11 @@ export const SaveRegistrationResponse = zod.object({
   "name": zod.string().min(1).max(saveRegistrationResponseRegistrationOneOneNameMax),
   "registrationType": zod.enum(['consumer', 'business']),
   "email": zod.string().regex(saveRegistrationResponseRegistrationOneOneEmailRegExp),
-  "usefulnessRating": zod.number().min(1).max(saveRegistrationResponseRegistrationOneOneUsefulnessRatingMax),
-  "referralLikelihood": zod.number().min(1).max(saveRegistrationResponseRegistrationOneOneReferralLikelihoodMax),
-  "desiredFeatures": zod.string().min(1).max(saveRegistrationResponseRegistrationOneOneDesiredFeaturesMax)
+  "usefulnessRating": zod.union([zod.number().min(1).max(saveRegistrationResponseRegistrationOneOneUsefulnessRatingOneMax),zod.null()]).describe('Survey answer; only asked once the account is at least 14 days old. Omit or send null to leave it unanswered.'),
+  "referralLikelihood": zod.union([zod.number().min(1).max(saveRegistrationResponseRegistrationOneOneReferralLikelihoodOneMax),zod.null()]),
+  "desiredFeatures": zod.union([zod.string().min(1).max(saveRegistrationResponseRegistrationOneOneDesiredFeaturesOneMax),zod.null()])
 }).and(zod.object({
+  "surveyCompleted": zod.boolean().describe('True once all three survey answers are stored.'),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
 })),zod.null()])

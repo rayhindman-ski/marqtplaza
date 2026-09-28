@@ -7,6 +7,7 @@ import { db, pool, userRegistrationsTable } from "@workspace/db";
 import { createRegistrationRouter } from "./registration";
 
 const userId = `registration-test-${process.pid}-${Date.now()}`;
+const freshUserId = `${userId}-fresh`;
 const app = express();
 app.use(express.json());
 app.use(
@@ -17,12 +18,12 @@ app.use(
 let server: ReturnType<typeof app.listen>;
 let baseUrl = "";
 
-async function request(path: string, init?: RequestInit): Promise<{ status: number; body: any }> {
+async function request(path: string, init?: RequestInit, asUser = userId): Promise<{ status: number; body: any }> {
   const result = await fetch(`${baseUrl}${path}`, {
     ...init,
     headers: {
       "content-type": "application/json",
-      "x-test-user-id": userId,
+      "x-test-user-id": asUser,
       ...init?.headers,
     },
   });
@@ -32,6 +33,7 @@ async function request(path: string, init?: RequestInit): Promise<{ status: numb
 describe("registration route", () => {
   before(async () => {
     await db.delete(userRegistrationsTable).where(eq(userRegistrationsTable.userId, userId));
+    await db.delete(userRegistrationsTable).where(eq(userRegistrationsTable.userId, freshUserId));
     await new Promise<void>((resolve) => {
       server = app.listen(0, "127.0.0.1", () => resolve());
     });
@@ -41,6 +43,7 @@ describe("registration route", () => {
 
   after(async () => {
     await db.delete(userRegistrationsTable).where(eq(userRegistrationsTable.userId, userId));
+    await db.delete(userRegistrationsTable).where(eq(userRegistrationsTable.userId, freshUserId));
     await new Promise<void>((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
     await pool.end();
   });
@@ -85,5 +88,36 @@ describe("registration route", () => {
     assert.equal(afterSave.status, 200);
     assert.equal(afterSave.body.registration.email, "noor@example.test");
     assert.equal(afterSave.body.registration.desiredFeatures, "Meer buurtverhalen en lokale activiteiten.");
+    assert.equal(afterSave.body.registration.surveyCompleted, true);
+
+    // Re-saving without survey answers (the form before day 14) keeps them.
+    const resaved = await request("/api/registration", {
+      method: "PUT",
+      body: JSON.stringify({ name: "Noor J.", registrationType: "business", email: "noor@example.test" }),
+    });
+    assert.equal(resaved.status, 200);
+    assert.equal(resaved.body.registration.name, "Noor J.");
+    assert.equal(resaved.body.registration.usefulnessRating, 4);
+    assert.equal(resaved.body.registration.surveyCompleted, true);
+  });
+
+  it("registers without survey answers and reports the survey as pending", async () => {
+    const saved = await request("/api/registration", {
+      method: "PUT",
+      body: JSON.stringify({ name: "Sam de Vries", registrationType: "consumer", email: "sam@example.test" }),
+    }, freshUserId);
+    assert.equal(saved.status, 200);
+    assert.equal(saved.body.registered, true);
+    assert.equal(saved.body.canParticipate, true);
+    assert.equal(saved.body.registration.usefulnessRating, null);
+    assert.equal(saved.body.registration.referralLikelihood, null);
+    assert.equal(saved.body.registration.desiredFeatures, null);
+    assert.equal(saved.body.registration.surveyCompleted, false);
+
+    const rejected = await request("/api/registration", {
+      method: "PUT",
+      body: JSON.stringify({ name: "Sam de Vries", registrationType: "consumer", email: "sam@example.test", usefulnessRating: 9 }),
+    }, freshUserId);
+    assert.equal(rejected.status, 400);
   });
 });

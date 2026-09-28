@@ -16,19 +16,8 @@ export interface RegistrationInput {
   registrationType: RegistrationType;
   /** @pattern ^[^\s@]+@[^\s@]+\.[^\s@]+$ */
   email: string;
-  /**
-     * @minimum 1
-     * @maximum 5
-     */
-  usefulnessRating: number;
-  /**
-     * @minimum 1
-     * @maximum 5
-     */
-  referralLikelihood: number;
-  /**
-     * @minLength 1
-     * @maxLength 2000
-     */
-  desiredFeatures: string;
+  /** Survey answer; only asked once the account is at least 14 days old. Omit or send null to leave it unanswered. */
+  usefulnessRating?: number | null;
+  referralLikelihood?: number | null;
+  desiredFeatures?: string | null;
 }

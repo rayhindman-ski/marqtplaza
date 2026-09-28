@@ -5225,29 +5225,39 @@ components:
           type: string
           pattern: "^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$"
         usefulnessRating:
-          type: number
-          minimum: 1
-          maximum: 5
+          description: Survey answer; only asked once the account is at least 14 days old. Omit or send null to leave it unanswered.
+          oneOf:
+            - type: number
+              minimum: 1
+              maximum: 5
+            - type: "null"
         referralLikelihood:
-          type: number
-          minimum: 1
-          maximum: 5
+          oneOf:
+            - type: number
+              minimum: 1
+              maximum: 5
+            - type: "null"
         desiredFeatures:
-          type: string
-          minLength: 1
-          maxLength: 2000
-      required: [name, registrationType, email, usefulnessRating, referralLikelihood, desiredFeatures]
+          oneOf:
+            - type: string
+              minLength: 1
+              maxLength: 2000
+            - type: "null"
+      required: [name, registrationType, email]
 
     Registration:
       allOf:
         - $ref: "#/components/schemas/RegistrationInput"
         - type: object
           properties:
+            surveyCompleted:
+              type: boolean
+              description: True once all three survey answers are stored.
             createdAt:
               type: string
             updatedAt:
               type: string
-          required: [createdAt, updatedAt]
+          required: [surveyCompleted, usefulnessRating, referralLikelihood, desiredFeatures, createdAt, updatedAt]
 
     RegistrationStatus:
       type: object
