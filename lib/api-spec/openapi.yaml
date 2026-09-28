@@ -2548,6 +2548,46 @@ paths:
         "404":
           description: Deal not found
 
+  /business-profiles/by-listing:
+    get:
+      operationId: getBusinessProfileByListing
+      tags: [businesses]
+      summary: Find a public claimed profile for a listing
+      parameters:
+        - name: listingSource
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 1
+        - name: listingId
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 1
+      responses:
+        "200":
+          description: Matching public business profile, if any
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [match]
+                properties:
+                  match:
+                    oneOf:
+                      - type: object
+                        required: [slug, name]
+                        properties:
+                          slug:
+                            type: string
+                          name:
+                            type: string
+                      - type: "null"
+        "400":
+          description: Missing or invalid listing identity
+
   /business-profiles/public/{slug}:
     get:
       operationId: getBusinessProfile

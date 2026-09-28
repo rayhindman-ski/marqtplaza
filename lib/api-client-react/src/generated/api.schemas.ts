@@ -3491,6 +3491,26 @@ export type LookupBusinessesParams = {
 q: string;
 };
 
+export type GetBusinessProfileByListingParams = {
+/**
+ * @minLength 1
+ */
+listingSource: string;
+/**
+ * @minLength 1
+ */
+listingId: string;
+};
+
+export type GetBusinessProfileByListing200Match = {
+  slug: string;
+  name: string;
+} | null;
+
+export type GetBusinessProfileByListing200 = {
+  match: GetBusinessProfileByListing200Match;
+};
+
 export type GetAuthorityQueueParams = {
 /**
  * Opaque cursor from a previous PageInfo.nextCursor.

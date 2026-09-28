@@ -3117,6 +3117,26 @@ export const UpdateBusinessDealResponse = zod.object({
 
 
 /**
+ * @summary Find a public claimed profile for a listing
+ */
+
+
+
+
+export const GetBusinessProfileByListingQueryParams = zod.object({
+  "listingSource": zod.coerce.string().min(1),
+  "listingId": zod.coerce.string().min(1)
+})
+
+export const GetBusinessProfileByListingResponse = zod.object({
+  "match": zod.union([zod.object({
+  "slug": zod.string(),
+  "name": zod.string()
+}),zod.null()])
+})
+
+
+/**
  * @summary Get one public claimed business profile
  */
 export const GetBusinessProfileParams = zod.object({

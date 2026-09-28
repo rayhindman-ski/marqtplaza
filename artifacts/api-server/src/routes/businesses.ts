@@ -1,5 +1,5 @@
 import { getAuth } from "@clerk/express";
-import { and, asc, desc, eq, gte, inArray, lte } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNull, lte } from "drizzle-orm";
 import {
   Router,
   type IRouter,
@@ -33,6 +33,8 @@ import {
   GetBusinessClaimModerationResponse,
   GetBusinessProfileParams,
   GetBusinessProfileResponse,
+  GetBusinessProfileByListingQueryParams,
+  GetBusinessProfileByListingResponse,
   GetDealModerationQueryParams,
   GetDealModerationResponse,
   GetDealsQueryParams,
@@ -390,6 +392,30 @@ export function createBusinessesRouter(
     res
       .status(201)
       .json(CreateBusinessClaimResponse.parse(serialiseClaim(claim, profile)));
+  });
+
+  router.get("/business-profiles/by-listing", async (req, res): Promise<void> => {
+    const parsed = GetBusinessProfileByListingQueryParams.safeParse(req.query);
+    if (typeof req.query.listingSource !== "string" || !req.query.listingSource.trim()
+      || typeof req.query.listingId !== "string" || !req.query.listingId.trim()
+      || !parsed.success) {
+      res.status(400).json({ error: "Invalid listing identity." });
+      return;
+    }
+    const [profile] = await db
+      .select()
+      .from(businessProfilesTable)
+      .where(and(
+        eq(businessProfilesTable.listingSource, parsed.data.listingSource),
+        eq(businessProfilesTable.listingId, parsed.data.listingId),
+        eq(businessProfilesTable.isClaimed, true),
+        eq(businessProfilesTable.publicationStatus, "published"),
+        isNull(businessProfilesTable.closedAt),
+      ));
+    const match = profile && await publicProjection(profile, flags().businessPublication)
+      ? { slug: profile.slug, name: profile.name }
+      : null;
+    res.json(GetBusinessProfileByListingResponse.parse({ match }));
   });
 
   router.get(

@@ -82,6 +82,8 @@ import type {
   FeatureReadiness,
   GetAuthorityQueueParams,
   GetBusinessClaimModerationParams,
+  GetBusinessProfileByListing200,
+  GetBusinessProfileByListingParams,
   GetCommunityModerationPostsParams,
   GetCommunityPostsParams,
   GetDealModerationParams,
@@ -5691,6 +5693,90 @@ export const useUpdateBusinessDeal = <TError = ErrorType<void>,
       > => {
       return useMutation(getUpdateBusinessDealMutationOptions(options));
     }
+
+export const getGetBusinessProfileByListingUrl = (params: GetBusinessProfileByListingParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/business-profiles/by-listing?${stringifiedParams}` : `/api/business-profiles/by-listing`
+}
+
+/**
+ * @summary Find a public claimed profile for a listing
+ */
+export const getBusinessProfileByListing = async (params: GetBusinessProfileByListingParams, options?: Parameters<typeof customFetch>[1]): Promise<GetBusinessProfileByListing200> => {
+
+  return customFetch<GetBusinessProfileByListing200>(getGetBusinessProfileByListingUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetBusinessProfileByListingQueryKey = (params?: GetBusinessProfileByListingParams,) => {
+    return [
+    `/api/business-profiles/by-listing`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetBusinessProfileByListingQueryOptions = <TData = Awaited<ReturnType<typeof getBusinessProfileByListing>>, TError = ErrorType<void>>(params: GetBusinessProfileByListingParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getBusinessProfileByListing>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetBusinessProfileByListingQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getBusinessProfileByListing>>> = ({ signal }) => getBusinessProfileByListing(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getBusinessProfileByListing>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetBusinessProfileByListingQueryResult = NonNullable<Awaited<ReturnType<typeof getBusinessProfileByListing>>>
+export type GetBusinessProfileByListingQueryError = ErrorType<void>
+
+
+/**
+ * @summary Find a public claimed profile for a listing
+ */
+
+export function useGetBusinessProfileByListing<TData = Awaited<ReturnType<typeof getBusinessProfileByListing>>, TError = ErrorType<void>>(
+ params: GetBusinessProfileByListingParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getBusinessProfileByListing>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetBusinessProfileByListingQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getGetBusinessProfileUrl = (slug: string,) => {
 

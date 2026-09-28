@@ -28,6 +28,8 @@ import {
   useGetListing,
   useGetWeather,
   useGetAccountMe,
+  useGetBusinessProfileByListing,
+  getGetBusinessProfileByListingQueryKey,
   getGetAccountMeQueryKey,
 } from '@workspace/api-client-react';
 import {
@@ -1660,6 +1662,17 @@ function MarkerCard({
   onSave: (e: React.MouseEvent) => void;
 }) {
   const [isExpanded, setIsExpanded] = useState(false);
+  const listingProfileParams = { listingSource: marker.source ?? '', listingId: String(marker.id ?? '') };
+  const { data: businessProfileMatch } = useGetBusinessProfileByListing(
+    listingProfileParams,
+    { query: {
+      queryKey: getGetBusinessProfileByListingQueryKey(listingProfileParams),
+      enabled: isExpanded
+        && (marker.category === 'Businesses' || marker.category === 'Food & Drink')
+        && Boolean(marker.source && marker.id),
+      staleTime: 5 * 60 * 1000,
+    } },
+  );
   const Icon = CATEGORY_ICONS[marker.category];
   const DetailIcon = DETAIL_ICONS[marker.category];
   const copy = getMarkerCopy(marker, language);
@@ -1925,14 +1938,19 @@ function MarkerCard({
             <div className="flex max-w-full shrink-0 flex-wrap items-center justify-end gap-x-3 gap-y-1">
               {(marker.category === 'Businesses' || marker.category === 'Food & Drink') && (
                 <Link
-                  href={featureFlags.businessIntake
+                   data-testid={`listing-business-link-${marker.id}`}
+                   href={businessProfileMatch?.match
+                     ? `/bedrijf/${encodeURIComponent(businessProfileMatch.match.slug)}`
+                     : featureFlags.businessIntake
                     ? `/bedrijf-nieuw?kind=existing_listing&cityId=dhg&listingSource=${encodeURIComponent(marker.source || 'google_maps')}&listingId=${encodeURIComponent(String(marker.id))}&locale=${language}`
                     : `/bedrijf-claim?listingId=${marker.id}&cityId=dhg&listingSource=${marker.source || 'google_maps'}&name=${encodeURIComponent(marker.name)}&address=${encodeURIComponent(marker.address || '')}&locale=${language}`}
                   className="flex items-center gap-1 text-[11px] font-bold text-primary hover:text-primary/80 transition-colors"
                   onClick={e => e.stopPropagation()}
                 >
                   <Store className="h-3 w-3 shrink-0" />
-                  {language === 'nl' ? 'Dit bedrijf claimen' : 'Claim this business'}
+                   {businessProfileMatch?.match
+                     ? accountTranslations[language].business.viewBusinessPage
+                     : (language === 'nl' ? 'Dit bedrijf claimen' : 'Claim this business')}
                 </Link>
               )}
               {marker.source && (
