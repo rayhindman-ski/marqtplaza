@@ -60,7 +60,7 @@ function useQueue<T>(key: string, fetcher: (cursor?: string) => Promise<{ items:
 
 function RevisionPreview({ revision, label, copy, fields }: { revision: BusinessRevision | null; label: string; copy: ReviewCopy; fields: PublicationCopy }) {
   if (!revision) return <p className="text-sm italic text-muted-foreground">{label}: {copy.none}</p>;
-  const { nl, en, facts } = revision.content;
+  const { nl, en, facts, services } = revision.content;
   return (
     <div className="text-sm space-y-2">
       <p className="font-bold text-xs uppercase tracking-wide text-muted-foreground">{label} · v{revision.version}</p>
@@ -90,6 +90,10 @@ function RevisionPreview({ revision, label, copy, fields }: { revision: Business
           </React.Fragment>
         ))}
       </dl>
+      {services && services.length > 0 && <section data-testid="review-services">
+        <p className="font-bold">{fields.services}</p>
+        <ul>{services.map((service, index) => <li key={index}>{service.nl} / {service.en}{service.detail && ` — ${service.detail.nl ?? ''} / ${service.detail.en ?? ''}`}</li>)}</ul>
+      </section>}
     </div>
   );
 }

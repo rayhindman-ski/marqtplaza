@@ -5,10 +5,12 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { BusinessMessage } from './businessMessage';
 import type { BusinessProfile } from './businessProfile';
 import type { Deal } from './deal';
 
 export type OwnedBusinessProfile = BusinessProfile & {
   role: string;
   deals: Deal[];
+  messages: BusinessMessage[];
 };

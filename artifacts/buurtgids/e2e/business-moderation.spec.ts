@@ -86,6 +86,7 @@ function installServer(page: Page) {
   const install = async () => {
     await page.route('**/api/business-claims/moderation**', (route) => json(route, []));
     await page.route('**/api/deals/moderation**', (route) => json(route, []));
+    await page.route(/\/api\/messages\/moderation(\?.*)?$/, (route) => json(route, []));
 
     await page.route(/\/api\/review\/claims(\/\d+\/decision)?(\?.*)?$/, (route) => {
       const { url, body, method } = record(route);

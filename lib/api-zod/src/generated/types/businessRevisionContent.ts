@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { BusinessRevisionContentServicesItem } from './businessRevisionContentServicesItem';
 import type { BusinessRevisionFacts } from './businessRevisionFacts';
 import type { BusinessRevisionText } from './businessRevisionText';
 
@@ -12,4 +13,6 @@ export interface BusinessRevisionContent {
   nl: BusinessRevisionText;
   en: BusinessRevisionText;
   facts: BusinessRevisionFacts;
+  /** @maxItems 30 */
+  services?: BusinessRevisionContentServicesItem[];
 }

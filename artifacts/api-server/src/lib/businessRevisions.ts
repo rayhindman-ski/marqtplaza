@@ -33,7 +33,8 @@ export type Language = (typeof LANGUAGES)[number];
 
 export type RevisionText = Record<TextField, string | null>;
 export type RevisionFacts = Record<FactField, string | null>;
-export type RevisionContent = { nl: RevisionText; en: RevisionText; facts: RevisionFacts };
+export type RevisionService = { nl: string; en: string; detail?: { nl?: string; en?: string } };
+export type RevisionContent = { nl: RevisionText; en: RevisionText; facts: RevisionFacts; services?: RevisionService[] };
 
 /** Newest confirmation older than this is reported as `stale`; nothing is hidden by it. */
 export const FRESHNESS_STALE_AFTER_DAYS = 180;
@@ -80,6 +81,18 @@ export function normaliseContent(raw: unknown): RevisionContent {
   const content = emptyContent();
   if (!raw || typeof raw !== "object") return content;
   const source = raw as Record<string, unknown>;
+  if (Array.isArray(source.services)) {
+    content.services = source.services
+      .filter((item): item is RevisionService => !!item && typeof item === "object" && typeof item.nl === "string" && typeof item.en === "string")
+      .map((item) => ({
+        nl: item.nl.trim(),
+        en: item.en.trim(),
+        ...(item.detail && typeof item.detail === "object" ? { detail: {
+          ...(typeof item.detail.nl === "string" ? { nl: item.detail.nl.trim() } : {}),
+          ...(typeof item.detail.en === "string" ? { en: item.detail.en.trim() } : {}),
+        } } : {}),
+      }));
+  }
   for (const language of LANGUAGES) {
     const block = source[language];
     if (!block || typeof block !== "object") continue;
@@ -110,6 +123,7 @@ export type ContentPatch = {
   nl?: Partial<Record<TextField, string | null | undefined>>;
   en?: Partial<Record<TextField, string | null | undefined>>;
   facts?: Partial<Record<FactField, string | null | undefined>>;
+  services?: RevisionService[];
 };
 
 /**
@@ -125,8 +139,32 @@ export function mergeContent(
     nl: { ...base.nl },
     en: { ...base.en },
     facts: { ...base.facts },
+    ...(base.services ? { services: [...base.services] } : {}),
   };
   const fieldErrors: ApiFieldError[] = [];
+  if (patch.services !== undefined) {
+    if (!Array.isArray(patch.services) || patch.services.length > 30) {
+      fieldErrors.push({ field: "services", code: "too_many" });
+    } else {
+      patch.services.forEach((service, index) => {
+        for (const language of LANGUAGES) {
+          if (!cleanString(service[language]) || service[language].trim().length > 80) {
+            fieldErrors.push({ field: `services.${index}.${language}`, code: "invalid" });
+          }
+          if (service.detail?.[language] && service.detail[language].length > 200) {
+            fieldErrors.push({ field: `services.${index}.detail.${language}`, code: "too_long" });
+          }
+        }
+      });
+      if (!fieldErrors.length) content.services = patch.services.map((service) => ({
+        nl: service.nl.trim(), en: service.en.trim(),
+        ...(service.detail ? { detail: {
+          ...(service.detail.nl !== undefined ? { nl: service.detail.nl.trim() } : {}),
+          ...(service.detail.en !== undefined ? { en: service.detail.en.trim() } : {}),
+        } } : {}),
+      }));
+    }
+  }
   for (const language of LANGUAGES) {
     const block = patch[language];
     if (!block) continue;
@@ -281,7 +319,7 @@ export function freshnessFor(checks: FactCheck[], now: Date = new Date()): Fresh
  */
 export function projectApprovedContent(content: RevisionContent, checks: FactCheck[]): RevisionContent {
   const withheld = new Set(checks.filter((check) => check.status === "contradicted").map((check) => check.field));
-  const projected: RevisionContent = { nl: { ...content.nl }, en: { ...content.en }, facts: { ...content.facts } };
+  const projected: RevisionContent = { nl: { ...content.nl }, en: { ...content.en }, facts: { ...content.facts }, ...(content.services ? { services: content.services } : {}) };
   for (const field of TEXT_FIELDS) {
     if (!withheld.has(field)) continue;
     projected.nl[field] = null;

@@ -8,7 +8,7 @@ import { expect, test, type Page, type Route } from '@playwright/test';
  */
 
 type Text = { tagline: string | null; description: string | null; openingHours: string | null };
-type Content = { nl: Text; en: Text; facts: Record<string, string | null> };
+type Content = { nl: Text; en: Text; facts: Record<string, string | null>; services?: { nl: string; en: string; detail?: { nl?: string; en?: string } }[] };
 type Revision = {
   id: number; businessProfileId: number; version: number; status: string; content: Content;
   submittedAt: string | null; decidedAt: string | null; createdAt: string; updatedAt: string;
@@ -123,6 +123,7 @@ function installServer(page: Page, options: { initialState?: 'suspended' } = {})
         for (const [key, value] of Object.entries(body[lang] ?? {})) (content[lang] as any)[key] = (value as string).trim() || null;
       }
       for (const [key, value] of Object.entries(body.facts ?? {})) content.facts[key] = (value as string).trim() || null;
+      if (body.services) content.services = body.services;
       if (l?.status === 'draft') {
         l.content = content;
         l.updatedAt = new Date().toISOString();
@@ -165,6 +166,29 @@ async function signIn(page: Page) {
 }
 
 test.describe('business review publication', () => {
+  test('services survive draft reload and appear only after approval', async ({ page }) => {
+    await signIn(page);
+    const server = installServer(page);
+    await server.install();
+    await page.goto('/mijn-bedrijf/7/profiel?e2eAccountAuth=1');
+    await page.getByTestId('add-service').click();
+    await page.locator('#service-0-nl').fill('Taarten op maat');
+    await page.locator('#service-0-en').fill('Custom cakes');
+    await page.locator('#service-0-detail-nl').fill('Ook vegan');
+    await page.getByTestId('save-draft').click();
+    await expect(page.getByTestId('owner-state')).toHaveText('Concept');
+    await page.reload();
+    await expect(page.locator('#service-0-nl')).toHaveValue('Taarten op maat');
+    expect(server.revisions[1].content.services?.[0].en).toBe('Custom cakes');
+    await page.goto('/bedrijf/bakkerij-e2e');
+    await expect(page.getByTestId('public-services')).toHaveCount(0);
+    await page.goto('/mijn-bedrijf/7/profiel?e2eAccountAuth=1');
+    await page.getByTestId('submit-revision').click();
+    await expect(page.getByTestId('owner-state')).toHaveText('Ingediend voor controle');
+    server.reviewer.approve();
+    await page.goto('/bedrijf/bakkerij-e2e');
+    await expect(page.getByTestId('public-services')).toContainText('Taarten op maat');
+  });
   test('owner is told before the fact check expires, without the state changing', async ({ page }) => {
     await signIn(page);
     const server = installServer(page);

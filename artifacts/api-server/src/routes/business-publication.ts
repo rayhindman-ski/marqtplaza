@@ -92,7 +92,7 @@ export type BusinessPublicationRouterOptions = {
 const NO_FIELDS: ReadonlySet<string> = new Set();
 const PAGE_QUERY_FIELDS: ReadonlySet<string> = new Set(["cursor", "limit"]);
 const PUBLICATION_QUEUE_QUERY_FIELDS: ReadonlySet<string> = new Set(["cursor", "limit", "recheckDue"]);
-const REVISION_UPDATE_FIELDS: ReadonlySet<string> = new Set(["expectedVersion", "nl", "en", "facts"]);
+const REVISION_UPDATE_FIELDS: ReadonlySet<string> = new Set(["expectedVersion", "nl", "en", "facts", "services"]);
 const TEXT_BLOCK_FIELDS: ReadonlySet<string> = new Set(["tagline", "description", "openingHours"]);
 const FACT_BLOCK_FIELDS: ReadonlySet<string> = new Set(["websiteUrl", "phone", "email", "address", "logoUrl", "coverUrl"]);
 const TRANSITION_FIELDS: ReadonlySet<string> = new Set(["expectedVersion"]);
@@ -457,6 +457,7 @@ export function createBusinessPublicationRouter(options: BusinessPublicationRout
       nl: body.data.nl,
       en: body.data.en,
       facts: body.data.facts,
+      services: body.data.services,
     });
     if (outcome.kind === "stale") {
       sendApiError(req, res, "VERSION_CONFLICT", { expectedVersion: outcome.currentVersion });

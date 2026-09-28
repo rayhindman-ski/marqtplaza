@@ -10,12 +10,14 @@ import {
 import {
   businessClaimsTable,
   businessMembersTable,
+  businessMessagesTable,
   businessProfilesTable,
   db,
   dealsTable,
   type BusinessClaim,
   type BusinessProfile,
   type Deal,
+  type BusinessMessage,
 } from "@workspace/db";
 import {
   CreateBusinessClaimBody,
@@ -23,6 +25,19 @@ import {
   CreateBusinessDealBody,
   CreateBusinessDealParams,
   CreateBusinessDealResponse,
+  CreateBusinessMessageBody,
+  CreateBusinessMessageParams,
+  CreateBusinessMessageResponse,
+  GetBusinessMessagesParams,
+  GetBusinessMessagesResponse,
+  UpdateBusinessMessageBody,
+  UpdateBusinessMessageParams,
+  UpdateBusinessMessageResponse,
+  GetBusinessMessageModerationQueryParams,
+  GetBusinessMessageModerationResponse,
+  DecideBusinessMessageParams,
+  DecideBusinessMessageBody,
+  DecideBusinessMessageResponse,
   DecideBusinessClaimBody,
   DecideBusinessClaimParams,
   DecideBusinessClaimResponse,
@@ -124,6 +139,32 @@ function serialiseDeal(deal: Deal, profile?: BusinessProfile) {
     createdAt: deal.createdAt.toISOString(),
     updatedAt: deal.updatedAt.toISOString(),
   };
+}
+
+function serialiseMessage(message: BusinessMessage, profile?: BusinessProfile) {
+  return {
+    id: message.id,
+    businessProfileId: message.businessProfileId,
+    ...(profile ? { businessName: profile.name, businessSlug: profile.slug } : {}),
+    cityId: message.cityId,
+    kind: message.kind,
+    title: message.title,
+    body: message.body,
+    startsOn: message.startsOn,
+    endsOn: message.endsOn,
+    status: message.status,
+    reviewNote: message.reviewNote,
+    reviewedAt: message.reviewedAt?.toISOString() ?? null,
+    createdAt: message.createdAt.toISOString(),
+    updatedAt: message.updatedAt.toISOString(),
+  };
+}
+
+function validMessageWindow(start: unknown, end: unknown) {
+  const startsOn = strictDate(start);
+  const endsOn = strictDate(end);
+  return Boolean(startsOn && endsOn && endsOn >= startsOn &&
+    (new Date(`${endsOn}T00:00:00Z`).getTime() - new Date(`${startsOn}T00:00:00Z`).getTime()) <= 60 * 86400000);
 }
 
 function clerkUserId(req: Request): string | null {
@@ -533,6 +574,11 @@ export function createBusinessesRouter(
           .where(inArray(dealsTable.businessProfileId, profileIds))
           .orderBy(desc(dealsTable.createdAt))
       : [];
+    const allMessages = profileIds.length
+      ? await db.select().from(businessMessagesTable)
+          .where(inArray(businessMessagesTable.businessProfileId, profileIds))
+          .orderBy(desc(businessMessagesTable.createdAt))
+      : [];
     const dealsByProfile = new Map<number, Deal[]>();
     for (const deal of allDeals) {
       dealsByProfile.set(deal.businessProfileId, [
@@ -549,6 +595,8 @@ export function createBusinessesRouter(
           deals: (dealsByProfile.get(profile.id) ?? []).map((deal) =>
             serialiseDeal(deal, profile),
           ),
+          messages: allMessages.filter((message) => message.businessProfileId === profile.id)
+            .map((message) => serialiseMessage(message, profile)),
         })),
       ),
     );
@@ -629,6 +677,128 @@ export function createBusinessesRouter(
       .where(eq(businessProfilesTable.id, owned.profile.id))
       .returning();
     res.json(UpdateBusinessProfileResponse.parse(serialiseProfile(profile)));
+  });
+
+  router.get("/business-profiles/:id/messages", async (req, res): Promise<void> => {
+    const userId = await requireActiveAccount(req, res, getUserId);
+    if (!userId) return;
+    const params = GetBusinessMessagesParams.safeParse(req.params);
+    const owned = params.success ? await findOwnedProfile(params.data.id, userId) : null;
+    if (!owned) { res.status(404).json({ error: "Profile not found." }); return; }
+    const rows = await db.select().from(businessMessagesTable)
+      .where(eq(businessMessagesTable.businessProfileId, owned.profile.id))
+      .orderBy(desc(businessMessagesTable.createdAt));
+    res.json(GetBusinessMessagesResponse.parse(rows.map((row) => serialiseMessage(row, owned.profile))));
+  });
+
+  router.post("/business-profiles/:id/messages", async (req, res): Promise<void> => {
+    const userId = await requireActiveAccount(req, res, getUserId);
+    if (!userId) return;
+    const params = CreateBusinessMessageParams.safeParse(req.params);
+    const body = CreateBusinessMessageBody.safeParse(req.body);
+    if (!params.success || !body.success || !body.data.title.trim() || !body.data.body.trim() ||
+      !validMessageWindow(body.data.startsOn, body.data.endsOn)) {
+      res.status(400).json({ error: "Invalid message details." }); return;
+    }
+    const owned = await findOwnedProfile(params.data.id, userId);
+    if (!owned) { res.status(404).json({ error: "Profile not found." }); return; }
+    const result = await db.transaction(async (tx) => {
+      await tx.select({ id: businessProfilesTable.id }).from(businessProfilesTable)
+        .where(eq(businessProfilesTable.id, owned.profile.id)).for("update");
+      const active = await tx.select({ id: businessMessagesTable.id }).from(businessMessagesTable)
+        .where(and(eq(businessMessagesTable.businessProfileId, owned.profile.id),
+          inArray(businessMessagesTable.status, ["pending", "approved"]),
+          gte(businessMessagesTable.endsOn, today())));
+      if (active.length >= 5) return null;
+      const [message] = await tx.insert(businessMessagesTable).values({
+        businessProfileId: owned.profile.id, cityId: owned.profile.cityId,
+        kind: body.data.kind, title: body.data.title.trim(), body: body.data.body.trim(),
+        startsOn: body.data.startsOn, endsOn: body.data.endsOn,
+      }).returning();
+      return message;
+    });
+    if (!result) { res.status(409).json({ error: "Maximum of five active messages." }); return; }
+    res.status(201).json(CreateBusinessMessageResponse.parse(serialiseMessage(result, owned.profile)));
+  });
+
+  router.patch("/business-profiles/:id/messages/:messageId", async (req, res): Promise<void> => {
+    const userId = await requireActiveAccount(req, res, getUserId);
+    if (!userId) return;
+    const params = UpdateBusinessMessageParams.safeParse(req.params);
+    const body = UpdateBusinessMessageBody.safeParse(req.body);
+    if (!params.success || !body.success || !Object.keys(body.data).length ||
+      (body.data.title !== undefined && !body.data.title.trim()) ||
+      (body.data.body !== undefined && !body.data.body.trim())) {
+      res.status(400).json({ error: "Invalid message update." }); return;
+    }
+    const owned = await findOwnedProfile(params.data.id, userId);
+    if (!owned) { res.status(404).json({ error: "Profile not found." }); return; }
+    const result = await db.transaction(async (tx) => {
+      await tx.select({ id: businessProfilesTable.id }).from(businessProfilesTable)
+        .where(eq(businessProfilesTable.id, owned.profile.id)).for("update");
+      const [existing] = await tx.select().from(businessMessagesTable)
+        .where(and(eq(businessMessagesTable.id, params.data.messageId),
+          eq(businessMessagesTable.businessProfileId, owned.profile.id)));
+      if (!existing) return { kind: "missing" as const };
+      if (existing.status === "withdrawn") return { kind: "conflict" as const };
+      const startsOn = body.data.startsOn ?? existing.startsOn;
+      const endsOn = body.data.endsOn ?? existing.endsOn;
+      if (!validMessageWindow(startsOn, endsOn)) return { kind: "invalid" as const };
+      const withdrawal = body.data.status === "withdrawn";
+      if (!withdrawal && (!["pending", "approved"].includes(existing.status) || existing.endsOn < today())) {
+        const active = await tx.select({ id: businessMessagesTable.id }).from(businessMessagesTable)
+          .where(and(eq(businessMessagesTable.businessProfileId, owned.profile.id),
+            inArray(businessMessagesTable.status, ["pending", "approved"]),
+            gte(businessMessagesTable.endsOn, today())));
+        if (active.length >= 5) return { kind: "conflict" as const };
+      }
+      const [message] = await tx.update(businessMessagesTable).set({
+        ...(body.data.kind ? { kind: body.data.kind } : {}),
+        ...(body.data.title !== undefined ? { title: body.data.title.trim() } : {}),
+        ...(body.data.body !== undefined ? { body: body.data.body.trim() } : {}),
+        startsOn, endsOn,
+        status: withdrawal ? "withdrawn" : "pending",
+        reviewNote: null, reviewedBy: null, reviewedAt: null,
+      }).where(eq(businessMessagesTable.id, existing.id)).returning();
+      return { kind: "ok" as const, message };
+    });
+    if (result.kind !== "ok") {
+      res.status(result.kind === "missing" ? 404 : result.kind === "invalid" ? 400 : 409)
+        .json({ error: result.kind === "invalid" ? "Invalid date window." : "Message not available." });
+      return;
+    }
+    res.json(UpdateBusinessMessageResponse.parse(serialiseMessage(result.message, owned.profile)));
+  });
+
+  router.get("/messages/moderation", requireEditorRole, async (req, res): Promise<void> => {
+    const parsed = GetBusinessMessageModerationQueryParams.safeParse(req.query);
+    if (!parsed.success) { res.status(400).json({ error: "Invalid status." }); return; }
+    const rows = await db.select({ message: businessMessagesTable, profile: businessProfilesTable })
+      .from(businessMessagesTable)
+      .innerJoin(businessProfilesTable, eq(businessMessagesTable.businessProfileId, businessProfilesTable.id))
+      .where(parsed.data.status === "all" ? undefined : eq(businessMessagesTable.status, parsed.data.status ?? "pending"))
+      .orderBy(desc(businessMessagesTable.createdAt));
+    res.json(GetBusinessMessageModerationResponse.parse(rows.map(({ message, profile }) => serialiseMessage(message, profile))));
+  });
+
+  router.patch("/messages/moderation/:id", requireEditorRole, async (req, res): Promise<void> => {
+    const editorId = await requireActiveAccount(req, res, getUserId);
+    if (!editorId) return;
+    const params = DecideBusinessMessageParams.safeParse(req.params);
+    const body = DecideBusinessMessageBody.safeParse(req.body);
+    if (!params.success || !body.success) { res.status(400).json({ error: "Invalid decision." }); return; }
+    const [row] = await db.select({ message: businessMessagesTable, profile: businessProfilesTable })
+      .from(businessMessagesTable)
+      .innerJoin(businessProfilesTable, eq(businessMessagesTable.businessProfileId, businessProfilesTable.id))
+      .where(eq(businessMessagesTable.id, params.data.id));
+    if (!row) { res.status(404).json({ error: "Message not found." }); return; }
+    if (row.message.status !== "pending") { res.status(409).json({ error: "Already decided." }); return; }
+    const [message] = await db.update(businessMessagesTable).set({
+      status: body.data.decision === "approve" ? "approved" : "rejected",
+      reviewNote: body.data.reviewNote?.trim() || null, reviewedBy: editorId, reviewedAt: new Date(),
+    }).where(and(eq(businessMessagesTable.id, row.message.id), eq(businessMessagesTable.status, "pending"))).returning();
+    if (!message) { res.status(409).json({ error: "Already decided." }); return; }
+    res.json(DecideBusinessMessageResponse.parse(serialiseMessage(message, row.profile)));
   });
 
   router.post(
@@ -831,10 +1001,17 @@ export function createBusinessesRouter(
           ),
         )
         .orderBy(asc(dealsTable.validUntil));
+      const activeMessages = await db.select().from(businessMessagesTable)
+        .where(and(eq(businessMessagesTable.businessProfileId, profile.id),
+          eq(businessMessagesTable.status, "approved"),
+          lte(businessMessagesTable.startsOn, today()),
+          gte(businessMessagesTable.endsOn, today())))
+        .orderBy(asc(businessMessagesTable.startsOn));
       res.json(
         GetBusinessProfileResponse.parse({
           ...projection,
           deals: activeDeals.map((deal) => serialiseDeal(deal, profile)),
+          messages: activeMessages.map((message) => serialiseMessage(message, profile)),
         }),
       );
     },

@@ -269,6 +269,33 @@ export const dealsTable = pgTable(
   ],
 );
 
+export const businessMessagesTable = pgTable(
+  "business_messages",
+  {
+    id: serial("id").primaryKey(),
+    businessProfileId: integer("business_profile_id").notNull()
+      .references(() => businessProfilesTable.id, { onDelete: "cascade" }),
+    cityId: text("city_id").notNull(),
+    kind: text("kind").notNull(),
+    title: text("title").notNull(),
+    body: text("body").notNull(),
+    startsOn: date("starts_on", { mode: "string" }).notNull(),
+    endsOn: date("ends_on", { mode: "string" }).notNull(),
+    status: text("status").notNull().default("pending"),
+    reviewNote: text("review_note"),
+    reviewedBy: text("reviewed_by"),
+    reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+  },
+  (table) => [
+    index("business_messages_profile_idx").on(table.businessProfileId),
+    index("business_messages_city_status_idx").on(table.cityId, table.status),
+    index("business_messages_window_idx").on(table.startsOn, table.endsOn),
+  ],
+);
+export type BusinessMessage = typeof businessMessagesTable.$inferSelect;
+
 export const insertBusinessProfileSchema = createInsertSchema(businessProfilesTable).omit({
   id: true,
   createdAt: true,

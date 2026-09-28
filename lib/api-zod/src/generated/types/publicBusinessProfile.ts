@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { BusinessMessage } from './businessMessage';
 import type { BusinessProfile } from './businessProfile';
 import type { BusinessRevisionContent } from './businessRevisionContent';
 import type { Deal } from './deal';
@@ -12,6 +13,7 @@ import type { PublicBusinessProvenance } from './publicBusinessProvenance';
 
 export type PublicBusinessProfile = BusinessProfile & ({
   deals: Deal[];
+  messages: BusinessMessage[];
   content?: BusinessRevisionContent | null;
   provenance?: PublicBusinessProvenance | null;
 });

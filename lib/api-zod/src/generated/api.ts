@@ -2930,6 +2930,23 @@ export const GetMyBusinessProfilesResponseItem = zod.object({
   "reviewedAt": zod.string().nullish(),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
+})),
+  "messages": zod.array(zod.object({
+  "id": zod.number(),
+  "businessProfileId": zod.number(),
+  "businessName": zod.string().optional(),
+  "businessSlug": zod.string().optional(),
+  "cityId": zod.string(),
+  "kind": zod.enum(['announcement', 'special']),
+  "title": zod.string(),
+  "body": zod.string(),
+  "startsOn": zod.string(),
+  "endsOn": zod.string(),
+  "status": zod.enum(['pending', 'approved', 'rejected', 'withdrawn']),
+  "reviewNote": zod.string().nullish(),
+  "reviewedAt": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
 }))
 }))
 export const GetMyBusinessProfilesResponse = zod.array(GetMyBusinessProfilesResponseItem)
@@ -2993,6 +3010,162 @@ export const UpdateBusinessProfileResponse = zod.object({
   "subcategory": zod.string().nullish().describe('Taxonomy subcategory of a new-business draft (food type for Food & Drink); null otherwise.'),
   "geographyBasis": zod.union([zod.literal('address_match'),zod.literal('declared_official'),zod.literal('unresolved'),zod.literal(null)]).nullish().describe('How a self-reported business\'s neighbourhood\/coordinates were established at submit; null before submit and for listing-derived profiles.'),
   "approvedRevisionVersion": zod.number().nullish().describe('Version of the approved revision when publication review is enabled; null when the profile is served from its columns.'),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+
+
+export const GetBusinessMessagesParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GetBusinessMessagesResponseItem = zod.object({
+  "id": zod.number(),
+  "businessProfileId": zod.number(),
+  "businessName": zod.string().optional(),
+  "businessSlug": zod.string().optional(),
+  "cityId": zod.string(),
+  "kind": zod.enum(['announcement', 'special']),
+  "title": zod.string(),
+  "body": zod.string(),
+  "startsOn": zod.string(),
+  "endsOn": zod.string(),
+  "status": zod.enum(['pending', 'approved', 'rejected', 'withdrawn']),
+  "reviewNote": zod.string().nullish(),
+  "reviewedAt": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+export const GetBusinessMessagesResponse = zod.array(GetBusinessMessagesResponseItem)
+
+
+export const CreateBusinessMessageParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const createBusinessMessageBodyTitleMax = 120;
+
+export const createBusinessMessageBodyBodyMax = 1000;
+
+
+
+export const CreateBusinessMessageBody = zod.object({
+  "kind": zod.enum(['announcement', 'special']),
+  "title": zod.string().min(1).max(createBusinessMessageBodyTitleMax),
+  "body": zod.string().min(1).max(createBusinessMessageBodyBodyMax),
+  "startsOn": zod.string(),
+  "endsOn": zod.string()
+})
+
+export const CreateBusinessMessageResponse = zod.object({
+  "id": zod.number(),
+  "businessProfileId": zod.number(),
+  "businessName": zod.string().optional(),
+  "businessSlug": zod.string().optional(),
+  "cityId": zod.string(),
+  "kind": zod.enum(['announcement', 'special']),
+  "title": zod.string(),
+  "body": zod.string(),
+  "startsOn": zod.string(),
+  "endsOn": zod.string(),
+  "status": zod.enum(['pending', 'approved', 'rejected', 'withdrawn']),
+  "reviewNote": zod.string().nullish(),
+  "reviewedAt": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+
+
+export const UpdateBusinessMessageParams = zod.object({
+  "id": zod.coerce.number(),
+  "messageId": zod.coerce.number()
+})
+
+export const updateBusinessMessageBodyTitleMax = 120;
+
+export const updateBusinessMessageBodyBodyMax = 1000;
+
+
+
+export const UpdateBusinessMessageBody = zod.object({
+  "kind": zod.enum(['announcement', 'special']).optional(),
+  "title": zod.string().min(1).max(updateBusinessMessageBodyTitleMax).optional(),
+  "body": zod.string().min(1).max(updateBusinessMessageBodyBodyMax).optional(),
+  "startsOn": zod.string().optional(),
+  "endsOn": zod.string().optional(),
+  "status": zod.enum(['withdrawn']).optional()
+})
+
+export const UpdateBusinessMessageResponse = zod.object({
+  "id": zod.number(),
+  "businessProfileId": zod.number(),
+  "businessName": zod.string().optional(),
+  "businessSlug": zod.string().optional(),
+  "cityId": zod.string(),
+  "kind": zod.enum(['announcement', 'special']),
+  "title": zod.string(),
+  "body": zod.string(),
+  "startsOn": zod.string(),
+  "endsOn": zod.string(),
+  "status": zod.enum(['pending', 'approved', 'rejected', 'withdrawn']),
+  "reviewNote": zod.string().nullish(),
+  "reviewedAt": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+
+
+export const GetBusinessMessageModerationQueryParams = zod.object({
+  "status": zod.enum(['pending', 'approved', 'rejected', 'withdrawn', 'all']).optional()
+})
+
+export const GetBusinessMessageModerationResponseItem = zod.object({
+  "id": zod.number(),
+  "businessProfileId": zod.number(),
+  "businessName": zod.string().optional(),
+  "businessSlug": zod.string().optional(),
+  "cityId": zod.string(),
+  "kind": zod.enum(['announcement', 'special']),
+  "title": zod.string(),
+  "body": zod.string(),
+  "startsOn": zod.string(),
+  "endsOn": zod.string(),
+  "status": zod.enum(['pending', 'approved', 'rejected', 'withdrawn']),
+  "reviewNote": zod.string().nullish(),
+  "reviewedAt": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+export const GetBusinessMessageModerationResponse = zod.array(GetBusinessMessageModerationResponseItem)
+
+
+export const DecideBusinessMessageParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const decideBusinessMessageBodyReviewNoteMax = 1000;
+
+
+
+export const DecideBusinessMessageBody = zod.object({
+  "decision": zod.enum(['approve', 'reject']),
+  "reviewNote": zod.string().max(decideBusinessMessageBodyReviewNoteMax).optional()
+})
+
+export const DecideBusinessMessageResponse = zod.object({
+  "id": zod.number(),
+  "businessProfileId": zod.number(),
+  "businessName": zod.string().optional(),
+  "businessSlug": zod.string().optional(),
+  "cityId": zod.string(),
+  "kind": zod.enum(['announcement', 'special']),
+  "title": zod.string(),
+  "body": zod.string(),
+  "startsOn": zod.string(),
+  "endsOn": zod.string(),
+  "status": zod.enum(['pending', 'approved', 'rejected', 'withdrawn']),
+  "reviewNote": zod.string().nullish(),
+  "reviewedAt": zod.string().nullish(),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
 })
@@ -3143,6 +3316,18 @@ export const GetBusinessProfileParams = zod.object({
   "slug": zod.coerce.string()
 })
 
+export const getBusinessProfileResponseTwoContentOneServicesItemNlMax = 80;
+
+export const getBusinessProfileResponseTwoContentOneServicesItemEnMax = 80;
+
+export const getBusinessProfileResponseTwoContentOneServicesItemDetailNlMax = 200;
+
+export const getBusinessProfileResponseTwoContentOneServicesItemDetailEnMax = 200;
+
+export const getBusinessProfileResponseTwoContentOneServicesMax = 30;
+
+
+
 export const GetBusinessProfileResponse = zod.object({
   "id": zod.number(),
   "slug": zod.string(),
@@ -3194,6 +3379,23 @@ export const GetBusinessProfileResponse = zod.object({
   "createdAt": zod.string(),
   "updatedAt": zod.string()
 })),
+  "messages": zod.array(zod.object({
+  "id": zod.number(),
+  "businessProfileId": zod.number(),
+  "businessName": zod.string().optional(),
+  "businessSlug": zod.string().optional(),
+  "cityId": zod.string(),
+  "kind": zod.enum(['announcement', 'special']),
+  "title": zod.string(),
+  "body": zod.string(),
+  "startsOn": zod.string(),
+  "endsOn": zod.string(),
+  "status": zod.enum(['pending', 'approved', 'rejected', 'withdrawn']),
+  "reviewNote": zod.string().nullish(),
+  "reviewedAt": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})),
   "content": zod.union([zod.object({
   "nl": zod.object({
   "tagline": zod.string().nullish(),
@@ -3212,7 +3414,15 @@ export const GetBusinessProfileResponse = zod.object({
   "address": zod.string().nullish(),
   "logoUrl": zod.string().nullish(),
   "coverUrl": zod.string().nullish()
-}).describe('Stored language-neutral facts. Migrated legacy values are preserved verbatim; new owner input is validated by `BusinessRevisionFactsInput`.')
+}).describe('Stored language-neutral facts. Migrated legacy values are preserved verbatim; new owner input is validated by `BusinessRevisionFactsInput`.'),
+  "services": zod.array(zod.object({
+  "nl": zod.string().min(1).max(getBusinessProfileResponseTwoContentOneServicesItemNlMax),
+  "en": zod.string().min(1).max(getBusinessProfileResponseTwoContentOneServicesItemEnMax),
+  "detail": zod.object({
+  "nl": zod.string().max(getBusinessProfileResponseTwoContentOneServicesItemDetailNlMax).optional(),
+  "en": zod.string().max(getBusinessProfileResponseTwoContentOneServicesItemDetailEnMax).optional()
+}).optional()
+})).max(getBusinessProfileResponseTwoContentOneServicesMax).optional()
 }),zod.null()]).optional(),
   "provenance": zod.union([zod.object({
   "listingSource": zod.string(),
@@ -3247,6 +3457,28 @@ export const GetBusinessProfileResponse = zod.object({
 export const GetBusinessRevisionWorkspaceParams = zod.object({
   "id": zod.coerce.number()
 })
+
+export const getBusinessRevisionWorkspaceResponseLatestRevisionOneTwoContentServicesItemNlMax = 80;
+
+export const getBusinessRevisionWorkspaceResponseLatestRevisionOneTwoContentServicesItemEnMax = 80;
+
+export const getBusinessRevisionWorkspaceResponseLatestRevisionOneTwoContentServicesItemDetailNlMax = 200;
+
+export const getBusinessRevisionWorkspaceResponseLatestRevisionOneTwoContentServicesItemDetailEnMax = 200;
+
+export const getBusinessRevisionWorkspaceResponseLatestRevisionOneTwoContentServicesMax = 30;
+
+export const getBusinessRevisionWorkspaceResponseApprovedRevisionOneTwoContentServicesItemNlMax = 80;
+
+export const getBusinessRevisionWorkspaceResponseApprovedRevisionOneTwoContentServicesItemEnMax = 80;
+
+export const getBusinessRevisionWorkspaceResponseApprovedRevisionOneTwoContentServicesItemDetailNlMax = 200;
+
+export const getBusinessRevisionWorkspaceResponseApprovedRevisionOneTwoContentServicesItemDetailEnMax = 200;
+
+export const getBusinessRevisionWorkspaceResponseApprovedRevisionOneTwoContentServicesMax = 30;
+
+
 
 export const GetBusinessRevisionWorkspaceResponse = zod.object({
   "profile": zod.object({
@@ -3309,7 +3541,15 @@ export const GetBusinessRevisionWorkspaceResponse = zod.object({
   "address": zod.string().nullish(),
   "logoUrl": zod.string().nullish(),
   "coverUrl": zod.string().nullish()
-}).describe('Stored language-neutral facts. Migrated legacy values are preserved verbatim; new owner input is validated by `BusinessRevisionFactsInput`.')
+}).describe('Stored language-neutral facts. Migrated legacy values are preserved verbatim; new owner input is validated by `BusinessRevisionFactsInput`.'),
+  "services": zod.array(zod.object({
+  "nl": zod.string().min(1).max(getBusinessRevisionWorkspaceResponseLatestRevisionOneTwoContentServicesItemNlMax),
+  "en": zod.string().min(1).max(getBusinessRevisionWorkspaceResponseLatestRevisionOneTwoContentServicesItemEnMax),
+  "detail": zod.object({
+  "nl": zod.string().max(getBusinessRevisionWorkspaceResponseLatestRevisionOneTwoContentServicesItemDetailNlMax).optional(),
+  "en": zod.string().max(getBusinessRevisionWorkspaceResponseLatestRevisionOneTwoContentServicesItemDetailEnMax).optional()
+}).optional()
+})).max(getBusinessRevisionWorkspaceResponseLatestRevisionOneTwoContentServicesMax).optional()
 })
 })),zod.null()]),
   "approvedRevision": zod.union([zod.object({
@@ -3340,7 +3580,15 @@ export const GetBusinessRevisionWorkspaceResponse = zod.object({
   "address": zod.string().nullish(),
   "logoUrl": zod.string().nullish(),
   "coverUrl": zod.string().nullish()
-}).describe('Stored language-neutral facts. Migrated legacy values are preserved verbatim; new owner input is validated by `BusinessRevisionFactsInput`.')
+}).describe('Stored language-neutral facts. Migrated legacy values are preserved verbatim; new owner input is validated by `BusinessRevisionFactsInput`.'),
+  "services": zod.array(zod.object({
+  "nl": zod.string().min(1).max(getBusinessRevisionWorkspaceResponseApprovedRevisionOneTwoContentServicesItemNlMax),
+  "en": zod.string().min(1).max(getBusinessRevisionWorkspaceResponseApprovedRevisionOneTwoContentServicesItemEnMax),
+  "detail": zod.object({
+  "nl": zod.string().max(getBusinessRevisionWorkspaceResponseApprovedRevisionOneTwoContentServicesItemDetailNlMax).optional(),
+  "en": zod.string().max(getBusinessRevisionWorkspaceResponseApprovedRevisionOneTwoContentServicesItemDetailEnMax).optional()
+}).optional()
+})).max(getBusinessRevisionWorkspaceResponseApprovedRevisionOneTwoContentServicesMax).optional()
 })
 })),zod.null()]),
   "latestDecision": zod.union([zod.object({
@@ -3411,6 +3659,16 @@ export const updateBusinessRevisionBodyFactsLogoUrlMax = 500;
 
 export const updateBusinessRevisionBodyFactsCoverUrlMax = 500;
 
+export const updateBusinessRevisionBodyServicesItemNlMax = 80;
+
+export const updateBusinessRevisionBodyServicesItemEnMax = 80;
+
+export const updateBusinessRevisionBodyServicesItemDetailNlMax = 200;
+
+export const updateBusinessRevisionBodyServicesItemDetailEnMax = 200;
+
+export const updateBusinessRevisionBodyServicesMax = 30;
+
 
 
 export const UpdateBusinessRevisionBody = zod.object({
@@ -3432,8 +3690,38 @@ export const UpdateBusinessRevisionBody = zod.object({
   "address": zod.string().max(updateBusinessRevisionBodyFactsAddressMax).nullish(),
   "logoUrl": zod.string().max(updateBusinessRevisionBodyFactsLogoUrlMax).nullish(),
   "coverUrl": zod.string().max(updateBusinessRevisionBodyFactsCoverUrlMax).nullish()
-}).optional().describe('Owner-supplied language-neutral facts. Only http(s) URLs are accepted.')
+}).optional().describe('Owner-supplied language-neutral facts. Only http(s) URLs are accepted.'),
+  "services": zod.array(zod.object({
+  "nl": zod.string().min(1).max(updateBusinessRevisionBodyServicesItemNlMax),
+  "en": zod.string().min(1).max(updateBusinessRevisionBodyServicesItemEnMax),
+  "detail": zod.object({
+  "nl": zod.string().max(updateBusinessRevisionBodyServicesItemDetailNlMax).optional(),
+  "en": zod.string().max(updateBusinessRevisionBodyServicesItemDetailEnMax).optional()
+}).optional()
+})).max(updateBusinessRevisionBodyServicesMax).optional()
 })
+
+export const updateBusinessRevisionResponseLatestRevisionOneTwoContentServicesItemNlMax = 80;
+
+export const updateBusinessRevisionResponseLatestRevisionOneTwoContentServicesItemEnMax = 80;
+
+export const updateBusinessRevisionResponseLatestRevisionOneTwoContentServicesItemDetailNlMax = 200;
+
+export const updateBusinessRevisionResponseLatestRevisionOneTwoContentServicesItemDetailEnMax = 200;
+
+export const updateBusinessRevisionResponseLatestRevisionOneTwoContentServicesMax = 30;
+
+export const updateBusinessRevisionResponseApprovedRevisionOneTwoContentServicesItemNlMax = 80;
+
+export const updateBusinessRevisionResponseApprovedRevisionOneTwoContentServicesItemEnMax = 80;
+
+export const updateBusinessRevisionResponseApprovedRevisionOneTwoContentServicesItemDetailNlMax = 200;
+
+export const updateBusinessRevisionResponseApprovedRevisionOneTwoContentServicesItemDetailEnMax = 200;
+
+export const updateBusinessRevisionResponseApprovedRevisionOneTwoContentServicesMax = 30;
+
+
 
 export const UpdateBusinessRevisionResponse = zod.object({
   "profile": zod.object({
@@ -3496,7 +3784,15 @@ export const UpdateBusinessRevisionResponse = zod.object({
   "address": zod.string().nullish(),
   "logoUrl": zod.string().nullish(),
   "coverUrl": zod.string().nullish()
-}).describe('Stored language-neutral facts. Migrated legacy values are preserved verbatim; new owner input is validated by `BusinessRevisionFactsInput`.')
+}).describe('Stored language-neutral facts. Migrated legacy values are preserved verbatim; new owner input is validated by `BusinessRevisionFactsInput`.'),
+  "services": zod.array(zod.object({
+  "nl": zod.string().min(1).max(updateBusinessRevisionResponseLatestRevisionOneTwoContentServicesItemNlMax),
+  "en": zod.string().min(1).max(updateBusinessRevisionResponseLatestRevisionOneTwoContentServicesItemEnMax),
+  "detail": zod.object({
+  "nl": zod.string().max(updateBusinessRevisionResponseLatestRevisionOneTwoContentServicesItemDetailNlMax).optional(),
+  "en": zod.string().max(updateBusinessRevisionResponseLatestRevisionOneTwoContentServicesItemDetailEnMax).optional()
+}).optional()
+})).max(updateBusinessRevisionResponseLatestRevisionOneTwoContentServicesMax).optional()
 })
 })),zod.null()]),
   "approvedRevision": zod.union([zod.object({
@@ -3527,7 +3823,15 @@ export const UpdateBusinessRevisionResponse = zod.object({
   "address": zod.string().nullish(),
   "logoUrl": zod.string().nullish(),
   "coverUrl": zod.string().nullish()
-}).describe('Stored language-neutral facts. Migrated legacy values are preserved verbatim; new owner input is validated by `BusinessRevisionFactsInput`.')
+}).describe('Stored language-neutral facts. Migrated legacy values are preserved verbatim; new owner input is validated by `BusinessRevisionFactsInput`.'),
+  "services": zod.array(zod.object({
+  "nl": zod.string().min(1).max(updateBusinessRevisionResponseApprovedRevisionOneTwoContentServicesItemNlMax),
+  "en": zod.string().min(1).max(updateBusinessRevisionResponseApprovedRevisionOneTwoContentServicesItemEnMax),
+  "detail": zod.object({
+  "nl": zod.string().max(updateBusinessRevisionResponseApprovedRevisionOneTwoContentServicesItemDetailNlMax).optional(),
+  "en": zod.string().max(updateBusinessRevisionResponseApprovedRevisionOneTwoContentServicesItemDetailEnMax).optional()
+}).optional()
+})).max(updateBusinessRevisionResponseApprovedRevisionOneTwoContentServicesMax).optional()
 })
 })),zod.null()]),
   "latestDecision": zod.union([zod.object({
@@ -3572,6 +3876,28 @@ export const SubmitBusinessRevisionParams = zod.object({
 export const SubmitBusinessRevisionBody = zod.object({
   "expectedVersion": zod.number()
 })
+
+export const submitBusinessRevisionResponseLatestRevisionOneTwoContentServicesItemNlMax = 80;
+
+export const submitBusinessRevisionResponseLatestRevisionOneTwoContentServicesItemEnMax = 80;
+
+export const submitBusinessRevisionResponseLatestRevisionOneTwoContentServicesItemDetailNlMax = 200;
+
+export const submitBusinessRevisionResponseLatestRevisionOneTwoContentServicesItemDetailEnMax = 200;
+
+export const submitBusinessRevisionResponseLatestRevisionOneTwoContentServicesMax = 30;
+
+export const submitBusinessRevisionResponseApprovedRevisionOneTwoContentServicesItemNlMax = 80;
+
+export const submitBusinessRevisionResponseApprovedRevisionOneTwoContentServicesItemEnMax = 80;
+
+export const submitBusinessRevisionResponseApprovedRevisionOneTwoContentServicesItemDetailNlMax = 200;
+
+export const submitBusinessRevisionResponseApprovedRevisionOneTwoContentServicesItemDetailEnMax = 200;
+
+export const submitBusinessRevisionResponseApprovedRevisionOneTwoContentServicesMax = 30;
+
+
 
 export const SubmitBusinessRevisionResponse = zod.object({
   "profile": zod.object({
@@ -3634,7 +3960,15 @@ export const SubmitBusinessRevisionResponse = zod.object({
   "address": zod.string().nullish(),
   "logoUrl": zod.string().nullish(),
   "coverUrl": zod.string().nullish()
-}).describe('Stored language-neutral facts. Migrated legacy values are preserved verbatim; new owner input is validated by `BusinessRevisionFactsInput`.')
+}).describe('Stored language-neutral facts. Migrated legacy values are preserved verbatim; new owner input is validated by `BusinessRevisionFactsInput`.'),
+  "services": zod.array(zod.object({
+  "nl": zod.string().min(1).max(submitBusinessRevisionResponseLatestRevisionOneTwoContentServicesItemNlMax),
+  "en": zod.string().min(1).max(submitBusinessRevisionResponseLatestRevisionOneTwoContentServicesItemEnMax),
+  "detail": zod.object({
+  "nl": zod.string().max(submitBusinessRevisionResponseLatestRevisionOneTwoContentServicesItemDetailNlMax).optional(),
+  "en": zod.string().max(submitBusinessRevisionResponseLatestRevisionOneTwoContentServicesItemDetailEnMax).optional()
+}).optional()
+})).max(submitBusinessRevisionResponseLatestRevisionOneTwoContentServicesMax).optional()
 })
 })),zod.null()]),
   "approvedRevision": zod.union([zod.object({
@@ -3665,7 +3999,15 @@ export const SubmitBusinessRevisionResponse = zod.object({
   "address": zod.string().nullish(),
   "logoUrl": zod.string().nullish(),
   "coverUrl": zod.string().nullish()
-}).describe('Stored language-neutral facts. Migrated legacy values are preserved verbatim; new owner input is validated by `BusinessRevisionFactsInput`.')
+}).describe('Stored language-neutral facts. Migrated legacy values are preserved verbatim; new owner input is validated by `BusinessRevisionFactsInput`.'),
+  "services": zod.array(zod.object({
+  "nl": zod.string().min(1).max(submitBusinessRevisionResponseApprovedRevisionOneTwoContentServicesItemNlMax),
+  "en": zod.string().min(1).max(submitBusinessRevisionResponseApprovedRevisionOneTwoContentServicesItemEnMax),
+  "detail": zod.object({
+  "nl": zod.string().max(submitBusinessRevisionResponseApprovedRevisionOneTwoContentServicesItemDetailNlMax).optional(),
+  "en": zod.string().max(submitBusinessRevisionResponseApprovedRevisionOneTwoContentServicesItemDetailEnMax).optional()
+}).optional()
+})).max(submitBusinessRevisionResponseApprovedRevisionOneTwoContentServicesMax).optional()
 })
 })),zod.null()]),
   "latestDecision": zod.union([zod.object({
@@ -3708,6 +4050,28 @@ export const DiscardBusinessRevisionParams = zod.object({
 export const DiscardBusinessRevisionBody = zod.object({
   "expectedVersion": zod.number()
 })
+
+export const discardBusinessRevisionResponseLatestRevisionOneTwoContentServicesItemNlMax = 80;
+
+export const discardBusinessRevisionResponseLatestRevisionOneTwoContentServicesItemEnMax = 80;
+
+export const discardBusinessRevisionResponseLatestRevisionOneTwoContentServicesItemDetailNlMax = 200;
+
+export const discardBusinessRevisionResponseLatestRevisionOneTwoContentServicesItemDetailEnMax = 200;
+
+export const discardBusinessRevisionResponseLatestRevisionOneTwoContentServicesMax = 30;
+
+export const discardBusinessRevisionResponseApprovedRevisionOneTwoContentServicesItemNlMax = 80;
+
+export const discardBusinessRevisionResponseApprovedRevisionOneTwoContentServicesItemEnMax = 80;
+
+export const discardBusinessRevisionResponseApprovedRevisionOneTwoContentServicesItemDetailNlMax = 200;
+
+export const discardBusinessRevisionResponseApprovedRevisionOneTwoContentServicesItemDetailEnMax = 200;
+
+export const discardBusinessRevisionResponseApprovedRevisionOneTwoContentServicesMax = 30;
+
+
 
 export const DiscardBusinessRevisionResponse = zod.object({
   "profile": zod.object({
@@ -3770,7 +4134,15 @@ export const DiscardBusinessRevisionResponse = zod.object({
   "address": zod.string().nullish(),
   "logoUrl": zod.string().nullish(),
   "coverUrl": zod.string().nullish()
-}).describe('Stored language-neutral facts. Migrated legacy values are preserved verbatim; new owner input is validated by `BusinessRevisionFactsInput`.')
+}).describe('Stored language-neutral facts. Migrated legacy values are preserved verbatim; new owner input is validated by `BusinessRevisionFactsInput`.'),
+  "services": zod.array(zod.object({
+  "nl": zod.string().min(1).max(discardBusinessRevisionResponseLatestRevisionOneTwoContentServicesItemNlMax),
+  "en": zod.string().min(1).max(discardBusinessRevisionResponseLatestRevisionOneTwoContentServicesItemEnMax),
+  "detail": zod.object({
+  "nl": zod.string().max(discardBusinessRevisionResponseLatestRevisionOneTwoContentServicesItemDetailNlMax).optional(),
+  "en": zod.string().max(discardBusinessRevisionResponseLatestRevisionOneTwoContentServicesItemDetailEnMax).optional()
+}).optional()
+})).max(discardBusinessRevisionResponseLatestRevisionOneTwoContentServicesMax).optional()
 })
 })),zod.null()]),
   "approvedRevision": zod.union([zod.object({
@@ -3801,7 +4173,15 @@ export const DiscardBusinessRevisionResponse = zod.object({
   "address": zod.string().nullish(),
   "logoUrl": zod.string().nullish(),
   "coverUrl": zod.string().nullish()
-}).describe('Stored language-neutral facts. Migrated legacy values are preserved verbatim; new owner input is validated by `BusinessRevisionFactsInput`.')
+}).describe('Stored language-neutral facts. Migrated legacy values are preserved verbatim; new owner input is validated by `BusinessRevisionFactsInput`.'),
+  "services": zod.array(zod.object({
+  "nl": zod.string().min(1).max(discardBusinessRevisionResponseApprovedRevisionOneTwoContentServicesItemNlMax),
+  "en": zod.string().min(1).max(discardBusinessRevisionResponseApprovedRevisionOneTwoContentServicesItemEnMax),
+  "detail": zod.object({
+  "nl": zod.string().max(discardBusinessRevisionResponseApprovedRevisionOneTwoContentServicesItemDetailNlMax).optional(),
+  "en": zod.string().max(discardBusinessRevisionResponseApprovedRevisionOneTwoContentServicesItemDetailEnMax).optional()
+}).optional()
+})).max(discardBusinessRevisionResponseApprovedRevisionOneTwoContentServicesMax).optional()
 })
 })),zod.null()]),
   "latestDecision": zod.union([zod.object({
@@ -3998,6 +4378,28 @@ export const GetEditorialQueueQueryParams = zod.object({
   "limit": zod.coerce.number().min(1).max(getEditorialQueueQueryLimitMax).default(getEditorialQueueQueryLimitDefault).describe('Page size for cursor-paginated lists.')
 })
 
+export const getEditorialQueueResponseItemsItemRevisionTwoContentServicesItemNlMax = 80;
+
+export const getEditorialQueueResponseItemsItemRevisionTwoContentServicesItemEnMax = 80;
+
+export const getEditorialQueueResponseItemsItemRevisionTwoContentServicesItemDetailNlMax = 200;
+
+export const getEditorialQueueResponseItemsItemRevisionTwoContentServicesItemDetailEnMax = 200;
+
+export const getEditorialQueueResponseItemsItemRevisionTwoContentServicesMax = 30;
+
+export const getEditorialQueueResponseItemsItemApprovedRevisionOneTwoContentServicesItemNlMax = 80;
+
+export const getEditorialQueueResponseItemsItemApprovedRevisionOneTwoContentServicesItemEnMax = 80;
+
+export const getEditorialQueueResponseItemsItemApprovedRevisionOneTwoContentServicesItemDetailNlMax = 200;
+
+export const getEditorialQueueResponseItemsItemApprovedRevisionOneTwoContentServicesItemDetailEnMax = 200;
+
+export const getEditorialQueueResponseItemsItemApprovedRevisionOneTwoContentServicesMax = 30;
+
+
+
 export const GetEditorialQueueResponse = zod.object({
   "items": zod.array(zod.object({
   "revision": zod.object({
@@ -4028,7 +4430,15 @@ export const GetEditorialQueueResponse = zod.object({
   "address": zod.string().nullish(),
   "logoUrl": zod.string().nullish(),
   "coverUrl": zod.string().nullish()
-}).describe('Stored language-neutral facts. Migrated legacy values are preserved verbatim; new owner input is validated by `BusinessRevisionFactsInput`.')
+}).describe('Stored language-neutral facts. Migrated legacy values are preserved verbatim; new owner input is validated by `BusinessRevisionFactsInput`.'),
+  "services": zod.array(zod.object({
+  "nl": zod.string().min(1).max(getEditorialQueueResponseItemsItemRevisionTwoContentServicesItemNlMax),
+  "en": zod.string().min(1).max(getEditorialQueueResponseItemsItemRevisionTwoContentServicesItemEnMax),
+  "detail": zod.object({
+  "nl": zod.string().max(getEditorialQueueResponseItemsItemRevisionTwoContentServicesItemDetailNlMax).optional(),
+  "en": zod.string().max(getEditorialQueueResponseItemsItemRevisionTwoContentServicesItemDetailEnMax).optional()
+}).optional()
+})).max(getEditorialQueueResponseItemsItemRevisionTwoContentServicesMax).optional()
 })
 })),
   "profile": zod.object({
@@ -4070,7 +4480,15 @@ export const GetEditorialQueueResponse = zod.object({
   "address": zod.string().nullish(),
   "logoUrl": zod.string().nullish(),
   "coverUrl": zod.string().nullish()
-}).describe('Stored language-neutral facts. Migrated legacy values are preserved verbatim; new owner input is validated by `BusinessRevisionFactsInput`.')
+}).describe('Stored language-neutral facts. Migrated legacy values are preserved verbatim; new owner input is validated by `BusinessRevisionFactsInput`.'),
+  "services": zod.array(zod.object({
+  "nl": zod.string().min(1).max(getEditorialQueueResponseItemsItemApprovedRevisionOneTwoContentServicesItemNlMax),
+  "en": zod.string().min(1).max(getEditorialQueueResponseItemsItemApprovedRevisionOneTwoContentServicesItemEnMax),
+  "detail": zod.object({
+  "nl": zod.string().max(getEditorialQueueResponseItemsItemApprovedRevisionOneTwoContentServicesItemDetailNlMax).optional(),
+  "en": zod.string().max(getEditorialQueueResponseItemsItemApprovedRevisionOneTwoContentServicesItemDetailEnMax).optional()
+}).optional()
+})).max(getEditorialQueueResponseItemsItemApprovedRevisionOneTwoContentServicesMax).optional()
 })
 })),zod.null()]),
   "canDecide": zod.boolean()
@@ -4116,6 +4534,28 @@ export const ReviewBusinessRevisionBody = zod.object({
 })).max(reviewBusinessRevisionBodyFactChecksMax).optional().describe('Per-field verdicts recorded with an approval. Omitted fields stay `unchecked`.')
 })
 
+export const reviewBusinessRevisionResponseRevisionTwoContentServicesItemNlMax = 80;
+
+export const reviewBusinessRevisionResponseRevisionTwoContentServicesItemEnMax = 80;
+
+export const reviewBusinessRevisionResponseRevisionTwoContentServicesItemDetailNlMax = 200;
+
+export const reviewBusinessRevisionResponseRevisionTwoContentServicesItemDetailEnMax = 200;
+
+export const reviewBusinessRevisionResponseRevisionTwoContentServicesMax = 30;
+
+export const reviewBusinessRevisionResponseApprovedRevisionOneTwoContentServicesItemNlMax = 80;
+
+export const reviewBusinessRevisionResponseApprovedRevisionOneTwoContentServicesItemEnMax = 80;
+
+export const reviewBusinessRevisionResponseApprovedRevisionOneTwoContentServicesItemDetailNlMax = 200;
+
+export const reviewBusinessRevisionResponseApprovedRevisionOneTwoContentServicesItemDetailEnMax = 200;
+
+export const reviewBusinessRevisionResponseApprovedRevisionOneTwoContentServicesMax = 30;
+
+
+
 export const ReviewBusinessRevisionResponse = zod.object({
   "revision": zod.object({
   "id": zod.number(),
@@ -4145,7 +4585,15 @@ export const ReviewBusinessRevisionResponse = zod.object({
   "address": zod.string().nullish(),
   "logoUrl": zod.string().nullish(),
   "coverUrl": zod.string().nullish()
-}).describe('Stored language-neutral facts. Migrated legacy values are preserved verbatim; new owner input is validated by `BusinessRevisionFactsInput`.')
+}).describe('Stored language-neutral facts. Migrated legacy values are preserved verbatim; new owner input is validated by `BusinessRevisionFactsInput`.'),
+  "services": zod.array(zod.object({
+  "nl": zod.string().min(1).max(reviewBusinessRevisionResponseRevisionTwoContentServicesItemNlMax),
+  "en": zod.string().min(1).max(reviewBusinessRevisionResponseRevisionTwoContentServicesItemEnMax),
+  "detail": zod.object({
+  "nl": zod.string().max(reviewBusinessRevisionResponseRevisionTwoContentServicesItemDetailNlMax).optional(),
+  "en": zod.string().max(reviewBusinessRevisionResponseRevisionTwoContentServicesItemDetailEnMax).optional()
+}).optional()
+})).max(reviewBusinessRevisionResponseRevisionTwoContentServicesMax).optional()
 })
 })),
   "profile": zod.object({
@@ -4187,7 +4635,15 @@ export const ReviewBusinessRevisionResponse = zod.object({
   "address": zod.string().nullish(),
   "logoUrl": zod.string().nullish(),
   "coverUrl": zod.string().nullish()
-}).describe('Stored language-neutral facts. Migrated legacy values are preserved verbatim; new owner input is validated by `BusinessRevisionFactsInput`.')
+}).describe('Stored language-neutral facts. Migrated legacy values are preserved verbatim; new owner input is validated by `BusinessRevisionFactsInput`.'),
+  "services": zod.array(zod.object({
+  "nl": zod.string().min(1).max(reviewBusinessRevisionResponseApprovedRevisionOneTwoContentServicesItemNlMax),
+  "en": zod.string().min(1).max(reviewBusinessRevisionResponseApprovedRevisionOneTwoContentServicesItemEnMax),
+  "detail": zod.object({
+  "nl": zod.string().max(reviewBusinessRevisionResponseApprovedRevisionOneTwoContentServicesItemDetailNlMax).optional(),
+  "en": zod.string().max(reviewBusinessRevisionResponseApprovedRevisionOneTwoContentServicesItemDetailEnMax).optional()
+}).optional()
+})).max(reviewBusinessRevisionResponseApprovedRevisionOneTwoContentServicesMax).optional()
 })
 })),zod.null()]),
   "canDecide": zod.boolean()
@@ -4213,6 +4669,18 @@ export const GetPublicationQueueQueryParams = zod.object({
   "limit": zod.coerce.number().min(1).max(getPublicationQueueQueryLimitMax).default(getPublicationQueueQueryLimitDefault).describe('Page size for cursor-paginated lists.'),
   "recheckDue": zod.coerce.boolean().optional().describe('When true, restrict to businesses whose fact re-check is due and order by soonest staleOn.')
 })
+
+export const getPublicationQueueResponseItemsItemApprovedRevisionOneTwoContentServicesItemNlMax = 80;
+
+export const getPublicationQueueResponseItemsItemApprovedRevisionOneTwoContentServicesItemEnMax = 80;
+
+export const getPublicationQueueResponseItemsItemApprovedRevisionOneTwoContentServicesItemDetailNlMax = 200;
+
+export const getPublicationQueueResponseItemsItemApprovedRevisionOneTwoContentServicesItemDetailEnMax = 200;
+
+export const getPublicationQueueResponseItemsItemApprovedRevisionOneTwoContentServicesMax = 30;
+
+
 
 export const GetPublicationQueueResponse = zod.object({
   "items": zod.array(zod.object({
@@ -4255,7 +4723,15 @@ export const GetPublicationQueueResponse = zod.object({
   "address": zod.string().nullish(),
   "logoUrl": zod.string().nullish(),
   "coverUrl": zod.string().nullish()
-}).describe('Stored language-neutral facts. Migrated legacy values are preserved verbatim; new owner input is validated by `BusinessRevisionFactsInput`.')
+}).describe('Stored language-neutral facts. Migrated legacy values are preserved verbatim; new owner input is validated by `BusinessRevisionFactsInput`.'),
+  "services": zod.array(zod.object({
+  "nl": zod.string().min(1).max(getPublicationQueueResponseItemsItemApprovedRevisionOneTwoContentServicesItemNlMax),
+  "en": zod.string().min(1).max(getPublicationQueueResponseItemsItemApprovedRevisionOneTwoContentServicesItemEnMax),
+  "detail": zod.object({
+  "nl": zod.string().max(getPublicationQueueResponseItemsItemApprovedRevisionOneTwoContentServicesItemDetailNlMax).optional(),
+  "en": zod.string().max(getPublicationQueueResponseItemsItemApprovedRevisionOneTwoContentServicesItemDetailEnMax).optional()
+}).optional()
+})).max(getPublicationQueueResponseItemsItemApprovedRevisionOneTwoContentServicesMax).optional()
 })
 })),zod.null()]),
   "latestDecision": zod.union([zod.object({
@@ -4308,6 +4784,18 @@ export const SetBusinessPublicationBody = zod.object({
   "reason": zod.string().max(setBusinessPublicationBodyReasonMax).optional().describe('Required for unpublish and suspend.')
 })
 
+export const setBusinessPublicationResponseApprovedRevisionOneTwoContentServicesItemNlMax = 80;
+
+export const setBusinessPublicationResponseApprovedRevisionOneTwoContentServicesItemEnMax = 80;
+
+export const setBusinessPublicationResponseApprovedRevisionOneTwoContentServicesItemDetailNlMax = 200;
+
+export const setBusinessPublicationResponseApprovedRevisionOneTwoContentServicesItemDetailEnMax = 200;
+
+export const setBusinessPublicationResponseApprovedRevisionOneTwoContentServicesMax = 30;
+
+
+
 export const SetBusinessPublicationResponse = zod.object({
   "profile": zod.object({
   "id": zod.number(),
@@ -4348,7 +4836,15 @@ export const SetBusinessPublicationResponse = zod.object({
   "address": zod.string().nullish(),
   "logoUrl": zod.string().nullish(),
   "coverUrl": zod.string().nullish()
-}).describe('Stored language-neutral facts. Migrated legacy values are preserved verbatim; new owner input is validated by `BusinessRevisionFactsInput`.')
+}).describe('Stored language-neutral facts. Migrated legacy values are preserved verbatim; new owner input is validated by `BusinessRevisionFactsInput`.'),
+  "services": zod.array(zod.object({
+  "nl": zod.string().min(1).max(setBusinessPublicationResponseApprovedRevisionOneTwoContentServicesItemNlMax),
+  "en": zod.string().min(1).max(setBusinessPublicationResponseApprovedRevisionOneTwoContentServicesItemEnMax),
+  "detail": zod.object({
+  "nl": zod.string().max(setBusinessPublicationResponseApprovedRevisionOneTwoContentServicesItemDetailNlMax).optional(),
+  "en": zod.string().max(setBusinessPublicationResponseApprovedRevisionOneTwoContentServicesItemDetailEnMax).optional()
+}).optional()
+})).max(setBusinessPublicationResponseApprovedRevisionOneTwoContentServicesMax).optional()
 })
 })),zod.null()]),
   "latestDecision": zod.union([zod.object({

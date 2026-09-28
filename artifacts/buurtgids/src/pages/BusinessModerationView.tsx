@@ -8,6 +8,9 @@ import {
   useGetDealModeration,
   getGetDealModerationQueryKey,
   useDecideBusinessDeal,
+  useGetBusinessMessageModeration,
+  getGetBusinessMessageModerationQueryKey,
+  useDecideBusinessMessage,
   ModerationDecisionDecision,
 } from '@workspace/api-client-react';
 import { useQueryClient } from '@tanstack/react-query';
@@ -29,7 +32,7 @@ import { useEditorAccess } from '@/lib/editorAccess';
 import { featureFlags } from '@/lib/featureFlags';
 import { BusinessReviewPanel } from './BusinessReviewPanel';
 import { AccountSupportPanel } from './AccountSupportPanel';
-import { accountSupportTranslations, businessReviewTranslations, reviewWorkspaceTranslations } from '@/lib/i18n';
+import { accountSupportTranslations, businessMessageTranslations, businessReviewTranslations, reviewWorkspaceTranslations } from '@/lib/i18n';
 import { useAppLanguage } from '@/lib/useAppLanguage';
 
 // Minimal editor check based on role - assuming editor access checks are done elsewhere, 
@@ -49,7 +52,9 @@ export default function BusinessModerationView() {
   const tabCopy = reviewCopy.tabs;
   const legacyCopy = reviewCopy.legacy;
   const dateLocale = reviewLanguage === 'en' ? enUS : nl;
-  const tabCount = 2 + (featureFlags.businessPublication ? 3 : 0) + (featureFlags.accounts ? 2 : 0);
+  const tabCount = 3 + (featureFlags.businessPublication ? 3 : 0) + (featureFlags.accounts ? 2 : 0);
+  const messageCopy = businessMessageTranslations[reviewLanguage];
+  const [messageReviewNote, setMessageReviewNote] = useState('');
   
   // Claim Queries & Mutations
   const { data: claims, isLoading: claimsLoading } = useGetBusinessClaimModeration(
@@ -64,6 +69,18 @@ export default function BusinessModerationView() {
     { query: { enabled: !!isSignedIn && isEditor, queryKey: getGetDealModerationQueryKey({ status: 'pending' }) } }
   );
   const decideDeal = useDecideBusinessDeal();
+  const { data: messages, isLoading: messagesLoading } = useGetBusinessMessageModeration({ status: 'pending' }, {
+    query: { enabled: !!isSignedIn && isEditor, queryKey: getGetBusinessMessageModerationQueryKey({ status: 'pending' }) }
+  });
+  // A failed or non-JSON response must never take the whole review workspace down.
+  const messageList = Array.isArray(messages) ? messages : [];
+  const decideMessage = useDecideBusinessMessage();
+  const reviewMessage = (id: number, decision: 'approve' | 'reject') => {
+    decideMessage.mutate({ id, data: { decision, reviewNote: messageReviewNote || undefined } }, {
+      onSuccess: () => { toast.success(messageCopy.success); setMessageReviewNote(''); void queryClient.invalidateQueries({ queryKey: getGetBusinessMessageModerationQueryKey({ status: 'pending' }) }); },
+      onError: () => toast.error(messageCopy.error),
+    });
+  };
 
   // Dialog State
   const [isDecisionModalOpen, setIsDecisionModalOpen] = useState(false);
@@ -174,7 +191,8 @@ export default function BusinessModerationView() {
             <TabsTrigger value="claims" className="flex-1 basis-[calc(50%-0.25rem)] sm:basis-auto min-w-fit whitespace-nowrap px-4 py-2.5 font-bold data-[state=active]:bg-primary/10 data-[state=active]:text-primary rounded-lg flex gap-2">
               {legacyCopy.claimsTab} {claims && claims.length > 0 && <Badge variant="secondary" className="bg-primary text-primary-foreground text-[10px] py-0 px-1.5 h-4 min-w-4">{claims.length}</Badge>}
             </TabsTrigger>
-            <TabsTrigger value="deals" className="flex-1 basis-[calc(50%-0.25rem)] sm:basis-auto min-w-fit whitespace-nowrap px-4 py-2.5 font-bold data-[state=active]:bg-primary/10 data-[state=active]:text-primary rounded-lg flex gap-2">
+              <TabsTrigger value="messages" data-testid="tab-review-messages" className="flex-1 basis-auto">{messageCopy.moderation} {messageList.length ? `(${messageList.length})` : ''}</TabsTrigger>
+              <TabsTrigger value="deals" className="flex-1 basis-[calc(50%-0.25rem)] sm:basis-auto min-w-fit whitespace-nowrap px-4 py-2.5 font-bold data-[state=active]:bg-primary/10 data-[state=active]:text-primary rounded-lg flex gap-2">
               {legacyCopy.dealsTab} {deals && deals.length > 0 && <Badge variant="secondary" className="bg-primary text-primary-foreground text-[10px] py-0 px-1.5 h-4 min-w-4">{deals.length}</Badge>}
             </TabsTrigger>
             {featureFlags.businessPublication && (
@@ -313,6 +331,16 @@ export default function BusinessModerationView() {
             )}
           </TabsContent>
 
+          <TabsContent value="messages" className="space-y-4" data-testid="review-messages">
+            {messagesLoading ? <p>{reviewCopy.loading}</p> : !messageList.length ? <p>{messageCopy.reviewEmpty}</p> : messageList.map((message) => <Card key={message.id} data-testid={`moderation-message-${message.id}`}>
+              <CardHeader><Badge className="w-fit">{messageCopy[message.kind]}</Badge><CardTitle>{message.title}</CardTitle><CardDescription>{message.businessName} · {message.startsOn} – {message.endsOn}</CardDescription></CardHeader>
+              <CardContent className="space-y-3"><p className="whitespace-pre-wrap">{message.body}</p>
+                <label className="block text-sm">{messageCopy.reviewNote}<Textarea value={messageReviewNote} onChange={(event) => setMessageReviewNote(event.target.value)} maxLength={1000} /></label>
+                <div className="flex gap-2"><Button data-testid={`approve-message-${message.id}`} onClick={() => reviewMessage(message.id, 'approve')}>{messageCopy.approve}</Button>
+                  <Button variant="outline" data-testid={`reject-message-${message.id}`} onClick={() => reviewMessage(message.id, 'reject')}>{messageCopy.reject}</Button></div>
+              </CardContent>
+            </Card>)}
+          </TabsContent>
           <TabsContent value="deals" className="space-y-6 mt-0">
             {dealsLoading ? (
                <div className="space-y-4">

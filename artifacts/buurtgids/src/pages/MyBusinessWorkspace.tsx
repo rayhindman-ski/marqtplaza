@@ -9,6 +9,9 @@ import {
   useUpdateBusinessProfile,
   useCreateBusinessDeal,
   useUpdateBusinessDeal,
+  useCreateBusinessMessage,
+  useUpdateBusinessMessage,
+  type BusinessMessage,
   useWithdrawBusinessClaim,
   type ApiError,
 } from '@workspace/api-client-react';
@@ -50,7 +53,7 @@ import {
 } from '@/components/ui/form';
 import { useAccountAuth } from '@/lib/accountAuth';
 import { featureFlags } from '@/lib/featureFlags';
-import { businessIntakeTranslations } from '@/lib/i18n';
+import { businessIntakeTranslations, businessMessageTranslations } from '@/lib/i18n';
 import { claimPresentation } from '@/lib/claimPresentation';
 import { useAppLanguage } from '@/lib/useAppLanguage';
 
@@ -84,6 +87,54 @@ const dealSchema = z.object({
   validFrom: z.string().min(1, 'Kies een startdatum'),
   validUntil: z.string().min(1, 'Kies een einddatum'),
 });
+
+function MessagesPanel({ profileId, messages, language }: { profileId: number; messages: BusinessMessage[]; language: 'nl' | 'en' }) {
+  const copy = businessMessageTranslations[language];
+  const queryClient = useQueryClient();
+  const create = useCreateBusinessMessage();
+  const update = useUpdateBusinessMessage();
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState({ kind: 'announcement' as 'announcement' | 'special', title: '', body: '', startsOn: new Date().toISOString().slice(0, 10), endsOn: '' });
+  const refresh = () => queryClient.invalidateQueries({ queryKey: getGetMyBusinessProfilesQueryKey() });
+  const submit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    try {
+      if (editingId) await update.mutateAsync({ id: profileId, messageId: editingId, data: form });
+      else await create.mutateAsync({ id: profileId, data: form });
+      toast.success(copy.success);
+      setShowForm(false);
+      setEditingId(null);
+      void refresh();
+    } catch { toast.error(copy.error); }
+  };
+  return <section className="space-y-5" data-testid="owner-messages">
+    <div className="flex justify-between gap-3 items-start">
+      <div><h2 className="text-2xl font-bold">{copy.title}</h2><p className="text-sm text-muted-foreground">{copy.intro}</p></div>
+      <Button type="button" data-testid="create-message" onClick={() => { setEditingId(null); setForm({ kind: 'announcement', title: '', body: '', startsOn: new Date().toISOString().slice(0, 10), endsOn: '' }); setShowForm(true); }}>{copy.create}</Button>
+    </div>
+    {showForm && <form className="space-y-3 rounded-xl border bg-card p-5" onSubmit={(event) => void submit(event)} data-testid="message-form">
+      <label className="block text-sm">{copy.kind}<select className="block w-full border rounded p-2" value={form.kind} onChange={(event) => setForm({ ...form, kind: event.target.value as 'announcement' | 'special' })}><option value="announcement">{copy.announcement}</option><option value="special">{copy.special}</option></select></label>
+      <label className="block text-sm">{copy.titleField}<Input data-testid="message-title" required maxLength={120} value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} /></label>
+      <label className="block text-sm">{copy.bodyField}<Textarea data-testid="message-body" required maxLength={1000} value={form.body} onChange={(event) => setForm({ ...form, body: event.target.value })} /></label>
+      <div className="grid grid-cols-2 gap-3">
+        <label className="text-sm">{copy.start}<Input type="date" data-testid="message-start" required value={form.startsOn} onChange={(event) => setForm({ ...form, startsOn: event.target.value })} /></label>
+        <label className="text-sm">{copy.end}<Input type="date" data-testid="message-end" required value={form.endsOn} onChange={(event) => setForm({ ...form, endsOn: event.target.value })} /></label>
+      </div>
+      <div className="flex gap-2"><Button type="submit" data-testid="save-message" disabled={create.isPending || update.isPending}>{copy.save}</Button><Button type="button" variant="outline" onClick={() => setShowForm(false)}>{copy.cancel}</Button></div>
+    </form>}
+    {!messages.length && <p>{copy.empty}</p>}
+    <div className="grid sm:grid-cols-2 gap-4">{messages.map((message) => <Card key={message.id} data-testid={`owner-message-${message.id}`}>
+      <CardHeader><div className="flex justify-between"><Badge>{copy[message.kind]}</Badge><Badge variant="outline" data-testid={`message-status-${message.id}`}>{copy[message.status]}</Badge></div><CardTitle>{message.title}</CardTitle></CardHeader>
+      <CardContent className="space-y-2"><p className="whitespace-pre-wrap">{message.body}</p><p className="text-xs">{message.startsOn} – {message.endsOn}</p>{message.reviewNote && <p className="text-sm">{copy.note}: {message.reviewNote}</p>}
+        {message.status !== 'withdrawn' && <div className="flex gap-2">
+          <Button size="sm" variant="outline" data-testid={`edit-message-${message.id}`} onClick={() => { setEditingId(message.id); setForm({ kind: message.kind, title: message.title, body: message.body, startsOn: message.startsOn, endsOn: message.endsOn }); setShowForm(true); }}>{copy.edit}</Button>
+          <Button size="sm" variant="outline" data-testid={`withdraw-message-${message.id}`} onClick={async () => { try { await update.mutateAsync({ id: profileId, messageId: message.id, data: { status: 'withdrawn' } }); void refresh(); } catch { toast.error(copy.error); } }}>{copy.withdraw}</Button>
+        </div>}
+      </CardContent>
+    </Card>)}</div>
+  </section>;
+}
 
 type DealFormValues = z.infer<typeof dealSchema>;
 
@@ -431,9 +482,10 @@ export default function MyBusinessWorkspace() {
                 <div className="lg:col-span-3">
                   {activeProfile && (
                     <Tabs defaultValue="profiel" className="w-full">
-                      <TabsList className="grid w-full grid-cols-2 mb-8 bg-card border-border/50 shadow-sm p-1 rounded-xl h-auto">
+                      <TabsList className="grid w-full grid-cols-3 mb-8 bg-card border-border/50 shadow-sm p-1 rounded-xl h-auto">
                         <TabsTrigger value="profiel" className="py-2.5 font-bold data-[state=active]:bg-primary/10 data-[state=active]:text-primary rounded-lg">Profiel</TabsTrigger>
                         <TabsTrigger value="deals" className="py-2.5 font-bold data-[state=active]:bg-primary/10 data-[state=active]:text-primary rounded-lg">Deals & Acties</TabsTrigger>
+                        <TabsTrigger value="messages" data-testid="tab-owner-messages">{businessMessageTranslations[language].title}</TabsTrigger>
                       </TabsList>
                       
                       <TabsContent value="profiel" className="space-y-6">
@@ -495,6 +547,7 @@ export default function MyBusinessWorkspace() {
                         </Card>
                       </TabsContent>
 
+                      <TabsContent value="messages"><MessagesPanel key={activeProfile.id} profileId={activeProfile.id} messages={activeProfile.messages ?? []} language={language} /></TabsContent>
                       <TabsContent value="deals" className="space-y-6">
                         <div className="flex items-center justify-between">
                           <div>

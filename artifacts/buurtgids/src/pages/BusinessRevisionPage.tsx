@@ -42,6 +42,7 @@ type FormState = {
   nl: Record<TextKey, string>;
   en: Record<TextKey, string>;
   facts: Record<FactKey, string>;
+  services: NonNullable<BusinessRevisionContent['services']>;
 };
 
 function emptyForm(): FormState {
@@ -49,6 +50,7 @@ function emptyForm(): FormState {
     nl: { tagline: '', description: '', openingHours: '' },
     en: { tagline: '', description: '', openingHours: '' },
     facts: { websiteUrl: '', phone: '', email: '', address: '', logoUrl: '', coverUrl: '' },
+    services: [],
   };
 }
 
@@ -60,6 +62,7 @@ function formFromContent(content: BusinessRevisionContent | null | undefined): F
     form.en[key] = content.en[key] ?? '';
   }
   for (const key of FACT_KEYS) form.facts[key] = content.facts[key] ?? '';
+  form.services = content.services?.map((service) => ({ ...service, ...(service.detail ? { detail: { ...service.detail } } : {}) })) ?? [];
   return form;
 }
 
@@ -76,6 +79,7 @@ function diffForm(base: FormState, next: FormState): Omit<BusinessRevisionUpdate
   for (const key of FACT_KEYS) {
     if (base.facts[key] !== next.facts[key]) patch.facts = { ...(patch.facts ?? {}), [key]: next.facts[key] };
   }
+  if (JSON.stringify(base.services) !== JSON.stringify(next.services)) patch.services = next.services;
   return patch;
 }
 
@@ -345,6 +349,28 @@ export default function BusinessRevisionPage() {
             </div>
           )}
           <fieldset disabled={locked || busy} className="space-y-6">
+            <Card>
+              <CardHeader><CardTitle>{copy.services}</CardTitle><CardDescription>{copy.servicesHint}</CardDescription></CardHeader>
+              <CardContent className="space-y-4">
+                {form.services.map((service, index) => (
+                  <div key={index} className="rounded-lg border p-4 space-y-3" data-testid={`service-row-${index}`}>
+                    {(['nl', 'en'] as const).map((lang) => (
+                      <div key={lang} className="grid sm:grid-cols-2 gap-3">
+                        <div><Label htmlFor={`service-${index}-${lang}`}>{lang === 'nl' ? copy.languageNl : copy.languageEn}</Label>
+                          <Input id={`service-${index}-${lang}`} maxLength={80} value={service[lang]} onChange={(event) => setForm((current) => ({ ...current, services: current.services.map((item, i) => i === index ? { ...item, [lang]: event.target.value } : item) }))} />
+                        </div>
+                        <div><Label htmlFor={`service-${index}-detail-${lang}`}>{copy.serviceDetail} ({lang})</Label>
+                          <Input id={`service-${index}-detail-${lang}`} maxLength={200} value={service.detail?.[lang] ?? ''} onChange={(event) => setForm((current) => ({ ...current, services: current.services.map((item, i) => i === index ? { ...item, detail: { ...item.detail, [lang]: event.target.value } } : item) }))} />
+                        </div>
+                      </div>
+                    ))}
+                    <Button type="button" variant="outline" data-testid={`remove-service-${index}`} onClick={() => setForm((current) => ({ ...current, services: current.services.filter((_, i) => i !== index) }))}>{copy.removeService}</Button>
+                  </div>
+                ))}
+                <Button type="button" variant="outline" data-testid="add-service" disabled={form.services.length >= 30} onClick={() => setForm((current) => ({ ...current, services: [...current.services, { nl: '', en: '' }] }))}>{copy.addService}</Button>
+                {Object.keys(fieldErrors).some((field) => field.startsWith('services')) && <p className="text-destructive text-sm">{copy.invalid}</p>}
+              </CardContent>
+            </Card>
             {(['nl', 'en'] as const).map((lang) => (
               <Card key={lang} className="border-border/60 shadow-sm">
                 <CardHeader className="pb-4">

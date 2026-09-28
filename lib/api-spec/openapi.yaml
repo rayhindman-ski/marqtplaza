@@ -2477,6 +2477,113 @@ paths:
         "404":
           description: Profile not found
 
+  /business-profiles/{id}/messages:
+    get:
+      operationId: getBusinessMessages
+      tags: [businesses]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: number }
+      responses:
+        "200":
+          description: Owned messages
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/BusinessMessage" }
+        "404": { description: Business not found }
+    post:
+      operationId: createBusinessMessage
+      tags: [businesses]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: number }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BusinessMessageInput" }
+      responses:
+        "201":
+          description: Message submitted
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BusinessMessage" }
+        "400": { description: Invalid message }
+        "404": { description: Business not found }
+        "409": { description: Active message limit reached }
+  /business-profiles/{id}/messages/{messageId}:
+    patch:
+      operationId: updateBusinessMessage
+      tags: [businesses]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: number }
+        - name: messageId
+          in: path
+          required: true
+          schema: { type: number }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BusinessMessageUpdate" }
+      responses:
+        "200":
+          description: Updated message
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BusinessMessage" }
+        "400": { description: Invalid update }
+        "404": { description: Message not found }
+        "409": { description: Active message limit reached }
+  /messages/moderation:
+    get:
+      operationId: getBusinessMessageModeration
+      tags: [businesses]
+      parameters:
+        - name: status
+          in: query
+          schema: { type: string, enum: [pending, approved, rejected, withdrawn, all] }
+      responses:
+        "200":
+          description: Messages awaiting review
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/BusinessMessage" }
+  /messages/moderation/{id}:
+    patch:
+      operationId: decideBusinessMessage
+      tags: [businesses]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: number }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BusinessMessageDecision" }
+      responses:
+        "200":
+          description: Decision
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BusinessMessage" }
+        "400": { description: Invalid decision }
+        "404": { description: Message not found }
+        "409": { description: Already decided }
+
   /business-profiles/{id}/deals:
     post:
       operationId: createBusinessDeal
@@ -4465,6 +4572,30 @@ components:
           $ref: "#/components/schemas/BusinessRevisionText"
         facts:
           $ref: "#/components/schemas/BusinessRevisionFacts"
+        services:
+          type: array
+          maxItems: 30
+          items:
+            type: object
+            required: [nl, en]
+            properties:
+              nl:
+                type: string
+                minLength: 1
+                maxLength: 80
+              en:
+                type: string
+                minLength: 1
+                maxLength: 80
+              detail:
+                type: object
+                properties:
+                  nl:
+                    type: string
+                    maxLength: 200
+                  en:
+                    type: string
+                    maxLength: 200
 
     BusinessRevision:
       allOf:
@@ -4488,6 +4619,30 @@ components:
           $ref: "#/components/schemas/BusinessRevisionTextInput"
         facts:
           $ref: "#/components/schemas/BusinessRevisionFactsInput"
+        services:
+          type: array
+          maxItems: 30
+          items:
+            type: object
+            required: [nl, en]
+            properties:
+              nl:
+                type: string
+                minLength: 1
+                maxLength: 80
+              en:
+                type: string
+                minLength: 1
+                maxLength: 80
+              detail:
+                type: object
+                properties:
+                  nl:
+                    type: string
+                    maxLength: 200
+                  en:
+                    type: string
+                    maxLength: 200
 
     BusinessRevisionTransitionInput:
       type: object
@@ -5071,6 +5226,50 @@ components:
         coverUrl:
           type: string
 
+    BusinessMessage:
+      type: object
+      required: [id, businessProfileId, cityId, kind, title, body, startsOn, endsOn, status, createdAt, updatedAt]
+      properties:
+        id: { type: number }
+        businessProfileId: { type: number }
+        businessName: { type: string }
+        businessSlug: { type: string }
+        cityId: { type: string }
+        kind: { type: string, enum: [announcement, special] }
+        title: { type: string }
+        body: { type: string }
+        startsOn: { type: string }
+        endsOn: { type: string }
+        status: { type: string, enum: [pending, approved, rejected, withdrawn] }
+        reviewNote: { type: ["string", "null"] }
+        reviewedAt: { type: ["string", "null"] }
+        createdAt: { type: string }
+        updatedAt: { type: string }
+    BusinessMessageInput:
+      type: object
+      required: [kind, title, body, startsOn, endsOn]
+      properties:
+        kind: { type: string, enum: [announcement, special] }
+        title: { type: string, minLength: 1, maxLength: 120 }
+        body: { type: string, minLength: 1, maxLength: 1000 }
+        startsOn: { type: string }
+        endsOn: { type: string }
+    BusinessMessageUpdate:
+      type: object
+      properties:
+        kind: { type: string, enum: [announcement, special] }
+        title: { type: string, minLength: 1, maxLength: 120 }
+        body: { type: string, minLength: 1, maxLength: 1000 }
+        startsOn: { type: string }
+        endsOn: { type: string }
+        status: { type: string, enum: [withdrawn] }
+    BusinessMessageDecision:
+      type: object
+      required: [decision]
+      properties:
+        decision: { type: string, enum: [approve, reject] }
+        reviewNote: { type: string, maxLength: 1000 }
+
     Deal:
       type: object
       required: [id, businessProfileId, cityId, title, description, category, offerText, validFrom, validUntil, status, createdAt, updatedAt]
@@ -5207,7 +5406,7 @@ components:
       allOf:
         - $ref: "#/components/schemas/BusinessProfile"
         - type: object
-          required: [role, deals]
+          required: [role, deals, messages]
           properties:
             role:
               type: string
@@ -5215,12 +5414,16 @@ components:
               type: array
               items:
                 $ref: "#/components/schemas/Deal"
+            messages:
+              type: array
+              items:
+                $ref: "#/components/schemas/BusinessMessage"
 
     PublicBusinessProfile:
       allOf:
         - $ref: "#/components/schemas/BusinessProfile"
         - type: object
-          required: [deals]
+          required: [deals, messages]
           description: |
             When the business has an approved revision, editorial fields (tagline, description,
             openingHours, websiteUrl, phone, email, address, logoUrl, coverUrl) come only from that
@@ -5231,6 +5434,10 @@ components:
               type: array
               items:
                 $ref: "#/components/schemas/Deal"
+            messages:
+              type: array
+              items:
+                $ref: "#/components/schemas/BusinessMessage"
             content:
               oneOf:
                 - $ref: "#/components/schemas/BusinessRevisionContent"

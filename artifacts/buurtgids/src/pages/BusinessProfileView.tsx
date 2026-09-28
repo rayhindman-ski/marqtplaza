@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAppLanguage } from '@/lib/useAppLanguage';
-import { accountTranslations, businessPublicationTranslations } from '@/lib/i18n';
+import { accountTranslations, businessMessageTranslations, businessPublicationTranslations } from '@/lib/i18n';
 import { featureFlags } from '@/lib/featureFlags';
 import { businessIntentRef } from '@/lib/businessIntent';
 
@@ -239,6 +239,25 @@ export default function BusinessProfileView() {
           )}
         </div>
 
+        {approved?.services && approved.services.length > 0 && (
+          <section className="mb-8 space-y-4" data-testid="public-services">
+            <h2 className="text-2xl font-bold">{publicationCopy.services}</h2>
+            <ul className="grid gap-3 sm:grid-cols-2">{approved.services.map((service, index) => (
+              <li key={index} className="rounded-xl border bg-card p-4">
+                <strong>{(language === 'en' ? service.en : service.nl) || (language === 'en' ? service.nl : service.en)}</strong>
+                {(language === 'en' ? service.detail?.en : service.detail?.nl) || (language === 'en' ? service.detail?.nl : service.detail?.en)
+                  ? <p className="text-sm text-muted-foreground">{(language === 'en' ? service.detail?.en : service.detail?.nl) || (language === 'en' ? service.detail?.nl : service.detail?.en)}</p> : null}
+              </li>
+            ))}</ul>
+          </section>
+        )}
+        {profile.messages && profile.messages.length > 0 && <section className="mb-8 space-y-5" data-testid="public-messages">
+          <h2 className="text-3xl font-extrabold">{businessMessageTranslations[language].news}</h2>
+          <div className="grid sm:grid-cols-2 gap-4">{profile.messages.map((message) => <Card key={message.id} data-testid={`public-message-${message.id}`}>
+            <CardHeader><Badge className="w-fit">{businessMessageTranslations[language][message.kind]}</Badge><CardTitle>{message.title}</CardTitle></CardHeader>
+            <CardContent><p className="whitespace-pre-wrap">{message.body}</p><p className="mt-3 text-xs text-muted-foreground">{message.startsOn} – {message.endsOn}</p></CardContent>
+          </Card>)}</div>
+        </section>}
         {/* Deals Section */}
         {profile.deals && profile.deals.length > 0 && (
           <div className="space-y-6">

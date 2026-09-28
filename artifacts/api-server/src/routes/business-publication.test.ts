@@ -1437,6 +1437,39 @@ describe("business publication routes", () => {
       assert.notEqual(profile.publicationStatus, "archived");
     }
   });
+  it("reviews structured services and rejects invalid names or oversized lists", async () => {
+    const serviceSlug = `pub-services-${runId}`;
+    const [profile] = await db.insert(businessProfilesTable).values({
+      slug: serviceSlug, cityId: "dhg", listingSource: "openstreetmap", listingId: serviceSlug,
+      name: "Services Test", isClaimed: true, publicationStatus: "published",
+    }).returning();
+    await db.insert(businessMembersTable).values({ businessProfileId: profile.id, userId: users.owner, role: "owner" });
+    try {
+      const path = `/api/business-profiles/${profile.id}/revision`;
+      const services = [{ nl: "Fietsonderhoud", en: "Bike repairs", detail: { nl: "Alle merken", en: "All brands" } }];
+      const empty = await request(path, { method: "PATCH", body: json({ expectedVersion: 0, services: [{ nl: "", en: "Bike repairs" }] }) });
+      assert.equal(empty.status, 400);
+      const tooMany = await request(path, { method: "PATCH", body: json({ expectedVersion: 0, services: Array(31).fill(services[0]) }) });
+      assert.equal(tooMany.status, 400);
+      const draft = await request(path, { method: "PATCH", body: json({ expectedVersion: 0, nl: { description: "Wij repareren fietsen." }, services }) });
+      assert.equal(draft.status, 200);
+      assert.deepEqual(draft.body.latestRevision.content.services, services);
+      const submitted = await request(`${path}/submit`, { method: "POST", body: json({ expectedVersion: 1 }) });
+      assert.equal(submitted.status, 200);
+      const reviewed = await request(`/api/review/revisions/${submitted.body.latestRevision.id}/decision`, {
+        method: "POST", ...asReviewer, body: json({ decision: "approve", expectedVersion: 1 }),
+      });
+      assert.equal(reviewed.status, 200);
+      const publicProfile = await request(`/api/business-profiles/public/${serviceSlug}`, { userId: null });
+      assert.equal(publicProfile.status, 200);
+      assert.deepEqual(publicProfile.body.content.services, services);
+    } finally {
+      const revisions = await db.select({ id: businessProfileRevisionsTable.id }).from(businessProfileRevisionsTable)
+        .where(eq(businessProfileRevisionsTable.businessProfileId, profile.id));
+      if (revisions.length) await db.delete(businessReviewsTable).where(inArray(businessReviewsTable.targetId, revisions.map((r) => r.id)));
+      await db.delete(businessProfilesTable).where(eq(businessProfilesTable.id, profile.id));
+    }
+  });
   it("keeps profiles at the legacy contract limits live after backfill, in public and in the owner workspace", async () => {
     const wideListingId = `pub-test-wide-${runId}`;
     const wideSlug = `pub-wide-${runId}`;

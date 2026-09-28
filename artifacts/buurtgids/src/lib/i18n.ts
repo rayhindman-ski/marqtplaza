@@ -1864,6 +1864,31 @@ export function getMarkerCopy(
     : marker;
 }
 
+export const businessMessageTranslations = {
+  nl: {
+    title: 'Berichten & acties', intro: 'De redactie controleert nieuwe en gewijzigde berichten voordat ze zichtbaar worden.',
+    news: 'Nieuws & acties', announcement: 'Mededeling', special: 'Actie',
+    create: 'Bericht plaatsen', edit: 'Bewerken', withdraw: 'Intrekken', save: 'Opslaan',
+    cancel: 'Annuleren', titleField: 'Titel', bodyField: 'Bericht', kind: 'Soort',
+    start: 'Vanaf', end: 'Tot en met', pending: 'In behandeling', approved: 'Goedgekeurd',
+    rejected: 'Afgewezen', withdrawn: 'Ingetrokken', note: 'Toelichting redactie',
+    empty: 'Nog geen berichten.', error: 'Het bericht kon niet worden opgeslagen.',
+    success: 'Bericht ingediend voor beoordeling.', moderation: 'Berichten', approve: 'Goedkeuren', reject: 'Afwijzen',
+    reviewNote: 'Toelichting (optioneel)', reviewEmpty: 'Geen berichten ter beoordeling.',
+  },
+  en: {
+    title: 'Messages & specials', intro: 'Editors review new and updated messages before they become visible.',
+    news: 'News & specials', announcement: 'Announcement', special: 'Special',
+    create: 'Create message', edit: 'Edit', withdraw: 'Withdraw', save: 'Save',
+    cancel: 'Cancel', titleField: 'Title', bodyField: 'Message', kind: 'Type',
+    start: 'From', end: 'Through', pending: 'Pending', approved: 'Approved',
+    rejected: 'Rejected', withdrawn: 'Withdrawn', note: 'Editorial note',
+    empty: 'No messages yet.', error: 'Could not save the message.',
+    success: 'Message submitted for review.', moderation: 'Messages', approve: 'Approve', reject: 'Reject',
+    reviewNote: 'Note (optional)', reviewEmpty: 'No messages awaiting review.',
+  },
+} as const;
+
 export const businessPublicationTranslations = {
   nl: {
     editorTitle: 'Profiel bewerken',
@@ -1911,6 +1936,11 @@ export const businessPublicationTranslations = {
     description: 'Beschrijving',
     openingHours: 'Openingstijden',
     facts: 'Feiten & contact',
+    services: 'Diensten',
+    servicesHint: 'Voeg maximaal 30 diensten toe in beide talen.',
+    serviceDetail: 'Details',
+    addService: 'Dienst toevoegen',
+    removeService: 'Dienst verwijderen',
     websiteUrl: 'Website',
     phone: 'Telefoon',
     email: 'E-mail',
@@ -1981,6 +2011,11 @@ export const businessPublicationTranslations = {
     description: 'Description',
     openingHours: 'Opening hours',
     facts: 'Facts & contact',
+    services: 'Services',
+    servicesHint: 'Add up to 30 services in both languages.',
+    serviceDetail: 'Details',
+    addService: 'Add service',
+    removeService: 'Remove service',
     websiteUrl: 'Website',
     phone: 'Phone',
     email: 'Email',

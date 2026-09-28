@@ -44,6 +44,7 @@ export type BusinessRevisionContent = {
   nl?: Record<string, string | null>;
   en?: Record<string, string | null>;
   facts?: Record<string, string | number | boolean | null>;
+  services?: { nl: string; en: string; detail?: { nl?: string; en?: string } }[];
 };
 
 export const businessProfileRevisionsTable = pgTable(

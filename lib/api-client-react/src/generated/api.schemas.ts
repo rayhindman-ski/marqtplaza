@@ -1212,14 +1212,58 @@ export interface BusinessRevisionFactsInput {
   coverUrl?: string | null;
 }
 
+export type BusinessRevisionContentServicesItemDetail = {
+  /** @maxLength 200 */
+  nl?: string;
+  /** @maxLength 200 */
+  en?: string;
+};
+
+export type BusinessRevisionContentServicesItem = {
+  /**
+     * @minLength 1
+     * @maxLength 80
+     */
+  nl: string;
+  /**
+     * @minLength 1
+     * @maxLength 80
+     */
+  en: string;
+  detail?: BusinessRevisionContentServicesItemDetail;
+};
+
 export interface BusinessRevisionContent {
   nl: BusinessRevisionText;
   en: BusinessRevisionText;
   facts: BusinessRevisionFacts;
+  /** @maxItems 30 */
+  services?: BusinessRevisionContentServicesItem[];
 }
 
 export type BusinessRevision = BusinessRevisionSummary & {
   content: BusinessRevisionContent;
+};
+
+export type BusinessRevisionUpdateInputServicesItemDetail = {
+  /** @maxLength 200 */
+  nl?: string;
+  /** @maxLength 200 */
+  en?: string;
+};
+
+export type BusinessRevisionUpdateInputServicesItem = {
+  /**
+     * @minLength 1
+     * @maxLength 80
+     */
+  nl: string;
+  /**
+     * @minLength 1
+     * @maxLength 80
+     */
+  en: string;
+  detail?: BusinessRevisionUpdateInputServicesItemDetail;
 };
 
 export interface BusinessRevisionUpdateInput {
@@ -1228,6 +1272,8 @@ export interface BusinessRevisionUpdateInput {
   nl?: BusinessRevisionTextInput;
   en?: BusinessRevisionTextInput;
   facts?: BusinessRevisionFactsInput;
+  /** @maxItems 30 */
+  services?: BusinessRevisionUpdateInputServicesItem[];
 }
 
 export interface BusinessRevisionTransitionInput {
@@ -1837,6 +1883,114 @@ export interface BusinessProfileUpdate {
   coverUrl?: string;
 }
 
+export type BusinessMessageKind = typeof BusinessMessageKind[keyof typeof BusinessMessageKind];
+
+
+export const BusinessMessageKind = {
+  announcement: 'announcement',
+  special: 'special',
+} as const;
+
+export type BusinessMessageStatus = typeof BusinessMessageStatus[keyof typeof BusinessMessageStatus];
+
+
+export const BusinessMessageStatus = {
+  pending: 'pending',
+  approved: 'approved',
+  rejected: 'rejected',
+  withdrawn: 'withdrawn',
+} as const;
+
+export interface BusinessMessage {
+  id: number;
+  businessProfileId: number;
+  businessName?: string;
+  businessSlug?: string;
+  cityId: string;
+  kind: BusinessMessageKind;
+  title: string;
+  body: string;
+  startsOn: string;
+  endsOn: string;
+  status: BusinessMessageStatus;
+  /** @nullable */
+  reviewNote?: string | null;
+  /** @nullable */
+  reviewedAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type BusinessMessageInputKind = typeof BusinessMessageInputKind[keyof typeof BusinessMessageInputKind];
+
+
+export const BusinessMessageInputKind = {
+  announcement: 'announcement',
+  special: 'special',
+} as const;
+
+export interface BusinessMessageInput {
+  kind: BusinessMessageInputKind;
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  title: string;
+  /**
+     * @minLength 1
+     * @maxLength 1000
+     */
+  body: string;
+  startsOn: string;
+  endsOn: string;
+}
+
+export type BusinessMessageUpdateKind = typeof BusinessMessageUpdateKind[keyof typeof BusinessMessageUpdateKind];
+
+
+export const BusinessMessageUpdateKind = {
+  announcement: 'announcement',
+  special: 'special',
+} as const;
+
+export type BusinessMessageUpdateStatus = typeof BusinessMessageUpdateStatus[keyof typeof BusinessMessageUpdateStatus];
+
+
+export const BusinessMessageUpdateStatus = {
+  withdrawn: 'withdrawn',
+} as const;
+
+export interface BusinessMessageUpdate {
+  kind?: BusinessMessageUpdateKind;
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  title?: string;
+  /**
+     * @minLength 1
+     * @maxLength 1000
+     */
+  body?: string;
+  startsOn?: string;
+  endsOn?: string;
+  status?: BusinessMessageUpdateStatus;
+}
+
+export type BusinessMessageDecisionDecision = typeof BusinessMessageDecisionDecision[keyof typeof BusinessMessageDecisionDecision];
+
+
+export const BusinessMessageDecisionDecision = {
+  approve: 'approve',
+  reject: 'reject',
+} as const;
+
+export interface BusinessMessageDecision {
+  decision: BusinessMessageDecisionDecision;
+  /** @maxLength 1000 */
+  reviewNote?: string;
+}
+
 export interface Deal {
   id: number;
   businessProfileId: number;
@@ -1959,10 +2113,12 @@ export interface ModerationDecision {
 export type OwnedBusinessProfile = BusinessProfile & {
   role: string;
   deals: Deal[];
+  messages: BusinessMessage[];
 };
 
 export type PublicBusinessProfile = BusinessProfile & ({
   deals: Deal[];
+  messages: BusinessMessage[];
   content?: BusinessRevisionContent | null;
   provenance?: PublicBusinessProvenance | null;
 });
@@ -3490,6 +3646,21 @@ export type LookupBusinessesParams = {
  */
 q: string;
 };
+
+export type GetBusinessMessageModerationParams = {
+status?: GetBusinessMessageModerationStatus;
+};
+
+export type GetBusinessMessageModerationStatus = typeof GetBusinessMessageModerationStatus[keyof typeof GetBusinessMessageModerationStatus];
+
+
+export const GetBusinessMessageModerationStatus = {
+  pending: 'pending',
+  approved: 'approved',
+  rejected: 'rejected',
+  withdrawn: 'withdrawn',
+  all: 'all',
+} as const;
 
 export type GetBusinessProfileByListingParams = {
 /**

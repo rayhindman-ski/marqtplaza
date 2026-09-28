@@ -7,6 +7,7 @@
  */
 import type { BusinessRevisionFactsInput } from './businessRevisionFactsInput';
 import type { BusinessRevisionTextInput } from './businessRevisionTextInput';
+import type { BusinessRevisionUpdateInputServicesItem } from './businessRevisionUpdateInputServicesItem';
 
 export interface BusinessRevisionUpdateInput {
   /** Version of the latest revision the owner saw; 0 when the business has none yet. */
@@ -14,4 +15,6 @@ export interface BusinessRevisionUpdateInput {
   nl?: BusinessRevisionTextInput;
   en?: BusinessRevisionTextInput;
   facts?: BusinessRevisionFactsInput;
+  /** @maxItems 30 */
+  services?: BusinessRevisionUpdateInputServicesItem[];
 }
