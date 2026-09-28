@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, Redirect, useSearch } from 'wouter';
-import { useClerk, useUser, UserProfile } from '@clerk/react';
+import { useClerk, UserProfile } from '@clerk/react';
 import { useQueryClient } from '@tanstack/react-query';
 import { BookmarkCheck, ClipboardList, LogOut, Mail, ShieldCheck, Trash2, UserRound, KeyRound, Store } from 'lucide-react';
 
@@ -44,7 +44,6 @@ export default function AccountPage() {
   const auth = useAccountAuth();
   const search = useSearch();
   const { signOut } = useClerk();
-  const { user } = useUser();
   const signedIn = auth.isLoaded && auth.isSignedIn;
   const accountsOn = featureFlags.accounts && signedIn;
   const returnPath = resolveReturnPath(search);
@@ -256,7 +255,7 @@ export default function AccountPage() {
             </Link>
           )}
         </div>
-        {registrationQuery.data?.registered && !registrationQuery.data.registration?.surveyCompleted && isSurveyDue(user?.createdAt) && (
+        {registrationQuery.data?.registered && !registrationQuery.data.registration?.surveyCompleted && isSurveyDue(registrationQuery.data.registration?.createdAt) && (
           <div data-testid="status-survey-due" className="mt-5 flex flex-col gap-3 rounded-2xl border border-primary/30 bg-primary/5 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-sm leading-6 text-foreground">{copy.account.surveyDueBody}</p>
             <Link href="/onboarding" data-testid="link-survey" className="inline-flex shrink-0 items-center justify-center rounded-full bg-primary px-4 py-2 text-sm font-bold text-primary-foreground hover:bg-primary/90">

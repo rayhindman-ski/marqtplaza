@@ -1662,14 +1662,15 @@ function MarkerCard({
   onSave: (e: React.MouseEvent) => void;
 }) {
   const [isExpanded, setIsExpanded] = useState(false);
-  const listingProfileParams = { listingSource: marker.source ?? '', listingId: String(marker.id ?? '') };
-  const { data: businessProfileMatch } = useGetBusinessProfileByListing(
+  const listingProfileParams = { cityId: 'dhg', listingSource: marker.source ?? '', listingId: String(marker.id ?? '') };
+  const businessLookupEnabled = isExpanded
+    && (marker.category === 'Businesses' || marker.category === 'Food & Drink')
+    && Boolean(marker.source && marker.id);
+  const { data: businessProfileMatch, isPending: businessLookupPending } = useGetBusinessProfileByListing(
     listingProfileParams,
     { query: {
       queryKey: getGetBusinessProfileByListingQueryKey(listingProfileParams),
-      enabled: isExpanded
-        && (marker.category === 'Businesses' || marker.category === 'Food & Drink')
-        && Boolean(marker.source && marker.id),
+      enabled: businessLookupEnabled,
       staleTime: 5 * 60 * 1000,
     } },
   );
@@ -1936,7 +1937,15 @@ function MarkerCard({
               <span className="min-w-0 truncate">{marker.address ?? `Lat ${marker.lat.toFixed(5)} · Lng ${marker.lng.toFixed(5)}`}</span>
             </div>
             <div className="flex max-w-full shrink-0 flex-wrap items-center justify-end gap-x-3 gap-y-1">
-              {(marker.category === 'Businesses' || marker.category === 'Food & Drink') && (
+              {(marker.category === 'Businesses' || marker.category === 'Food & Drink') && businessLookupEnabled && businessLookupPending && (
+                // Not a link yet: offering "claim" before the lookup settles could send
+                // someone into the claim flow for an already-claimed business.
+                <span data-testid={`listing-business-link-pending-${marker.id}`} aria-busy="true" className="flex items-center gap-1 text-[11px] font-bold text-muted-foreground">
+                  <Store className="h-3 w-3 shrink-0" />
+                  {language === 'nl' ? 'Bedrijf controleren…' : 'Checking business…'}
+                </span>
+              )}
+              {(marker.category === 'Businesses' || marker.category === 'Food & Drink') && !(businessLookupEnabled && businessLookupPending) && (
                 <Link
                    data-testid={`listing-business-link-${marker.id}`}
                    href={businessProfileMatch?.match

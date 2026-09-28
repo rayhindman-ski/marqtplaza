@@ -2661,6 +2661,12 @@ paths:
       tags: [businesses]
       summary: Find a public claimed profile for a listing
       parameters:
+        - name: cityId
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 1
         - name: listingSource
           in: query
           required: true

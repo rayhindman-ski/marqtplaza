@@ -91,7 +91,10 @@ export function createRegistrationRouter(
   if (!userId) return;
 
   const parsed = SaveRegistrationBody.safeParse(req.body);
-  if (!parsed.success) {
+  const integerRatings = parsed.success
+    && [parsed.data.usefulnessRating, parsed.data.referralLikelihood]
+      .every((rating) => rating === undefined || rating === null || Number.isInteger(rating));
+  if (!parsed.success || !integerRatings) {
     res.status(400).json({ error: "Please complete the registration fields." });
     return;
   }

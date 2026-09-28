@@ -25,7 +25,7 @@ let baseUrl: string;
 let profileId: number;
 
 async function lookup(source = listingSource, id = listingId) {
-  const response = await fetch(`${baseUrl}/api/business-profiles/by-listing?listingSource=${encodeURIComponent(source)}&listingId=${encodeURIComponent(id)}`);
+  const response = await fetch(`${baseUrl}/api/business-profiles/by-listing?cityId=dhg&listingSource=${encodeURIComponent(source)}&listingId=${encodeURIComponent(id)}`);
   return { status: response.status, body: await response.json() };
 }
 

@@ -583,3 +583,47 @@ Still unset in production and therefore still inert: `LIFECYCLE_DELIVERY_PROVIDE
 and `CONSUMER_REGISTRATION_LINK_BASE_URL` — registration and invitation
 e-mails queue but are not sent until a provider is configured. `SESSION_SECRET`
 is present. Provisional policy values (§15) remain provisional.
+
+### 2026-09-28 — Post-flag follow-ups (user requests)
+
+**Research survey deferred (07:40 – 08:20 CEST).** The usefulness / referral /
+desired-features questions on `/onboarding` were part of sign-up when accounts
+were off in production. Decision (user): they are asked only after **14 days of
+participation**, never at registration. The `user_registrations` survey columns
+are now nullable, `PUT /api/registration` accepts a registration without them
+and never overwrites stored answers with absent ones (COALESCE), ratings must
+be integers 1–5, and the response carries `surveyCompleted`. The form shows the
+survey only when the registration row is ≥ 14 days old; the account page
+shows a "Deel je ervaring" prompt at that point. Note: this lifts the earlier
+"do not touch `/api/registration`" freeze, at the user's explicit request.
+
+**Business account follow-ups (08:20 – 09:45 CEST), all three chosen by the
+user:**
+
+1. *Map pin → claimed business.* New public `GET /business-profiles/by-listing`
+   (`cityId`, `listingSource`, `listingId` → `{slug,name}` only for claimed,
+   published, not-closed profiles with an approved snapshot). The marker popup
+   resolves it lazily when opened; while pending it shows a non-link
+   "Bedrijf controleren…" so nobody enters the claim flow for a claimed
+   business; unclaimed listings keep the claim link unchanged. Frozen map
+   regression still 11/11.
+2. *Services list.* Optional `services[]` (nl/en name + detail, ≤ 30) in
+   `BusinessRevisionContent`; edited in the revision draft, visible in the
+   reviewer preview, rendered publicly only from the approved snapshot.
+3. *Owner messages / specials.* New `business_messages` table and routes
+   mirroring deals (owner create/edit/withdraw → pending; editor moderation
+   under role + active-account gates; public profile shows approved messages
+   inside their date window; max 5 pending+approved per business, serialized
+   on the profile row lock). Owner panel in "Mijn bedrijf", moderation tab in
+   the review workspace, "Nieuws & acties" section on `/bedrijf/:slug`.
+
+**Architect review:** one round, four findings, all fixed (moderation read
+route lacked the active-account gate; by-listing lookup lacked `cityId`; the
+popup offered "claim" before the lookup settled; fractional ratings reached
+the integer column). Evidence: api registration 3/3, by-listing 3/3,
+business-messages 2/2, business-intake 15/15, business-membership 13/13,
+business-publication 26 pass / 2 pre-existing fails; e2e business-pin-link
+2/2, business-messages 1/1, business-review, business-moderation 9/9,
+business-intake + business-onboarding 20/20, business-membership,
+map-regression 11/11, account-privacy/support/consumer-registration 15/15;
+typecheck clean. `v042`/`v043` release specs still fail as recorded debt.

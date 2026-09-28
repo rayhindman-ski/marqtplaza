@@ -119,5 +119,11 @@ describe("registration route", () => {
       body: JSON.stringify({ name: "Sam de Vries", registrationType: "consumer", email: "sam@example.test", usefulnessRating: 9 }),
     }, freshUserId);
     assert.equal(rejected.status, 400);
+
+    const fractional = await request("/api/registration", {
+      method: "PUT",
+      body: JSON.stringify({ name: "Sam de Vries", registrationType: "consumer", email: "sam@example.test", usefulnessRating: 2.5, referralLikelihood: 3, desiredFeatures: "x" }),
+    }, freshUserId);
+    assert.equal(fractional.status, 400);
   });
 });

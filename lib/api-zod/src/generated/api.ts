@@ -3296,7 +3296,9 @@ export const UpdateBusinessDealResponse = zod.object({
 
 
 
+
 export const GetBusinessProfileByListingQueryParams = zod.object({
+  "cityId": zod.coerce.string().min(1),
   "listingSource": zod.coerce.string().min(1),
   "listingId": zod.coerce.string().min(1)
 })

@@ -38,10 +38,15 @@ const REGISTRATION_MARKER_KEY = 'buurtplaza-onboarding-complete';
 /** The usefulness/referral/features survey is asked only after this much use. */
 export const SURVEY_DELAY_MS = 14 * 24 * 60 * 60 * 1000;
 
-/** True once the account is old enough for the survey; unknown creation dates never qualify. */
-export function isSurveyDue(accountCreatedAt: Date | null | undefined, now: number = Date.now()): boolean {
-  if (!accountCreatedAt) return false;
-  const created = accountCreatedAt.getTime();
+/**
+ * True once the research registration itself is old enough for the survey.
+ * Participation starts at registration, not at account creation, so a first
+ * registration (even on an old account) never asks the survey; unknown or
+ * missing registration dates never qualify.
+ */
+export function isSurveyDue(registrationCreatedAt: string | Date | null | undefined, now: number = Date.now()): boolean {
+  if (!registrationCreatedAt) return false;
+  const created = new Date(registrationCreatedAt).getTime();
   return Number.isFinite(created) && now - created >= SURVEY_DELAY_MS;
 }
 
@@ -104,8 +109,8 @@ export default function OnboardingPage() {
   if (!isSignedIn || !user) return <Redirect to="/sign-in" />;
 
   // The survey is never part of sign-up: it appears here only after ~14 days
-  // of use, judged by the account's creation date.
-  const surveyDue = isSurveyDue(user.createdAt);
+  // of use, counted from the registration date.
+  const surveyDue = isSurveyDue(registrationQuery.data?.registration?.createdAt);
 
   const submit = (event: React.FormEvent) => {
     event.preventDefault();

@@ -439,6 +439,7 @@ export function createBusinessesRouter(
     const parsed = GetBusinessProfileByListingQueryParams.safeParse(req.query);
     if (typeof req.query.listingSource !== "string" || !req.query.listingSource.trim()
       || typeof req.query.listingId !== "string" || !req.query.listingId.trim()
+      || typeof req.query.cityId !== "string" || !req.query.cityId.trim()
       || !parsed.success) {
       res.status(400).json({ error: "Invalid listing identity." });
       return;
@@ -447,6 +448,8 @@ export function createBusinessesRouter(
       .select()
       .from(businessProfilesTable)
       .where(and(
+        // Listing identity is unique per (city, source, id) only.
+        eq(businessProfilesTable.cityId, parsed.data.cityId),
         eq(businessProfilesTable.listingSource, parsed.data.listingSource),
         eq(businessProfilesTable.listingId, parsed.data.listingId),
         eq(businessProfilesTable.isClaimed, true),
@@ -771,6 +774,9 @@ export function createBusinessesRouter(
   });
 
   router.get("/messages/moderation", requireEditorRole, async (req, res): Promise<void> => {
+    // Editor role alone is not enough: a suspended/deleted account must not read unpublished messages.
+    const editorId = await requireActiveAccount(req, res, getUserId);
+    if (!editorId) return;
     const parsed = GetBusinessMessageModerationQueryParams.safeParse(req.query);
     if (!parsed.success) { res.status(400).json({ error: "Invalid status." }); return; }
     const rows = await db.select({ message: businessMessagesTable, profile: businessProfilesTable })

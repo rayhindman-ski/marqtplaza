@@ -3666,6 +3666,10 @@ export type GetBusinessProfileByListingParams = {
 /**
  * @minLength 1
  */
+cityId: string;
+/**
+ * @minLength 1
+ */
 listingSource: string;
 /**
  * @minLength 1
