@@ -9,6 +9,7 @@ import { getFeatureFlags } from "./lib/featureFlags";
 import { startLifecycleDispatcher } from "./lib/lifecycleOutbox";
 import { startAccountRetentionScheduler } from "./lib/accountRetention";
 import { expireAccountExports, prepareAccountExports } from "./lib/accountExport";
+import { executeAccountDeletions } from "./lib/accountDeletion";
 
 const rawPort = process.env["PORT"];
 
@@ -44,6 +45,7 @@ async function startServer(): Promise<void> {
     startAccountRetentionScheduler(undefined, async now => {
       await expireAccountExports(now);
       if (getFeatureFlags().accountExport) await prepareAccountExports(now);
+      if (getFeatureFlags().accountDeletion) await executeAccountDeletions(now);
     });
   }
   app.listen(port, (err) => {

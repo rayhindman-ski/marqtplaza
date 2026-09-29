@@ -73,6 +73,7 @@ import OnboardingPage from './pages/OnboardingPage';
 import AccountPage from './pages/AccountPage';
 import AccountPreferencesPage from './pages/AccountPreferencesPage';
 import AccountPrivacyPage from './pages/AccountPrivacyPage';
+import AccountDeletionPage from './pages/AccountDeletionPage';
 import AccountEmailChangePage from './pages/AccountEmailChangePage';
 import AccountRightsPage, { AccountExportUnavailablePage } from './pages/AccountRightsPage';
 import { TermsPage, PrivacyNoticePage, EnglishTermsPage, EnglishPrivacyNoticePage } from './pages/LegalDocumentPage';
@@ -3823,6 +3824,7 @@ export default function App() {
           <Route path="/account/e-mail-wijzigen" component={AccountEmailChangePage} />
           <Route path={BUSINESS_ONBOARDING_PATH} component={BusinessOnboardingIntroPage} />
           <Route path="/account/privacy" component={AccountPrivacyPage} />
+          <Route path="/account/verwijderen" component={AccountDeletionPage} />
           <Route path="/voorwaarden" component={TermsPage} />
           <Route path="/privacy" component={PrivacyNoticePage} />
           <Route path="/terms" component={EnglishTermsPage} />

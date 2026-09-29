@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { AccountDeletionReport } from './accountDeletionReport';
 import type { AccountRequestBlocker } from './accountRequestBlocker';
 import type { AccountRequestScope } from './accountRequestScope';
 import type { AccountRequestStatus } from './accountRequestStatus';
@@ -28,6 +29,11 @@ export interface AccountRequest {
      * @nullable
      */
   deadlineAt: string | null;
+  /** @nullable */
+  scheduledFor: string | null;
+  /** @nullable */
+  cancelUntil: string | null;
+  resultReport: AccountDeletionReport | null;
   createdAt: string;
   updatedAt: string;
   /** @nullable */

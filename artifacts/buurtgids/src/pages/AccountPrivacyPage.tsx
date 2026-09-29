@@ -7,6 +7,8 @@ import {
   getGetAccountMeQueryKey,
   getGetAccountMessagesQueryKey,
   getGetAccountRequestsQueryKey,
+  getGetAccountDeletionPolicyQueryKey,
+  useGetAccountDeletionPolicy,
   useCreateAccountDeletionRequest,
   useGetAccountMe,
   useGetAccountMessages,
@@ -22,7 +24,7 @@ import { AccountLoading, AccountShell, AccountUnavailable } from '@/components/a
 import { Button } from '@/components/ui/button';
 import { useAccountAuth } from '@/lib/accountAuth';
 import { featureFlags } from '@/lib/featureFlags';
-import { accountErrorMessage, accountTranslations, formatCopy, type Language } from '@/lib/i18n';
+import { accountDeletionCategoryCopy, accountErrorMessage, accountOffboardingLabels, accountTranslations, formatCopy, type Language } from '@/lib/i18n';
 import { useAppLanguage } from '@/lib/useAppLanguage';
 import { isRecentAuthError, RecentAuthPrompt } from '@/lib/recentAuth';
 import { ConsentPanel } from './AccountPage';
@@ -88,7 +90,10 @@ export default function AccountPrivacyPage() {
       ) : me ? (
         <>
           {featureFlags.consentCenter ? <ConsentPanel language={language} enabled={accountsOn} verified={me.capabilities.isVerified} /> : <AccountUnavailable language={language} />}
-          <RequestsPanel language={language} verified={me.capabilities.isVerified} />
+          {featureFlags.accountDeletion ? <Link href="/account/verwijderen" data-testid="link-privacy-deletion" className="mb-3 block font-bold text-primary underline">
+            {accountOffboardingLabels[language].deleteAccount}
+          </Link> : null}
+          <RequestsPanel language={language} verified={me.capabilities.isVerified} showPolicy={false} />
           <MessagesPanel language={language} />
         </>
       ) : (
@@ -100,6 +105,14 @@ export default function AccountPrivacyPage() {
       <Link href="/account/gegevens-export" data-testid="link-privacy-export" className="mb-6 ml-4 inline-block font-bold text-primary underline">
         {accountTranslations[language].rights.export}
       </Link>
+      <nav aria-label={language === 'nl' ? 'Afzonderlijke accountacties' : 'Separate account actions'} className="mb-6 flex flex-wrap gap-3 text-sm">
+        {([
+          ['signOut', '/account'], ['revokeSessions', '/account/beveiliging'],
+          ['withdrawConsent', '/account/privacy'], ['clearPreferences', '/account/voorkeuren'],
+          ['clearLastSearch', '/account'], ['exportData', '/account/gegevens-export'],
+          ['deleteAccount', '/account/verwijderen'],
+        ] as const).map(([action, href]) => <Link key={action} href={href} className="font-semibold text-primary underline">{accountOffboardingLabels[language][action]}</Link>)}
+      </nav>
       <div className="mt-2">
         <Link href="/account" data-testid="link-privacy-back" className="text-sm font-bold text-primary hover:underline">
           {privacy.toAccount}
@@ -109,7 +122,7 @@ export default function AccountPrivacyPage() {
   );
 }
 
-function RequestsPanel({ language, verified }: { language: Language; verified: boolean }) {
+export function RequestsPanel({ language, verified, showPolicy = false }: { language: Language; verified: boolean; showPolicy?: boolean }) {
   const copy = accountTranslations[language];
   const privacy = copy.privacy;
   const queryClient = useQueryClient();
@@ -117,6 +130,8 @@ function RequestsPanel({ language, verified }: { language: Language; verified: b
   const [error, setError] = useState<string | null>(null);
   const [needsRecentAuth, setNeedsRecentAuth] = useState(false);
   const [withdrawingId, setWithdrawingId] = useState<number | null>(null);
+  const [confirmed, setConfirmed] = useState(false);
+  const policyQuery = useGetAccountDeletionPolicy({ query: { queryKey: getGetAccountDeletionPolicyQueryKey(), enabled: featureFlags.accountDeletion && showPolicy, retry: false } });
 
   const requestsQuery = useGetAccountRequests({ query: { queryKey: getGetAccountRequestsQueryKey(), retry: false } });
   const createMutation = useCreateAccountDeletionRequest();
@@ -125,6 +140,9 @@ function RequestsPanel({ language, verified }: { language: Language; verified: b
   const requests = requestsQuery.data?.requests ?? [];
   const openRequest = requests.find((request) => request.status === 'received' || request.status === 'blocked' || request.status === 'in_review');
   const allAcknowledged = DELETION_SCOPES.every((scope) => acknowledged.has(scope));
+  const policy = featureFlags.accountDeletion && showPolicy ? policyQuery.data : null;
+  const categoryCopy = accountDeletionCategoryCopy[language];
+  const labelsFor = (ids: string[]) => ids.map(id => categoryCopy.labels[id as keyof typeof categoryCopy.labels] ?? categoryCopy.other).join(', ');
 
   const invalidate = () =>
     Promise.all([
@@ -150,7 +168,9 @@ function RequestsPanel({ language, verified }: { language: Language; verified: b
     setError(null);
     setWithdrawingId(request.id);
     try {
-      await withdrawMutation.mutateAsync({ id: request.id, data: { expectedVersion: request.version } });
+      const updated = await withdrawMutation.mutateAsync({ id: request.id, data: { expectedVersion: request.version } });
+      queryClient.setQueryData<{ requests: AccountRequest[] }>(getGetAccountRequestsQueryKey(), previous =>
+        previous ? { ...previous, requests: previous.requests.map(item => item.id === updated.id ? updated : item) } : previous);
       await invalidate();
     } catch (cause) {
       setError(accountErrorMessage(cause, language));
@@ -167,6 +187,14 @@ function RequestsPanel({ language, verified }: { language: Language; verified: b
         {privacy.scopesTitle}
       </p>
       <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">{privacy.scopesIntro}</p>
+      {showPolicy && featureFlags.accountDeletion && policyQuery.isError ? <p role="alert">{accountErrorMessage(policyQuery.error, language)}</p> : null}
+      {policy ? <div data-testid="deletion-policy" className="mt-4 space-y-2 text-sm leading-6">
+        <p>{policy.labels[language].waiting}</p>
+        <p>{policy.labels[language].retained}</p>
+        <p>{categoryCopy.deleted}: {labelsFor(policy.categories.deleted)}</p>
+        <p>{categoryCopy.anonymised}: {labelsFor(policy.categories.anonymised)}</p>
+        <p>{categoryCopy.retained}: {labelsFor(policy.categories.retained)}</p>
+      </div> : null}
 
       <fieldset className="mt-5" disabled={Boolean(openRequest) || !verified}>
         <legend className="sr-only">{privacy.scopesTitle}</legend>
@@ -200,7 +228,9 @@ function RequestsPanel({ language, verified }: { language: Language; verified: b
         <p className="text-sm font-bold text-foreground">{privacy.separateTitle}</p>
         <ul className="mt-2 list-disc space-y-1 pl-5 text-sm leading-6 text-muted-foreground">
           <li>{privacy.separateRegistration}</li>
-          <li>{privacy.separateClerk}</li>
+          <li>{featureFlags.accountDeletion
+            ? language === 'nl' ? 'Bij uitvoering worden alle Clerk-sessies ingetrokken en je Clerk-account verwijderd.' : 'On execution, all Clerk sessions are revoked and your Clerk account is deleted.'
+            : privacy.separateClerk}</li>
           <li>{privacy.separateSignOut}</li>
           <li>{privacy.separateContributions}</li>
         </ul>
@@ -212,25 +242,26 @@ function RequestsPanel({ language, verified }: { language: Language; verified: b
           <span>{privacy.soleOwnerNotice}</span>
         </p>
         <p>{privacy.reauthNotice}</p>
-        <p>{privacy.noRetention}</p>
+        {!featureFlags.accountDeletion ? <p>{privacy.noRetention}</p> : null}
       </div>
 
       {!verified ? (
         <p role="status" data-testid="status-deletion-unverified" className="mt-4 text-sm font-bold text-amber-900">{copy.account.unverifiedBody}</p>
       ) : null}
       {error ? (needsRecentAuth
-        ? <RecentAuthPrompt language={language} returnPath="/account/privacy" />
+        ? <RecentAuthPrompt language={language} returnPath={featureFlags.accountDeletion ? "/account/verwijderen" : "/account/privacy"} />
         : <p role="alert" data-testid="status-deletion-error" className="mt-4 text-sm font-bold text-red-800">{error}</p>) : null}
       {requestsQuery.isError ? (
         <p role="alert" data-testid="status-requests-error" className="mt-4 text-sm font-bold text-red-800">{accountErrorMessage(requestsQuery.error, language)}</p>
       ) : null}
 
       <div className="mt-5 flex flex-wrap items-center gap-3">
+        {featureFlags.accountDeletion && showPolicy ? <label className="flex w-full gap-2 text-sm"><input type="checkbox" checked={confirmed} onChange={event => setConfirmed(event.target.checked)} data-testid="checkbox-deletion-confirm" />{language === 'nl' ? 'Ik bevestig dat ik mijn account wil verwijderen.' : 'I confirm that I want to delete my account.'}</label> : null}
         <Button
           type="button"
           variant="destructive"
           data-testid="button-request-deletion"
-          disabled={!verified || !allAcknowledged || Boolean(openRequest) || createMutation.isPending}
+          disabled={!verified || !allAcknowledged || Boolean(openRequest) || createMutation.isPending || (featureFlags.accountDeletion && showPolicy && (!confirmed || !policy))}
           onClick={() => void submit()}
         >
           {createMutation.isPending ? privacy.submitting : privacy.submit}
@@ -251,13 +282,19 @@ function RequestsPanel({ language, verified }: { language: Language; verified: b
                   <p data-testid={`request-status-${request.id}`} className="mt-1 text-sm text-foreground">
                     {lookup(privacy, `status_${request.status}`, request.status)}
                   </p>
+                  {featureFlags.accountDeletion && request.type === 'deletion' ? <p className="mt-1 text-xs" data-testid={`request-schedule-${request.id}`}>
+                    {language === 'nl' ? 'Referentie' : 'Reference'} #{request.id}
+                    {request.scheduledFor ? ` · ${language === 'nl' ? 'Gepland' : 'Scheduled'}: ${formatDate(request.scheduledFor, language)}` : ''}
+                    {request.cancelUntil ? ` · ${language === 'nl' ? 'Annuleren tot' : 'Cancel until'}: ${formatDate(request.cancelUntil, language)}` : ''}
+                  </p> : null}
                   <p className="mt-1 text-xs text-muted-foreground">
                     {formatCopy(privacy.submittedOn, { date: formatDate(request.createdAt, language) })}
                     {request.resolvedAt ? ` · ${formatCopy(privacy.resolvedOn, { date: formatDate(request.resolvedAt, language) })}` : ''}
                     {!request.resolvedAt && !request.withdrawnAt && !request.deadlineAt ? ` · ${privacy.noDeadline}` : ''}
                   </p>
                 </div>
-                {request.status === 'received' || request.status === 'blocked' ? (
+                {(request.status === 'received' || request.status === 'blocked') &&
+                  (!featureFlags.accountDeletion || !request.cancelUntil || new Date(request.cancelUntil) > new Date()) ? (
                   <Button
                     type="button"
                     variant="outline"

@@ -178,6 +178,7 @@ export const ACCOUNT_REQUEST_STATUSES = [
   "received",
   "blocked",
   "in_review",
+  "in_progress",
   "completed",
   "rejected",
   "withdrawn",
@@ -187,6 +188,7 @@ export const OPEN_ACCOUNT_REQUEST_STATUSES = [
   "received",
   "blocked",
   "in_review",
+  "in_progress",
 ] as const satisfies readonly AccountRequestStatus[];
 
 export const ACCOUNT_REQUEST_BLOCKERS = ["blocked_ownership"] as const;
@@ -224,6 +226,9 @@ export const accountRequestsTable = pgTable(
     version: integer("version").notNull().default(1),
     /** Set only from release configuration; null means no deadline has been approved. */
     deadlineAt: timestamp("deadline_at", { withTimezone: true }),
+    cancelUntil: timestamp("cancel_until", { withTimezone: true }),
+    scheduledFor: timestamp("scheduled_for", { withTimezone: true }),
+    resultReport: jsonb("result_report").$type<{ deleted: string[]; anonymised: string[]; retained: string[] }>(),
     /** Scopes the requester explicitly acknowledged when submitting. */
     acknowledgedScopes: jsonb("acknowledged_scopes").$type<string[]>().notNull().default([]),
     blockerCode: text("blocker_code"),
@@ -278,6 +283,21 @@ export const accountRequestEventsTable = pgTable(
   },
   (table) => [index("account_request_events_request_idx").on(table.requestId, table.createdAt)],
 );
+
+export const ACCOUNT_REQUEST_PROCESSORS = ["clerk", "app_db", "object_storage", "mail_provider"] as const;
+export const ACCOUNT_REQUEST_PROCESSOR_STATUSES = ["pending", "done", "failed", "skipped"] as const;
+export const accountRequestProcessorOutcomesTable = pgTable("account_request_processor_outcomes", {
+  id: serial("id").primaryKey(),
+  requestId: integer("request_id").notNull(),
+  processor: text("processor").notNull(),
+  status: text("status").notNull().default("pending"),
+  attempts: integer("attempts").notNull().default(0),
+  lastErrorCode: text("last_error_code"),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
+}, (table) => [
+  foreignKey({ columns: [table.requestId], foreignColumns: [accountRequestsTable.id], name: "account_request_processor_outcomes_request_fk" }).onDelete("cascade"),
+  uniqueIndex("account_request_processor_outcomes_unique").on(table.requestId, table.processor),
+]);
 
 /** Private artifacts belong to a single export request; file keys are server generated. */
 export const accountExportsTable = pgTable("account_exports", {

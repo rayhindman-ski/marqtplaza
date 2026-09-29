@@ -982,8 +982,9 @@ export interface AccountConsents {
 }
 
 /**
- * What an account deletion request covers. The research registration, community
- * contributions, and Clerk credentials are separate scopes handled outside this request.
+ * What an account deletion request covers. Research registration and community
+ * contributions have separate retention decisions. When account deletion is enabled,
+ * Clerk sessions and credentials are removed by the deletion processor.
  */
 export type AccountDeletionScope = typeof AccountDeletionScope[keyof typeof AccountDeletionScope];
 
@@ -995,6 +996,60 @@ export const AccountDeletionScope = {
   saved_events: 'saved_events',
   business_memberships: 'business_memberships',
 } as const;
+
+export interface AccountDeletionPolicyLabels {
+  waiting: string;
+  retained: string;
+}
+
+export type AccountDeletionPolicyLabelsProperty = {
+  nl: AccountDeletionPolicyLabels;
+  en: AccountDeletionPolicyLabels;
+};
+
+export interface AccountDeletionReport {
+  deleted: string[];
+  anonymised: string[];
+  retained: string[];
+}
+
+export interface AccountDeletionPolicy {
+  waitingDays: number;
+  cutoff: string;
+  order: string[];
+  categories: AccountDeletionReport;
+  labels: AccountDeletionPolicyLabelsProperty;
+}
+
+export type AccountDeletionProcessorOutcomeProcessor = typeof AccountDeletionProcessorOutcomeProcessor[keyof typeof AccountDeletionProcessorOutcomeProcessor];
+
+
+export const AccountDeletionProcessorOutcomeProcessor = {
+  app_db: 'app_db',
+  clerk: 'clerk',
+  object_storage: 'object_storage',
+  mail_provider: 'mail_provider',
+} as const;
+
+export type AccountDeletionProcessorOutcomeStatus = typeof AccountDeletionProcessorOutcomeStatus[keyof typeof AccountDeletionProcessorOutcomeStatus];
+
+
+export const AccountDeletionProcessorOutcomeStatus = {
+  pending: 'pending',
+  done: 'done',
+  failed: 'failed',
+  skipped: 'skipped',
+} as const;
+
+export interface AccountDeletionProcessorOutcome {
+  processor: AccountDeletionProcessorOutcomeProcessor;
+  status: AccountDeletionProcessorOutcomeStatus;
+  attempts: number;
+  /** @nullable */
+  lastErrorCode: string | null;
+  /** @nullable */
+  completedAt: string | null;
+}
 
 export interface CreateAccountDeletionRequestInput {
   /**
@@ -1021,6 +1076,7 @@ export const AccountRequestStatus = {
   received: 'received',
   blocked: 'blocked',
   in_review: 'in_review',
+  in_progress: 'in_progress',
   completed: 'completed',
   rejected: 'rejected',
   withdrawn: 'withdrawn',
@@ -1092,6 +1148,11 @@ export interface AccountRequest {
      * @nullable
      */
   deadlineAt: string | null;
+  /** @nullable */
+  scheduledFor: string | null;
+  /** @nullable */
+  cancelUntil: string | null;
+  resultReport: AccountDeletionReport | null;
   createdAt: string;
   updatedAt: string;
   /** @nullable */
@@ -1136,6 +1197,7 @@ export type SupportAccountRequest = AccountRequest & ({
   /** @nullable */
   resolvedByUserId: string | null;
   events: AccountRequestEvent[];
+  processors: AccountDeletionProcessorOutcome[];
 });
 
 export type SupportAccountRequestsExportRequestsItem = {

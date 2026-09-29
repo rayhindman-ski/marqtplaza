@@ -82,6 +82,10 @@ export function requireAppUser(options: RequireAppUserOptions = {}): RequestHand
       return;
     }
 
+    if (user.closedAt) {
+      sendApiError(req, res, "NOT_FOUND");
+      return;
+    }
     if (user.status === "deleted") {
       sendApiError(req, res, "ACCOUNT_DELETED");
       return;

@@ -547,6 +547,31 @@ export const RecordAccountConsentResponse = zod.object({
 
 
 /**
+ * @summary Read the shared deletion waiting period and inventory categories
+ */
+export const GetAccountDeletionPolicyResponse = zod.object({
+  "waitingDays": zod.number(),
+  "cutoff": zod.string(),
+  "order": zod.array(zod.string()),
+  "categories": zod.object({
+  "deleted": zod.array(zod.string()),
+  "anonymised": zod.array(zod.string()),
+  "retained": zod.array(zod.string())
+}),
+  "labels": zod.object({
+  "nl": zod.object({
+  "waiting": zod.string(),
+  "retained": zod.string()
+}),
+  "en": zod.object({
+  "waiting": zod.string(),
+  "retained": zod.string()
+})
+})
+})
+
+
+/**
  * Records a tracked deletion request for the signed-in account. The caller must first
  * acknowledge every deletion scope; the research registration and Clerk credentials are
  * separate and are not covered by this request. Clients must re-authenticate through Clerk
@@ -561,14 +586,14 @@ export const createAccountDeletionRequestBodyAcknowledgedScopesMax = 10;
 
 
 export const CreateAccountDeletionRequestBody = zod.object({
-  "acknowledgedScopes": zod.array(zod.enum(['account_profile', 'preferences', 'consents', 'saved_events', 'business_memberships']).describe('What an account deletion request covers. The research registration, community\ncontributions, and Clerk credentials are separate scopes handled outside this request.\n')).min(1).max(createAccountDeletionRequestBodyAcknowledgedScopesMax).describe('Must contain every AccountDeletionScope value exactly once.')
+  "acknowledgedScopes": zod.array(zod.enum(['account_profile', 'preferences', 'consents', 'saved_events', 'business_memberships']).describe('What an account deletion request covers. Research registration and community\ncontributions have separate retention decisions. When account deletion is enabled,\nClerk sessions and credentials are removed by the deletion processor.\n')).min(1).max(createAccountDeletionRequestBodyAcknowledgedScopesMax).describe('Must contain every AccountDeletionScope value exactly once.')
 })
 
 export const CreateAccountDeletionRequestResponse = zod.object({
   "id": zod.number(),
   "scope": zod.enum(['account', 'business']),
   "type": zod.enum(['deletion', 'export', 'suspension_appeal']),
-  "status": zod.enum(['received', 'blocked', 'in_review', 'completed', 'rejected', 'withdrawn']).describe('`received` awaits support; `blocked` needs a support decision about a sole-owned business\nfirst; `in_review` is being handled; `completed`, `rejected`, and `withdrawn` are final.\n'),
+  "status": zod.enum(['received', 'blocked', 'in_review', 'in_progress', 'completed', 'rejected', 'withdrawn']).describe('`received` awaits support; `blocked` needs a support decision about a sole-owned business\nfirst; `in_review` is being handled; `completed`, `rejected`, and `withdrawn` are final.\n'),
   "version": zod.number(),
   "acknowledgedScopes": zod.array(zod.string()),
   "blocker": zod.union([zod.object({
@@ -582,6 +607,13 @@ export const CreateAccountDeletionRequestResponse = zod.object({
 }),zod.null()]),
   "resolutionCode": zod.string().nullable(),
   "deadlineAt": zod.string().nullable().describe('Null until a handling deadline is approved in release configuration.'),
+  "scheduledFor": zod.string().nullable(),
+  "cancelUntil": zod.string().nullable(),
+  "resultReport": zod.union([zod.object({
+  "deleted": zod.array(zod.string()),
+  "anonymised": zod.array(zod.string()),
+  "retained": zod.array(zod.string())
+}),zod.null()]),
   "createdAt": zod.string(),
   "updatedAt": zod.string(),
   "resolvedAt": zod.string().nullable(),
@@ -597,7 +629,7 @@ export const GetAccountRequestsResponse = zod.object({
   "id": zod.number(),
   "scope": zod.enum(['account', 'business']),
   "type": zod.enum(['deletion', 'export', 'suspension_appeal']),
-  "status": zod.enum(['received', 'blocked', 'in_review', 'completed', 'rejected', 'withdrawn']).describe('`received` awaits support; `blocked` needs a support decision about a sole-owned business\nfirst; `in_review` is being handled; `completed`, `rejected`, and `withdrawn` are final.\n'),
+  "status": zod.enum(['received', 'blocked', 'in_review', 'in_progress', 'completed', 'rejected', 'withdrawn']).describe('`received` awaits support; `blocked` needs a support decision about a sole-owned business\nfirst; `in_review` is being handled; `completed`, `rejected`, and `withdrawn` are final.\n'),
   "version": zod.number(),
   "acknowledgedScopes": zod.array(zod.string()),
   "blocker": zod.union([zod.object({
@@ -611,6 +643,13 @@ export const GetAccountRequestsResponse = zod.object({
 }),zod.null()]),
   "resolutionCode": zod.string().nullable(),
   "deadlineAt": zod.string().nullable().describe('Null until a handling deadline is approved in release configuration.'),
+  "scheduledFor": zod.string().nullable(),
+  "cancelUntil": zod.string().nullable(),
+  "resultReport": zod.union([zod.object({
+  "deleted": zod.array(zod.string()),
+  "anonymised": zod.array(zod.string()),
+  "retained": zod.array(zod.string())
+}),zod.null()]),
   "createdAt": zod.string(),
   "updatedAt": zod.string(),
   "resolvedAt": zod.string().nullable(),
@@ -637,7 +676,7 @@ export const WithdrawAccountRequestResponse = zod.object({
   "id": zod.number(),
   "scope": zod.enum(['account', 'business']),
   "type": zod.enum(['deletion', 'export', 'suspension_appeal']),
-  "status": zod.enum(['received', 'blocked', 'in_review', 'completed', 'rejected', 'withdrawn']).describe('`received` awaits support; `blocked` needs a support decision about a sole-owned business\nfirst; `in_review` is being handled; `completed`, `rejected`, and `withdrawn` are final.\n'),
+  "status": zod.enum(['received', 'blocked', 'in_review', 'in_progress', 'completed', 'rejected', 'withdrawn']).describe('`received` awaits support; `blocked` needs a support decision about a sole-owned business\nfirst; `in_review` is being handled; `completed`, `rejected`, and `withdrawn` are final.\n'),
   "version": zod.number(),
   "acknowledgedScopes": zod.array(zod.string()),
   "blocker": zod.union([zod.object({
@@ -651,6 +690,13 @@ export const WithdrawAccountRequestResponse = zod.object({
 }),zod.null()]),
   "resolutionCode": zod.string().nullable(),
   "deadlineAt": zod.string().nullable().describe('Null until a handling deadline is approved in release configuration.'),
+  "scheduledFor": zod.string().nullable(),
+  "cancelUntil": zod.string().nullable(),
+  "resultReport": zod.union([zod.object({
+  "deleted": zod.array(zod.string()),
+  "anonymised": zod.array(zod.string()),
+  "retained": zod.array(zod.string())
+}),zod.null()]),
   "createdAt": zod.string(),
   "updatedAt": zod.string(),
   "resolvedAt": zod.string().nullable(),
@@ -688,7 +734,7 @@ export const GetAccountMessagesResponse = zod.object({
  */
 export const GetSupportAccountRequestsQueryParams = zod.object({
   "type": zod.enum(['deletion', 'export']).optional(),
-  "status": zod.enum(['received', 'blocked', 'in_review', 'completed', 'rejected', 'withdrawn']).optional()
+  "status": zod.enum(['received', 'blocked', 'in_review', 'in_progress', 'completed', 'rejected', 'withdrawn']).optional()
 })
 
 export const GetSupportAccountRequestsResponse = zod.object({
@@ -703,7 +749,7 @@ export const GetSupportAccountRequestsResponse = zod.object({
   "id": zod.number(),
   "scope": zod.enum(['account', 'business']),
   "type": zod.enum(['deletion', 'export', 'suspension_appeal']),
-  "status": zod.enum(['received', 'blocked', 'in_review', 'completed', 'rejected', 'withdrawn']).describe('`received` awaits support; `blocked` needs a support decision about a sole-owned business\nfirst; `in_review` is being handled; `completed`, `rejected`, and `withdrawn` are final.\n'),
+  "status": zod.enum(['received', 'blocked', 'in_review', 'in_progress', 'completed', 'rejected', 'withdrawn']).describe('`received` awaits support; `blocked` needs a support decision about a sole-owned business\nfirst; `in_review` is being handled; `completed`, `rejected`, and `withdrawn` are final.\n'),
   "version": zod.number(),
   "acknowledgedScopes": zod.array(zod.string()),
   "blocker": zod.union([zod.object({
@@ -717,6 +763,13 @@ export const GetSupportAccountRequestsResponse = zod.object({
 }),zod.null()]),
   "resolutionCode": zod.string().nullable(),
   "deadlineAt": zod.string().nullable().describe('Null until a handling deadline is approved in release configuration.'),
+  "scheduledFor": zod.string().nullable(),
+  "cancelUntil": zod.string().nullable(),
+  "resultReport": zod.union([zod.object({
+  "deleted": zod.array(zod.string()),
+  "anonymised": zod.array(zod.string()),
+  "retained": zod.array(zod.string())
+}),zod.null()]),
   "createdAt": zod.string(),
   "updatedAt": zod.string(),
   "resolvedAt": zod.string().nullable(),
@@ -734,6 +787,13 @@ export const GetSupportAccountRequestsResponse = zod.object({
   "businessProfileId": zod.number().nullable(),
   "note": zod.string().nullable(),
   "createdAt": zod.string()
+})),
+  "processors": zod.array(zod.object({
+  "processor": zod.enum(['app_db', 'clerk', 'object_storage', 'mail_provider']),
+  "status": zod.enum(['pending', 'done', 'failed', 'skipped']),
+  "attempts": zod.number(),
+  "lastErrorCode": zod.string().nullable(),
+  "completedAt": zod.string().nullable()
 }))
 })))
 })
@@ -770,7 +830,7 @@ export const DecideSupportAccountRequestResponse = zod.object({
   "id": zod.number(),
   "scope": zod.enum(['account', 'business']),
   "type": zod.enum(['deletion', 'export', 'suspension_appeal']),
-  "status": zod.enum(['received', 'blocked', 'in_review', 'completed', 'rejected', 'withdrawn']).describe('`received` awaits support; `blocked` needs a support decision about a sole-owned business\nfirst; `in_review` is being handled; `completed`, `rejected`, and `withdrawn` are final.\n'),
+  "status": zod.enum(['received', 'blocked', 'in_review', 'in_progress', 'completed', 'rejected', 'withdrawn']).describe('`received` awaits support; `blocked` needs a support decision about a sole-owned business\nfirst; `in_review` is being handled; `completed`, `rejected`, and `withdrawn` are final.\n'),
   "version": zod.number(),
   "acknowledgedScopes": zod.array(zod.string()),
   "blocker": zod.union([zod.object({
@@ -784,6 +844,13 @@ export const DecideSupportAccountRequestResponse = zod.object({
 }),zod.null()]),
   "resolutionCode": zod.string().nullable(),
   "deadlineAt": zod.string().nullable().describe('Null until a handling deadline is approved in release configuration.'),
+  "scheduledFor": zod.string().nullable(),
+  "cancelUntil": zod.string().nullable(),
+  "resultReport": zod.union([zod.object({
+  "deleted": zod.array(zod.string()),
+  "anonymised": zod.array(zod.string()),
+  "retained": zod.array(zod.string())
+}),zod.null()]),
   "createdAt": zod.string(),
   "updatedAt": zod.string(),
   "resolvedAt": zod.string().nullable(),
@@ -801,6 +868,13 @@ export const DecideSupportAccountRequestResponse = zod.object({
   "businessProfileId": zod.number().nullable(),
   "note": zod.string().nullable(),
   "createdAt": zod.string()
+})),
+  "processors": zod.array(zod.object({
+  "processor": zod.enum(['app_db', 'clerk', 'object_storage', 'mail_provider']),
+  "status": zod.enum(['pending', 'done', 'failed', 'skipped']),
+  "attempts": zod.number(),
+  "lastErrorCode": zod.string().nullable(),
+  "completedAt": zod.string().nullable()
 }))
 }))
 

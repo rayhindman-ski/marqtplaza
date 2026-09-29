@@ -346,3 +346,94 @@ retention policy remain provisionally subject to product-owner approval.
   violation.
 - e2e: account-export 2/2, account-rights + account-privacy green (7 total in
   the combined run); typecheck clean.
+
+## Phase 5 — Deletion lifecycle completion (2026-09-29 07:00–07:18 UTC, observed `date`)
+
+**Implemented.** Additive `drizzle-kit push` from `lib/db`: `account_requests`
+gets `scheduled_for`, `cancel_until`, `result_report`; a named-FK processor
+outcomes table tracks Clerk, app DB, object storage and mail; `app_users.closed_at`
+is a tombstone. No existing partial-index WHERE was diffed. OpenAPI policy,
+report, processor/status DTOs and the policy endpoint were code-generated.
+With the effective `ACCOUNT_DELETION_ENABLED` flag, new requests schedule
+execution in 14 days and repeat POST returns the same reference; cancellation
+at/after the cutoff returns 409. With it off, the existing deletion request
+and support review path continue. The new NL/EN deletion page reads
+inventory categories and cutoff copy from the API, requires acknowledgements
+plus final confirmation, shows step-up on recent-auth 401 and displays status,
+date and cancellation. The privacy page links to it only when enabled.
+Account privacy copy now lists distinct sign-out, all-session revocation,
+consent withdrawal, preference/last-search clearing, export and deletion
+labels in both languages (parity spec).
+
+The existing retention scheduler invokes the injected-clock, injected-Clerk,
+injected-storage processor while the flag is on. It fences the account,
+revokes active sessions, deletes Clerk identity, anonymises local rows and
+retained request events, removes search/preferences/saved rows and export
+objects, queues a one-time completion message to the execution-time address,
+then completes only when all processor outcomes are final. Failed stages
+become `blocked` with code-only errors, are visible in reviewer processor
+rows, and reconcile on retry without rerunning completed stages; illegal
+transitions throw. Reviewer notes are removed from the flagged support DTO;
+the new flagged DTO does not return business names. The Clerk subject
+remains as a unique closed-row tombstone (no e-mail); a different Clerk
+subject provisions a different app row. Pending registration tokens for
+that e-mail are superseded and their contact row anonymised. The identity
+guard rejects a closed subject for account, preferences, search, export and
+business invitation routes. The completion notice's address exists only
+in its queued outbox row until delivery/retention purge.
+
+**Verified (foreground, observed by `date`, 07:18 UTC).** API suites:
+`account-lifecycle` 24/24; `account-export` 3/3;
+`consumer-registration` 28/28; `business-membership` 14/14;
+`account` 17/17; `registration` 3/3 (89/89 total).
+Root `pnpm run typecheck` clean. Wrote but **did not run** browser specs
+`e2e/account-deletion.spec.ts` (policy, NL/EN, confirmation, recent-auth,
+status, cutoff, cancel, page-scoped axe) and
+`e2e/account-offboarding-labels.spec.ts` (seven labels, both locales).
+Owner must run these; no browser or workflow was launched; no commit.
+
+**BUS-006 evidence.** The v0.5.2 `clerk-live-signup.spec.ts` recovery steps
+cover returning through account verification/sign-in, while
+`account-lifecycle.test.ts` verifies support decision and deletion blocker
+resolution. No new recovery mechanism was added. The requested *live*
+Clerk-delete walk-through and architect review remain for the owner.
+
+**Deviations / approvals.** The test-only business-membership fixture had
+no Clerk middleware and initially failed its deletion scenario when the
+existing recent-auth guard called `getAuth`; injecting recent-auth claims
+fixed it (final 14/14). The approved temporary address snapshot is held in
+the completion outbox until its send/final-state purge, not directly passed
+to a synchronous provider. Other inventory categories (public
+contributions, third-party copies, legal-obligation records) remain
+case-by-case pending owner approval; the result report reports only the
+categories this orchestrator handles plus legally retained categories.
+The inventory and legal wording remain provisional.
+
+### Phase 5 — browser feedback remediation (2026-09-29 07:20–07:23 UTC, observed `date`)
+
+Owner reported `account-offboarding-labels` and `account-preferences` passing;
+five browser failures remained in `account-deletion` and legacy
+`account-privacy`. Restored the same reusable `RequestsPanel` on the privacy
+page, retaining its acknowledgement, sole-owner and unverified test IDs
+while the dedicated route uses that component's full policy/confirmation
+mode. Replaced raw inventory table codes in requester *and reviewer* report
+UI with paired NL/EN category labels; unknown codes display a safe generic
+label rather than a raw id. The deletion spec explicitly selects NL before
+asserting Dutch copy (app-wide default language is EN), checks both
+languages and no raw table ids. Withdrawal now updates the request cache
+from the mutation result before the authoritative refetch, avoiding a
+stale received status. Added label-catalogue parity assertions.
+Root typecheck clean; **no browser launched**. Owner should rerun
+`e2e/account-deletion.spec.ts`, `e2e/account-privacy.spec.ts` and
+`e2e/account-offboarding-labels.spec.ts`.
+
+### Phase 5 — owner verification (2026-09-29)
+
+- Owner fixes to the new spec only: the request stub used a trailing `**`
+  glob, which misses `/requests/:id/withdraw` (known Playwright quirk in this
+  workspace) — replaced by a regex route; axe scoped to
+  `account-deletion-panel` (shell eyebrow/language toggle are pre-existing
+  contrast debt).
+- e2e: account-deletion 3/3; account-offboarding-labels, account-privacy,
+  account-rights green (9 total in the combined run); usability-regression
+  21/21 (PW_PORT=22580); typecheck clean.

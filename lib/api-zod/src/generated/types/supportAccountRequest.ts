@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { AccountDeletionProcessorOutcome } from './accountDeletionProcessorOutcome';
 import type { AccountRequest } from './accountRequest';
 import type { AccountRequestEvent } from './accountRequestEvent';
 
@@ -16,4 +17,5 @@ export type SupportAccountRequest = AccountRequest & ({
   /** @nullable */
   resolvedByUserId: string | null;
   events: AccountRequestEvent[];
+  processors: AccountDeletionProcessorOutcome[];
 });

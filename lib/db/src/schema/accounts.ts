@@ -54,6 +54,8 @@ export const appUsersTable = pgTable(
     suspendedAt: timestamp("suspended_at", { withTimezone: true }),
     suspensionReasonCode: text("suspension_reason_code"),
     deletedAt: timestamp("deleted_at", { withTimezone: true }),
+    /** Permanent tombstone; a closed Clerk subject must never be reprovisioned. */
+    closedAt: timestamp("closed_at", { withTimezone: true }),
     lastSeenAt: timestamp("last_seen_at", { withTimezone: true }),
     /** Server-side fence: a PUT received before a clear may never recreate the row. */
     lastSearchClearedAt: timestamp("last_search_cleared_at", { withTimezone: true }),

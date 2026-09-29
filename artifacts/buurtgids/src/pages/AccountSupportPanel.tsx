@@ -22,7 +22,8 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { useAppLanguage } from '@/lib/useAppLanguage';
-import { accountSupportTranslations } from '@/lib/i18n';
+import { accountDeletionCategoryCopy, accountSupportTranslations } from '@/lib/i18n';
+import { featureFlags } from '@/lib/featureFlags';
 
 type Copy = (typeof accountSupportTranslations)[keyof typeof accountSupportTranslations];
 type Decision = SupportAccountRequestDecisionInput['decision'];
@@ -88,6 +89,8 @@ export function AccountSupportPanel({ section, enabled }: { section: 'requests' 
   const queryClient = useQueryClient();
   const [language] = useAppLanguage();
   const copy = accountSupportTranslations[language];
+  const categories = accountDeletionCategoryCopy[language];
+  const categoryLabels = (ids: string[]) => ids.map(id => categories.labels[id as keyof typeof categories.labels] ?? categories.other).join(', ');
 
   const requestsQuery = useGetSupportAccountRequests(undefined, { query: { enabled: enabled && section === 'requests', queryKey: getGetSupportAccountRequestsQueryKey() } });
   const exportsQuery = useGetSupportAccountRequests({ type: 'export' }, { query: {
@@ -165,7 +168,7 @@ export function AccountSupportPanel({ section, enabled }: { section: 'requests' 
           requests.map((request) => {
             const blockers = request.blocker?.businesses ?? [];
             const unresolved = blockers.filter((business) => !business.resolved);
-            const canStart = request.status === 'received' || request.status === 'blocked';
+            const canStart = request.status === 'received' || (request.status === 'blocked' && (!featureFlags.accountDeletion || request.blocker?.code === 'blocked_ownership'));
             const canResolve = (request.status === 'blocked' || request.status === 'in_review') && request.blocker?.code === 'blocked_ownership';
             const inReview = request.status === 'in_review';
             const completeHintId = `complete-hint-${request.id}`;
@@ -185,6 +188,16 @@ export function AccountSupportPanel({ section, enabled }: { section: 'requests' 
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
+                  {request.processors.length > 0 && <section data-testid={`deletion-processors-${request.id}`} className="text-sm">
+                    <h4 className="font-semibold">{language === 'nl' ? 'Verwerkingsstappen' : 'Processing steps'}</h4>
+                    <ul>{request.processors.map(item => <li key={item.processor}>{item.processor}: {item.status} ({item.attempts}){item.lastErrorCode ? ` · ${item.lastErrorCode}` : ''}</li>)}</ul>
+                  </section>}
+                  {request.resultReport && <section data-testid={`deletion-report-${request.id}`} className="text-sm">
+                    <h4 className="font-semibold">{language === 'nl' ? 'Resultaat per categorie' : 'Result by category'}</h4>
+                    <p>{categories.deleted}: {categoryLabels(request.resultReport.deleted)}</p>
+                    <p>{categories.anonymised}: {categoryLabels(request.resultReport.anonymised)}</p>
+                    <p>{categories.retained}: {categoryLabels(request.resultReport.retained)}</p>
+                  </section>}
                   <div>
                     <p className="text-xs font-bold uppercase text-muted-foreground">{copy.blockers}</p>
                     {blockers.length === 0 ? (
@@ -238,7 +251,7 @@ export function AccountSupportPanel({ section, enabled }: { section: 'requests' 
                   {inReview && (
                     <>
                       <Button variant="outline" size="sm" className="text-destructive gap-1" onClick={() => open({ kind: 'decision', request, decision: 'reject' })}><X className="w-4 h-4" /> {copy.reject}</Button>
-                      <Button
+                      {!featureFlags.accountDeletion && <Button
                         size="sm"
                         className="gap-1"
                         disabled={unresolved.length > 0}
@@ -246,7 +259,7 @@ export function AccountSupportPanel({ section, enabled }: { section: 'requests' 
                         onClick={() => open({ kind: 'decision', request, decision: 'complete' })}
                       >
                         <Check className="w-4 h-4" /> {copy.complete}
-                      </Button>
+                      </Button>}
                     </>
                   )}
                 </CardFooter>

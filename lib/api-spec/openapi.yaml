@@ -447,6 +447,17 @@ paths:
         "503":
           $ref: "#/components/responses/FeatureDisabled"
 
+  /account/deletion-policy:
+    get:
+      operationId: getAccountDeletionPolicy
+      summary: Read the shared deletion waiting period and inventory categories
+      responses:
+        "200":
+          description: Deletion policy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountDeletionPolicy"
   /account/deletion-requests:
     post:
       operationId: createAccountDeletionRequest
@@ -4492,9 +4503,76 @@ components:
     AccountDeletionScope:
       type: string
       description: |
-        What an account deletion request covers. The research registration, community
-        contributions, and Clerk credentials are separate scopes handled outside this request.
+        What an account deletion request covers. Research registration and community
+        contributions have separate retention decisions. When account deletion is enabled,
+        Clerk sessions and credentials are removed by the deletion processor.
       enum: [account_profile, preferences, consents, saved_events, business_memberships]
+
+    AccountDeletionPolicy:
+      type: object
+      required: [waitingDays, cutoff, order, categories, labels]
+      properties:
+        waitingDays:
+          type: number
+        cutoff:
+          type: string
+        order:
+          type: array
+          items:
+            type: string
+        categories:
+          $ref: "#/components/schemas/AccountDeletionReport"
+        labels:
+          type: object
+          required: [nl, en]
+          properties:
+            nl:
+              $ref: "#/components/schemas/AccountDeletionPolicyLabels"
+            en:
+              $ref: "#/components/schemas/AccountDeletionPolicyLabels"
+
+    AccountDeletionPolicyLabels:
+      type: object
+      required: [waiting, retained]
+      properties:
+        waiting:
+          type: string
+        retained:
+          type: string
+
+    AccountDeletionReport:
+      type: object
+      required: [deleted, anonymised, retained]
+      properties:
+        deleted:
+          type: array
+          items:
+            type: string
+        anonymised:
+          type: array
+          items:
+            type: string
+        retained:
+          type: array
+          items:
+            type: string
+
+    AccountDeletionProcessorOutcome:
+      type: object
+      required: [processor, status, attempts, lastErrorCode, completedAt]
+      properties:
+        processor:
+          type: string
+          enum: [app_db, clerk, object_storage, mail_provider]
+        status:
+          type: string
+          enum: [pending, done, failed, skipped]
+        attempts:
+          type: number
+        lastErrorCode:
+          type: ["string", "null"]
+        completedAt:
+          type: ["string", "null"]
 
     CreateAccountDeletionRequestInput:
       type: object
@@ -4523,7 +4601,7 @@ components:
       description: |
         `received` awaits support; `blocked` needs a support decision about a sole-owned business
         first; `in_review` is being handled; `completed`, `rejected`, and `withdrawn` are final.
-      enum: [received, blocked, in_review, completed, rejected, withdrawn]
+      enum: [received, blocked, in_review, in_progress, completed, rejected, withdrawn]
 
     AccountRequestResolution:
       type: string
@@ -4558,7 +4636,7 @@ components:
     AccountRequest:
       type: object
       description: Requester-facing view. Support notes and the handling reviewer are never included.
-      required: [id, scope, type, status, version, acknowledgedScopes, blocker, resolutionCode, deadlineAt, createdAt, updatedAt, resolvedAt, withdrawnAt]
+      required: [id, scope, type, status, version, acknowledgedScopes, blocker, resolutionCode, deadlineAt, scheduledFor, cancelUntil, resultReport, createdAt, updatedAt, resolvedAt, withdrawnAt]
       properties:
         id:
           type: number
@@ -4585,6 +4663,14 @@ components:
         deadlineAt:
           type: ["string", "null"]
           description: Null until a handling deadline is approved in release configuration.
+        scheduledFor:
+          type: ["string", "null"]
+        cancelUntil:
+          type: ["string", "null"]
+        resultReport:
+          oneOf:
+            - $ref: "#/components/schemas/AccountDeletionReport"
+            - type: "null"
         createdAt:
           type: string
         updatedAt:
@@ -4629,7 +4715,7 @@ components:
       allOf:
         - $ref: "#/components/schemas/AccountRequest"
         - type: object
-          required: [userId, resolutionNote, resolvedByUserId, events]
+          required: [userId, resolutionNote, resolvedByUserId, events, processors]
           properties:
             userId:
               type: number
@@ -4642,6 +4728,10 @@ components:
               type: array
               items:
                 $ref: "#/components/schemas/AccountRequestEvent"
+            processors:
+              type: array
+              items:
+                $ref: "#/components/schemas/AccountDeletionProcessorOutcome"
 
     SupportAccountRequests:
       type: object

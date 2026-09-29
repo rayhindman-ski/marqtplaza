@@ -3,6 +3,7 @@ import { Router, type IRouter, type NextFunction, type Request, type RequestHand
 
 import {
   accountRequestEventsTable,
+  accountRequestProcessorOutcomesTable,
   accountExportsTable,
   accountRequestsTable,
   appUsersTable,
@@ -50,6 +51,7 @@ import type { IdentityResolver } from "../lib/permissions";
 import { requireAppUser } from "../middlewares/requireAppUser";
 import { requireFlag } from "../middlewares/requireFlag";
 import { requireRecentAuth, type RecentAuthOptions } from "../lib/recentAuth";
+import { DELETION_POLICY, DELETION_WAIT_MS } from "../lib/accountDeletion";
 
 /**
  * Account lifecycle self-service and its support path.
@@ -221,6 +223,9 @@ async function serialiseRequest(request: AccountRequest, events: AccountRequestE
     blocker: request.blockerCode ? { code: request.blockerCode, businesses } : null,
     resolutionCode: request.resolutionCode,
     deadlineAt: request.deadlineAt?.toISOString() ?? null,
+    scheduledFor: request.scheduledFor?.toISOString() ?? null,
+    cancelUntil: request.cancelUntil?.toISOString() ?? null,
+    resultReport: request.resultReport ?? null,
     createdAt: request.createdAt.toISOString(),
     updatedAt: request.updatedAt.toISOString(),
     resolvedAt: request.resolvedAt?.toISOString() ?? null,
@@ -228,12 +233,19 @@ async function serialiseRequest(request: AccountRequest, events: AccountRequestE
   };
 }
 
-async function serialiseRequestForSupport(request: AccountRequest, events: AccountRequestEvent[]) {
+async function serialiseRequestForSupport(request: AccountRequest, events: AccountRequestEvent[], redactNotes = false) {
+  const outcomes = await db.select().from(accountRequestProcessorOutcomesTable).where(eq(accountRequestProcessorOutcomesTable.requestId, request.id));
+  const requesterView = await serialiseRequest(request, events);
   return {
-    ...(await serialiseRequest(request, events)),
+    ...requesterView,
+    ...(redactNotes && requesterView.blocker ? { blocker: {
+      ...requesterView.blocker,
+      businesses: requesterView.blocker.businesses.map(business => ({ ...business, name: "" })),
+    } } : {}),
     userId: request.userId,
-    resolutionNote: request.resolutionNote,
+    resolutionNote: redactNotes ? null : request.resolutionNote,
     resolvedByUserId: request.resolvedByUserId,
+    processors: outcomes.map(row => ({ processor: row.processor, status: row.status, attempts: row.attempts, lastErrorCode: row.lastErrorCode, completedAt: row.completedAt?.toISOString() ?? null })),
     events: events.map((event) => ({
       id: event.id,
       fromStatus: event.fromStatus,
@@ -241,7 +253,7 @@ async function serialiseRequestForSupport(request: AccountRequest, events: Accou
       actor: event.actor,
       resolutionCode: event.resolutionCode,
       businessProfileId: event.businessProfileId,
-      note: event.note,
+       note: redactNotes ? null : event.note,
       createdAt: event.createdAt.toISOString(),
     })),
   };
@@ -269,6 +281,9 @@ export function createAccountLifecycleRouter(options: AccountLifecycleRouterOpti
     requireAppUser({ resolveIdentity: options.resolveIdentity, requireVerified: true }),
   ];
   const supportGuarded: RequestHandler[] = [...guarded, requireReviewer];
+  router.get("/account/deletion-policy", [requireFlag("accountDeletion", flags), requireAppUser({ resolveIdentity: options.resolveIdentity })], (_req: Request, res: Response) => {
+    res.json(DELETION_POLICY);
+  });
 
   // ------------------------------------------------------------- requester ---
 
@@ -308,7 +323,10 @@ export function createAccountLifecycleRouter(options: AccountLifecycleRouterOpti
           ),
         )
         .limit(1);
-      if (open) return { kind: "already_open" as const };
+      if (open) {
+        const [request] = await tx.select().from(accountRequestsTable).where(eq(accountRequestsTable.id, open.id));
+        return { kind: "already_open" as const, request };
+      }
 
       const soleOwned = await findSoleOwnedBusinesses(tx, identity.userId);
       const blocked = soleOwned.length > 0;
@@ -322,6 +340,7 @@ export function createAccountLifecycleRouter(options: AccountLifecycleRouterOpti
           acknowledgedScopes: [...ACCOUNT_DELETION_SCOPES],
           blockerCode: blocked ? "blocked_ownership" : null,
           blockerDetails: blocked ? { businessProfileIds: soleOwned.map((business) => business.id) } : null,
+           ...(flags().accountDeletion ? { scheduledFor: new Date(now().getTime() + DELETION_WAIT_MS), cancelUntil: new Date(now().getTime() + DELETION_WAIT_MS) } : {}),
         })
         .returning();
       await tx.insert(accountRequestEventsTable).values({
@@ -340,6 +359,11 @@ export function createAccountLifecycleRouter(options: AccountLifecycleRouterOpti
     });
 
     if (outcome.kind === "already_open") {
+      if (flags().accountDeletion) {
+        const events = (await loadEvents([outcome.request.id])).get(outcome.request.id) ?? [];
+        res.status(200).json(CreateAccountDeletionRequestResponse.parse(await serialiseRequest(outcome.request, events)));
+        return;
+      }
       sendApiError(req, res, "IDEMPOTENCY_CONFLICT", { fieldErrors: [{ field: "request", code: "already_open" }] });
       return;
     }
@@ -385,6 +409,7 @@ export function createAccountLifecycleRouter(options: AccountLifecycleRouterOpti
     const outcome = await db.transaction(async (tx) => {
       const [locked] = await tx.select().from(accountRequestsTable).where(eq(accountRequestsTable.id, existing.id)).for("update");
       if (!locked) return { kind: "not_found" as const };
+      if (locked.cancelUntil && now() >= locked.cancelUntil) return { kind: "cutoff" as const };
       if (locked.version !== body.data.expectedVersion) return { kind: "stale" as const, currentVersion: locked.version };
       if (locked.status !== "received" && locked.status !== "blocked") return { kind: "not_withdrawable" as const, currentVersion: locked.version };
       const at = now();
@@ -409,6 +434,10 @@ export function createAccountLifecycleRouter(options: AccountLifecycleRouterOpti
     });
     if (outcome.kind === "not_found") {
       sendApiError(req, res, "NOT_FOUND");
+      return;
+    }
+    if (outcome.kind === "cutoff") {
+      sendApiError(req, res, "VERSION_CONFLICT", { fieldErrors: [{ field: "cancelUntil", code: "cutoff_passed" }] });
       return;
     }
     if (outcome.kind === "stale") {
@@ -467,7 +496,7 @@ export function createAccountLifecycleRouter(options: AccountLifecycleRouterOpti
       .orderBy(asc(accountRequestsTable.createdAt), asc(accountRequestsTable.id))
       .limit(100);
     const events = await loadEvents(rows.map((row) => row.id));
-    const requests = await Promise.all(rows.map((row) => serialiseRequestForSupport(row, events.get(row.id) ?? [])));
+    const requests = await Promise.all(rows.map((row) => serialiseRequestForSupport(row, events.get(row.id) ?? [], Boolean(flags().accountDeletion))));
     res.json(GetSupportAccountRequestsResponse.parse({ requests }));
   });
 
@@ -617,6 +646,7 @@ export function createAccountLifecycleRouter(options: AccountLifecycleRouterOpti
           return { kind: "ok" as const, request: updated };
         }
         case "complete": {
+          if (flags().accountDeletion || request.scheduledFor) return invalid("decision", "scheduler_managed");
           if (request.status !== "in_review") return invalid("status", "not_in_review");
           const remaining = await findSoleOwnedBusinesses(tx, requester.clerkUserId);
           if (remaining.length > 0) return invalid("status", "ownership_unresolved");

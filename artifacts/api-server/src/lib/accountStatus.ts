@@ -8,7 +8,8 @@ export type AccountAccess =
   | { kind: "active"; userId: string }
   | { kind: "unauthenticated" }
   | { kind: "suspended"; userId: string }
-  | { kind: "deleted"; userId: string };
+  | { kind: "deleted"; userId: string }
+  | { kind: "closed"; userId: string };
 
 /**
  * Terminal application account states apply to every authenticated
@@ -24,10 +25,11 @@ export type AccountAccess =
 export async function resolveAccountAccess(userId: string | null | undefined): Promise<AccountAccess> {
   if (!userId) return { kind: "unauthenticated" };
   const [row] = await db
-    .select({ status: appUsersTable.status })
+    .select({ status: appUsersTable.status, closedAt: appUsersTable.closedAt })
     .from(appUsersTable)
     .where(eq(appUsersTable.clerkUserId, userId))
     .limit(1);
+  if (row?.closedAt) return { kind: "closed", userId };
   if (row?.status === "deleted") return { kind: "deleted", userId };
   if (row?.status === "suspended") return { kind: "suspended", userId };
   return { kind: "active", userId };
@@ -54,6 +56,9 @@ export async function requireActiveAccount(
       return null;
     case "deleted":
       sendApiError(req, res, "ACCOUNT_DELETED");
+      return null;
+    case "closed":
+      sendApiError(req, res, "NOT_FOUND");
       return null;
   }
 }

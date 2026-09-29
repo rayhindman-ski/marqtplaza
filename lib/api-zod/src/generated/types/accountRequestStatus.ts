@@ -17,6 +17,7 @@ export const AccountRequestStatus = {
   received: 'received',
   blocked: 'blocked',
   in_review: 'in_review',
+  in_progress: 'in_progress',
   completed: 'completed',
   rejected: 'rejected',
   withdrawn: 'withdrawn',

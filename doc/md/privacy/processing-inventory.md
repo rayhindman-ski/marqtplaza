@@ -56,3 +56,18 @@ already erase every downstream copy.
 source/provider operational metadata rather than account personal data; if
 free-form error text is later stored there, reclassify and redact it.
 `posts` in `schema/index.ts` is a commented example, not a deployed table.
+
+Phase 5 implementation note (2026-09-29): A closed account keeps its numeric
+`app_users.id` and original unique Clerk subject as an internal tombstone,
+but clears the stored e-mail and locale (locale becomes `nl`). A *different*
+Clerk subject signing up with the same e-mail creates a new `app_users` row,
+never attaching to that tombstone. The 14-day scheduler removes preferences,
+last search, saved-event account rows, memberships and export objects; it
+anonymises account/request history and research registration contact columns.
+Consent decisions retain only purpose/version/locale/time and internal ids.
+The completion notice holds the pre-deletion address only in its one-time
+delivery outbox row, subject to the existing 30-day final-message purge;
+this is a temporary delivery exception, not retained audit contact data.
+Additional public contributions and third-party/legal-obligation records
+remain subject to owner-approved case-by-case retention decisions. The
+processing inventory remains provisional until owner approval.

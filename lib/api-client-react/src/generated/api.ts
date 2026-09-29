@@ -21,6 +21,7 @@ import type {
 
 import type {
   AccountConsents,
+  AccountDeletionPolicy,
   AccountExportReference,
   AccountExportStatus,
   AccountLastSearch,
@@ -1382,6 +1383,83 @@ export const useRecordAccountConsent = <TError = ErrorType<ApiError | FeatureDis
       > => {
       return useMutation(getRecordAccountConsentMutationOptions(options));
     }
+
+export const getGetAccountDeletionPolicyUrl = () => {
+
+
+
+
+  return `/api/account/deletion-policy`
+}
+
+/**
+ * @summary Read the shared deletion waiting period and inventory categories
+ */
+export const getAccountDeletionPolicy = async ( options?: Parameters<typeof customFetch>[1]): Promise<AccountDeletionPolicy> => {
+
+  return customFetch<AccountDeletionPolicy>(getGetAccountDeletionPolicyUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetAccountDeletionPolicyQueryKey = () => {
+    return [
+    `/api/account/deletion-policy`
+    ] as const;
+    }
+
+
+export const getGetAccountDeletionPolicyQueryOptions = <TData = Awaited<ReturnType<typeof getAccountDeletionPolicy>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAccountDeletionPolicy>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetAccountDeletionPolicyQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAccountDeletionPolicy>>> = ({ signal }) => getAccountDeletionPolicy({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAccountDeletionPolicy>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetAccountDeletionPolicyQueryResult = NonNullable<Awaited<ReturnType<typeof getAccountDeletionPolicy>>>
+export type GetAccountDeletionPolicyQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Read the shared deletion waiting period and inventory categories
+ */
+
+export function useGetAccountDeletionPolicy<TData = Awaited<ReturnType<typeof getAccountDeletionPolicy>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAccountDeletionPolicy>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetAccountDeletionPolicyQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getCreateAccountDeletionRequestUrl = () => {
 

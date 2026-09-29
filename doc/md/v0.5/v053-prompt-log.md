@@ -117,3 +117,19 @@ provisional; progress lines below at each phase start and commit.
 - 07:00 UTC (observed `date`, 2026-09-29): strengthened export isolation
   assertions with another user's search and poisoned outbox payload; export
   API 3/3 and root typecheck still green. Owner to run Playwright spec.
+- 07:00 UTC (observed `date`, 2026-09-29): delegated Phase 5 deletion lifecycle,
+  OpenAPI/codegen, additive schema push, flags, NL/EN UI, scheduler,
+  processor reconciliation, tombstones, support DTO, API/e2e specs and logs.
+- 07:18 UTC (observed `date`, 2026-09-29): implemented policy endpoint and
+  deletion screen, processor state machine and scheduler, named-FK schema,
+  tombstone and token invalidation, reviewer view and inventory note.
+  Codegen/push complete. Six API suites 89/89 and root typecheck clean.
+  Two Playwright specs written for owner; no browser launched, no commit.
+  Observed duration approximately 18 minutes.
+- 07:20–07:23 UTC (observed `date`, 2026-09-29): owner reported five
+  browser failures (locale/default expectation, raw category codes,
+  post-withdraw stale state, removed privacy deletion section). Kept the
+  shared privacy deletion panel in-place, used its full policy mode on the
+  dedicated page, added NL/EN inventory labels for requester/reviewer,
+  updated cancellation cache and browser assertions. Root typecheck clean.
+  Browser reruns remain with owner; no browser launched.

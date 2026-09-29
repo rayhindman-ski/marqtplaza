@@ -6,6 +6,7 @@ import { and, eq, inArray, like } from "drizzle-orm";
 
 import {
   accountRequestEventsTable,
+  accountExportsTable,
   accountRequestsTable,
   appUsersTable,
   businessMembersTable,
@@ -18,6 +19,9 @@ import {
 } from "@workspace/db";
 
 import { createAccountLifecycleRouter } from "./account-lifecycle";
+import { assertDeletionTransition, DELETION_POLICY, executeAccountDeletions } from "../lib/accountDeletion";
+import { provisionAppUser } from "../middlewares/requireAppUser";
+import { accountRequestProcessorOutcomesTable, accountLastSearchTable, consumerPreferencesTable } from "@workspace/db";
 import { createBusinessesRouter } from "./businesses";
 import { createSavedEventsRouter } from "./saved-events";
 import {
@@ -60,7 +64,7 @@ const users = {
 const allUserIds = Object.values(users);
 const keyPrefix = `lifecycle-test:${runId}`;
 
-let flags = { accounts: true, businessIntake: true, businessPublication: true, consumerRegistration: false, businessOnboarding: false };
+let flags: { accounts: boolean; businessIntake: boolean; businessPublication: boolean; consumerRegistration: boolean; businessOnboarding: boolean; accountDeletion?: boolean } = { accounts: true, businessIntake: true, businessPublication: true, consumerRegistration: false, businessOnboarding: false };
 
 function identityFromHeaders(req: express.Request): Identity | null {
   const userId = req.header("x-test-user-id");
@@ -140,6 +144,14 @@ async function createProfile(name: string): Promise<number> {
 }
 
 async function cleanup(): Promise<void> {
+  const extra = [`${keyPrefix}:closed-subject`, `${keyPrefix}:new-subject`, `${keyPrefix}:deletion`];
+  const extraUsers = await db.select({ id: appUsersTable.id }).from(appUsersTable).where(inArray(appUsersTable.clerkUserId, extra));
+  if (extraUsers.length) {
+    const ids = extraUsers.map(row => row.id);
+    await db.delete(lifecycleOutboxTable).where(inArray(lifecycleOutboxTable.recipientUserId, ids));
+    await db.delete(accountRequestsTable).where(inArray(accountRequestsTable.userId, ids));
+    await db.delete(appUsersTable).where(inArray(appUsersTable.id, ids));
+  }
   await db.delete(lifecycleOutboxTable).where(like(lifecycleOutboxTable.idempotencyKey, `${keyPrefix}%`));
   const testUsers = await db.select({ id: appUsersTable.id }).from(appUsersTable).where(inArray(appUsersTable.clerkUserId, allUserIds));
   if (testUsers.length > 0) {
@@ -161,6 +173,80 @@ async function outboxRows(clerkUserId: string) {
 }
 
 describe("lifecycle outbox", () => {
+  it("rejects out-of-order deletion transitions and provisions a new Clerk subject independently of a closed row", async () => {
+    assert.throws(() => assertDeletionTransition("received", "completed"), /Invalid deletion transition/);
+    assert.throws(() => assertDeletionTransition("completed", "in_progress"), /Invalid deletion transition/);
+    const old = await provisionAppUser(`${keyPrefix}:closed-subject`);
+    await db.update(appUsersTable).set({ closedAt: new Date(), status: "deleted", email: null }).where(eq(appUsersTable.id, old.id));
+    const next = await provisionAppUser(`${keyPrefix}:new-subject`);
+    assert.notEqual(next.id, old.id);
+    assert.equal((await provisionAppUser(`${keyPrefix}:closed-subject`)).id, old.id);
+  });
+
+  it("schedules deletion, rejects cancellation at cutoff, reconciles processor failure, and retains only minimal audit", async () => {
+    flags = { ...flags, accountDeletion: true };
+    try {
+      const subject = `${keyPrefix}:deletion`;
+      const fresh = await provisionAppUser(subject);
+      await db.update(appUsersTable).set({ email: "private@example.test" }).where(eq(appUsersTable.id, fresh.id));
+      await db.insert(consumerPreferencesTable).values({ userId: fresh.id });
+      const created = await request("/api/account/deletion-requests", { method: "POST", userId: subject, body: json({ acknowledgedScopes: ALL_SCOPES }) });
+      assert.equal(created.status, 201);
+      const record = created.body as { id: number; version: number; scheduledFor: string; cancelUntil: string };
+      assert.equal(new Date(record.cancelUntil).getTime(), new Date(record.scheduledFor).getTime());
+      const repeat = await request("/api/account/deletion-requests", { method: "POST", userId: subject, body: json({ acknowledgedScopes: ALL_SCOPES }) });
+      assert.equal((repeat.body as { id: number }).id, record.id);
+      const due = new Date("2026-09-20T00:00:00Z");
+      await db.update(accountRequestsTable).set({ scheduledFor: due, cancelUntil: due }).where(eq(accountRequestsTable.id, record.id));
+      const refused = await request(`/api/account/requests/${record.id}/withdraw`, { method: "POST", userId: subject, body: json({ expectedVersion: record.version }) });
+      assert.equal(refused.status, 409);
+      let fail = true;
+      const called: string[] = [];
+      const clerk = {
+        sessions: { getSessionList: async () => ({ data: called.includes("revoke") ? [] : [{ id: "session-1" }] }), revokeSession: async () => { called.push("revoke"); } },
+        users: { deleteUser: async () => { called.push("delete"); } },
+      };
+      const store = { save: async () => {}, load: async () => Buffer.alloc(0), remove: async () => { if (fail) throw new Error("private@example.test secret-token"); } };
+      // Create an artifact to force a storage failure after the account and Clerk stages.
+      const [exportRequest] = await db.insert(accountRequestsTable).values({ userId: fresh.id, scope: "account", type: "export" }).returning();
+      await db.insert(accountExportsTable).values({ requestId: exportRequest.id, files: [{ key: "deletion-test", name: "bundle.json", size: 1 }] });
+      await executeAccountDeletions(new Date("2026-09-29T00:00:00Z"), clerk, store);
+      assert.deepEqual(called, ["revoke", "delete"]);
+      let [row] = await db.select().from(accountRequestsTable).where(eq(accountRequestsTable.id, record.id));
+      assert.equal(row.status, "blocked");
+      let outcomes = await db.select().from(accountRequestProcessorOutcomesTable).where(eq(accountRequestProcessorOutcomesTable.requestId, record.id));
+      assert.equal(outcomes.find(item => item.processor === "object_storage")?.status, "failed");
+      assert.equal(outcomes.find(item => item.processor === "mail_provider")?.status, "pending");
+      const support = await request("/api/review/account-requests?status=blocked", { userId: users.support, editor: true });
+      const displayed = JSON.stringify(support.body);
+      assert.ok(displayed.includes("object_storage"));
+      assert.ok(!/private@example\.test|secret-token/.test(displayed));
+      fail = false;
+      await executeAccountDeletions(new Date("2026-09-29T00:01:00Z"), clerk, store);
+      [row] = await db.select().from(accountRequestsTable).where(eq(accountRequestsTable.id, record.id));
+      assert.equal(row.status, "completed");
+      assert.deepEqual(row.resultReport, DELETION_POLICY.categories);
+      outcomes = await db.select().from(accountRequestProcessorOutcomesTable).where(eq(accountRequestProcessorOutcomesTable.requestId, record.id));
+      assert.ok(outcomes.every(item => item.status === "done" || item.status === "skipped"));
+      const [closed] = await db.select().from(appUsersTable).where(eq(appUsersTable.id, fresh.id));
+      assert.equal(closed.email, null);
+      assert.ok(closed.closedAt);
+      const audit = await db.select().from(accountRequestEventsTable).where(eq(accountRequestEventsTable.requestId, record.id));
+      assert.ok(audit.every(item => item.note === null && item.actorUserId === null));
+      const retained = await db.select().from(accountRequestsTable).where(eq(accountRequestsTable.userId, fresh.id));
+      assert.ok(retained.every(item => item.resolutionNote === null && item.resolvedByUserId === null));
+      const notices = await db.select().from(lifecycleOutboxTable).where(eq(lifecycleOutboxTable.recipientUserId, fresh.id));
+      assert.ok(notices.filter(item => item.eventCode !== "account.deletion_completed").every(item =>
+        item.recipientEmail === null && !JSON.stringify(item.payload).includes("private@example.test")));
+      assert.equal((await db.select().from(consumerPreferencesTable).where(eq(consumerPreferencesTable.userId, fresh.id))).length, 0);
+      assert.equal((await db.select().from(accountLastSearchTable).where(eq(accountLastSearchTable.userId, fresh.id))).length, 0);
+      const forbidden = await request("/api/account/requests", { userId: subject });
+      assert.equal(forbidden.status, 404);
+      assert.equal((forbidden.body as { code: string }).code, "NOT_FOUND");
+    } finally {
+      flags = { accounts: true, businessIntake: true, businessPublication: true, consumerRegistration: false, businessOnboarding: false };
+    }
+  });
   before(async () => {
     await cleanup();
     await new Promise<void>((resolve) => {

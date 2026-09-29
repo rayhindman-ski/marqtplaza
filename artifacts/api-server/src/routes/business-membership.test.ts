@@ -74,7 +74,10 @@ app.use(
     clientKey: () => "test-net",
   }),
 );
-app.use("/api", createAccountLifecycleRouter({ flags: () => flags, resolveIdentity: identityFromHeaders }));
+app.use("/api", createAccountLifecycleRouter({
+  flags: () => flags, resolveIdentity: identityFromHeaders,
+  recentAuth: { now: () => 1_800_000_000_000, claims: () => ({ fva: [0, -1] }) },
+}));
 app.use("/api", createBusinessPublicationRouter({ flags: () => flags, resolveIdentity: identityFromHeaders, now }));
 app.use("/api", createBusinessesRouter({ flags: () => flags, getUserId: (req) => req.header("x-test-user-id") ?? null }));
 
@@ -448,6 +451,19 @@ describe("business membership routes", () => {
     assert.equal(allowed.body.status, "received");
     assert.equal(allowed.body.blocker, null);
     await request(`/account/requests/${allowed.body.id}/withdraw`, { method: "POST", userId: users.outsider, body: { expectedVersion: allowed.body.version } });
+  });
+
+  it("OFF-016: a closed subject cannot accept an invitation token", async () => {
+    const [account] = await db.select().from(appUsersTable).where(eq(appUsersTable.clerkUserId, users.outsider));
+    await db.update(appUsersTable).set({ closedAt: new Date() }).where(eq(appUsersTable.id, account.id));
+    try {
+      const result = await request("/business-invitations/accept", { method: "POST", userId: users.outsider, body: { token: "invalid" } });
+      assert.notEqual(result.status, 200);
+      assert.equal(result.status, 404);
+      assert.equal(result.body.code, "NOT_FOUND");
+    } finally {
+      await db.update(appUsersTable).set({ closedAt: null }).where(eq(appUsersTable.id, account.id));
+    }
   });
 
   it("BMEM-T04/T06: close unpublishes through the owner route, keeps rows, writes audit, and is idempotent", async () => {

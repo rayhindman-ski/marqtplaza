@@ -7,8 +7,9 @@
  */
 
 /**
- * What an account deletion request covers. The research registration, community
- * contributions, and Clerk credentials are separate scopes handled outside this request.
+ * What an account deletion request covers. Research registration and community
+ * contributions have separate retention decisions. When account deletion is enabled,
+ * Clerk sessions and credentials are removed by the deletion processor.
  */
 export type AccountDeletionScope = typeof AccountDeletionScope[keyof typeof AccountDeletionScope];
 

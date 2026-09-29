@@ -143,6 +143,22 @@ after(async () => {
 });
 
 describe("normalization helpers (REG-006, REG-007)", () => {
+  it("OFF-016: a cancelled pending registration token cannot verify after account closure", async () => {
+    const address = mail("closed-link");
+    const token = `closed-link-${runId}`;
+    const [pending] = await db.insert(consumerRegistrationsTable).values({
+      normalizedEmail: address, name: "Test", normalizedPhone: "+31612345678",
+      status: "cancelled", expiresAt: new Date(clock.getTime() + 60_000), cancelledAt: clock,
+    }).returning();
+    await db.insert(consumerRegistrationTokensTable).values({
+      registrationId: pending.id, tokenDigest: digestRegistrationToken(token),
+      expiresAt: new Date(clock.getTime() + 60_000),
+    });
+    const inspect = await request(`/consumer-registration/verify?token=${token}`);
+    const consume = await request("/consumer-registration/verify", { method: "POST", body: json({ token }) });
+    assert.equal(inspect.body.state, "invalid");
+    assert.equal(consume.body.state, "invalid");
+  });
   it("normalizes email conservatively and never merges distinct mailboxes", () => {
     assert.equal(normalizeEmail("  Jan.De+tag@Example.NL "), "jan.de+tag@example.nl");
     assert.notEqual(normalizeEmail("jan.de@example.nl"), normalizeEmail("jande@example.nl"));
