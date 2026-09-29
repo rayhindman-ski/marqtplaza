@@ -12,14 +12,15 @@ import { parseDiscoveryUrlState } from '@/lib/discoveryUrlState';
 export function useLastSearchCapture(context: {
   cityId: string;
   viewport: { center: { lat: number; lng: number }; zoom: number } | null;
-  selectedListing: { source: string; id: string } | null;
+  selectedListing: { source: 'google_maps' | 'openstreetmap' | 'curated' | 'source_scan'; id: string } | null;
   neighborhoodNames: string[];
   categoryNames: string[];
+  locale: 'nl' | 'en';
 }) {
   const auth = useAccountAuth();
   const client = useQueryClient();
   const enabled = featureFlags.lastSearch && auth.isLoaded && auth.isSignedIn && !!auth.userId;
-  const me = useGetAccountMe({ query: { enabled, queryKey: getGetAccountMeQueryKey(), retry: false } });
+  const me = useGetAccountMe({ query: { enabled, queryKey: [...getGetAccountMeQueryKey(), auth.userId], retry: false } });
   const put = usePutAccountLastSearch();
   const { cityId, viewport, selectedListing, neighborhoodNames, categoryNames } = context;
   const publicSearch = typeof window === 'undefined' ? '' : window.location.search;
@@ -31,14 +32,31 @@ export function useLastSearchCapture(context: {
     const parsed = parseDiscoveryUrlState(publicParams);
     if (!parsed.valid) return;
     const state = parsed.state;
+    const fingerprint = JSON.stringify({
+      publicSearch, neighborhoodNames, categoryNames, selectedListing,
+      zoom: viewport?.zoom, lat: viewport?.center.lat, lng: viewport?.center.lng,
+    });
+    const restoreMarkerKey = 'buurtplaza-last-search-restore';
+    const markerRaw = window.sessionStorage.getItem(restoreMarkerKey);
+    if (markerRaw) {
+      try {
+        const marker = JSON.parse(markerRaw) as { userId: string; savedAt: number; fingerprint?: string };
+        if (marker.userId === auth.userId && Date.now() - marker.savedAt < 60_000) {
+          if (!marker.fingerprint) window.sessionStorage.setItem(restoreMarkerKey, JSON.stringify({ ...marker, fingerprint }));
+          if (!marker.fingerprint || marker.fingerprint === fingerprint) return;
+        }
+      } catch { /* Discard malformed session marker. */ }
+      window.sessionStorage.removeItem(restoreMarkerKey);
+    }
     const data: AccountLastSearchInput = {
       cityId,
+      section: state.section,
       neighborhoodIds: neighborhoodNames.slice(0, 20).map((name) =>
         `dhg:${name.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/&/g, 'and').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}`),
       categoryIds: categoryNames.slice(0, 20).map((name) =>
         `category:${name.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/&/g, 'and').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}`),
       ...(state.postcode ? { query: state.postcode } : {}),
-      locale: state.locale,
+      locale: context.locale,
       sourceScope: state.scope,
       presentationMode: 'map',
       ...(selectedListing ? { selectedListing } : {}),
@@ -54,5 +72,5 @@ export function useLastSearchCapture(context: {
       }).catch(() => { /* Capture must never interrupt discovery. */ });
     }, 700);
     return () => window.clearTimeout(timer);
-  }, [auth.userId, cityId, client, enabled, me.data, publicSearch, selectedListing?.id, selectedListing?.source, viewport?.zoom, viewport?.center.lat, viewport?.center.lng, neighborhoodNames.join(','), categoryNames.join(',')]);
+  }, [auth.userId, cityId, client, enabled, me.data, context.locale, publicSearch, selectedListing?.id, selectedListing?.source, viewport?.zoom, viewport?.center.lat, viewport?.center.lng, neighborhoodNames.join(','), categoryNames.join(',')]);
 }

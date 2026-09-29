@@ -4119,6 +4119,9 @@ components:
         cityId:
           type: string
           maxLength: 80
+        section:
+          type: string
+          enum: [events, businesses, food-drink, social-map]
         neighborhoodIds:
           type: array
           maxItems: 20
@@ -4131,7 +4134,8 @@ components:
             type: string
         query:
           type: string
-          maxLength: 120
+          maxLength: 64
+          description: Trimmed public search text; server accepts Unicode letters, digits, spaces, hyphens, commas and periods only.
         filters:
           type: object
           additionalProperties: false
@@ -4150,10 +4154,11 @@ components:
           properties:
             source:
               type: string
-              maxLength: 60
+              enum: [google_maps, openstreetmap, curated, source_scan]
             id:
               type: string
-              maxLength: 120
+              maxLength: 128
+              pattern: '^[A-Za-z0-9_:-]+$'
         presentationMode:
           type: string
           enum: [map, list]
@@ -4171,7 +4176,7 @@ components:
           maximum: 180
         scrollContext:
           type: string
-          maxLength: 80
+          enum: [top, results, map]
 
     AccountLastSearch:
       allOf:

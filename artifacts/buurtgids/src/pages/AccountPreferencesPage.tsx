@@ -5,6 +5,7 @@ import { CheckCircle2, RotateCcw } from 'lucide-react';
 
 import {
   getGetAccountMeQueryKey,
+  getGetAccountLastSearchQueryKey,
   getGetAccountOptionsQueryKey,
   useCompleteAccountOnboarding,
   useGetAccountMe,
@@ -150,8 +151,12 @@ export default function AccountPreferencesPage() {
 
   const applyAccount = useCallback((me: AccountMe) => {
     queryClient.setQueryData(getGetAccountMeQueryKey(), me);
+    if (auth.userId) queryClient.setQueryData([...getGetAccountMeQueryKey(), auth.userId], me);
+    if (me.preferences?.retainLastSearch === false) {
+      queryClient.removeQueries({ queryKey: getGetAccountLastSearchQueryKey() });
+    }
     setExpectedRevision(me.preferences?.revision ?? 0);
-  }, [queryClient]);
+  }, [queryClient, auth.userId]);
 
   const resetFeedback = () => {
     setErrorMessage(null);

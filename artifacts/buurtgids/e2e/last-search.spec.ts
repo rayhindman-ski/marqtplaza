@@ -3,7 +3,13 @@ import { expect, test } from '@playwright/test';
 test('captured search stays private, restores public URL and clears authoritatively', async ({ page }) => {
   const searches = new Map<string, Record<string, unknown>>();
   const puts: Record<string, unknown>[] = [];
-  await page.addInitScript(() => { window.__accountTestAuth = { userId: 'user-one' }; });
+  await page.addInitScript(() => {
+    window.__accountTestAuth = { userId: window.sessionStorage.getItem('last-search-test-user') || 'user-one' };
+    (window as typeof window & { __geoCalls?: number }).__geoCalls = 0;
+    navigator.geolocation.getCurrentPosition = () => {
+      (window as typeof window & { __geoCalls?: number }).__geoCalls! += 1;
+    };
+  });
   await page.route(/maps\.googleapis\.com/, (route) => route.abort('failed'));
   await page.route(/tile\.openstreetmap\.org/, (route) => route.abort('failed'));
   await page.route(/\/api\/weather(?:\?|$)/, (route) => route.fulfill({
@@ -30,7 +36,14 @@ test('captured search stays private, restores public URL and clears authoritativ
       hasResearchRegistration: false, businessMembershipCount: 0, businesses: [],
       preferences: { revision: 1, neighborhoodIds: [], interestIds: [], unresolvedNeighborhoodIds: [], unresolvedInterestIds: [], retainLastSearch: true, updatedAt: '2026-09-01T00:00:00.000Z' },
     });
-    if (path.endsWith('/options')) return json({ taxonomyVersion: 'test', neighborhoods: [], interests: [] });
+    if (path.endsWith('/options')) return json({
+      taxonomyVersion: 'test',
+      neighborhoods: [
+        { id: 'dhg:centrum', label: { nl: 'Centrum', en: 'Centrum' } },
+        { id: 'dhg:scheveningen', label: { nl: 'Scheveningen', en: 'Scheveningen' } },
+      ],
+      interests: [{ id: 'category:retail-and-shopping', label: { nl: 'Winkelen', en: 'Retail & Shopping' } }],
+    });
     if (path.endsWith('/consents')) return json({ currentNoticeVersion: 'draft-2026-09', purposes: ['marketing_updates', 'research_contact'], current: [], history: [] });
     if (req.method() === 'PUT') {
       const body = req.postDataJSON() as Record<string, unknown>;
@@ -51,17 +64,50 @@ test('captured search stays private, restores public URL and clears authoritativ
   expect(puts[0].cityId).toBe('dhg');
   expect(puts[0].query).toBe('2511AB');
   expect(puts[0]).not.toHaveProperty('userId');
+  const original = searches.get('user-one')!;
+  searches.set('user-one', {
+    ...original,
+    section: 'businesses',
+    neighborhoodIds: ['dhg:centrum', 'dhg:scheveningen'],
+    categoryIds: ['category:retail-and-shopping'],
+    filters: { openNow: true },
+    summary: 'Centrum · Scheveningen · Winkelen',
+  });
   await page.goto('/account?e2eAccountAuth=1');
   await expect(page.getByTestId('link-restore-last-search')).toBeVisible();
   await expect(page.getByTestId('last-search-summary')).not.toContainText('2511AB');
+  await page.getByTestId('button-sign-out').click();
+  await expect(page.getByTestId('link-restore-last-search')).toHaveCount(0);
   await page.evaluate(() => window.__setAccountTestAuth?.({ userId: 'user-two' }));
+  await page.evaluate(() => window.sessionStorage.setItem('last-search-test-user', 'user-two'));
+  await page.goto('/account?e2eAccountAuth=1');
   await expect(page.getByTestId('link-restore-last-search')).toHaveCount(0);
   await page.evaluate(() => window.__setAccountTestAuth?.({ userId: 'user-one' }));
+  await page.evaluate(() => window.sessionStorage.setItem('last-search-test-user', 'user-one'));
+  await page.goto('/account?e2eAccountAuth=1');
   await expect(page.getByTestId('link-restore-last-search')).toBeVisible();
+  const beforeRestorePuts = puts.length;
+  const providerRequests: string[] = [];
+  page.on('request', (request) => {
+    const url = new URL(request.url());
+    if ((url.pathname.includes('/api/listings') && url.searchParams.get('mode') === 'live')
+      || url.pathname.includes('/api/capture')) providerRequests.push(request.url());
+  });
   await page.getByTestId('link-restore-last-search').click();
   await expect(page).toHaveURL(/\/activiteiten\/den-haag\?/);
   expect(page.url()).toContain('postcode=2511AB');
+  expect(page.url()).toContain('section=businesses');
+  expect(page.url()).toContain('neighborhood=centrum');
   expect(page.url()).not.toMatch(/centerLat|centerLng|user-one|accountId/);
+  const restored = await page.evaluate(() => JSON.parse(window.localStorage.getItem('buurtplaza-discovery-return-state') ?? 'null'));
+  expect(restored.selectedNeighborhoods).toEqual(['Centrum', 'Scheveningen']);
+  expect(restored.subcategories['Retail & Shopping']).toBe(true);
+  expect(restored.subcategories['Fitness & Sports']).toBe(false);
+  expect(restored.quickFilters).toContain('open-now');
+  await page.waitForTimeout(1000);
+  expect(puts.length).toBe(beforeRestorePuts);
+  expect(providerRequests).toHaveLength(0);
+  expect(await page.evaluate(() => (window as typeof window & { __geoCalls?: number }).__geoCalls)).toBe(0);
   await page.goto('/account?e2eAccountAuth=1');
   page.once('dialog', (dialog) => dialog.accept());
   await page.getByTestId('button-clear-last-search').click();

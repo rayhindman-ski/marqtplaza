@@ -78,3 +78,64 @@ account consent response needed by account home. Rerun:
 `last-search.spec.ts` 1/1, unchanged `usability-regression.spec.ts` 21/21
 with `PW_PORT=22580`, and root typecheck clean. No frozen discovery
 components or expectations changed.
+
+## Phase 1 review remediation (2026-09-29 07:41 → 07:51 CEST; observed `date` 05:41:37 → 05:51:08 UTC)
+
+**Review findings resolved.** PUT now locks `app_users` and rechecks retention
+inside the same transaction as its upsert; preferences PATCH uses that same
+lock to disable retention and delete the row atomically; DELETE locks it too.
+An interleaving API test holds a PUT after the lock while opt-out waits, then
+verifies the final row is absent and subsequent PUT returns 204. Periodic
+last-search expiry runs from the server scheduler even without account API
+traffic, with a no-traffic purge test. Free-text query is trimmed, max 64,
+Unicode letter/digit/space/hyphen/comma/period-only; listing source/id and
+scroll context use allow-lists. The generated Zod regex cannot apply Unicode
+flags, so the Unicode regex is enforced in the route after OpenAPI max-length
+validation rather than in generated Zod.
+
+Restoration now uses the discovery URL serializer for locale, section,
+postcode and the canonical first neighbourhood; the existing `restore=1`
+discovery-state mechanism carries **all** validated neighbourhoods,
+categories, open-now filter and available viewport context, without putting
+coordinates or an account identifier in the URL. An account-scoped one-shot
+marker suppresses immediate capture on arrival until a discovery-state
+change. Capture reads the effective UI language; a provider-level cache
+guard clears account/last-search queries on sign-out or user switch, not just
+the Account button. Browser test uses the sign-out button and checks that
+restore makes no live provider or geolocation calls.
+
+**Results after remediation.** API `last-search.test.ts` **9/9**, browser
+`last-search.spec.ts` **1/1**, unchanged `discovery-regression.spec.ts`
+**11/11**, unchanged `usability-regression.spec.ts` **21/21**
+(`PW_PORT=22580`), root typecheck clean. No commits.
+
+**Explicit limits.** The frozen public discovery URL supports one
+neighbourhood and has no slots for selected listing, presentation mode,
+arbitrary category ids, viewport or web scope without live fetch. The
+existing restore-state mechanism carries multiple neighbourhoods, supported
+categories/filter and viewport; selected listing and presentation mode cannot
+be applied without changing frozen discovery state/interfaces. To ensure
+stored-only restore the effective scope is local, even if the original search
+used web scope; users can re-opt into live providers explicitly. Development
+push-preflight flagged an existing numeric(6,3) vs numeric(6, 3) formatting
+discrepancy as a type change; `drizzle-kit push` was run separately and
+reported changes applied (the additive `section` column), with no
+drop/retype intended. Inspect its production plan before production push.
+
+**Final post-review verification (observed 2026-09-29 05:54:40 UTC /
+07:54:40 CEST).** Preference updates now also refresh the user-keyed account
+cache used by capture, so opt-out stops client PUT attempts without waiting
+for a refetch. After that final change, API **9/9**; combined new/frozen
+discovery browser suites **12/12** (new 1, frozen 11); frozen usability
+**21/21** on port 22580; root typecheck clean.
+
+**Clear race fence and final rerun (observed 2026-09-29 05:58:44 UTC /
+07:58:44 CEST).** A second additive `app_users.last_search_cleared_at`
+column fences any PUT *received before* DELETE but forced to wait for the
+same account row lock: DELETE records the server-side clear instant inside
+its transaction, and the delayed PUT returns 204. A deterministic
+interleaving test holds DELETE under lock while PUT arrives, then verifies
+the row remains absent (a fresh post-clear PUT can save again). Development
+`drizzle-kit push` reported changes applied. Final runs after this change:
+API **10/10**, new + frozen discovery browser **12/12**, frozen usability
+**21/21** with port 22580, root typecheck clean. No commit.

@@ -116,6 +116,7 @@ import {
 import { isPointInsideNeighborhoods } from '@workspace/geo';
 import { parseDiscoveryUrlState, serializeDiscoveryUrlState } from './lib/discoveryUrlState';
 import { useLastSearchCapture } from './hooks/useLastSearchCapture';
+import { AccountCacheGuard } from './hooks/AccountCacheGuard';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -2584,6 +2585,7 @@ function DiscoveryState({
     cityId: locationId,
     viewport: mapViewportRef.current,
     selectedListing: selectedForCapture?.source ? { source: selectedForCapture.source, id: selectedForCapture.id } : null,
+    locale: language,
     neighborhoodNames: selectedNeighborhoods,
     categoryNames: selectedBusinessCategories,
   });
@@ -3789,6 +3791,7 @@ export default function App() {
     <WouterRouter base={basePath}>
       <ClerkProviderWithRouter>
         <QueryClientProvider client={queryClient}>
+        <AccountCacheGuard />
         <Switch>
           <Route path="/">
             <MainApp />

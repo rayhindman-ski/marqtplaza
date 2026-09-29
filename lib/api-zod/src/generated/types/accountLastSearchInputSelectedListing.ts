@@ -5,10 +5,13 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { AccountLastSearchInputSelectedListingSource } from './accountLastSearchInputSelectedListingSource';
 
 export type AccountLastSearchInputSelectedListing = {
-  /** @maxLength 60 */
-  source: string;
-  /** @maxLength 120 */
+  source: AccountLastSearchInputSelectedListingSource;
+  /**
+     * @maxLength 128
+     * @pattern ^[A-Za-z0-9_:-]+$
+     */
   id: string;
 };

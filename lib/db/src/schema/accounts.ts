@@ -53,6 +53,8 @@ export const appUsersTable = pgTable(
     suspensionReasonCode: text("suspension_reason_code"),
     deletedAt: timestamp("deleted_at", { withTimezone: true }),
     lastSeenAt: timestamp("last_seen_at", { withTimezone: true }),
+    /** Server-side fence: a PUT received before a clear may never recreate the row. */
+    lastSearchClearedAt: timestamp("last_search_cleared_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true })
       .notNull()
@@ -97,6 +99,7 @@ export const accountLastSearchTable = pgTable(
     id: serial("id").primaryKey(),
     userId: integer("user_id").notNull(),
     cityId: text("city_id").notNull(),
+    section: text("section").notNull().default("events"),
     neighborhoodIds: jsonb("neighborhood_ids").$type<string[]>().notNull().default([]),
     query: text("query"),
     categoryIds: jsonb("category_ids").$type<string[]>().notNull().default([]),

@@ -51,3 +51,24 @@ provisional; progress lines below at each phase start and commit.
   existing discovery fixture weather/listings/map stubs and account consent
   stub; `last-search.spec.ts` now 1/1, unchanged usability suite 21/21
   (`PW_PORT=22580`), root typecheck clean. No discovery implementation edits.
+
+### Phase 1 review remediation
+
+- 07:41 CEST (observed `date` 05:41:37 UTC): architect rejected Phase 1 for
+  PUT/opt-out/clear race, partial restoration, missing scheduled purge,
+  locale/account cache, weak allow-list and incomplete browser isolation.
+- 07:51 CEST (observed `date` 05:51:08 UTC): transactional common lock and
+  interleaving test delivered; scheduler, strict allow-lists, canonical URL
+  and existing restore-state mechanism, suppression marker, effective locale
+  and global auth-cache guard delivered. E2e exercises real sign-out and
+  verifies no live provider/geolocation call. API 9/9, browser 1/1, frozen
+  discovery 11/11 and usability 21/21, root typecheck clean. Schema
+  preflight's numeric-format false-positive documented in companion log;
+  additive `section` push applied. No commit.
+- 07:54 CEST (observed `date` 05:54:40 UTC): final cache synchronisation
+  fix followed by full rerun: API 9/9, new + frozen discovery browser 12/12,
+  usability 21/21, root typecheck clean. No commit.
+- 07:58 CEST (observed `date` 05:58:44 UTC): closed the DELETE-vs-delayed-PUT
+  gap with a server-side cleared-at fence and a deterministic race test;
+  additive schema push applied. Final API 10/10, new + frozen discovery
+  12/12, usability 21/21, root typecheck clean. No commit.

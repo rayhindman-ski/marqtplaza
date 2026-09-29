@@ -7,6 +7,7 @@ import { startNeighborhoodDiscoveryScheduler } from "./lib/neighborhood-discover
 import { backfillApprovedRevisions } from "./lib/businessRevisionBackfill";
 import { getFeatureFlags } from "./lib/featureFlags";
 import { startLifecycleDispatcher } from "./lib/lifecycleOutbox";
+import { startLastSearchPurgeScheduler } from "./lib/lastSearch";
 
 const rawPort = process.env["PORT"];
 
@@ -38,6 +39,8 @@ async function startServer(): Promise<void> {
   if (getFeatureFlags().accounts) {
     // Without a configured provider this only logs once; queued rows stay visible as queued.
     startLifecycleDispatcher();
+    // Continue enforcing expiry if last-search capture is disabled after rollout.
+    startLastSearchPurgeScheduler();
   }
   app.listen(port, (err) => {
     if (err) {

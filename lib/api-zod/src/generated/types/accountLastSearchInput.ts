@@ -7,6 +7,8 @@
  */
 import type { AccountLastSearchInputFilters } from './accountLastSearchInputFilters';
 import type { AccountLastSearchInputPresentationMode } from './accountLastSearchInputPresentationMode';
+import type { AccountLastSearchInputScrollContext } from './accountLastSearchInputScrollContext';
+import type { AccountLastSearchInputSection } from './accountLastSearchInputSection';
 import type { AccountLastSearchInputSelectedListing } from './accountLastSearchInputSelectedListing';
 import type { AccountLastSearchInputSourceScope } from './accountLastSearchInputSourceScope';
 import type { AccountLocale } from './accountLocale';
@@ -14,11 +16,15 @@ import type { AccountLocale } from './accountLocale';
 export interface AccountLastSearchInput {
   /** @maxLength 80 */
   cityId: string;
+  section?: AccountLastSearchInputSection;
   /** @maxItems 20 */
   neighborhoodIds: string[];
   /** @maxItems 20 */
   categoryIds: string[];
-  /** @maxLength 120 */
+  /**
+     * Trimmed public search text; server accepts Unicode letters, digits, spaces, hyphens, commas and periods only.
+     * @maxLength 64
+     */
   query?: string;
   filters?: AccountLastSearchInputFilters;
   locale: AccountLocale;
@@ -40,6 +46,5 @@ export interface AccountLastSearchInput {
      * @maximum 180
      */
   centerLng?: number;
-  /** @maxLength 80 */
-  scrollContext?: string;
+  scrollContext?: AccountLastSearchInputScrollContext;
 }

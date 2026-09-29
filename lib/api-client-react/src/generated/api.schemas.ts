@@ -710,6 +710,16 @@ export interface AccountMe {
   createdAt: string;
 }
 
+export type AccountLastSearchInputSection = typeof AccountLastSearchInputSection[keyof typeof AccountLastSearchInputSection];
+
+
+export const AccountLastSearchInputSection = {
+  events: 'events',
+  businesses: 'businesses',
+  'food-drink': 'food-drink',
+  'social-map': 'social-map',
+} as const;
+
 export type AccountLastSearchInputFilters = {
   openNow?: boolean;
 };
@@ -722,10 +732,22 @@ export const AccountLastSearchInputSourceScope = {
   web: 'web',
 } as const;
 
+export type AccountLastSearchInputSelectedListingSource = typeof AccountLastSearchInputSelectedListingSource[keyof typeof AccountLastSearchInputSelectedListingSource];
+
+
+export const AccountLastSearchInputSelectedListingSource = {
+  google_maps: 'google_maps',
+  openstreetmap: 'openstreetmap',
+  curated: 'curated',
+  source_scan: 'source_scan',
+} as const;
+
 export type AccountLastSearchInputSelectedListing = {
-  /** @maxLength 60 */
-  source: string;
-  /** @maxLength 120 */
+  source: AccountLastSearchInputSelectedListingSource;
+  /**
+     * @maxLength 128
+     * @pattern ^[A-Za-z0-9_:-]+$
+     */
   id: string;
 };
 
@@ -737,14 +759,27 @@ export const AccountLastSearchInputPresentationMode = {
   list: 'list',
 } as const;
 
+export type AccountLastSearchInputScrollContext = typeof AccountLastSearchInputScrollContext[keyof typeof AccountLastSearchInputScrollContext];
+
+
+export const AccountLastSearchInputScrollContext = {
+  top: 'top',
+  results: 'results',
+  map: 'map',
+} as const;
+
 export interface AccountLastSearchInput {
   /** @maxLength 80 */
   cityId: string;
+  section?: AccountLastSearchInputSection;
   /** @maxItems 20 */
   neighborhoodIds: string[];
   /** @maxItems 20 */
   categoryIds: string[];
-  /** @maxLength 120 */
+  /**
+     * Trimmed public search text; server accepts Unicode letters, digits, spaces, hyphens, commas and periods only.
+     * @maxLength 64
+     */
   query?: string;
   filters?: AccountLastSearchInputFilters;
   locale: AccountLocale;
@@ -766,8 +801,7 @@ export interface AccountLastSearchInput {
      * @maximum 180
      */
   centerLng?: number;
-  /** @maxLength 80 */
-  scrollContext?: string;
+  scrollContext?: AccountLastSearchInputScrollContext;
 }
 
 export type AccountLastSearch = AccountLastSearchInput & {

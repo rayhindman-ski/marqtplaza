@@ -106,12 +106,12 @@ export const getAccountLastSearchResponseOneOneNeighborhoodIdsMax = 20;
 
 export const getAccountLastSearchResponseOneOneCategoryIdsMax = 20;
 
-export const getAccountLastSearchResponseOneOneQueryMax = 120;
+export const getAccountLastSearchResponseOneOneQueryMax = 64;
 
-export const getAccountLastSearchResponseOneOneSelectedListingSourceMax = 60;
+export const getAccountLastSearchResponseOneOneSelectedListingIdMax = 128;
 
-export const getAccountLastSearchResponseOneOneSelectedListingIdMax = 120;
 
+export const getAccountLastSearchResponseOneOneSelectedListingIdRegExp = new RegExp('^[A-Za-z0-9_:-]+$');
 export const getAccountLastSearchResponseOneOneZoomMax = 22;
 
 export const getAccountLastSearchResponseOneOneCenterLatMin = -90;
@@ -120,29 +120,28 @@ export const getAccountLastSearchResponseOneOneCenterLatMax = 90;
 export const getAccountLastSearchResponseOneOneCenterLngMin = -180;
 export const getAccountLastSearchResponseOneOneCenterLngMax = 180;
 
-export const getAccountLastSearchResponseOneOneScrollContextMax = 80;
-
 
 
 export const GetAccountLastSearchResponse = zod.union([zod.object({
   "cityId": zod.string().max(getAccountLastSearchResponseOneOneCityIdMax),
+  "section": zod.enum(['events', 'businesses', 'food-drink', 'social-map']).optional(),
   "neighborhoodIds": zod.array(zod.string()).max(getAccountLastSearchResponseOneOneNeighborhoodIdsMax),
   "categoryIds": zod.array(zod.string()).max(getAccountLastSearchResponseOneOneCategoryIdsMax),
-  "query": zod.string().max(getAccountLastSearchResponseOneOneQueryMax).optional(),
+  "query": zod.string().max(getAccountLastSearchResponseOneOneQueryMax).optional().describe('Trimmed public search text; server accepts Unicode letters, digits, spaces, hyphens, commas and periods only.'),
   "filters": zod.object({
   "openNow": zod.boolean().optional()
 }).optional(),
   "locale": zod.enum(['nl', 'en']),
   "sourceScope": zod.enum(['local', 'web']),
   "selectedListing": zod.object({
-  "source": zod.string().max(getAccountLastSearchResponseOneOneSelectedListingSourceMax),
-  "id": zod.string().max(getAccountLastSearchResponseOneOneSelectedListingIdMax)
+  "source": zod.enum(['google_maps', 'openstreetmap', 'curated', 'source_scan']),
+  "id": zod.string().max(getAccountLastSearchResponseOneOneSelectedListingIdMax).regex(getAccountLastSearchResponseOneOneSelectedListingIdRegExp)
 }).optional(),
   "presentationMode": zod.enum(['map', 'list']),
   "zoom": zod.number().min(1).max(getAccountLastSearchResponseOneOneZoomMax).optional(),
   "centerLat": zod.number().min(getAccountLastSearchResponseOneOneCenterLatMin).max(getAccountLastSearchResponseOneOneCenterLatMax).optional(),
   "centerLng": zod.number().min(getAccountLastSearchResponseOneOneCenterLngMin).max(getAccountLastSearchResponseOneOneCenterLngMax).optional(),
-  "scrollContext": zod.string().max(getAccountLastSearchResponseOneOneScrollContextMax).optional()
+  "scrollContext": zod.enum(['top', 'results', 'map']).optional()
 }).and(zod.object({
   "summary": zod.string(),
   "capturedAt": zod.string(),
@@ -159,12 +158,12 @@ export const putAccountLastSearchBodyNeighborhoodIdsMax = 20;
 
 export const putAccountLastSearchBodyCategoryIdsMax = 20;
 
-export const putAccountLastSearchBodyQueryMax = 120;
+export const putAccountLastSearchBodyQueryMax = 64;
 
-export const putAccountLastSearchBodySelectedListingSourceMax = 60;
+export const putAccountLastSearchBodySelectedListingIdMax = 128;
 
-export const putAccountLastSearchBodySelectedListingIdMax = 120;
 
+export const putAccountLastSearchBodySelectedListingIdRegExp = new RegExp('^[A-Za-z0-9_:-]+$');
 export const putAccountLastSearchBodyZoomMax = 22;
 
 export const putAccountLastSearchBodyCenterLatMin = -90;
@@ -173,29 +172,28 @@ export const putAccountLastSearchBodyCenterLatMax = 90;
 export const putAccountLastSearchBodyCenterLngMin = -180;
 export const putAccountLastSearchBodyCenterLngMax = 180;
 
-export const putAccountLastSearchBodyScrollContextMax = 80;
-
 
 
 export const PutAccountLastSearchBody = zod.object({
   "cityId": zod.string().max(putAccountLastSearchBodyCityIdMax),
+  "section": zod.enum(['events', 'businesses', 'food-drink', 'social-map']).optional(),
   "neighborhoodIds": zod.array(zod.string()).max(putAccountLastSearchBodyNeighborhoodIdsMax),
   "categoryIds": zod.array(zod.string()).max(putAccountLastSearchBodyCategoryIdsMax),
-  "query": zod.string().max(putAccountLastSearchBodyQueryMax).optional(),
+  "query": zod.string().max(putAccountLastSearchBodyQueryMax).optional().describe('Trimmed public search text; server accepts Unicode letters, digits, spaces, hyphens, commas and periods only.'),
   "filters": zod.object({
   "openNow": zod.boolean().optional()
 }).optional(),
   "locale": zod.enum(['nl', 'en']),
   "sourceScope": zod.enum(['local', 'web']),
   "selectedListing": zod.object({
-  "source": zod.string().max(putAccountLastSearchBodySelectedListingSourceMax),
-  "id": zod.string().max(putAccountLastSearchBodySelectedListingIdMax)
+  "source": zod.enum(['google_maps', 'openstreetmap', 'curated', 'source_scan']),
+  "id": zod.string().max(putAccountLastSearchBodySelectedListingIdMax).regex(putAccountLastSearchBodySelectedListingIdRegExp)
 }).optional(),
   "presentationMode": zod.enum(['map', 'list']),
   "zoom": zod.number().min(1).max(putAccountLastSearchBodyZoomMax).optional(),
   "centerLat": zod.number().min(putAccountLastSearchBodyCenterLatMin).max(putAccountLastSearchBodyCenterLatMax).optional(),
   "centerLng": zod.number().min(putAccountLastSearchBodyCenterLngMin).max(putAccountLastSearchBodyCenterLngMax).optional(),
-  "scrollContext": zod.string().max(putAccountLastSearchBodyScrollContextMax).optional()
+  "scrollContext": zod.enum(['top', 'results', 'map']).optional()
 })
 
 export const putAccountLastSearchResponseOneCityIdMax = 80;
@@ -204,12 +202,12 @@ export const putAccountLastSearchResponseOneNeighborhoodIdsMax = 20;
 
 export const putAccountLastSearchResponseOneCategoryIdsMax = 20;
 
-export const putAccountLastSearchResponseOneQueryMax = 120;
+export const putAccountLastSearchResponseOneQueryMax = 64;
 
-export const putAccountLastSearchResponseOneSelectedListingSourceMax = 60;
+export const putAccountLastSearchResponseOneSelectedListingIdMax = 128;
 
-export const putAccountLastSearchResponseOneSelectedListingIdMax = 120;
 
+export const putAccountLastSearchResponseOneSelectedListingIdRegExp = new RegExp('^[A-Za-z0-9_:-]+$');
 export const putAccountLastSearchResponseOneZoomMax = 22;
 
 export const putAccountLastSearchResponseOneCenterLatMin = -90;
@@ -218,29 +216,28 @@ export const putAccountLastSearchResponseOneCenterLatMax = 90;
 export const putAccountLastSearchResponseOneCenterLngMin = -180;
 export const putAccountLastSearchResponseOneCenterLngMax = 180;
 
-export const putAccountLastSearchResponseOneScrollContextMax = 80;
-
 
 
 export const PutAccountLastSearchResponse = zod.object({
   "cityId": zod.string().max(putAccountLastSearchResponseOneCityIdMax),
+  "section": zod.enum(['events', 'businesses', 'food-drink', 'social-map']).optional(),
   "neighborhoodIds": zod.array(zod.string()).max(putAccountLastSearchResponseOneNeighborhoodIdsMax),
   "categoryIds": zod.array(zod.string()).max(putAccountLastSearchResponseOneCategoryIdsMax),
-  "query": zod.string().max(putAccountLastSearchResponseOneQueryMax).optional(),
+  "query": zod.string().max(putAccountLastSearchResponseOneQueryMax).optional().describe('Trimmed public search text; server accepts Unicode letters, digits, spaces, hyphens, commas and periods only.'),
   "filters": zod.object({
   "openNow": zod.boolean().optional()
 }).optional(),
   "locale": zod.enum(['nl', 'en']),
   "sourceScope": zod.enum(['local', 'web']),
   "selectedListing": zod.object({
-  "source": zod.string().max(putAccountLastSearchResponseOneSelectedListingSourceMax),
-  "id": zod.string().max(putAccountLastSearchResponseOneSelectedListingIdMax)
+  "source": zod.enum(['google_maps', 'openstreetmap', 'curated', 'source_scan']),
+  "id": zod.string().max(putAccountLastSearchResponseOneSelectedListingIdMax).regex(putAccountLastSearchResponseOneSelectedListingIdRegExp)
 }).optional(),
   "presentationMode": zod.enum(['map', 'list']),
   "zoom": zod.number().min(1).max(putAccountLastSearchResponseOneZoomMax).optional(),
   "centerLat": zod.number().min(putAccountLastSearchResponseOneCenterLatMin).max(putAccountLastSearchResponseOneCenterLatMax).optional(),
   "centerLng": zod.number().min(putAccountLastSearchResponseOneCenterLngMin).max(putAccountLastSearchResponseOneCenterLngMax).optional(),
-  "scrollContext": zod.string().max(putAccountLastSearchResponseOneScrollContextMax).optional()
+  "scrollContext": zod.enum(['top', 'results', 'map']).optional()
 }).and(zod.object({
   "summary": zod.string(),
   "capturedAt": zod.string(),

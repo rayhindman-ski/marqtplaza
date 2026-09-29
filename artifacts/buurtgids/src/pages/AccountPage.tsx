@@ -31,6 +31,7 @@ import { accountErrorMessage, accountTranslations, formatCopy, type Language } f
 import { resolveReturnPath, withReturnPath } from '@/lib/returnPath';
 import { useAppLanguage } from '@/lib/useAppLanguage';
 import { serializeDiscoveryUrlState } from '@/lib/discoveryUrlState';
+import { BUSINESS_CATEGORIES, EVENT_CATEGORIES, FOOD_TYPES, SOCIAL_MAP_CATEGORIES } from '@/lib/data';
 import { PreferenceSummary } from './AccountPreferencesPage';
 import { isSurveyDue } from './OnboardingPage';
 
@@ -69,17 +70,50 @@ export default function AccountPage() {
   const clearLastSearch = useDeleteAccountLastSearch();
   const [lastSearchError, setLastSearchError] = useState(false);
   const lastSearch = lastSearchQuery.data;
-  const neighborhoodName = lastSearch?.neighborhoodIds[0]
-    ? optionsQuery.data?.neighborhoods.find((option) => option.id === lastSearch.neighborhoodIds[0])?.label.nl
-    : undefined;
+  const neighborhoodNames = lastSearch?.neighborhoodIds.flatMap((id) => {
+    const option = optionsQuery.data?.neighborhoods.find((item) => item.id === id);
+    return option ? [option.label.nl] : [];
+  }) ?? [];
+  const section = lastSearch?.section ?? 'events';
+  const postcode = lastSearch?.query && /^\d{4}[A-Z]{2}$/.test(lastSearch.query) ? lastSearch.query : undefined;
   const lastSearchUrl = lastSearch ? `/activiteiten/den-haag?${serializeDiscoveryUrlState({
     city: 'den-haag',
     locale: lastSearch.locale,
-    section: 'events',
-    scope: meQuery.data?.preferences?.retainLastSearch === false ? 'local' : 'local',
-    ...(neighborhoodName ? { neighborhood: neighborhoodName } : {}),
-    ...(lastSearch.query && /^\d{4}[A-Z]{2}$/.test(lastSearch.query) ? { postcode: lastSearch.query } : {}),
-  })}` : '';
+    section,
+    // A stored search must not start a live provider fetch, even if the
+    // previous public scope was web. The opt-in can be selected again later.
+    scope: 'local',
+    ...(neighborhoodNames[0] ? { neighborhood: neighborhoodNames[0] } : {}),
+    ...(postcode ? { postcode } : {}),
+  })}&restore=1` : '';
+
+  const prepareLastSearchRestore = () => {
+    if (!lastSearch || !auth.userId) return;
+    const allSubcategories = [...EVENT_CATEGORIES, ...BUSINESS_CATEGORIES, ...SOCIAL_MAP_CATEGORIES, ...FOOD_TYPES];
+    const selectedCategories = new Set(lastSearch.categoryIds.flatMap((id) => {
+      const option = optionsQuery.data?.interests.find((item) => item.id === id);
+      return option ? [option.label.en] : [];
+    }));
+    window.localStorage.setItem('buurtplaza-discovery-return-state', JSON.stringify({
+      savedAt: Date.now(),
+      locationId: 'dhg',
+      topLevelCategories: Object.fromEntries(['events', 'businesses', 'food-drink', 'social-map'].map((candidate) => [candidate, candidate === section])),
+      subcategories: Object.fromEntries(allSubcategories.map((category) => [
+        category, section === 'businesses' && selectedCategories.size > 0
+          ? selectedCategories.has(category)
+          : true,
+      ])),
+      selectedNeighborhoods: neighborhoodNames,
+      neighborhoodSelection: neighborhoodNames.length > 0 ? 'some' : 'all',
+      postcodeFilter: postcode ?? '',
+      quickFilters: lastSearch.filters?.openNow ? ['open-now'] : [],
+      ...(lastSearch.zoom != null && lastSearch.centerLat != null && lastSearch.centerLng != null
+        ? { mapViewport: { zoom: lastSearch.zoom, center: { lat: lastSearch.centerLat, lng: lastSearch.centerLng } } }
+        : {}),
+    }));
+    window.sessionStorage.setItem('buurtplaza-last-search-restore', JSON.stringify({ userId: auth.userId, savedAt: Date.now() }));
+    window.sessionStorage.setItem('buurtplaza-discovery-live-mode', 'false');
+  };
 
   if (!auth.isLoaded) return <AccountLoading label={copy.account.loading} />;
   if (!auth.isSignedIn) return <Redirect to="/sign-in" />;
@@ -96,7 +130,11 @@ export default function AccountPage() {
       data-testid="button-sign-out"
       onClick={() => {
         queryClient.removeQueries({ queryKey: getGetAccountLastSearchQueryKey() });
-        void signOut({ redirectUrl: basePath || '/' });
+        if (auth.isTestAuth) {
+          window.__setAccountTestAuth?.({ userId: null });
+        } else {
+          void signOut({ redirectUrl: basePath || '/' });
+        }
       }}
     >
       <LogOut className="h-4 w-4" aria-hidden="true" />
@@ -125,7 +163,7 @@ export default function AccountPage() {
               <p data-testid="last-search-summary" className="mt-2 text-sm text-muted-foreground">{lastSearch.summary}</p>
               <div className="mt-4 flex gap-4">
                 <Link data-testid="link-restore-last-search" href={lastSearchUrl}
-                  onClick={() => window.sessionStorage.setItem('buurtplaza-discovery-live-mode', 'false')}
+                  onClick={prepareLastSearchRestore}
                   className="font-bold text-primary underline">{copy.account.lastSearchRestore}</Link>
                 <Button type="button" variant="outline" data-testid="button-clear-last-search" disabled={clearLastSearch.isPending} onClick={() => {
                   if (!window.confirm(copy.account.lastSearchConfirm)) return;

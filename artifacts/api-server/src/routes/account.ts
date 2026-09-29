@@ -48,6 +48,10 @@ export type AccountRouterOptions = {
    * tests inject a replacement to exercise a taxonomy version transition.
    */
   accountOptions?: AccountOptionsSource;
+  /** Test seam: pause after the account row is locked, before the retention read. */
+  afterLastSearchUserLock?: () => Promise<void>;
+  /** Test seam: pause a DELETE after its common lock to interleave a PUT. */
+  afterLastSearchClearLock?: () => Promise<void>;
 };
 
 /** Read-only operations accept no body or query fields at all. */
@@ -252,39 +256,57 @@ export function createAccountRouter(options: AccountRouterOptions = {}): IRouter
   });
 
   router.put("/account/last-search", requireFlag("lastSearch", flags), async (req, res): Promise<void> => {
-    const allowed = new Set(["cityId", "neighborhoodIds", "categoryIds", "query", "filters", "locale", "sourceScope", "selectedListing", "presentationMode", "zoom", "centerLat", "centerLng", "scrollContext"]);
+    const receivedAt = new Date();
+    const allowed = new Set(["cityId", "section", "neighborhoodIds", "categoryIds", "query", "filters", "locale", "sourceScope", "selectedListing", "presentationMode", "zoom", "centerLat", "centerLng", "scrollContext"]);
     if (rejectClientFields(req, res, allowed)) return;
     const parsed = PutAccountLastSearchBody.safeParse(req.body);
     if (!parsed.success || (req.body?.filters && unknownFieldErrors(req.body.filters, new Set(["openNow"])).length > 0)
       || (req.body?.selectedListing && unknownFieldErrors(req.body.selectedListing, new Set(["source", "id"])).length > 0)
-      || req.body?.cityId !== "dhg" || (req.body?.zoom !== undefined && !Number.isInteger(req.body.zoom))) {
+      || req.body?.cityId !== "dhg" || (req.body?.zoom !== undefined && !Number.isInteger(req.body.zoom))
+      || (parsed.success && (
+        (parsed.data.query !== undefined && (parsed.data.query.trim().length > 64 || !/^[\p{L}\p{N}\s\-,.]+$/u.test(parsed.data.query.trim())))
+        || (parsed.data.selectedListing !== undefined && (
+          !["google_maps", "openstreetmap", "curated", "source_scan"].includes(parsed.data.selectedListing.source)
+          || parsed.data.selectedListing.id.length > 128
+          || !/^[A-Za-z0-9_:-]+$/.test(parsed.data.selectedListing.id)
+        ))
+        || (parsed.data.scrollContext !== undefined && !["top", "results", "map"].includes(parsed.data.scrollContext))
+      ))) {
       sendApiError(req, res, "VALIDATION_FAILED");
       return;
     }
     const userId = req.account!.user.id;
-    const [preference] = await db.select().from(consumerPreferencesTable).where(eq(consumerPreferencesTable.userId, userId)).limit(1);
-    if (preference?.retainLastSearch === false) {
-      await db.delete(accountLastSearchTable).where(eq(accountLastSearchTable.userId, userId));
-      res.status(204).end();
-      return;
-    }
-    const now = new Date();
-    await purgeExpiredLastSearch(now);
-    const [row] = await db.insert(accountLastSearchTable).values({
-      ...validateLastSearch(parsed.data, accountOptions),
-      userId,
-      capturedAt: now,
-      expiresAt: new Date(now.getTime() + LAST_SEARCH_RETENTION_DAYS * 86_400_000),
-    }).onConflictDoUpdate({
-      target: accountLastSearchTable.userId,
-      set: { ...validateLastSearch(parsed.data, accountOptions), capturedAt: now, expiresAt: new Date(now.getTime() + LAST_SEARCH_RETENTION_DAYS * 86_400_000) },
-    }).returning();
+    const row = await db.transaction(async (tx) => {
+      // All PUT, opt-out PATCH and DELETE operations lock the same user row.
+      // Locking preferences alone is insufficient when no preferences exist yet.
+      const [owner] = await tx.select({ lastSearchClearedAt: appUsersTable.lastSearchClearedAt })
+        .from(appUsersTable).where(eq(appUsersTable.id, userId)).for("update");
+      await options.afterLastSearchUserLock?.();
+      if (owner?.lastSearchClearedAt && receivedAt <= owner.lastSearchClearedAt) return null;
+      const [preference] = await tx.select().from(consumerPreferencesTable).where(eq(consumerPreferencesTable.userId, userId)).limit(1);
+      if (preference?.retainLastSearch === false) {
+        await tx.delete(accountLastSearchTable).where(eq(accountLastSearchTable.userId, userId));
+        return null;
+      }
+      const now = new Date();
+      const values = { ...validateLastSearch(parsed.data, accountOptions), capturedAt: now, expiresAt: new Date(now.getTime() + LAST_SEARCH_RETENTION_DAYS * 86_400_000) };
+      const [saved] = await tx.insert(accountLastSearchTable).values({ ...values, userId })
+        .onConflictDoUpdate({ target: accountLastSearchTable.userId, set: values }).returning();
+      return saved;
+    });
+    if (!row) { res.status(204).end(); return; }
     res.json(serializeLastSearch(row, accountOptions));
   });
 
   router.delete("/account/last-search", requireFlag("lastSearch", flags), async (req, res): Promise<void> => {
     if (rejectClientFields(req, res)) return;
-    await db.delete(accountLastSearchTable).where(eq(accountLastSearchTable.userId, req.account!.user.id));
+    await db.transaction(async (tx) => {
+      const userId = req.account!.user.id;
+      await tx.select({ id: appUsersTable.id }).from(appUsersTable).where(eq(appUsersTable.id, userId)).for("update");
+      await options.afterLastSearchClearLock?.();
+      await tx.delete(accountLastSearchTable).where(eq(accountLastSearchTable.userId, userId));
+      await tx.update(appUsersTable).set({ lastSearchClearedAt: new Date() }).where(eq(appUsersTable.id, userId));
+    });
     res.status(204).end();
   });
 
