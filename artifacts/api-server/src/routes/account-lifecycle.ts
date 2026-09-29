@@ -613,7 +613,9 @@ export function createAccountLifecycleRouter(options: AccountLifecycleRouterOpti
           return { kind: "ok" as const, request: updated };
         }
         case "complete": {
-          if (flags().accountDeletion || request.scheduledFor) return invalid("decision", "scheduler_managed");
+          // Preserve the pre-scheduler review path for historical requests.
+          // Scheduled Phase 5 requests can only be completed by the worker.
+          if (request.scheduledFor) return invalid("decision", "scheduler_managed");
           if (request.status !== "in_review") return invalid("status", "not_in_review");
           const remaining = await findSoleOwnedBusinesses(tx, requester.clerkUserId);
           if (remaining.length > 0) return invalid("status", "ownership_unresolved");

@@ -166,6 +166,11 @@ export function AccountSupportPanel({ section, enabled }: { section: 'requests' 
       {section === 'requests' && (
         requestsQuery.isLoading ? <QueueSkeleton /> : requests.length === 0 ? <EmptyState title={copy.emptyRequests} /> : (
           requests.map((request) => {
+            // Older deletion requests and v0.5.2 support fixtures predate
+            // processor outcomes and scheduling. Keep their review controls;
+            // only scheduled Phase 5 deletions must complete via the worker.
+            const processors = request.processors ?? [];
+            const scheduledDeletion = featureFlags.accountDeletion && Boolean(request.scheduledFor);
             const blockers = request.blocker?.businesses ?? [];
             const unresolved = blockers.filter((business) => !business.resolved);
             const canStart = request.status === 'received' || (request.status === 'blocked' && (!featureFlags.accountDeletion || request.blocker?.code === 'blocked_ownership'));
@@ -188,9 +193,9 @@ export function AccountSupportPanel({ section, enabled }: { section: 'requests' 
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  {request.processors.length > 0 && <section data-testid={`deletion-processors-${request.id}`} className="text-sm">
+                  {processors.length > 0 && <section data-testid={`deletion-processors-${request.id}`} className="text-sm">
                     <h4 className="font-semibold">{language === 'nl' ? 'Verwerkingsstappen' : 'Processing steps'}</h4>
-                    <ul>{request.processors.map(item => <li key={item.processor}>{item.processor}: {item.status} ({item.attempts}){item.lastErrorCode ? ` · ${item.lastErrorCode}` : ''}</li>)}</ul>
+                    <ul>{processors.map(item => <li key={item.processor}>{item.processor}: {item.status} ({item.attempts}){item.lastErrorCode ? ` · ${item.lastErrorCode}` : ''}</li>)}</ul>
                   </section>}
                   {request.resultReport && <section data-testid={`deletion-report-${request.id}`} className="text-sm">
                     <h4 className="font-semibold">{language === 'nl' ? 'Resultaat per categorie' : 'Result by category'}</h4>
@@ -251,7 +256,7 @@ export function AccountSupportPanel({ section, enabled }: { section: 'requests' 
                   {inReview && (
                     <>
                       <Button variant="outline" size="sm" className="text-destructive gap-1" onClick={() => open({ kind: 'decision', request, decision: 'reject' })}><X className="w-4 h-4" /> {copy.reject}</Button>
-                      {!featureFlags.accountDeletion && <Button
+                      {!scheduledDeletion && <Button
                         size="sm"
                         className="gap-1"
                         disabled={unresolved.length > 0}
