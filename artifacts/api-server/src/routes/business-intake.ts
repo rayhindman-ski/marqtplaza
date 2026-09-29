@@ -56,6 +56,7 @@ import type { IdentityResolver } from "../lib/permissions";
 import { requireAppUser } from "../middlewares/requireAppUser";
 import { requireFlag } from "../middlewares/requireFlag";
 import { resolveClaimableBusinessListing, type ClaimableBusinessListing } from "./listings";
+import { normalizePublicUrl, validPublicUrl } from "../lib/businessRevisions";
 
 /**
  * Business intake: bounded public lookup, private claim drafts for existing
@@ -450,16 +451,6 @@ function rejectUnverified(req: Request, res: Response): boolean {
   return true;
 }
 
-function validPublicUrl(value: string | null | undefined): boolean {
-  if (!value?.trim()) return true;
-  try {
-    const url = new URL(value);
-    return url.protocol === "https:" || url.protocol === "http:";
-  } catch {
-    return false;
-  }
-}
-
 type NewBusinessFactsBody = {
   name: string;
   category: string;
@@ -477,7 +468,7 @@ function businessFacts(business: NewBusinessFactsBody): BusinessFactsInput {
     subcategory: trimmedOrNull(business.subcategory),
     neighborhood: business.neighborhood.trim(),
     address: trimmedOrNull(business.address),
-    websiteUrl: trimmedOrNull(business.websiteUrl),
+    websiteUrl: normalizePublicUrl(business.websiteUrl),
     phone: trimmedOrNull(business.phone),
   };
 }

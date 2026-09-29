@@ -31,6 +31,21 @@ import { BUSINESS_CATEGORIES, FOOD_TYPES, LOCATIONS, type BusinessCategory, type
 import { RETURN_PATH_PARAM, sanitizeReturnPath, withReturnPath } from '@/lib/returnPath';
 import { journeyContextFromSearch, type BusinessIntentContext } from '@/lib/businessIntent';
 import { BusinessJourneySteps } from '@/components/BusinessJourneySteps';
+
+const URL_SCHEME = /^[a-z][a-z0-9+.-]*:/i;
+/** Scheme is optional for typed websites: `www.example.nl` → `https://www.example.nl`. Null when not a public http(s) URL. */
+export function normalizeWebsiteUrl(value: string | null | undefined): string | null {
+  const trimmed = value?.trim();
+  if (!trimmed || /\s/.test(trimmed)) return null;
+  try {
+    const url = new URL(URL_SCHEME.test(trimmed) ? trimmed : `https://${trimmed}`);
+    if (url.protocol !== 'https:' && url.protocol !== 'http:') return null;
+    if (!url.hostname.includes('.') || url.hostname.endsWith('.') || url.username || url.password) return null;
+    return url.href;
+  } catch {
+    return null;
+  }
+}
 import { useAppLanguage } from '@/lib/useAppLanguage';
 
 const RELATIONSHIP_KINDS = ['owner', 'manager', 'representative'] as const;
@@ -54,7 +69,7 @@ const schema = z.object({
   subcategory: z.string().max(80),
   neighborhood: z.string().max(120),
   address: z.string().max(240),
-  websiteUrl: z.string().url().optional().or(z.literal('')),
+  websiteUrl: z.string().max(400).refine(value => value === '' || normalizeWebsiteUrl(value) !== null, 'invalid_url'),
   phone: z.string().regex(PHONE, 'phone').or(z.literal('')),
   contactName: z.string().min(2).max(120),
   contactEmail: z.string().email().max(254),
@@ -211,7 +226,7 @@ export default function BusinessDraftPage() {
     const business = {
       name: values.name, category: values.category as BusinessCategory, neighborhood: values.neighborhood,
       subcategory: values.category === FOOD_DRINK && values.subcategory ? values.subcategory : null,
-      address: values.address || null, websiteUrl: values.websiteUrl || null, phone: values.phone || null,
+      address: values.address || null, websiteUrl: normalizeWebsiteUrl(values.websiteUrl), phone: values.phone || null,
     };
     if (claim) {
       const saved = await update.mutateAsync({
@@ -400,7 +415,7 @@ export default function BusinessDraftPage() {
             </select>
           </Field>
           <Field label={copy.phone} visibility={copy.visibilityPublic} help={copy.phoneOrWebsiteHelp} error={fieldError('phone')}><Input type="tel" data-testid="input-business-phone" {...form.register('phone')} /></Field>
-          <Field label={copy.websiteUrl} visibility={copy.visibilityPublic} error={fieldError('websiteUrl')}><Input type="url" data-testid="input-business-website" {...form.register('websiteUrl')} /></Field></> : null}
+          <Field label={copy.websiteUrl} visibility={copy.visibilityPublic} error={fieldError('websiteUrl')}><Input type="text" inputMode="url" autoComplete="url" data-testid="input-business-website" {...form.register('websiteUrl')} /></Field></> : null}
         <Field label={copy.contactName} visibility={copy.visibilityPrivate} error={fieldError('contactName')}><Input {...form.register('contactName')} /></Field>
         <Field label={copy.contactEmail} visibility={copy.visibilityPrivate} error={fieldError('contactEmail')}><Input type="email" {...form.register('contactEmail')} /></Field>
         <Field label={copy.relationshipKind} visibility={copy.visibilityPrivate} help={copy.relationshipKindHelp} error={form.formState.errors.relationshipKind ? copy.relationshipKindRequired : undefined}>

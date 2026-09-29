@@ -109,14 +109,32 @@ export function normaliseContent(raw: unknown): RevisionContent {
   return content;
 }
 
-export function validPublicUrl(value: string | null): boolean {
-  if (!value) return true;
+const SCHEME_PATTERN = /^[a-z][a-z0-9+.-]*:/i;
+
+/**
+ * Normalises a user-typed website. The scheme is optional: `www.example.nl`
+ * becomes `https://www.example.nl`. Returns null when the value cannot be a
+ * public http(s) URL (no dotted host, spaces, other schemes).
+ */
+export function normalizePublicUrl(value: string | null | undefined): string | null {
+  const trimmed = value?.trim();
+  if (!trimmed) return null;
+  if (/\s/.test(trimmed)) return null;
+  const candidate = SCHEME_PATTERN.test(trimmed) ? trimmed : `https://${trimmed}`;
   try {
-    const url = new URL(value);
-    return url.protocol === "https:" || url.protocol === "http:";
+    const url = new URL(candidate);
+    if (url.protocol !== "https:" && url.protocol !== "http:") return null;
+    if (!url.hostname.includes(".") || url.hostname.endsWith(".")) return null;
+    if (url.username || url.password) return null;
+    return url.href;
   } catch {
-    return false;
+    return null;
   }
+}
+
+export function validPublicUrl(value: string | null | undefined): boolean {
+  if (!value?.trim()) return true;
+  return normalizePublicUrl(value) !== null;
 }
 
 export type ContentPatch = {
@@ -181,7 +199,8 @@ export function mergeContent(
   if (patch.facts) {
     for (const field of FACT_FIELDS) {
       if (patch.facts[field] === undefined) continue;
-      const value = cleanString(patch.facts[field]);
+      const raw = cleanString(patch.facts[field]);
+      const value = URL_FIELDS.has(field) && raw ? (normalizePublicUrl(raw) ?? raw) : raw;
       if (value && value.length > FACT_LIMITS[field]) {
         fieldErrors.push({ field: `facts.${field}`, code: "too_long" });
         continue;
