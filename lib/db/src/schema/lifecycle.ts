@@ -228,6 +228,9 @@ export const accountRequestsTable = pgTable(
     deadlineAt: timestamp("deadline_at", { withTimezone: true }),
     cancelUntil: timestamp("cancel_until", { withTimezone: true }),
     scheduledFor: timestamp("scheduled_for", { withTimezone: true }),
+    processingClaimedAt: timestamp("processing_claimed_at", { withTimezone: true }),
+    processingClaimToken: text("processing_claim_token"),
+    deletionEmailSnapshot: text("deletion_email_snapshot"),
     resultReport: jsonb("result_report").$type<{ deleted: string[]; anonymised: string[]; retained: string[] }>(),
     /** Scopes the requester explicitly acknowledged when submitting. */
     acknowledgedScopes: jsonb("acknowledged_scopes").$type<string[]>().notNull().default([]),
@@ -311,6 +314,9 @@ export const accountExportsTable = pgTable("account_exports", {
   expiresAt: timestamp("expires_at", { withTimezone: true }),
   downloadedAt: timestamp("downloaded_at", { withTimezone: true }),
   status: text("status").notNull().default("requested"),
+  processingClaimedAt: timestamp("processing_claimed_at", { withTimezone: true }),
+  processingClaimToken: text("processing_claim_token"),
+  failureCode: text("failure_code"),
 }, (table) => [
   foreignKey({ columns: [table.requestId], foreignColumns: [accountRequestsTable.id], name: "account_exports_request_fk" }).onDelete("cascade"),
   uniqueIndex("account_exports_request_unique").on(table.requestId),

@@ -1,6 +1,6 @@
 import { getAuth } from "@clerk/express";
 import { eq, sql } from "drizzle-orm";
-import { Router, type IRouter, type Request } from "express";
+import { Router, type IRouter, type Request, type Response } from "express";
 
 import { db, userRegistrationsTable, type UserRegistration } from "@workspace/db";
 import {
@@ -8,22 +8,18 @@ import {
   SaveRegistrationBody,
   SaveRegistrationResponse,
 } from "@workspace/api-zod";
+import { requireActiveAccount } from "../lib/accountStatus";
 
 const router: IRouter = Router();
 
 type UserIdResolver = (req: Request) => string | null | undefined;
 
-function currentUserId(
+async function currentUserId(
   req: Request,
-  res: { status: (code: number) => { json: (body: unknown) => unknown } },
+  res: Response,
   resolveUserId: UserIdResolver,
 ) {
-  const userId = resolveUserId(req);
-  if (!userId) {
-    res.status(401).json({ error: "Authentication is required." });
-    return null;
-  }
-  return userId;
+  return requireActiveAccount(req, res, resolveUserId);
 }
 
 /** All three survey answers are present; the survey itself is only asked after ~14 days of use. */
@@ -74,7 +70,7 @@ export function createRegistrationRouter(
   const router: IRouter = Router();
 
   router.get("/registration", async (req, res): Promise<void> => {
-  const userId = currentUserId(req, res, resolveUserId);
+  const userId = await currentUserId(req, res, resolveUserId);
   if (!userId) return;
 
   const [registration] = await db
@@ -87,7 +83,7 @@ export function createRegistrationRouter(
   });
 
   router.put("/registration", async (req, res): Promise<void> => {
-  const userId = currentUserId(req, res, resolveUserId);
+  const userId = await currentUserId(req, res, resolveUserId);
   if (!userId) return;
 
   const parsed = SaveRegistrationBody.safeParse(req.body);

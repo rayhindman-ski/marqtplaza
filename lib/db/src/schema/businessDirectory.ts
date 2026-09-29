@@ -279,6 +279,8 @@ export const businessMessagesTable = pgTable(
     kind: text("kind").notNull(),
     title: text("title").notNull(),
     body: text("body").notNull(),
+    /** Nullable for pre-v0.5.3 messages whose author was not recorded. */
+    authorUserId: text("author_user_id"),
     startsOn: date("starts_on", { mode: "string" }).notNull(),
     endsOn: date("ends_on", { mode: "string" }).notNull(),
     status: text("status").notNull().default("pending"),

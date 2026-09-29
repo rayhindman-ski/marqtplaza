@@ -2,6 +2,7 @@ import { getAuth } from "@clerk/express";
 import type { NextFunction, Request, Response } from "express";
 
 import { isEditor, roleFromClaims } from "../lib/permissions";
+import { requireActiveAccount } from "../lib/accountStatus";
 
 function editorRole(req: Request): string | null {
   const auth = getAuth(req);
@@ -9,7 +10,7 @@ function editorRole(req: Request): string | null {
   return roleFromClaims(auth.sessionClaims) ?? "";
 }
 
-export function requireEditor(req: Request, res: Response, next: NextFunction): void {
+export async function requireEditor(req: Request, res: Response, next: NextFunction): Promise<void> {
   const role = editorRole(req);
   if (role === null) {
     res.status(401).json({ error: "Authentication is required to review event candidates." });
@@ -19,5 +20,6 @@ export function requireEditor(req: Request, res: Response, next: NextFunction): 
     res.status(403).json({ error: "An editor role is required to review event candidates." });
     return;
   }
+  if (!await requireActiveAccount(req, res, request => getAuth(request).userId)) return;
   next();
 }

@@ -125,4 +125,30 @@ describe("account export", () => {
     assert.equal(review.body.exportRequests.find((row: { reference: number }) => row.reference === pending.body.reference).status, "failed");
     assert.doesNotMatch(JSON.stringify(review.body), /@example\.test/);
   });
+  it("fails closed for a closed owner and recovers an expired preparing lease", async () => {
+    const [closedRequest] = await db.insert(accountRequestsTable).values({
+      userId, scope: "account", type: "export",
+    }).returning();
+    await db.insert(accountExportsTable).values({ requestId: closedRequest.id });
+    await db.update(appUsersTable).set({ closedAt: at }).where(eq(appUsersTable.id, userId));
+    const before = bytes.size;
+    await prepareAccountExports(at, store);
+    const [closed] = await db.select().from(accountExportsTable).where(eq(accountExportsTable.requestId, closedRequest.id));
+    assert.equal(closed.status, "failed");
+    assert.equal(closed.failureCode, "account_closed");
+    assert.equal(bytes.size, before);
+    await db.update(appUsersTable).set({ closedAt: null }).where(eq(appUsersTable.id, userId));
+
+    const [crashedRequest] = await db.insert(accountRequestsTable).values({
+      userId, scope: "account", type: "export",
+    }).returning();
+    await db.insert(accountExportsTable).values({
+      requestId: crashedRequest.id, status: "preparing", processingClaimToken: "orphan",
+      processingClaimedAt: new Date(at.getTime() - 11 * 60_000),
+    });
+    await prepareAccountExports(at, store);
+    const [recovered] = await db.select().from(accountExportsTable).where(eq(accountExportsTable.requestId, crashedRequest.id));
+    assert.equal(recovered.status, "available");
+    assert.equal(recovered.processingClaimToken, null);
+  });
 });

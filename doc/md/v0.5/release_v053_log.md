@@ -437,3 +437,41 @@ Root typecheck clean; **no browser launched**. Owner should rerun
 - e2e: account-deletion 3/3; account-offboarding-labels, account-privacy,
   account-rights green (9 total in the combined run); usability-regression
   21/21 (PW_PORT=22580); typecheck clean.
+
+### Phases 4–5 review remediation (2026-09-29 07:36 UTC, observed `date`)
+
+- Final membership-locked sole-owner guard rechecks every due deletion,
+  including support-reopened requests; blocked ownership records a new event
+  and prevents Clerk/app execution. Deletion and export workers use durable
+  10-minute claim tokens with stale-lease recovery; Clerk 404 means already
+  deleted. Export workers fail closed with `account_closed` if the account
+  closed before build or before publication (user-row lock).
+- Clerk verified primary e-mail is snapshotted before deletion, used for
+  pending registration/invitation revocation and the completion outbox notice,
+  and cleared after completion. Mail processor stays pending until confirmed
+  delivery or skips with no e-mail. Expanded subject-linked anonymisation,
+  author attribution for new business messages, inventory and NL/EN category
+  descriptions. Pre-attribution messages cannot be assigned to an author
+  retrospectively; manual case review remains required.
+- Unified support redaction on list/decision responses, strips contact/token
+  patterns from free-form notes and suppresses raw retention exceptions.
+  Closed subjects are rejected from legacy registration and community
+  posting/editor paths. Added regression tests for sole-owner reopening,
+  concurrent ticks, absent Clerk user, null-local-email delivery, crashed
+  export lease, closed-account export, and closed registration.
+- Additive DB columns applied with explicit SQL. Schema preflight reports
+  only the known numeric-spacing false positive for last-search center
+  coordinates. Six requested suites passed: lifecycle 25/25, export 4/4,
+  consumer registration 28/28, business membership 14/14, registration 4/4,
+  account 17/17. Root typecheck clean. No browser run or commit.
+- **Phase 6 evidence remains open:** live Clerk user-delete/revoke walk-through
+  (including the final delivery/reconciliation path) must be recorded by
+  the owner; simulated tests are not live-provider proof.
+- 07:40 UTC (observed `date`): final post-remediation rerun of the six suites
+  92/92 and root typecheck clean; `git diff --check` clean.
+- 07:41 UTC (observed `date`): extended scrub to linked reviewer/fact-check,
+  deal and listing-correction references; reran all six suites 92/92 and
+  root typecheck successfully. No browser, no commit.
+- 07:43 UTC (observed `date`): closed-account guard also applied to the
+  authenticated discovery-query attribution path. Final six suites 92/92,
+  typecheck and diff check clean.

@@ -133,3 +133,25 @@ provisional; progress lines below at each phase start and commit.
   dedicated page, added NL/EN inventory labels for requester/reviewer,
   updated cancellation cache and browser assertions. Root typecheck clean.
   Browser reruns remain with owner; no browser launched.
+
+### Phases 4–5 review remediation
+
+- 07:36 UTC (observed `date`, 2026-09-29): architect rejected initial
+  implementation for sole-owner bypass, unclaimed work, missing Clerk/mail
+  reconciliation, contact remnants and support/log redaction. Added locked
+  final ownership check, recoverable deletion/export leases, closed-account
+  export fencing, verified Clerk e-mail snapshot, final-delivery condition,
+  expanded personal-field scrubbing and legacy-route account guards.
+  Additive columns applied directly after schema preflight encountered only
+  the prior numeric-spacing false positive. Six requested API suites
+  92/92 (25+4+28+14+4+17), root typecheck clean; browser not launched,
+  no commit. Historical business messages have no attribution and require
+  manual review. Live Clerk-delete walk-through remains Phase 6 evidence.
+- 07:40 UTC (observed `date`, 2026-09-29): post-remediation rerun confirmed
+  the six API suites 92/92 and root typecheck clean. No browser or commit.
+- 07:41 UTC (observed `date`, 2026-09-29): extended reviewer/claim
+  linked-field anonymisation; final rerun of six suites 92/92, root
+  typecheck and diff check clean. No browser or commit.
+- 07:43 UTC (observed `date`, 2026-09-29): prevented closed Clerk subjects
+  from being attributed to public discovery queries; six suites 92/92 and
+  root typecheck clean again. No browser or commit.

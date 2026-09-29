@@ -15,6 +15,10 @@ import {
   db,
   lifecycleDeliveryAttemptsTable,
   lifecycleOutboxTable,
+  consumerRegistrationsTable,
+  consumerRegistrationTokensTable,
+  businessInvitationsTable,
+  businessInvitationTokensTable,
   pool,
 } from "@workspace/db";
 
@@ -144,7 +148,8 @@ async function createProfile(name: string): Promise<number> {
 }
 
 async function cleanup(): Promise<void> {
-  const extra = [`${keyPrefix}:closed-subject`, `${keyPrefix}:new-subject`, `${keyPrefix}:deletion`];
+  const extra = [`${keyPrefix}:closed-subject`, `${keyPrefix}:new-subject`, `${keyPrefix}:deletion`,
+    `${keyPrefix}:guard`, `${keyPrefix}:concurrent`, `${keyPrefix}:missing`];
   const extraUsers = await db.select({ id: appUsersTable.id }).from(appUsersTable).where(inArray(appUsersTable.clerkUserId, extra));
   if (extraUsers.length) {
     const ids = extraUsers.map(row => row.id);
@@ -188,7 +193,8 @@ describe("lifecycle outbox", () => {
     try {
       const subject = `${keyPrefix}:deletion`;
       const fresh = await provisionAppUser(subject);
-      await db.update(appUsersTable).set({ email: "private@example.test" }).where(eq(appUsersTable.id, fresh.id));
+      // Provisioned app users have no local address; only Clerk has the verified one.
+      await db.update(appUsersTable).set({ email: null }).where(eq(appUsersTable.id, fresh.id));
       await db.insert(consumerPreferencesTable).values({ userId: fresh.id });
       const created = await request("/api/account/deletion-requests", { method: "POST", userId: subject, body: json({ acknowledgedScopes: ALL_SCOPES }) });
       assert.equal(created.status, 201);
@@ -201,30 +207,59 @@ describe("lifecycle outbox", () => {
       const refused = await request(`/api/account/requests/${record.id}/withdraw`, { method: "POST", userId: subject, body: json({ expectedVersion: record.version }) });
       assert.equal(refused.status, 409);
       let fail = true;
+      const snapshotEmail = `private-${runId}@example.test`;
       const called: string[] = [];
       const clerk = {
         sessions: { getSessionList: async () => ({ data: called.includes("revoke") ? [] : [{ id: "session-1" }] }), revokeSession: async () => { called.push("revoke"); } },
-        users: { deleteUser: async () => { called.push("delete"); } },
+        users: {
+          getUser: async () => ({ primaryEmailAddressId: "email-1", emailAddresses: [
+            { id: "email-1", emailAddress: snapshotEmail, verification: { status: "verified" } },
+          ] }),
+          deleteUser: async () => { called.push("delete"); },
+        },
       };
       const store = { save: async () => {}, load: async () => Buffer.alloc(0), remove: async () => { if (fail) throw new Error("private@example.test secret-token"); } };
       // Create an artifact to force a storage failure after the account and Clerk stages.
       const [exportRequest] = await db.insert(accountRequestsTable).values({ userId: fresh.id, scope: "account", type: "export" }).returning();
       await db.insert(accountExportsTable).values({ requestId: exportRequest.id, files: [{ key: "deletion-test", name: "bundle.json", size: 1 }] });
+      const [pendingRegistration] = await db.insert(consumerRegistrationsTable).values({
+        normalizedEmail: snapshotEmail, name: "Private Name", normalizedPhone: "+31612345678",
+        expiresAt: new Date("2026-10-30T00:00:00Z"),
+      }).returning();
+      await db.insert(consumerRegistrationTokensTable).values({
+        registrationId: pendingRegistration.id, tokenDigest: `private-${runId}`,
+        expiresAt: new Date("2026-10-01T00:00:00Z"),
+      });
+      const invitationProfileId = await createProfile(`Private invitation ${runId}`);
+      const [invitation] = await db.insert(businessInvitationsTable).values({
+        businessProfileId: invitationProfileId, normalizedEmail: snapshotEmail,
+        invitedByUserId: subject, role: "manager", expiresAt: new Date("2026-10-30T00:00:00Z"),
+      }).returning();
+      await db.insert(businessInvitationTokensTable).values({
+        invitationId: invitation.id, tokenDigest: `private-invite-${runId}`,
+        expiresAt: new Date("2026-10-01T00:00:00Z"),
+      });
       await executeAccountDeletions(new Date("2026-09-29T00:00:00Z"), clerk, store);
       assert.deepEqual(called, ["revoke", "delete"]);
       let [row] = await db.select().from(accountRequestsTable).where(eq(accountRequestsTable.id, record.id));
       assert.equal(row.status, "blocked");
       let outcomes = await db.select().from(accountRequestProcessorOutcomesTable).where(eq(accountRequestProcessorOutcomesTable.requestId, record.id));
+      assert.equal(outcomes.find(item => item.processor === "app_db")?.status, "done", JSON.stringify(outcomes.map(row => [row.processor, row.status, row.lastErrorCode])));
       assert.equal(outcomes.find(item => item.processor === "object_storage")?.status, "failed");
       assert.equal(outcomes.find(item => item.processor === "mail_provider")?.status, "pending");
       const support = await request("/api/review/account-requests?status=blocked", { userId: users.support, editor: true });
       const displayed = JSON.stringify(support.body);
       assert.ok(displayed.includes("object_storage"));
-      assert.ok(!/private@example\.test|secret-token/.test(displayed));
+      assert.ok(!/@example\.test|secret-token/.test(displayed));
       fail = false;
+      const [pendingNotice] = await db.select().from(lifecycleOutboxTable)
+        .where(eq(lifecycleOutboxTable.idempotencyKey, `account-deletion:${record.id}:completed`));
+      assert.equal(pendingNotice.recipientEmail, snapshotEmail);
+      await db.update(lifecycleOutboxTable).set({ status: "delivered" }).where(eq(lifecycleOutboxTable.id, pendingNotice.id));
       await executeAccountDeletions(new Date("2026-09-29T00:01:00Z"), clerk, store);
       [row] = await db.select().from(accountRequestsTable).where(eq(accountRequestsTable.id, record.id));
       assert.equal(row.status, "completed");
+      assert.equal(row.deletionEmailSnapshot, null);
       assert.deepEqual(row.resultReport, DELETION_POLICY.categories);
       outcomes = await db.select().from(accountRequestProcessorOutcomesTable).where(eq(accountRequestProcessorOutcomesTable.requestId, record.id));
       assert.ok(outcomes.every(item => item.status === "done" || item.status === "skipped"));
@@ -237,15 +272,78 @@ describe("lifecycle outbox", () => {
       assert.ok(retained.every(item => item.resolutionNote === null && item.resolvedByUserId === null));
       const notices = await db.select().from(lifecycleOutboxTable).where(eq(lifecycleOutboxTable.recipientUserId, fresh.id));
       assert.ok(notices.filter(item => item.eventCode !== "account.deletion_completed").every(item =>
-        item.recipientEmail === null && !JSON.stringify(item.payload).includes("private@example.test")));
+        item.recipientEmail === null && !JSON.stringify(item.payload).includes(snapshotEmail)));
       assert.equal((await db.select().from(consumerPreferencesTable).where(eq(consumerPreferencesTable.userId, fresh.id))).length, 0);
       assert.equal((await db.select().from(accountLastSearchTable).where(eq(accountLastSearchTable.userId, fresh.id))).length, 0);
+      const [cancelled] = await db.select().from(consumerRegistrationsTable).where(eq(consumerRegistrationsTable.id, pendingRegistration.id));
+      assert.equal(cancelled.status, "cancelled");
+      assert.equal(cancelled.normalizedPhone, "");
+      assert.ok((await db.select().from(consumerRegistrationTokensTable).where(eq(consumerRegistrationTokensTable.registrationId, pendingRegistration.id)))[0].supersededAt);
+      const [revoked] = await db.select().from(businessInvitationsTable).where(eq(businessInvitationsTable.id, invitation.id));
+      assert.ok(revoked.revokedAt);
+      assert.ok(!revoked.normalizedEmail.includes(snapshotEmail));
+      assert.ok((await db.select().from(businessInvitationTokensTable).where(eq(businessInvitationTokensTable.invitationId, invitation.id)))[0].supersededAt);
+      await db.delete(consumerRegistrationsTable).where(eq(consumerRegistrationsTable.id, pendingRegistration.id));
       const forbidden = await request("/api/account/requests", { userId: subject });
       assert.equal(forbidden.status, 404);
       assert.equal((forbidden.body as { code: string }).code, "NOT_FOUND");
     } finally {
       flags = { accounts: true, businessIntake: true, businessPublication: true, consumerRegistration: false, businessOnboarding: false };
     }
+  });
+  it("rechecks ownership after review, claims concurrent ticks once, and reconciles missing Clerk users", async () => {
+    const at = new Date("2026-09-29T08:00:00Z");
+    const guard = await provisionAppUser(`${keyPrefix}:guard`);
+    const profileId = await createProfile(`Late owner ${runId}`);
+    await db.insert(businessMembersTable).values({ businessProfileId: profileId, userId: guard.clerkUserId, role: "owner" });
+    const [blocked] = await db.insert(accountRequestsTable).values({
+      userId: guard.id, scope: "account", type: "deletion", status: "blocked", scheduledFor: at,
+      blockerCode: "blocked_ownership", blockerDetails: { businessProfileIds: [profileId] },
+    }).returning();
+    const reopened = await request(`/api/review/account-requests/${blocked.id}/decision`, {
+      method: "POST", userId: users.support, editor: true,
+      body: json({ expectedVersion: blocked.version, decision: "start_review" }),
+    });
+    assert.equal(reopened.status, 200);
+    assert.equal(reopened.body.status, "in_review");
+    let deletes = 0;
+    const clerk = {
+      sessions: { getSessionList: async () => ({ data: [] }), revokeSession: async () => {} },
+      users: {
+        getUser: async () => ({ emailAddresses: [] }),
+        deleteUser: async () => { deletes++; },
+      },
+    };
+    const store = { save: async () => {}, load: async () => Buffer.alloc(0), remove: async () => {} };
+    await executeAccountDeletions(at, clerk, store);
+    const [stopped] = await db.select().from(accountRequestsTable).where(eq(accountRequestsTable.id, blocked.id));
+    assert.equal(stopped.status, "blocked");
+    assert.equal(stopped.blockerCode, "blocked_ownership");
+    assert.equal(deletes, 0);
+    assert.equal((await db.select().from(accountRequestEventsTable).where(eq(accountRequestEventsTable.requestId, blocked.id))).at(-1)?.toStatus, "blocked");
+    assert.equal((await db.select().from(appUsersTable).where(eq(appUsersTable.id, guard.id)))[0].closedAt, null);
+
+    const concurrent = await provisionAppUser(`${keyPrefix}:concurrent`);
+    const [requestRow] = await db.insert(accountRequestsTable).values({
+      userId: concurrent.id, scope: "account", type: "deletion", status: "received", scheduledFor: at,
+    }).returning();
+    await Promise.all([executeAccountDeletions(at, clerk, store), executeAccountDeletions(at, clerk, store)]);
+    assert.equal(deletes, 1);
+    assert.equal((await db.select().from(accountRequestsTable).where(eq(accountRequestsTable.id, requestRow.id)))[0].status, "completed");
+
+    const missing = await provisionAppUser(`${keyPrefix}:missing`);
+    const [retry] = await db.insert(accountRequestsTable).values({
+      userId: missing.id, scope: "account", type: "deletion", status: "in_progress", scheduledFor: at,
+    }).returning();
+    const gone = { ...clerk, sessions: {
+      getSessionList: async (): Promise<{ data: { id: string }[] }> => { throw { status: 404 }; },
+      revokeSession: async () => { throw { status: 404 }; },
+    }, users: {
+      getUser: async (): Promise<{ emailAddresses: [] }> => { throw { status: 404 }; },
+      deleteUser: async () => { throw { status: 404 }; },
+    } };
+    await executeAccountDeletions(at, gone, store);
+    assert.equal((await db.select().from(accountRequestsTable).where(eq(accountRequestsTable.id, retry.id)))[0].status, "completed");
   });
   before(async () => {
     await cleanup();

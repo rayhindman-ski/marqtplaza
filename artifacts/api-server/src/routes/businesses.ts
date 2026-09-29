@@ -716,6 +716,7 @@ export function createBusinessesRouter(
       const [message] = await tx.insert(businessMessagesTable).values({
         businessProfileId: owned.profile.id, cityId: owned.profile.cityId,
         kind: body.data.kind, title: body.data.title.trim(), body: body.data.body.trim(),
+        authorUserId: userId,
         startsOn: body.data.startsOn, endsOn: body.data.endsOn,
       }).returning();
       return message;
@@ -756,6 +757,7 @@ export function createBusinessesRouter(
         if (active.length >= 5) return { kind: "conflict" as const };
       }
       const [message] = await tx.update(businessMessagesTable).set({
+        authorUserId: userId,
         ...(body.data.kind ? { kind: body.data.kind } : {}),
         ...(body.data.title !== undefined ? { title: body.data.title.trim() } : {}),
         ...(body.data.body !== undefined ? { body: body.data.body.trim() } : {}),

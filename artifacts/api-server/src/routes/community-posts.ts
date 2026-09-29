@@ -17,6 +17,7 @@ import {
 } from "@workspace/api-zod";
 import { requireEditor } from "../middlewares/requireEditor.js";
 import { hasUserRegistration } from "./registration.js";
+import { requireActiveAccount } from "../lib/accountStatus";
 
 const router: IRouter = Router();
 
@@ -119,6 +120,7 @@ function validateCity(cityId: string, res: { status: (code: number) => { json: (
 }
 
 router.get("/community-posts", async (req, res): Promise<void> => {
+  if (getAuth(req).userId && !await requireActiveAccount(req, res, request => getAuth(request).userId)) return;
   const parsed = GetCommunityPostsQueryParams.safeParse(req.query);
   const cityId = parsed.success ? parsed.data.cityId.trim() : "";
   if (!parsed.success || !validateCity(cityId, res)) {
@@ -154,6 +156,7 @@ router.post("/community-posts", async (req, res): Promise<void> => {
     res.status(401).json({ error: "Sign in to post something local." });
     return;
   }
+  if (!await requireActiveAccount(req, res, () => auth.userId)) return;
   if (!(await hasUserRegistration(auth.userId))) {
     res.status(403).json({ error: "Complete your registration before posting locally." });
     return;
@@ -249,6 +252,7 @@ router.put("/community-posts/:id/participation", async (req, res): Promise<void>
     res.status(401).json({ error: "Sign in to show your interest." });
     return;
   }
+  if (!await requireActiveAccount(req, res, () => auth.userId)) return;
   if (!(await hasUserRegistration(auth.userId))) {
     res.status(403).json({ error: "Complete your registration before participating." });
     return;

@@ -71,3 +71,37 @@ this is a temporary delivery exception, not retained audit contact data.
 Additional public contributions and third-party/legal-obligation records
 remain subject to owner-approved case-by-case retention decisions. The
 processing inventory remains provisional until owner approval.
+
+Phases 4–5 review remediation (2026-09-29): Execution now rechecks *current*
+sole ownership under membership locks before disabling the account, even after
+support changes the request to in-review. Durable per-request claims (10-minute
+recoverable leases) prevent simultaneous deletion/export workers from both
+processing a request. Export preparation checks `closed_at` before building
+and again under the app-user row lock before publication; closed accounts
+receive `account_closed` failure, without an artifact. The verified primary
+e-mail is fetched from Clerk and temporarily stored on the deletion request
+before the Clerk user is removed; it is used to cancel pending consumer
+registrations/business invitations and queue the completion notice even where
+the local user e-mail was null. The snapshot is cleared on completion. The
+mail-provider outcome remains pending until the notice reaches **delivered**;
+no address means skipped. Failed or cancelled delivery blocks completion.
+
+The deletion transaction also clears personal contact/evidence/free-text
+columns on subject-linked `business_claims`, revokes and anonymises
+`business_invitations` and their tokens (including invitations sent *by* the
+user), pseudonymises `business_member_events`, empties authored
+`business_profile_revisions`, redacts reviews authored by the subject,
+fact-check/editor identities and notes, member-inviter references, business
+deal review identities, listing-correction reviewer identities and reasons,
+replaces authored `community_posts` content while retaining row ids, and
+deletes participation rows. New `business_messages.author_user_id` identifies
+the writer; messages authored after this schema addition keep their ids but
+lose title/body/review note when that writer closes their account. Historical
+business messages predate author attribution and **cannot safely be assigned
+to a particular member**; these rows need case-by-case review rather than
+deleting a shared business's messages. Existing reviewer/third-party records
+remain subject to the provisional legal-retention policy. Public tokens
+linked by verified e-mail are revoked before Clerk removal; account-owned
+legacy registration and community posting routes refuse closed subjects
+even if `app_users.email` is null; a signed-in closed subject is also refused
+before a discovery listing query can store their Clerk id.

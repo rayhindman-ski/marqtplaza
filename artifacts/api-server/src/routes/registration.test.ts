@@ -3,11 +3,12 @@ import { after, before, describe, it } from "node:test";
 import type { AddressInfo } from "node:net";
 import express from "express";
 import { eq } from "drizzle-orm";
-import { db, pool, userRegistrationsTable } from "@workspace/db";
+import { appUsersTable, db, pool, userRegistrationsTable } from "@workspace/db";
 import { createRegistrationRouter } from "./registration";
 
 const userId = `registration-test-${process.pid}-${Date.now()}`;
 const freshUserId = `${userId}-fresh`;
+const closedUserId = `${userId}-closed`;
 const app = express();
 app.use(express.json());
 app.use(
@@ -44,6 +45,7 @@ describe("registration route", () => {
   after(async () => {
     await db.delete(userRegistrationsTable).where(eq(userRegistrationsTable.userId, userId));
     await db.delete(userRegistrationsTable).where(eq(userRegistrationsTable.userId, freshUserId));
+    await db.delete(appUsersTable).where(eq(appUsersTable.clerkUserId, closedUserId));
     await new Promise<void>((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
     await pool.end();
   });
@@ -57,6 +59,13 @@ describe("registration route", () => {
       body: JSON.stringify({ name: "Incomplete" }),
     });
     assert.equal(invalid.status, 400);
+  });
+  it("refuses GET and PUT for a closed Clerk subject even when its stored e-mail is null", async () => {
+    await db.insert(appUsersTable).values({ clerkUserId: closedUserId, email: null, status: "deleted", closedAt: new Date() });
+    assert.equal((await request("/api/registration", undefined, closedUserId)).status, 404);
+    assert.equal((await request("/api/registration", {
+      method: "PUT", body: JSON.stringify({ name: "Closed", email: "closed@example.test", registrationType: "consumer" }),
+    }, closedUserId)).status, 404);
   });
 
   it("persists registration data and exposes participation access", async () => {

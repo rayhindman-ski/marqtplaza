@@ -28,7 +28,7 @@ export function startAccountRetentionScheduler(
     if (running) return;
     running = true;
     try { await purgeAccountRetention(new Date(), expireExports); }
-    catch (error) { logger.error({ err: error, event: "account.retention.purge_failed" }, "Account retention purge failed"); }
+    catch { logger.error({ code: "retention_purge_failed", event: "account.retention.purge_failed" }, "Account retention purge failed"); }
     finally { running = false; }
   };
   const timer = setInterval(() => void tick(), intervalMs);

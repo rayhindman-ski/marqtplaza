@@ -25,6 +25,7 @@ import {
   type SocialMapCategory,
 } from "../lib/social-map-listings.js";
 import { getSocialMapReviewReport } from "../lib/social-map-review.js";
+import { resolveAccountAccess } from "../lib/accountStatus";
 import {
   ensureLocalizedEventCopy,
   eventCopyForLanguage,
@@ -1706,6 +1707,18 @@ export function createListingsRouter(
     requestedNeighborhoods,
     requestedBusinessCategories,
   );
+  const listingUserId = dependencies.getUserId(req);
+  if (listingUserId) {
+    const account = await resolveAccountAccess(listingUserId);
+    if (account.kind === "closed" || account.kind === "deleted") {
+      res.status(404).json({ code: "NOT_FOUND", error: "Account not found." });
+      return;
+    }
+    if (account.kind === "suspended") {
+      res.status(403).json({ code: "ACCOUNT_SUSPENDED", error: "Account suspended." });
+      return;
+    }
+  }
   const queryId = await createListingsQuery({
     cityId,
     section: listingSection,
@@ -1713,7 +1726,7 @@ export function createListingsRouter(
     neighborhoods: requestedNeighborhoods,
     mode,
     anonymousId,
-    userId: dependencies.getUserId(req),
+    userId: listingUserId,
     normalizedKey,
   });
 

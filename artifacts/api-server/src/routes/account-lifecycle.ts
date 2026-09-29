@@ -52,6 +52,7 @@ import { requireAppUser } from "../middlewares/requireAppUser";
 import { requireFlag } from "../middlewares/requireFlag";
 import { requireRecentAuth, type RecentAuthOptions } from "../lib/recentAuth";
 import { DELETION_POLICY, DELETION_WAIT_MS } from "../lib/accountDeletion";
+import { findSoleOwnedBusinesses } from "../lib/soleOwnership";
 
 /**
  * Account lifecycle self-service and its support path.
@@ -98,7 +99,6 @@ const STATUS_QUERY: ReadonlySet<string> = new Set(["status", "type"]);
  * nobody can manage. Drafts and unpublished profiles are not public and do not
  * block; support resolves a blocker by transfer, closure, or unpublication.
  */
-const BLOCKING_PUBLICATION_STATUSES = ["published", "suspended"] as const;
 
 function rejectClientFields(
   req: Request,
@@ -124,45 +124,6 @@ function requireReviewer(req: Request, res: Response, next: NextFunction): void 
 }
 
 // ------------------------------------------------------------ sole owners ---
-
-type SoleOwnedBusiness = { id: number; name: string; publicationStatus: string };
-
-/**
- * Businesses where this user is the only owner. Locks the membership rows so a
- * concurrent membership change cannot slip between the check and the decision.
- */
-async function findSoleOwnedBusinesses(tx: Tx, clerkUserId: string): Promise<SoleOwnedBusiness[]> {
-  const owned = await tx
-    .select({ businessProfileId: businessMembersTable.businessProfileId })
-    .from(businessMembersTable)
-    .where(and(eq(businessMembersTable.userId, clerkUserId), eq(businessMembersTable.role, "owner")))
-    .for("update");
-  if (owned.length === 0) return [];
-  const ids = owned.map((row) => row.businessProfileId);
-  const otherOwners = await tx
-    .select({ businessProfileId: businessMembersTable.businessProfileId })
-    .from(businessMembersTable)
-    .where(
-      and(
-        inArray(businessMembersTable.businessProfileId, ids),
-        eq(businessMembersTable.role, "owner"),
-        ne(businessMembersTable.userId, clerkUserId),
-      ),
-    );
-  const shared = new Set(otherOwners.map((row) => row.businessProfileId));
-  const soleIds = ids.filter((id) => !shared.has(id));
-  if (soleIds.length === 0) return [];
-  const profiles = await tx
-    .select({
-      id: businessProfilesTable.id,
-      name: businessProfilesTable.name,
-      publicationStatus: businessProfilesTable.publicationStatus,
-    })
-    .from(businessProfilesTable)
-    .where(and(inArray(businessProfilesTable.id, soleIds), inArray(businessProfilesTable.publicationStatus, [...BLOCKING_PUBLICATION_STATUSES])))
-    .orderBy(asc(businessProfilesTable.id));
-  return profiles;
-}
 
 // ------------------------------------------------------------ serialisers ---
 
@@ -233,6 +194,12 @@ async function serialiseRequest(request: AccountRequest, events: AccountRequestE
   };
 }
 
+function redactFreeForm(value: string | null): string | null {
+  return value?.replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, "[email]")
+    .replace(/(?:\+?\d[\d\s().-]{7,}\d)/g, "[phone]")
+    .replace(/(?:bearer\s+|token[=:]\s*)[A-Za-z0-9._~+/=-]{8,}/gi, "[token]") ?? null;
+}
+
 async function serialiseRequestForSupport(request: AccountRequest, events: AccountRequestEvent[], redactNotes = false) {
   const outcomes = await db.select().from(accountRequestProcessorOutcomesTable).where(eq(accountRequestProcessorOutcomesTable.requestId, request.id));
   const requesterView = await serialiseRequest(request, events);
@@ -243,7 +210,7 @@ async function serialiseRequestForSupport(request: AccountRequest, events: Accou
       businesses: requesterView.blocker.businesses.map(business => ({ ...business, name: "" })),
     } } : {}),
     userId: request.userId,
-    resolutionNote: redactNotes ? null : request.resolutionNote,
+    resolutionNote: redactNotes ? null : redactFreeForm(request.resolutionNote),
     resolvedByUserId: request.resolvedByUserId,
     processors: outcomes.map(row => ({ processor: row.processor, status: row.status, attempts: row.attempts, lastErrorCode: row.lastErrorCode, completedAt: row.completedAt?.toISOString() ?? null })),
     events: events.map((event) => ({
@@ -253,7 +220,7 @@ async function serialiseRequestForSupport(request: AccountRequest, events: Accou
       actor: event.actor,
       resolutionCode: event.resolutionCode,
       businessProfileId: event.businessProfileId,
-       note: redactNotes ? null : event.note,
+       note: redactNotes ? null : redactFreeForm(event.note),
       createdAt: event.createdAt.toISOString(),
     })),
   };
@@ -719,7 +686,7 @@ export function createAccountLifecycleRouter(options: AccountLifecycleRouterOpti
           "Account request decision recorded",
         );
         const events = (await loadEvents([outcome.request.id])).get(outcome.request.id) ?? [];
-        res.json(DecideSupportAccountRequestResponse.parse(await serialiseRequestForSupport(outcome.request, events)));
+        res.json(DecideSupportAccountRequestResponse.parse(await serialiseRequestForSupport(outcome.request, events, Boolean(flags().accountDeletion))));
       }
     }
   });

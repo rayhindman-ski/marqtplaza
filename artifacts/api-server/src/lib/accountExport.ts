@@ -1,6 +1,7 @@
 import { Storage } from "@google-cloud/storage";
+import { randomUUID } from "node:crypto";
 import { zipSync } from "fflate";
-import { and, asc, eq, inArray, lte } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, lt, lte, or } from "drizzle-orm";
 import {
   db, appUsersTable, consumerPreferencesTable, accountConsentEventsTable,
   userRegistrationsTable, accountLastSearchTable, businessMembersTable,
@@ -31,6 +32,7 @@ const bucket = () => {
 const keyFor = (userId: number, requestId: number, name: string) =>
   `${privatePrefix()}/account-exports/${userId}/${requestId}/${name}`;
 export const EXPORT_LIFETIME_MS = 72 * 60 * 60 * 1000;
+const CLAIM_LEASE_MS = 10 * 60_000;
 export type ExportArtifactStore = {
   save: (key: string, bytes: Buffer, contentType: string) => Promise<void>;
   remove: (key: string) => Promise<void>;
@@ -48,9 +50,9 @@ export const appStorage: ExportArtifactStore = {
 export async function buildAccountBundle(userId: number, clerkUserId: string, at: Date) {
   const [profile] = await db.select({
     id: appUsersTable.id, email: appUsersTable.email, locale: appUsersTable.locale,
-    status: appUsersTable.status, createdAt: appUsersTable.createdAt,
+    status: appUsersTable.status, closedAt: appUsersTable.closedAt, createdAt: appUsersTable.createdAt,
   }).from(appUsersTable).where(eq(appUsersTable.id, userId));
-  if (!profile) throw new Error("Export owner no longer exists");
+  if (!profile || profile.status !== "active" || profile.closedAt) throw new Error("account_closed");
   const preferences = await db.select().from(consumerPreferencesTable).where(eq(consumerPreferencesTable.userId, userId));
   const consents = await db.select().from(accountConsentEventsTable).where(eq(accountConsentEventsTable.userId, userId)).orderBy(asc(accountConsentEventsTable.id));
   const registrations = await db.select({
@@ -106,15 +108,37 @@ export async function transitionExport(requestId: number, from: string, to: stri
 }
 
 export async function prepareAccountExports(at = new Date(), store: ExportArtifactStore = appStorage): Promise<void> {
-  const pending = await db.select({ requestId: accountExportsTable.requestId, userId: accountRequestsTable.userId, clerkId: appUsersTable.clerkUserId })
+  const pending = await db.select({ requestId: accountExportsTable.requestId, userId: accountRequestsTable.userId,
+    clerkId: appUsersTable.clerkUserId, status: accountExportsTable.status })
     .from(accountExportsTable)
     .innerJoin(accountRequestsTable, eq(accountExportsTable.requestId, accountRequestsTable.id))
     .innerJoin(appUsersTable, eq(accountRequestsTable.userId, appUsersTable.id))
-    .where(eq(accountExportsTable.status, "requested")).orderBy(asc(accountExportsTable.requestId)).limit(20);
+    .where(or(eq(accountExportsTable.status, "requested"), and(
+      eq(accountExportsTable.status, "preparing"),
+      or(isNull(accountExportsTable.processingClaimedAt), lt(accountExportsTable.processingClaimedAt, new Date(at.getTime() - CLAIM_LEASE_MS))),
+    ))).orderBy(asc(accountExportsTable.requestId)).limit(20);
   for (const item of pending) {
-    if (!await transitionExport(item.requestId, "requested", "preparing", at)) continue;
+    const claimToken = randomUUID();
+    const claimed = await db.transaction(async tx => {
+      const [row] = await tx.update(accountExportsTable).set({
+        status: "preparing", processingClaimToken: claimToken, processingClaimedAt: at,
+      }).where(and(eq(accountExportsTable.requestId, item.requestId),
+        or(eq(accountExportsTable.status, "requested"), and(eq(accountExportsTable.status, "preparing"),
+          or(isNull(accountExportsTable.processingClaimedAt), lt(accountExportsTable.processingClaimedAt, new Date(at.getTime() - CLAIM_LEASE_MS)))))))
+        .returning();
+      if (row && item.status === "requested") {
+        await tx.insert(accountRequestEventsTable).values({
+          requestId: item.requestId, fromStatus: "requested", toStatus: "preparing", actor: "system", createdAt: at,
+        });
+      }
+      return row;
+    });
+    if (!claimed) continue;
     const uploaded: string[] = [];
     try {
+      const [owner] = await db.select({ closedAt: appUsersTable.closedAt, status: appUsersTable.status })
+        .from(appUsersTable).where(eq(appUsersTable.id, item.userId));
+      if (!owner || owner.closedAt || owner.status !== "active") throw new Error("account_closed");
       const bundle = await buildAccountBundle(item.userId, item.clerkId, at);
       const files = Object.entries(bundle).filter(([, value]) => Array.isArray(value)).map(([name, value]) =>
         ({ name: `${name}.csv`, bytes: Buffer.from(csv(value as Record<string, unknown>[]), "utf8") }));
@@ -124,26 +148,42 @@ export async function prepareAccountExports(at = new Date(), store: ExportArtifa
       )) });
       const stored: { name: string; key: string; size: number }[] = [];
       for (const file of files) {
-        const key = keyFor(item.userId, item.requestId, file.name);
+        const key = keyFor(item.userId, item.requestId, `${claimToken}/${file.name}`);
         await store.save(key, file.bytes, file.name.endsWith(".zip") ? "application/zip" : file.name.endsWith(".csv") ? "text/csv; charset=utf-8" : "application/json");
         uploaded.push(key);
         stored.push({ name: file.name, key, size: file.bytes.length });
       }
       await db.transaction(async tx => {
+        const [currentOwner] = await tx.select({ closedAt: appUsersTable.closedAt, status: appUsersTable.status })
+          .from(appUsersTable).where(eq(appUsersTable.id, item.userId)).for("update");
+        if (!currentOwner || currentOwner.closedAt || currentOwner.status !== "active") throw new Error("account_closed");
         const [updated] = await tx.update(accountExportsTable).set({
           status: "available", files: stored, storageKey: stored[0].key,
+          processingClaimToken: null, processingClaimedAt: null, failureCode: null,
           size: stored.reduce((total, file) => total + file.size, 0),
           availableAt: at, expiresAt: new Date(at.getTime() + EXPORT_LIFETIME_MS),
-        }).where(and(eq(accountExportsTable.requestId, item.requestId), eq(accountExportsTable.status, "preparing"))).returning();
+        }).where(and(eq(accountExportsTable.requestId, item.requestId), eq(accountExportsTable.status, "preparing"),
+          eq(accountExportsTable.processingClaimToken, claimToken))).returning();
         if (!updated) throw new Error("Export preparation lost its claim");
         await tx.insert(accountRequestEventsTable).values({ requestId: item.requestId, fromStatus: "preparing", toStatus: "available", actor: "system", createdAt: at });
         await notifyUser(tx, { clerkUserId: item.clerkId, eventCode: "account.export_ready", idempotencyKey: `account-export:${item.requestId}:ready`, payload: { requestId: item.requestId } });
       });
     } catch (error) {
       await Promise.allSettled(uploaded.map(key => store.remove(key)));
-      await transitionExport(item.requestId, "preparing", "failed", at);
-      await db.update(accountRequestsTable).set({ status: "rejected", resolvedAt: at })
-        .where(eq(accountRequestsTable.id, item.requestId));
+      await db.transaction(async tx => {
+        const [failed] = await tx.update(accountExportsTable).set({
+          status: "failed", processingClaimToken: null, processingClaimedAt: null,
+          failureCode: error instanceof Error && error.message === "account_closed" ? "account_closed" : "preparation_failed",
+        }).where(and(eq(accountExportsTable.requestId, item.requestId),
+          eq(accountExportsTable.status, "preparing"), eq(accountExportsTable.processingClaimToken, claimToken))).returning();
+        if (failed) {
+          await tx.insert(accountRequestEventsTable).values({
+            requestId: item.requestId, fromStatus: "preparing", toStatus: "failed", actor: "system", createdAt: at,
+          });
+          await tx.update(accountRequestsTable).set({ status: "rejected", resolvedAt: at })
+            .where(eq(accountRequestsTable.id, item.requestId));
+        }
+      });
     }
   }
 }
