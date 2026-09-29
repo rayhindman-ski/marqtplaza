@@ -1,4 +1,5 @@
 import { and, desc, eq, sql } from "drizzle-orm";
+import { clerkClient } from "@clerk/express";
 import { Router, type IRouter, type Request, type Response } from "express";
 
 import {
@@ -29,6 +30,8 @@ import { getAccountOptions, type AccountOptionsSource } from "../lib/accountOpti
 import { sendApiError, unknownFieldErrors } from "../lib/apiError";
 import { listBusinessesForUser } from "../lib/businessMembership";
 import { getFeatureFlags, type FeatureFlagSource } from "../lib/featureFlags";
+import { enqueueLifecycleMessage } from "../lib/lifecycleOutbox";
+import { requireRecentAuth, type RecentAuthOptions } from "../lib/recentAuth";
 import { LAST_SEARCH_RETENTION_DAYS, purgeExpiredLastSearch, serializeLastSearch, validateLastSearch } from "../lib/lastSearch";
 import {
   countBusinessMemberships,
@@ -42,6 +45,8 @@ import { hasUserRegistration } from "./registration";
 
 export type AccountRouterOptions = {
   resolveIdentity?: IdentityResolver;
+  recentAuth?: RecentAuthOptions;
+  clerkUsers?: Pick<typeof clerkClient.users, "getUser">;
   flags?: FeatureFlagSource;
   /**
    * Source of the controlled option lists. Defaults to the released taxonomy;
@@ -62,6 +67,7 @@ const PREFERENCE_FIELDS: ReadonlySet<string> = new Set([
   "neighborhoodIds",
   "interestIds",
   "retainLastSearch",
+  "externalSearchScope",
 ]);
 const CONSENT_FIELDS: ReadonlySet<string> = new Set([
   "consentType",
@@ -179,6 +185,7 @@ function serialisePreferences(
     neighborhoodIds: preferences.neighborhoodIds,
     interestIds: preferences.interestIds,
     retainLastSearch: preferences.retainLastSearch,
+    externalSearchScope: preferences.externalSearchScope,
     unresolvedNeighborhoodIds: preferences.neighborhoodIds.filter((id) => !neighborhoodIds.has(id)),
     unresolvedInterestIds: preferences.interestIds.filter((id) => !interestIds.has(id)),
     updatedAt: preferences.updatedAt.toISOString(),
@@ -241,6 +248,53 @@ export function createAccountRouter(options: AccountRouterOptions = {}): IRouter
 
   router.use("/account", requireFlag("accounts", flags));
   router.use("/account", requireAppUser({ resolveIdentity: options.resolveIdentity }));
+
+  const emailChangeGuard = requireRecentAuth(options.recentAuth);
+  const clerkUsers = options.clerkUsers ?? clerkClient.users;
+  async function verifiedPrimary(clerkUserId: string): Promise<string | null> {
+    const user = await clerkUsers.getUser(clerkUserId);
+    const primary = user.emailAddresses.find((item) => item.id === user.primaryEmailAddressId);
+    return primary?.verification?.status === "verified" ? primary.emailAddress : null;
+  }
+
+  router.post("/account/email-change/start", emailChangeGuard, async (req, res): Promise<void> => {
+    if (rejectClientFields(req, res)) return;
+    if (rejectUnverified(req, res)) return;
+    const account = req.account!;
+    const oldAddress = await verifiedPrimary(account.identity.userId);
+    if (!oldAddress) { res.status(409).json({ error: "verified_primary_required", code: "VERIFIED_PRIMARY_REQUIRED" }); return; }
+    await db.transaction(async (tx) => {
+      const [row] = await tx.select().from(appUsersTable).where(eq(appUsersTable.id, account.user.id)).for("update");
+      if (!row) throw new Error("Account missing");
+      if (row.emailChangePendingAt) return;
+      const now = new Date();
+      await tx.update(appUsersTable).set({ email: oldAddress, emailChangePendingAt: now }).where(eq(appUsersTable.id, row.id));
+      await enqueueLifecycleMessage(tx, { eventCode: "account.email_change_requested", recipientClerkUserId: account.identity.userId,
+        recipientEmail: oldAddress, idempotencyKey: `email-change-start:${row.id}:${now.getTime()}`, locale: row.locale });
+    });
+    req.log?.info?.({ event: "account.email_change.started", accountId: account.user.id }, "Email change started");
+    res.status(204).end();
+  });
+
+  router.post("/account/email-change/confirm", emailChangeGuard, async (req, res): Promise<void> => {
+    if (rejectClientFields(req, res)) return;
+    if (rejectUnverified(req, res)) return;
+    const account = req.account!;
+    const newAddress = await verifiedPrimary(account.identity.userId);
+    if (!newAddress) { res.status(409).json({ error: "verified_primary_required", code: "VERIFIED_PRIMARY_REQUIRED" }); return; }
+    const changed = await db.transaction(async (tx) => {
+      const [row] = await tx.select().from(appUsersTable).where(eq(appUsersTable.id, account.user.id)).for("update");
+      if (!row?.emailChangePendingAt || !row.email || row.email.toLowerCase() === newAddress.toLowerCase()) return false;
+      await tx.update(appUsersTable).set({ email: newAddress, emailChangePendingAt: null }).where(eq(appUsersTable.id, row.id));
+      for (const [target, address] of [["old", row.email], ["new", newAddress]] as const)
+        await enqueueLifecycleMessage(tx, { eventCode: "account.email_changed", recipientClerkUserId: account.identity.userId,
+          recipientEmail: address, idempotencyKey: `email-change-done:${row.id}:${row.emailChangePendingAt.getTime()}:${target}`, locale: row.locale });
+      return true;
+    });
+    if (!changed) { res.status(409).json({ error: "verified_primary_unchanged", code: "VERIFIED_PRIMARY_UNCHANGED" }); return; }
+    req.log?.info?.({ event: "account.email_change.confirmed", accountId: account.user.id }, "Email change confirmed");
+    res.status(204).end();
+  });
 
   router.get("/account/last-search", requireFlag("lastSearch", flags), async (req, res): Promise<void> => {
     if (rejectClientFields(req, res)) return;
@@ -388,7 +442,8 @@ export function createAccountRouter(options: AccountRouterOptions = {}): IRouter
             revision: current.revision + 1,
             ...(neighborhoodIds ? { neighborhoodIds } : {}),
             ...(interestIds ? { interestIds } : {}),
-             ...(input.retainLastSearch !== undefined ? { retainLastSearch: input.retainLastSearch } : {}),
+              ...(input.retainLastSearch !== undefined ? { retainLastSearch: input.retainLastSearch } : {}),
+              ...(input.externalSearchScope !== undefined ? { externalSearchScope: input.externalSearchScope } : {}),
             updatedAt: new Date(),
           })
           .where(
@@ -404,6 +459,7 @@ export function createAccountRouter(options: AccountRouterOptions = {}): IRouter
           neighborhoodIds: neighborhoodIds ?? [],
           interestIds: interestIds ?? [],
            retainLastSearch: input.retainLastSearch ?? true,
+            externalSearchScope: input.externalSearchScope ?? "ask",
         });
       }
       if (input.locale && input.locale !== account.user.locale) {

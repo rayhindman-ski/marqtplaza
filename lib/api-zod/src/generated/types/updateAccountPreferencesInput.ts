@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { AccountLocale } from './accountLocale';
+import type { ExternalSearchScope } from './externalSearchScope';
 
 export interface UpdateAccountPreferencesInput {
   /**
@@ -14,6 +15,7 @@ export interface UpdateAccountPreferencesInput {
      */
   expectedRevision: number;
   retainLastSearch?: boolean;
+  externalSearchScope?: ExternalSearchScope;
   locale?: AccountLocale;
   /**
      * @maxItems 20

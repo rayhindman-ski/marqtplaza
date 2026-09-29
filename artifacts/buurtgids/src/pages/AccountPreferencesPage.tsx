@@ -33,6 +33,7 @@ type Draft = {
   neighborhoodIds: string[];
   interestIds: string[];
   retainLastSearch: boolean;
+  externalSearchScope: 'ask' | 'never' | 'always';
 };
 
 type Outcome = { kind: 'saved' } | { kind: 'skipped' } | null;
@@ -54,6 +55,7 @@ function readDraft(userId: string): Draft | null {
       neighborhoodIds: parsed.neighborhoodIds.filter((id): id is string => typeof id === 'string'),
       interestIds: parsed.interestIds.filter((id): id is string => typeof id === 'string'),
       retainLastSearch: parsed.retainLastSearch !== false,
+      externalSearchScope: parsed.externalSearchScope === 'always' || parsed.externalSearchScope === 'never' ? parsed.externalSearchScope : 'ask',
     };
   } catch {
     return null;
@@ -75,6 +77,7 @@ function draftFromAccount(me: AccountMe): Draft {
     neighborhoodIds: me.preferences?.neighborhoodIds ?? [],
     interestIds: me.preferences?.interestIds ?? [],
     retainLastSearch: me.preferences?.retainLastSearch ?? true,
+    externalSearchScope: me.preferences?.externalSearchScope ?? 'ask',
   };
 }
 
@@ -351,6 +354,16 @@ export default function AccountPreferencesPage() {
             </div>
           </fieldset>
 
+          <fieldset className="rounded-3xl border border-border/80 bg-card p-5 shadow-sm">
+            <legend className="px-2 text-sm font-extrabold uppercase tracking-[0.12em] text-primary">{copy.preferences.searchPreferences}</legend>
+            <label htmlFor="external-search-scope" className="block text-sm font-bold">{copy.preferences.externalSearchScope}</label>
+            <select id="external-search-scope" data-testid="select-external-search-scope" value={draft.externalSearchScope}
+              onChange={(event) => setDraft({ ...draft, externalSearchScope: event.target.value as Draft['externalSearchScope'] })}
+              className="mt-2 rounded-lg border border-border bg-background p-2">
+              <option value="ask">{copy.preferences.scopeAsk}</option>
+              <option value="never">{copy.preferences.scopeNever}</option>
+              <option value="always">{copy.preferences.scopeAlways}</option>
+            </select>
           {featureFlags.lastSearch ? (
             <label className="flex items-center gap-3 rounded-3xl border border-border/80 bg-card p-5 text-sm font-bold">
               <input type="checkbox" data-testid="toggle-retain-last-search" checked={draft.retainLastSearch}
@@ -358,6 +371,7 @@ export default function AccountPreferencesPage() {
               {copy.preferences.retainLastSearch}
             </label>
           ) : null}
+          </fieldset>
           {optionsQuery.isLoading ? (
             <p data-testid="status-options-loading" role="status" className="text-sm text-muted-foreground">{copy.preferences.loading}</p>
           ) : null}

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { describe, it } from 'node:test';
 
 import {
@@ -52,4 +53,12 @@ describe('Dutch and English copy parity', () => {
       assert.deepEqual(collectEmptyLeaves(table.en), []);
     });
   }
+});
+
+it('does not promise legal compliance based on a consent or privacy link', () => {
+  const source = readFileSync(new URL('./i18n.ts', import.meta.url), 'utf8');
+  const forbidden = new RegExp(['GDPR', 'compliant'].join('[- ]'), 'i');
+  const dutch = new RegExp(['AVG', 'conform'].join('-'), 'i');
+  const assertion = new RegExp(['voldoet aan', 'de AVG'].join(' '), 'i');
+  assert.equal(forbidden.test(source) || dutch.test(source) || assertion.test(source), false);
 });

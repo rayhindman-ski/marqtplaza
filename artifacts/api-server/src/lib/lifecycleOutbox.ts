@@ -44,6 +44,8 @@ export const LIFECYCLE_EVENT_CODES = [
   "account.deletion_completed",
   "account.deletion_rejected",
   "account.deletion_withdrawn",
+  "account.email_change_requested",
+  "account.email_changed",
   /** Consumer registration link (v0.5.1); addressed to a pending registration, not an account. */
   "registration.link",
   /** Business membership (v0.5.2). The invitation is addressed to an invitation row, not an account. */
@@ -110,6 +112,8 @@ export type EnqueueLifecycleMessageInput = {
   eventCode: LifecycleEventCode;
   /** Clerk subject of the recipient; the local account is provisioned if needed. */
   recipientClerkUserId: string;
+  /** Security notice to the former address, which Clerk no longer marks primary. */
+  recipientEmail?: string;
   /**
    * Deduplication key. The same key written twice (a retried request, a
    * replayed transition) leaves exactly one row.
@@ -150,6 +154,7 @@ export async function enqueueLifecycleMessage(
     .values({
       eventCode: input.eventCode,
       recipientUserId: recipient.id,
+      recipientEmail: input.recipientEmail,
       template: input.eventCode,
       locale: input.locale ?? recipient.locale,
       payload,
@@ -272,6 +277,7 @@ export type OutboundLifecycleMessage = {
   locale: string;
   recipientUserId: number | null;
   recipientClerkUserId: string | null;
+  recipientEmail?: string | null;
   /** Set instead of the account references for pre-account messages. */
   recipientRegistrationId: number | null;
   /** Set instead of the account references for business invitations (v0.5.2). */
@@ -492,6 +498,7 @@ export async function dispatchLifecycleOutbox(options: DispatchOptions = {}): Pr
         recipientClerkUserId: row.recipientUserId ? (clerkIdByRecipient.get(row.recipientUserId) ?? null) : null,
         recipientRegistrationId: row.recipientRegistrationId,
         recipientInvitationId: row.recipientInvitationId,
+        recipientEmail: row.recipientEmail,
         payload: row.payload,
         attempt,
         dedupeKey: lifecycleDedupeKey(row),

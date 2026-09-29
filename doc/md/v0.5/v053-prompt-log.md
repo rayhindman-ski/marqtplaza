@@ -72,3 +72,17 @@ provisional; progress lines below at each phase start and commit.
   gap with a server-side cleared-at fence and a deterministic race test;
   additive schema push applied. Final API 10/10, new + frozen discovery
   12/12, usability 21/21, root typecheck clean. No commit.
+- 06:00 UTC (observed `date`, 2026-09-29): Phase 2 delegated: preferences,
+  Clerk e-mail change, recent-auth gate, privacy rights/print, copy audit.
+- 06:12 UTC (observed `date`, 2026-09-29): additive schema pushed, OpenAPI
+  generated, account 17/17, lifecycle 22/22, recent-auth 1/1,
+  i18n 13/13, root typecheck clean.
+  Browser verification handed to owner; approved legal documents/effective
+  dates absent, so print/PDF not fabricated. No commit.
+- 06:16 UTC (observed `date`, 2026-09-29): user decided to ship the
+  PRIV-004 mechanism with explicitly DRAFT placeholder copy rather than
+  approved legal text. Added shared versioned source, NL/EN routes, print
+  CSS/action, legal links, e2e print/axe, and injected API-401 UI regression.
+  Root typecheck clean, i18n 13/13; owner must run Playwright (its server startup is
+  outside this subagent's execution scope). Content acceptance still awaits
+  approved legal copy/effective date. No commit.

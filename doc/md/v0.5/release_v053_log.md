@@ -139,3 +139,78 @@ the row remains absent (a fresh post-clear PUT can save again). Development
 `drizzle-kit push` reported changes applied. Final runs after this change:
 API **10/10**, new + frozen discovery browser **12/12**, frozen usability
 **21/21** with port 22580, root typecheck clean. No commit.
+
+## Phase 2 — preferences and account privacy (2026-09-29 06:00–06:12 UTC, observed `date`)
+
+Additive columns: consumer preferences external-search scope (`ask` default),
+app user e-mail and pending-change timestamp, outbox recipient-address snapshot
+for security notices to the former/new address. Development `drizzle-kit push`
+reported changes applied. Preflight reported the existing numeric(6,3) vs
+numeric(6, 3) formatting false positive; no destructive schema operation was
+requested. OpenAPI source and generated clients updated; root typecheck clean.
+
+Preferences now save scope with retention in a grouped search block; the
+existing last-search restoration continues to force local scope unless
+explicitly expanded in a future phase. Shared server recent-auth gate checks
+Clerk's signed session `iat` against an injectable 10-minute clock and returns
+401 `RECENT_AUTH_REQUIRED` otherwise. E-mail change start and confirm never
+accept client-supplied e-mail addresses: the server reads Clerk's verified
+primary, requires recent auth, records the pending old address, and
+transactionally queues NL/EN notifications to the correct old/new addresses
+after verification. Provider UI starts verification with Clerk and promotes
+the primary address only after code verification. The UI offers a sign-in
+return path for API step-up failure (Clerk's useReverification hook only
+handles Clerk API failures, not app API errors).
+
+Privacy rights navigation lists seven rights and includes an unavailable
+export screen; NL/EN copy parity and an i18n prohibited-claims assertion added.
+Static e2e checks were authored for rights and e-mail-change framing.
+
+**Suite evidence:** API account routes **17/17**, lifecycle outbox **22/22**,
+recent-auth unit **1/1**, web i18n **13/13**;
+root typecheck clean. Browser suites were not run by this subagent (owner
+handles browser/app runs); no browser pass, print action, or live Clerk
+walk-through is claimed. No commits.
+The already-running preview returned an HTTP error for the rights route;
+this subagent did not start a server (browser verification belongs to owner).
+
+**Open deviation at initial handoff:** No versioned Terms or privacy document
+or effective date existed in the web artifact. The e-mail-change e2e initially
+proved framing only; provider-owned verification still requires a live Clerk
+run. The outbox's
+recipient-address snapshot is necessary to deliver security notices to
+the former address after Clerk switches primary; it must follow normal
+outbox-retention purge policy in Phase 3.
+
+**Follow-up 2026-09-29 06:13–06:16 UTC (observed `date`).** PRIV-004
+mechanism delivered: `/voorwaarden` and `/privacy` with English aliases
+`/terms` and `/privacy-notice`, all rendered from a single versioned source
+module. The `draft-2026-09` version matches the API consent notice version;
+effective date is `null`. The visible draft warning, version and unset
+effective date appear in the printed header. Print CSS hides navigation and
+controls while retaining the header; “Download als PDF” calls `window.print()`
+without introducing a dependency. Account and registration legal links added
+without changing discovery UI. E2e for four legal routes and an injected
+`window.print` spy, plus API-401 recent-auth prompt regression, added.
+Root typecheck clean; i18n **13/13**. **Content remains DRAFT**, not approved; final
+acceptance requires user-supplied approved NL/EN text and effective date.
+PRIV-001–003 (claimed by v0.5.2) also depend on that approval. Browser suites
+were not run by this subagent under the owner-only app execution policy;
+their pass status is unclaimed. No commit.
+
+### Phase 2 — owner verification (2026-09-29, after the worker pass)
+
+- Fixes applied by the owning agent: return-path allow-lists (web
+  `returnPath.ts` and API `consumerRegistration.ts`) extended with the new
+  account routes so the recent-auth prompt keeps `?terug=`; `AuthPageFrame`
+  now accepts the page-owned language so the toggle and the page stay in sync;
+  the new Terms link on the registration page uses foreground colour so the
+  usability contrast budget is unchanged.
+- e2e: account-email-change 3/3, account-rights, legal-documents,
+  account-preferences, account-privacy — 23/23 combined; usability-regression
+  21/21 (PW_PORT=22580); api account + consumer-registration 44/44; typecheck
+  clean.
+- Observed once: intermittent axe colour-contrast report on the account
+  preferences "failed save" test when run in a large combined batch (active
+  language-toggle button, pre-existing element); 4/4 green when repeated in
+  isolation. Not changed; watch in Phase 6.

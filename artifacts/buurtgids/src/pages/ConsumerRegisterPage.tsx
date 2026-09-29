@@ -13,6 +13,7 @@ import { accountErrorMessage, accountTranslations, type Language } from '@/lib/i
 import { businessIntentRef, isBusinessIntentPath } from '@/lib/businessIntent';
 import { RETURN_PATH_PARAM, sanitizeReturnPath } from '@/lib/returnPath';
 import { useAppLanguage } from '@/lib/useAppLanguage';
+import { legalDocuments } from '@/lib/legal/documents';
 
 /**
  * Consumer registration request (v0.5.1, REG-001 – REG-004). Collects contact
@@ -261,8 +262,11 @@ export default function ConsumerRegisterPage() {
             <h2 className="font-serif text-xl font-semibold text-foreground">{register.purposeTitle}</h2>
           </div>
           <p className="mt-3 text-sm leading-6 text-muted-foreground">{register.purposeBody}</p>
-          <Link href="/account/privacy" data-testid="link-register-privacy" className="mt-4 inline-flex text-sm font-bold text-primary underline-offset-2 hover:underline">
+          <Link href="/privacy" data-testid="link-register-privacy" className="mt-4 inline-flex text-sm font-bold text-primary underline-offset-2 hover:underline">
             {register.privacyLink}
+          </Link>
+          <Link href="/voorwaarden" data-testid="link-register-terms" className="ml-4 mt-4 inline-flex text-sm font-bold text-foreground underline underline-offset-2">
+            {legalDocuments.terms[language].title}
           </Link>
         </aside>
       </div>

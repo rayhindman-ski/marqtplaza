@@ -318,7 +318,7 @@ describe("lifecycle outbox", () => {
     );
     // The provider only ever sees internal references, never an address or evidence.
     for (const message of seen) {
-      assert.deepEqual(Object.keys(message).sort(), ["attempt", "dedupeKey", "eventCode", "id", "locale", "payload", "recipientClerkUserId", "recipientInvitationId", "recipientRegistrationId", "recipientUserId", "template"]);
+      assert.deepEqual(Object.keys(message).sort(), ["attempt", "dedupeKey", "eventCode", "id", "locale", "payload", "recipientClerkUserId", "recipientEmail", "recipientInvitationId", "recipientRegistrationId", "recipientUserId", "template"]);
       assert.equal(message.recipientRegistrationId, null);
     }
 
@@ -783,8 +783,10 @@ describe("lifecycle outbox", () => {
           assert.ok(!rendered.text.toLowerCase().includes(word), `${eventCode} body contains ${word}`);
         }
       }
-      if (eventCode.startsWith("account.")) {
+      if (eventCode.startsWith("account.") && !eventCode.startsWith("account.email_")) {
         assert.ok(nl.text.includes("42") && en.text.includes("42"), eventCode);
+      } else if (eventCode.startsWith("account.email_")) {
+        assert.ok(!nl.text.includes("42") && !en.text.includes("42"), eventCode);
       } else {
         assert.ok(nl.subject.includes(payload.businessName) && en.subject.includes(payload.businessName), eventCode);
       }

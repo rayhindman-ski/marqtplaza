@@ -69,6 +69,8 @@ export const lifecycleOutboxTable = pgTable(
     recipientRegistrationId: integer("recipient_registration_id"),
     /** Third recipient kind (v0.5.2): a business invitation; the address is read from it at dispatch time. */
     recipientInvitationId: integer("recipient_invitation_id"),
+    /** Address snapshot for e-mail-change security notices, including the former address. */
+    recipientEmail: text("recipient_email"),
     template: text("template").notNull(),
     locale: text("locale").notNull().default("nl"),
     /**

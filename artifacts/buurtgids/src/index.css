@@ -5,6 +5,20 @@
 @import 'tw-animate-css';
 @plugin "@tailwindcss/typography";
 
+@media print {
+  @page { margin: 18mm; }
+  html, body, .legal-document { background: #fff !important; color: #111 !important; }
+  .legal-document { padding: 0 !important; min-height: auto !important; }
+  .legal-no-print { display: none !important; }
+  .legal-print-header { break-after: avoid; }
+  .legal-document section { break-inside: avoid; }
+  .legal-document [data-testid="legal-draft-banner"] {
+    color: #111 !important;
+    background: #fff !important;
+    border: 1px solid #111 !important;
+  }
+}
+
 @keyframes buurtplaza-neighborhood-pulse {
   0%, 100% {
     fill-opacity: 0.2;

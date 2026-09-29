@@ -9,6 +9,7 @@ import {
   appUsersTable,
   businessMembersTable,
   consumerPreferencesTable,
+  lifecycleOutboxTable,
   businessProfilesTable,
   db,
   pool,
@@ -21,6 +22,7 @@ import { createHealthRouter } from "./health";
 import type { Identity } from "../lib/permissions";
 import { getAccountOptions, type AccountOptionsSource } from "../lib/accountOptions";
 import type { AccountOptions } from "@workspace/api-zod";
+import { renderLifecycleEmail } from "../lib/lifecycleTemplates";
 
 const runId = `${process.pid}-${Date.now()}`;
 const users = {
@@ -59,6 +61,11 @@ function identityFromHeaders(req: express.Request): Identity | null {
 
 const app = express();
 app.use(express.json());
+const accountLogLines: unknown[] = [];
+app.use((req, _res, next) => {
+  req.log = { info: (...args: unknown[]) => accountLogLines.push(args) } as any;
+  next();
+});
 app.use("/api", createHealthRouter(() => flags));
 app.use("/api", createRegistrationRouter((req) => req.header("x-test-user-id")));
 app.use(
@@ -67,8 +74,14 @@ app.use(
     resolveIdentity: identityFromHeaders,
     flags: () => flags,
     accountOptions: accountOptionsSource,
+    recentAuth: { now: () => 1_800_000_000_000, claims: (req) => ({ iat: Number(req.header("x-test-iat")) }) },
+    clerkUsers: { getUser: async () => ({
+      primaryEmailAddressId: "primary",
+      emailAddresses: [{ id: "primary", emailAddress: primaryEmail, verification: { status: "verified" } }],
+    }) as any },
   }),
 );
+let primaryEmail = "old@example.test";
 
 let server: ReturnType<typeof app.listen>;
 let baseUrl = "";
@@ -87,7 +100,7 @@ async function request(
       ...(headers as Record<string, string> | undefined),
     },
   });
-  return { status: result.status, body: await result.json() };
+  return { status: result.status, body: result.status === 204 ? null : await result.json() };
 }
 
 async function cleanup(): Promise<void> {
@@ -309,11 +322,13 @@ describe("account routes", () => {
         locale: "en",
         neighborhoodIds: [hood1, hood2, hood1],
         interestIds: [interest],
+        externalSearchScope: "always",
       }),
     });
     assert.equal(saved.status, 200, JSON.stringify(saved.body));
     assert.equal(saved.body.locale, "en");
     assert.equal(saved.body.preferences.revision, 1);
+    assert.equal(saved.body.preferences.externalSearchScope, "always");
     assert.deepEqual(saved.body.preferences.neighborhoodIds, [hood1, hood2]);
     assert.deepEqual(saved.body.preferences.interestIds, [interest]);
     assert.equal(saved.body.onboardingCompleted, false, "saving preferences does not complete onboarding by itself");
@@ -334,6 +349,7 @@ describe("account routes", () => {
     });
     assert.equal(partial.status, 200);
     assert.equal(partial.body.preferences.revision, 2);
+    assert.equal(partial.body.preferences.externalSearchScope, "always", "omitted scope is preserved");
     assert.deepEqual(partial.body.preferences.neighborhoodIds, [hood1, hood2], "omitted fields stay unchanged");
     assert.deepEqual(partial.body.preferences.interestIds, [], "empty arrays clear a list");
     assert.equal(partial.body.locale, "en", "locale persists on the account");
@@ -587,6 +603,36 @@ describe("account routes", () => {
     assert.equal(ledger.length, 2);
     const otherConsents = await request("/api/account/consents", { userId: users.other });
     assert.deepEqual(otherConsents.body.history, [], "consent history is private to the account");
+  });
+
+  it("requires recent authentication and enqueues change notices for both verified addresses without logging them", async () => {
+    const userId = users.plain;
+    const stale = await request("/api/account/email-change/start", { method: "POST", userId });
+    assert.equal(stale.status, 401);
+    assert.deepEqual(stale.body, { error: "recent_authentication_required", code: "RECENT_AUTH_REQUIRED" });
+    const headers = { "x-test-iat": "1800000000" };
+    primaryEmail = "old@example.test";
+    const started = await request("/api/account/email-change/start", { method: "POST", userId, headers });
+    assert.equal(started.status, 204);
+    primaryEmail = "new@example.test";
+    const confirmed = await request("/api/account/email-change/confirm", { method: "POST", userId, headers });
+    assert.equal(confirmed.status, 204);
+    const [user] = await db.select().from(appUsersTable).where(eq(appUsersTable.clerkUserId, userId));
+    assert.equal(user.email, "new@example.test");
+    const notices = await db.select().from(lifecycleOutboxTable).where(eq(lifecycleOutboxTable.recipientUserId, user.id));
+    assert.deepEqual(notices.filter((row) => row.eventCode.startsWith("account.email_"))
+      .map((row) => [row.eventCode, row.recipientEmail]).sort(),
+      [["account.email_change_requested", "old@example.test"], ["account.email_changed", "new@example.test"], ["account.email_changed", "old@example.test"]].sort());
+    assert.ok(!JSON.stringify(accountLogLines).includes("old@example.test"));
+    assert.ok(!JSON.stringify(accountLogLines).includes("new@example.test"));
+    assert.equal((await request("/api/account/email-change/confirm", { method: "POST", userId, headers })).status, 409);
+    for (const locale of ["nl", "en"]) {
+      for (const code of ["account.email_change_requested", "account.email_changed"]) {
+        const rendered = renderLifecycleEmail(code, locale, {});
+        assert.ok(rendered.subject.length > 0 && rendered.text.length > 0);
+        assert.ok(!rendered.text.includes("example.test"));
+      }
+    }
   });
   it("lets exactly one concurrent first writer create preferences and answers the rest with 409", async () => {
     await request("/api/account/me", { userId: users.firstwriters });

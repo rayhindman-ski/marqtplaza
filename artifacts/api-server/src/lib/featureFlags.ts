@@ -5,13 +5,16 @@
  * operator environment once its release gate is recorded in the Spec Kit
  * convergence record; nothing in code may turn one on by default.
  */
-export type FeatureFlagName = "accounts" | "businessIntake" | "businessPublication" | "consumerRegistration" | "businessOnboarding" | "lastSearch";
+export type FeatureFlagName = "accounts" | "businessIntake" | "businessPublication" | "consumerRegistration" | "businessOnboarding" | "lastSearch" | "consentCenter" | "accountExport" | "accountDeletion";
 
-export type FeatureFlags = Readonly<Record<Exclude<FeatureFlagName, "lastSearch">, boolean> & { lastSearch?: boolean }>;
+export type FeatureFlags = Readonly<Record<Exclude<FeatureFlagName, "lastSearch" | "consentCenter" | "accountExport" | "accountDeletion">, boolean> & { lastSearch?: boolean; consentCenter?: boolean; accountExport?: boolean; accountDeletion?: boolean }>;
 
 export const FEATURE_FLAG_ENV_VARS: Readonly<Record<FeatureFlagName, string>> = {
   accounts: "ACCOUNTS_ENABLED",
   lastSearch: "LAST_SEARCH_ENABLED",
+  consentCenter: "CONSENT_CENTER_ENABLED",
+  accountExport: "ACCOUNT_EXPORT_ENABLED",
+  accountDeletion: "ACCOUNT_DELETION_ENABLED",
   businessIntake: "BUSINESS_INTAKE_ENABLED",
   businessPublication: "BUSINESS_PUBLICATION_ENABLED",
   /** v0.5.1 registration foundation; independent of `accounts` so it can stay off on its own. */
@@ -34,6 +37,9 @@ export function readFeatureFlags(
   return {
     accounts,
     lastSearch: parseFlag(env[FEATURE_FLAG_ENV_VARS.lastSearch]) && accounts,
+    consentCenter: parseFlag(env[FEATURE_FLAG_ENV_VARS.consentCenter]) && accounts,
+    accountExport: parseFlag(env[FEATURE_FLAG_ENV_VARS.accountExport]) && accounts,
+    accountDeletion: parseFlag(env[FEATURE_FLAG_ENV_VARS.accountDeletion]) && accounts,
     businessIntake,
     businessPublication: parseFlag(env[FEATURE_FLAG_ENV_VARS.businessPublication]),
     consumerRegistration: parseFlag(env[FEATURE_FLAG_ENV_VARS.consumerRegistration]),

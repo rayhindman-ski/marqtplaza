@@ -639,6 +639,148 @@ export const useDeleteAccountLastSearch = <TError = ErrorType<void>,
       return useMutation(getDeleteAccountLastSearchMutationOptions(options));
     }
 
+export const getStartAccountEmailChangeUrl = () => {
+
+
+
+
+  return `/api/account/email-change/start`
+}
+
+/**
+ * @summary Notify the former verified primary address before a Clerk email change
+ */
+export const startAccountEmailChange = async ( options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+
+  return customFetch<void>(getStartAccountEmailChangeUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getStartAccountEmailChangeMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof startAccountEmailChange>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof startAccountEmailChange>>, TError,void, TContext> => {
+
+const mutationKey = ['startAccountEmailChange'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof startAccountEmailChange>>, void> = () => {
+
+
+          return  startAccountEmailChange(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type StartAccountEmailChangeMutationResult = NonNullable<Awaited<ReturnType<typeof startAccountEmailChange>>>
+
+    export type StartAccountEmailChangeMutationError = ErrorType<ApiError>
+
+    /**
+ * @summary Notify the former verified primary address before a Clerk email change
+ */
+export const useStartAccountEmailChange = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof startAccountEmailChange>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof startAccountEmailChange>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getStartAccountEmailChangeMutationOptions(options));
+    }
+
+export const getConfirmAccountEmailChangeUrl = () => {
+
+
+
+
+  return `/api/account/email-change/confirm`
+}
+
+/**
+ * @summary Synchronize only Clerk's verified primary address
+ */
+export const confirmAccountEmailChange = async ( options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+
+  return customFetch<void>(getConfirmAccountEmailChangeUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getConfirmAccountEmailChangeMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof confirmAccountEmailChange>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof confirmAccountEmailChange>>, TError,void, TContext> => {
+
+const mutationKey = ['confirmAccountEmailChange'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof confirmAccountEmailChange>>, void> = () => {
+
+
+          return  confirmAccountEmailChange(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ConfirmAccountEmailChangeMutationResult = NonNullable<Awaited<ReturnType<typeof confirmAccountEmailChange>>>
+
+    export type ConfirmAccountEmailChangeMutationError = ErrorType<ApiError>
+
+    /**
+ * @summary Synchronize only Clerk's verified primary address
+ */
+export const useConfirmAccountEmailChange = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof confirmAccountEmailChange>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof confirmAccountEmailChange>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getConfirmAccountEmailChangeMutationOptions(options));
+    }
+
 export const getUpdateAccountPreferencesUrl = () => {
 
 

@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { ExternalSearchScope } from './externalSearchScope';
 
 /**
  * Optional controlled preferences owned by exactly one account. Updates require expectedRevision and return 409 VERSION_CONFLICT on mismatch. Unresolved IDs are stored legacy choices that no longer occur in the current taxonomy; they remain in the ID arrays until the user removes them.
@@ -12,6 +13,7 @@
 export interface ConsumerPreferences {
   revision: number;
   retainLastSearch: boolean;
+  externalSearchScope: ExternalSearchScope;
   /** @maxItems 20 */
   neighborhoodIds: string[];
   /** @maxItems 20 */

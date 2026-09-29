@@ -180,6 +180,40 @@ paths:
         "401":
           description: Authentication required
 
+  /account/email-change/start:
+    post:
+      operationId: startAccountEmailChange
+      tags: [account]
+      summary: Notify the former verified primary address before a Clerk email change
+      responses:
+        "204":
+          description: Change started and old-address notice queued
+        "401":
+          description: Recent authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /account/email-change/confirm:
+    post:
+      operationId: confirmAccountEmailChange
+      tags: [account]
+      summary: Synchronize only Clerk's verified primary address
+      responses:
+        "204":
+          description: Verified primary synchronized and notices queued
+        "401":
+          description: Recent authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "409":
+          description: No verified changed primary address
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /account/preferences:
     patch:
       operationId: updateAccountPreferences
@@ -4077,15 +4111,21 @@ components:
         createdAt:
           type: string
 
+    ExternalSearchScope:
+      type: string
+      enum: [ask, never, always]
+
     ConsumerPreferences:
       type: object
       description: Optional controlled preferences owned by exactly one account. Updates require expectedRevision and return 409 VERSION_CONFLICT on mismatch. Unresolved IDs are stored legacy choices that no longer occur in the current taxonomy; they remain in the ID arrays until the user removes them.
-      required: [revision, neighborhoodIds, interestIds, unresolvedNeighborhoodIds, unresolvedInterestIds, retainLastSearch, updatedAt]
+      required: [revision, neighborhoodIds, interestIds, unresolvedNeighborhoodIds, unresolvedInterestIds, retainLastSearch, externalSearchScope, updatedAt]
       properties:
         revision:
           type: number
         retainLastSearch:
           type: boolean
+        externalSearchScope:
+          $ref: "#/components/schemas/ExternalSearchScope"
         neighborhoodIds:
           type: array
           maxItems: 20
@@ -4210,6 +4250,8 @@ components:
           description: Current stored revision, or 0 when no preferences exist yet.
         retainLastSearch:
           type: boolean
+        externalSearchScope:
+          $ref: "#/components/schemas/ExternalSearchScope"
         locale:
           $ref: "#/components/schemas/AccountLocale"
         neighborhoodIds:

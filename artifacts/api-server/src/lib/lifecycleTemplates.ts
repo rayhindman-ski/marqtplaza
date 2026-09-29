@@ -68,6 +68,14 @@ function wrapEn(lines: string[]): string {
 }
 
 const TEMPLATES: Record<LifecycleEventCode, Record<LifecycleLocale, Template>> = {
+  "account.email_change_requested": {
+    nl: { subject: () => "Wijziging van e-mailadres aangevraagd", body: () => wrapNl(["Er is een wijziging van het e-mailadres van je account aangevraagd.", "Was jij dit niet? Neem contact op met ondersteuning."]) },
+    en: { subject: () => "Email address change requested", body: () => wrapEn(["A change to your account email address was requested.", "Was this not you? Contact support."]) },
+  },
+  "account.email_changed": {
+    nl: { subject: () => "Je e-mailadres is gewijzigd", body: () => wrapNl(["Het e-mailadres van je account is gewijzigd.", "Was jij dit niet? Neem contact op met ondersteuning."]) },
+    en: { subject: () => "Your email address has changed", body: () => wrapEn(["Your account email address has changed.", "Was this not you? Contact support."]) },
+  },
   "claim.submitted": {
     nl: {
       subject: (v) => `Claim ontvangen voor ${v.businessName}`,

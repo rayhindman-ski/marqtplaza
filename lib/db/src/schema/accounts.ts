@@ -46,6 +46,8 @@ export const appUsersTable = pgTable(
   {
     id: serial("id").primaryKey(),
     clerkUserId: text("clerk_user_id").notNull(),
+    email: text("email"),
+    emailChangePendingAt: timestamp("email_change_pending_at", { withTimezone: true }),
     status: text("status").notNull().default("active"),
     locale: text("locale").notNull().default("nl"),
     onboardingCompletedAt: timestamp("onboarding_completed_at", { withTimezone: true }),
@@ -83,6 +85,7 @@ export const consumerPreferencesTable = pgTable(
     neighborhoodIds: jsonb("neighborhood_ids").$type<string[]>().notNull().default([]),
     interestIds: jsonb("interest_ids").$type<string[]>().notNull().default([]),
     retainLastSearch: boolean("retain_last_search").notNull().default(true),
+    externalSearchScope: text("external_search_scope").notNull().default("ask"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true })
       .notNull()

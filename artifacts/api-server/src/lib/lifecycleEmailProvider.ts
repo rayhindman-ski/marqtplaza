@@ -276,6 +276,8 @@ export function createEmailDeliveryLoader(options: EmailDeliveryLoaderOptions): 
       if (resolution.kind === "not_configured") return { kind: "transient_failure", errorCode: "invitation_link_not_configured" };
       recipient = resolution.recipient;
       templateVars = resolution.templateVars;
+    } else if (message.recipientEmail) {
+      recipient = { email: message.recipientEmail };
     } else {
       if (!message.recipientClerkUserId) return { kind: "permanent_failure", errorCode: "recipient_unknown" };
       const resolution = await resolveRecipient(message.recipientClerkUserId);

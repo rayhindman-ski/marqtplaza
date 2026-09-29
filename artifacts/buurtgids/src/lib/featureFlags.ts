@@ -6,6 +6,9 @@
 export type FeatureFlags = Readonly<{
   accounts: boolean;
   lastSearch: boolean;
+  consentCenter: boolean;
+  accountExport: boolean;
+  accountDeletion: boolean;
   businessIntake: boolean;
   businessPublication: boolean;
   consumerRegistration: boolean;
@@ -24,6 +27,9 @@ export function readFeatureFlags(env: Record<string, unknown> = import.meta.env)
   return {
     accounts,
     lastSearch: parseFlag(env.VITE_LAST_SEARCH_ENABLED) && accounts,
+    consentCenter: parseFlag(env.VITE_CONSENT_CENTER_ENABLED) && accounts,
+    accountExport: parseFlag(env.VITE_ACCOUNT_EXPORT_ENABLED) && accounts,
+    accountDeletion: parseFlag(env.VITE_ACCOUNT_DELETION_ENABLED) && accounts,
     businessIntake,
     businessPublication: parseFlag(env.VITE_BUSINESS_PUBLICATION_ENABLED),
     consumerRegistration: parseFlag(env.VITE_CONSUMER_REGISTRATION_ENABLED),

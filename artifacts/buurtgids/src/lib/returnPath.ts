@@ -28,6 +28,11 @@ const EXACT_PATHS = new Set([
   '/account/beveiliging',
   '/account/bedrijf/toevoegen',
   '/account/uitnodiging',
+  '/account/privacy',
+  '/account/privacy/rechten',
+  '/account/e-mail-wijzigen',
+  '/account/gegevens-export',
+  '/account/verwijderen',
 ]);
 
 const PREFIX_PATHS = ['/activiteiten/den-haag/', '/nieuws/', '/bedrijf/'];

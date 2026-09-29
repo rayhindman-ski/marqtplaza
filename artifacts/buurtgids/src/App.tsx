@@ -73,6 +73,9 @@ import OnboardingPage from './pages/OnboardingPage';
 import AccountPage from './pages/AccountPage';
 import AccountPreferencesPage from './pages/AccountPreferencesPage';
 import AccountPrivacyPage from './pages/AccountPrivacyPage';
+import AccountEmailChangePage from './pages/AccountEmailChangePage';
+import AccountRightsPage, { AccountExportUnavailablePage } from './pages/AccountRightsPage';
+import { TermsPage, PrivacyNoticePage, EnglishTermsPage, EnglishPrivacyNoticePage } from './pages/LegalDocumentPage';
 import ConsumerRegisterPage from './pages/ConsumerRegisterPage';
 import ConsumerRegisterCheckEmailPage from './pages/ConsumerRegisterCheckEmailPage';
 import ConsumerRegisterCompletePage from './pages/ConsumerRegisterCompletePage';
@@ -103,7 +106,7 @@ import {
   type Language,
 } from './lib/i18n';
 import { persistLanguage, useAppLanguage, useStoredLanguage } from './lib/useAppLanguage';
-import { LanguageToggle } from '@/components/account/AccountShell';
+import { AuthPageFrame } from '@/components/account/AuthPageFrame';
 import { accountTranslations } from '@/lib/i18n';
 import { clerkLocalizationFor } from './lib/clerkLocalization';
 import {
@@ -3817,8 +3820,15 @@ export default function App() {
           <Route path={FORGOT_PASSWORD_PATH} component={ForgotPasswordPage} />
           <Route path={RESET_PASSWORD_PATH} component={ForgotPasswordPage} />
           <Route path="/account/beveiliging" component={AccountSecurityPage} />
+          <Route path="/account/e-mail-wijzigen" component={AccountEmailChangePage} />
           <Route path={BUSINESS_ONBOARDING_PATH} component={BusinessOnboardingIntroPage} />
           <Route path="/account/privacy" component={AccountPrivacyPage} />
+          <Route path="/voorwaarden" component={TermsPage} />
+          <Route path="/privacy" component={PrivacyNoticePage} />
+          <Route path="/terms" component={EnglishTermsPage} />
+          <Route path="/privacy-notice" component={EnglishPrivacyNoticePage} />
+          <Route path="/account/privacy/rechten" component={AccountRightsPage} />
+          <Route path="/account/gegevens-export" component={AccountExportUnavailablePage} />
           <Route path={BUSINESS_INVITATION_PATH} component={BusinessInvitationPage} />
           <Route path="/account/bedrijf/:id/team" component={BusinessMembersPage} />
           <Route path="/account/bedrijf/:id/sluiten" component={BusinessClosePage} />
@@ -4541,23 +4551,6 @@ function useStaleSignUpStepRecovery() {
  * too. The toggle writes the shared stored language, which the Clerk provider
  * above reads to re-localize its card.
  */
-function AuthPageFrame({ testId, children }: { testId: string; children: React.ReactNode }) {
-  const [language, setLanguage] = useAppLanguage();
-  const copy = accountTranslations[language];
-  return (
-    <main data-testid={testId} className="flex min-h-[100dvh] flex-col bg-background px-4 py-6 sm:px-6">
-      <div className="mx-auto flex w-full max-w-5xl items-center justify-between gap-4">
-        <Link href="/" data-testid="link-account-back" className="inline-flex items-center gap-2 text-sm font-bold text-muted-foreground transition-colors hover:text-primary">
-          <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-          {copy.back}
-        </Link>
-        <LanguageToggle language={language} onLanguageChange={setLanguage} />
-      </div>
-      <div className="flex flex-1 items-center justify-center py-8">{children}</div>
-    </main>
-  );
-}
-
 function SignUpPage() {
   const redirects = useClerkRedirects();
   useStaleSignUpStepRecovery();

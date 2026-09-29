@@ -174,6 +174,7 @@ export * from './eventReviewDecisionDecision';
 export * from './eventReviewDecisionResult';
 export * from './eventReviewList';
 export * from './eventReviewListCounts';
+export * from './externalSearchScope';
 export * from './factCheckStatus';
 export * from './featureDisabledResponse';
 export * from './featureReadiness';

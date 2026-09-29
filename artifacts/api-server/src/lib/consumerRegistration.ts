@@ -131,6 +131,11 @@ const RETURN_REF_EXACT_PATHS: ReadonlySet<string> = new Set([
   "/account/beveiliging",
   "/account/bedrijf/toevoegen",
   "/account/uitnodiging",
+  "/account/privacy",
+  "/account/privacy/rechten",
+  "/account/e-mail-wijzigen",
+  "/account/gegevens-export",
+  "/account/verwijderen",
 ]);
 /** Query parameters that are secrets in transit and must never be persisted with a return ref. */
 const RETURN_REF_SECRET_PARAMS = ["token"] as const;

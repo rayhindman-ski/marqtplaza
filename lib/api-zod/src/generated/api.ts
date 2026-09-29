@@ -62,6 +62,7 @@ export const GetAccountMeResponse = zod.object({
   "preferences": zod.union([zod.object({
   "revision": zod.number(),
   "retainLastSearch": zod.boolean(),
+  "externalSearchScope": zod.enum(['ask', 'never', 'always']),
   "neighborhoodIds": zod.array(zod.string()).max(getAccountMeResponsePreferencesOneNeighborhoodIdsMax),
   "interestIds": zod.array(zod.string()).max(getAccountMeResponsePreferencesOneInterestIdsMax),
   "unresolvedNeighborhoodIds": zod.array(zod.string()).max(getAccountMeResponsePreferencesOneUnresolvedNeighborhoodIdsMax).describe('Subset of neighborhoodIds that no longer resolves in the current account option taxonomy.'),
@@ -252,6 +253,18 @@ export const DeleteAccountLastSearchResponse = zod.void()
 
 
 /**
+ * @summary Notify the former verified primary address before a Clerk email change
+ */
+export const StartAccountEmailChangeResponse = zod.void()
+
+
+/**
+ * @summary Synchronize only Clerk's verified primary address
+ */
+export const ConfirmAccountEmailChangeResponse = zod.void()
+
+
+/**
  * Creates or updates the signed-in user's optional preferences. `expectedRevision` must equal
  * the current stored revision (use 0 when no preferences exist yet); a mismatch returns
  * 409 VERSION_CONFLICT with the current `expectedVersion` so the client can reload while keeping
@@ -277,6 +290,7 @@ export const updateAccountPreferencesBodyInterestIdsMax = 20;
 export const UpdateAccountPreferencesBody = zod.object({
   "expectedRevision": zod.number().min(updateAccountPreferencesBodyExpectedRevisionMin).describe('Current stored revision, or 0 when no preferences exist yet.'),
   "retainLastSearch": zod.boolean().optional(),
+  "externalSearchScope": zod.enum(['ask', 'never', 'always']).optional(),
   "locale": zod.enum(['nl', 'en']).optional(),
   "neighborhoodIds": zod.array(zod.string().max(updateAccountPreferencesBodyNeighborhoodIdsItemMax)).max(updateAccountPreferencesBodyNeighborhoodIdsMax).optional(),
   "interestIds": zod.array(zod.string().max(updateAccountPreferencesBodyInterestIdsItemMax)).max(updateAccountPreferencesBodyInterestIdsMax).optional()
@@ -319,6 +333,7 @@ export const UpdateAccountPreferencesResponse = zod.object({
   "preferences": zod.union([zod.object({
   "revision": zod.number(),
   "retainLastSearch": zod.boolean(),
+  "externalSearchScope": zod.enum(['ask', 'never', 'always']),
   "neighborhoodIds": zod.array(zod.string()).max(updateAccountPreferencesResponsePreferencesOneNeighborhoodIdsMax),
   "interestIds": zod.array(zod.string()).max(updateAccountPreferencesResponsePreferencesOneInterestIdsMax),
   "unresolvedNeighborhoodIds": zod.array(zod.string()).max(updateAccountPreferencesResponsePreferencesOneUnresolvedNeighborhoodIdsMax).describe('Subset of neighborhoodIds that no longer resolves in the current account option taxonomy.'),
@@ -372,6 +387,7 @@ export const CompleteAccountOnboardingResponse = zod.object({
   "preferences": zod.union([zod.object({
   "revision": zod.number(),
   "retainLastSearch": zod.boolean(),
+  "externalSearchScope": zod.enum(['ask', 'never', 'always']),
   "neighborhoodIds": zod.array(zod.string()).max(completeAccountOnboardingResponsePreferencesOneNeighborhoodIdsMax),
   "interestIds": zod.array(zod.string()).max(completeAccountOnboardingResponsePreferencesOneInterestIdsMax),
   "unresolvedNeighborhoodIds": zod.array(zod.string()).max(completeAccountOnboardingResponsePreferencesOneUnresolvedNeighborhoodIdsMax).describe('Subset of neighborhoodIds that no longer resolves in the current account option taxonomy.'),

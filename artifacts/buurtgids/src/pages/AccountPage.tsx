@@ -31,6 +31,7 @@ import { accountErrorMessage, accountTranslations, formatCopy, type Language } f
 import { resolveReturnPath, withReturnPath } from '@/lib/returnPath';
 import { useAppLanguage } from '@/lib/useAppLanguage';
 import { serializeDiscoveryUrlState } from '@/lib/discoveryUrlState';
+import { legalDocuments } from '@/lib/legal/documents';
 import { BUSINESS_CATEGORIES, EVENT_CATEGORIES, FOOD_TYPES, SOCIAL_MAP_CATEGORIES } from '@/lib/data';
 import { PreferenceSummary } from './AccountPreferencesPage';
 import { isSurveyDue } from './OnboardingPage';
@@ -289,6 +290,10 @@ export default function AccountPage() {
               {copy.security.link}
             </Link>
           </section>
+          <Link href="/account/e-mail-wijzigen" data-testid="link-account-email-change"
+            className="mb-6 inline-flex rounded-full border border-border px-4 py-2 text-sm font-bold text-primary">
+            {copy.emailChange.title}
+          </Link>
           {me ? (
             <section data-testid="account-privacy-link-panel" className="mb-6 flex flex-col gap-4 rounded-3xl border border-border/80 bg-card p-6 shadow-sm sm:flex-row sm:items-center sm:justify-between sm:p-8">
               <div>
@@ -307,6 +312,10 @@ export default function AccountPage() {
               </Link>
             </section>
           ) : null}
+          <nav aria-label={language === 'nl' ? 'Juridische documenten' : 'Legal documents'} className="mb-6 flex flex-wrap gap-4 text-sm">
+            <Link href="/voorwaarden" data-testid="link-account-terms" className="font-bold text-primary underline">{legalDocuments.terms[language].title}</Link>
+            <Link href="/privacy" data-testid="link-account-privacy-notice" className="font-bold text-primary underline">{legalDocuments.privacy[language].title}</Link>
+          </nav>
         </>
       )}
 

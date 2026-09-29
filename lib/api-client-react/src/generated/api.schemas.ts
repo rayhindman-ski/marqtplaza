@@ -665,12 +665,22 @@ export interface AccountCapabilities {
   canReview: boolean;
 }
 
+export type ExternalSearchScope = typeof ExternalSearchScope[keyof typeof ExternalSearchScope];
+
+
+export const ExternalSearchScope = {
+  ask: 'ask',
+  never: 'never',
+  always: 'always',
+} as const;
+
 /**
  * Optional controlled preferences owned by exactly one account. Updates require expectedRevision and return 409 VERSION_CONFLICT on mismatch. Unresolved IDs are stored legacy choices that no longer occur in the current taxonomy; they remain in the ID arrays until the user removes them.
  */
 export interface ConsumerPreferences {
   revision: number;
   retainLastSearch: boolean;
+  externalSearchScope: ExternalSearchScope;
   /** @maxItems 20 */
   neighborhoodIds: string[];
   /** @maxItems 20 */
@@ -830,6 +840,7 @@ export interface UpdateAccountPreferencesInput {
      */
   expectedRevision: number;
   retainLastSearch?: boolean;
+  externalSearchScope?: ExternalSearchScope;
   locale?: AccountLocale;
   /**
      * @maxItems 20

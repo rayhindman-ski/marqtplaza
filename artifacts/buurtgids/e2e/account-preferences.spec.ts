@@ -7,6 +7,7 @@ type Preferences = {
   unresolvedNeighborhoodIds?: string[];
   unresolvedInterestIds?: string[];
   updatedAt: string;
+  externalSearchScope?: 'ask' | 'never' | 'always';
 };
 type Me = {
   id: number;
@@ -134,6 +135,7 @@ async function installAccountServer(page: Page, initial: Partial<Me> = {}): Prom
         locale: body.locale ?? state.me.locale,
         preferences: {
           revision: current + 1,
+          externalSearchScope: body.externalSearchScope ?? state.me.preferences?.externalSearchScope ?? 'ask',
           neighborhoodIds: body.neighborhoodIds ?? state.me.preferences?.neighborhoodIds ?? [],
           interestIds: body.interestIds ?? state.me.preferences?.interestIds ?? [],
           unresolvedNeighborhoodIds: (body.neighborhoodIds ?? state.me.preferences?.neighborhoodIds ?? []).filter(
@@ -302,6 +304,7 @@ test.describe('consumer account journey', () => {
     await page.getByTestId('checkbox-dhg:zeeheldenkwartier').check();
     await page.getByTestId('checkbox-category:food-and-drink').check();
     await page.getByTestId('radio-locale-en').check();
+    await page.getByTestId('select-external-search-scope').selectOption('always');
 
     await page.getByTestId('button-language-en').click();
     await expect(page.getByTestId('heading-account-preferences')).toHaveText('What would you like to see first?');
@@ -313,6 +316,7 @@ test.describe('consumer account journey', () => {
     await expect(page.getByTestId('checkbox-dhg:zeeheldenkwartier')).toBeChecked();
     await expect(page.getByTestId('checkbox-category:food-and-drink')).toBeChecked();
     await expect(page.getByTestId('radio-locale-en')).toBeChecked();
+    await expect(page.getByTestId('select-external-search-scope')).toHaveValue('always');
 
     await page.getByTestId('button-preferences-save').click();
     await expect(page.getByTestId('status-preferences-saved')).toBeVisible();
@@ -325,12 +329,17 @@ test.describe('consumer account journey', () => {
       locale: 'en',
       neighborhoodIds: ['dhg:zeeheldenkwartier'],
       interestIds: ['category:food-and-drink'],
+      retainLastSearch: true,
+      externalSearchScope: 'always',
     });
+    expect(server.me.preferences?.externalSearchScope).toBe('always');
     expect(patch?.auth).toBe('Bearer e2e-token:user-e2e');
     expect(server.requests.some((request) => request.path.endsWith('/onboarding/complete'))).toBe(true);
 
     await page.getByTestId('button-preferences-continue').click();
     await expect(page).toHaveURL(/\/deals$/);
+    await page.goto('/account/voorkeuren?e2eAccountAuth=1');
+    await expect(page.getByTestId('select-external-search-scope')).toHaveValue('always');
   });
 
   test('skipping completes onboarding without saving anything and ignores unsafe return URLs', async ({ page }) => {

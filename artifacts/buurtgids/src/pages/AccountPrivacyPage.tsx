@@ -93,6 +93,9 @@ export default function AccountPrivacyPage() {
       ) : (
         <p role="status" className="mb-6 text-sm text-muted-foreground">{copy.account.loading}</p>
       )}
+      <Link href="/account/privacy/rechten" data-testid="link-privacy-rights" className="mb-6 inline-block font-bold text-primary underline">
+        {accountTranslations[language].rights.title}
+      </Link>
       <div className="mt-2">
         <Link href="/account" data-testid="link-privacy-back" className="text-sm font-bold text-primary hover:underline">
           {privacy.toAccount}
