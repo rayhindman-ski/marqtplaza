@@ -63,7 +63,7 @@ outputType = "console"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "PW_PORT=22590 CLERK_LIVE_SIGNUP=1 CLERK_LIVE_BASE_URL=\"https://$REPLIT_DEV_DOMAIN\" PLAYWRIGHT_CHROMIUM_EXECUTABLE=\"$(command -v chromium)\" pnpm --filter @workspace/buurtgids exec playwright test e2e/clerk-live-signup.spec.ts e2e/account-preferences.spec.ts e2e/consumer-registration.spec.ts e2e/signup-stale-step.spec.ts"
+args = "PW_PORT=22590 CLERK_LIVE_SIGNUP=1 CLERK_LIVE_BASE_URL=\"https://$REPLIT_DEV_DOMAIN\" PLAYWRIGHT_CHROMIUM_EXECUTABLE=\"$(command -v chromium)\" pnpm --filter @workspace/buurtgids exec playwright test e2e/clerk-live-signup.spec.ts e2e/clerk-live-email-change.spec.ts e2e/account-preferences.spec.ts e2e/consumer-registration.spec.ts e2e/signup-stale-step.spec.ts"
 
 [[workflows.workflow]]
 name = "usability-regression"

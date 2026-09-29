@@ -543,8 +543,14 @@ warning is the known false positive.
 2. Approve `doc/md/privacy/processing-inventory.md` (`PRIV-016`).
 3. Confirm or change the provisional §15 values (Phase 0 table).
 4. Decide production flag enablement.
-5. `PROF-004`: live e-mail-change walk-through not performed (offline stub +
-   backend-verified read only).
+5. ~~`PROF-004`: live e-mail-change walk-through~~ — performed 2026-09-29 with
+   `e2e/clerk-live-email-change.spec.ts` (opt-in, `CLERK_LIVE_SIGNUP=1`) against the
+   Clerk development instance: fresh test identity, new `+clerk_test` address created
+   and verified with the test code, primary switched at Clerk (Backend API read),
+   `email-change/start` and `/confirm` both 204, `app_users.email` updated with
+   `email_change_pending_at` cleared, outbox rows `account.email_change_requested`
+   (old address) and `account.email_changed` (old and new address) queued. SMTP
+   delivery is still not proven (test identities never receive mail). Identity deleted afterwards.
 
 ### Route naming: English canonical paths
 

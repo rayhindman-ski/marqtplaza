@@ -35,3 +35,8 @@ Expired → `ticket_expired_code`, reused → `sign_in_token_already_used_code`;
 shows the message with the normal form as recovery. Clerk's SignUp renders a *blank* card for a
 stale `/sign-up/verify-*` step with no sign-up attempt (also on the hosted Account Portal), so the
 app must redirect that case to `/sign-up` itself. Opt-in spec: `e2e/clerk-verification-recovery.spec.ts`.
+
+**Frontend API method override:** clerk-js sends `PATCH`/`DELETE` as `POST …?_method=PATCH`, so a
+route-level request log must read `_method` before trusting the HTTP verb (e.g. `user.update` for
+the primary e-mail switch shows up as `POST /v1/me?_method=PATCH`). `/api/account/me` does not expose
+the e-mail address; verify the app row through the database. Opt-in spec: `e2e/clerk-live-email-change.spec.ts`.
