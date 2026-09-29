@@ -5,6 +5,42 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+export interface AccountExportReference {
+  reference: number;
+  status: string;
+}
+
+export type AccountExportStatusStatus = typeof AccountExportStatusStatus[keyof typeof AccountExportStatusStatus];
+
+
+export const AccountExportStatusStatus = {
+  requested: 'requested',
+  preparing: 'preparing',
+  available: 'available',
+  downloaded: 'downloaded',
+  expired: 'expired',
+  failed: 'failed',
+} as const;
+
+export type AccountExportStatusDownloadsItem = {
+  file: string;
+  size: number;
+  url: string;
+};
+
+export interface AccountExportStatus {
+  reference: number;
+  status: AccountExportStatusStatus;
+  requestedAt: string;
+  /** @nullable */
+  availableAt: string | null;
+  /** @nullable */
+  expiresAt: string | null;
+  /** @nullable */
+  downloadedAt: string | null;
+  downloads: AccountExportStatusDownloadsItem[];
+}
+
 /**
  * Claim lifecycle. `pending` is the legacy alias of `submitted` (awaiting review).
  * Open states that hold the one-open-claim-per-listing slot: pending, submitted,
@@ -1102,7 +1138,18 @@ export type SupportAccountRequest = AccountRequest & ({
   events: AccountRequestEvent[];
 });
 
+export type SupportAccountRequestsExportRequestsItem = {
+  reference: number;
+  status: string;
+  requestedAt: string;
+  /** @nullable */
+  availableAt: string | null;
+  /** @nullable */
+  expiresAt: string | null;
+};
+
 export interface SupportAccountRequests {
+  exportRequests?: SupportAccountRequestsExportRequestsItem[];
   requests: SupportAccountRequest[];
 }
 
@@ -3568,9 +3615,26 @@ export type PageCursorParameter = string;
  */
 export type PageLimitParameter = number;
 
+export type ListAccountExportRequests200 = {
+  requests: AccountExportStatus[];
+};
+
+export type DownloadAccountExportRequestParams = {
+file: string;
+};
+
 export type GetSupportAccountRequestsParams = {
+type?: GetSupportAccountRequestsType;
 status?: AccountRequestStatus;
 };
+
+export type GetSupportAccountRequestsType = typeof GetSupportAccountRequestsType[keyof typeof GetSupportAccountRequestsType];
+
+
+export const GetSupportAccountRequestsType = {
+  deletion: 'deletion',
+  export: 'export',
+} as const;
 
 export type GetSupportLifecycleMessagesParams = {
 status?: LifecycleMessageStatus;

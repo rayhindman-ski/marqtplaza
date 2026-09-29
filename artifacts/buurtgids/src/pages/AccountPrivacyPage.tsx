@@ -97,6 +97,9 @@ export default function AccountPrivacyPage() {
       <Link href="/account/privacy/rechten" data-testid="link-privacy-rights" className="mb-6 inline-block font-bold text-primary underline">
         {accountTranslations[language].rights.title}
       </Link>
+      <Link href="/account/gegevens-export" data-testid="link-privacy-export" className="mb-6 ml-4 inline-block font-bold text-primary underline">
+        {accountTranslations[language].rights.export}
+      </Link>
       <div className="mt-2">
         <Link href="/account" data-testid="link-privacy-back" className="text-sm font-bold text-primary hover:underline">
           {privacy.toAccount}

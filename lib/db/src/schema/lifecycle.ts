@@ -1,5 +1,6 @@
 import {
   foreignKey,
+  bigint,
   index,
   integer,
   jsonb,
@@ -277,6 +278,24 @@ export const accountRequestEventsTable = pgTable(
   },
   (table) => [index("account_request_events_request_idx").on(table.requestId, table.createdAt)],
 );
+
+/** Private artifacts belong to a single export request; file keys are server generated. */
+export const accountExportsTable = pgTable("account_exports", {
+  id: serial("id").primaryKey(),
+  requestId: integer("request_id").notNull(),
+  format: text("format").notNull().default("json_csv"),
+  storageKey: text("storage_key"),
+  size: bigint("size", { mode: "number" }),
+  files: jsonb("files").$type<{ name: string; key: string; size: number }[]>().notNull().default([]),
+  availableAt: timestamp("available_at", { withTimezone: true }),
+  expiresAt: timestamp("expires_at", { withTimezone: true }),
+  downloadedAt: timestamp("downloaded_at", { withTimezone: true }),
+  status: text("status").notNull().default("requested"),
+}, (table) => [
+  foreignKey({ columns: [table.requestId], foreignColumns: [accountRequestsTable.id], name: "account_exports_request_fk" }).onDelete("cascade"),
+  uniqueIndex("account_exports_request_unique").on(table.requestId),
+  index("account_exports_status_idx").on(table.status, table.expiresAt),
+]);
 
 export const insertLifecycleOutboxSchema = createInsertSchema(lifecycleOutboxTable).omit({
   id: true,

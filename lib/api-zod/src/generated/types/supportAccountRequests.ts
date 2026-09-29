@@ -6,7 +6,9 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { SupportAccountRequest } from './supportAccountRequest';
+import type { SupportAccountRequestsExportRequestsItem } from './supportAccountRequestsExportRequestsItem';
 
 export interface SupportAccountRequests {
+  exportRequests?: SupportAccountRequestsExportRequestsItem[];
   requests: SupportAccountRequest[];
 }

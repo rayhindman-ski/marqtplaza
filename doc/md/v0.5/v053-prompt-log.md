@@ -107,3 +107,13 @@ provisional; progress lines below at each phase start and commit.
   consent 4/4; root typecheck clean. Browser specs written but not run; live
   Clerk e-mail-change walk-through deferred to Phase 6; user approval of
   inventory/legal copy pending. No commit.
+- 06:48 UTC (observed `date`, 2026-09-29): owner delegated Phase 4 export,
+  including App Storage, OpenAPI codegen, NL/EN UI, tests and audit evidence.
+- 06:59 UTC (observed `date`, 2026-09-29): implemented Phase 4 export, private
+  storage, ZIP + JSON/CSV, status and expiry scheduler, reviewer queue,
+  docs and browser spec. Additive schema push applied; API 25/25 across
+  export/lifecycle, root typecheck clean. Browser spec left for owner;
+  no browser launched, no commit. Observed duration approximately 11 minutes.
+- 07:00 UTC (observed `date`, 2026-09-29): strengthened export isolation
+  assertions with another user's search and poisoned outbox payload; export
+  API 3/3 and root typecheck still green. Owner to run Playwright spec.

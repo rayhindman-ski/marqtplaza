@@ -90,6 +90,10 @@ export function AccountSupportPanel({ section, enabled }: { section: 'requests' 
   const copy = accountSupportTranslations[language];
 
   const requestsQuery = useGetSupportAccountRequests(undefined, { query: { enabled: enabled && section === 'requests', queryKey: getGetSupportAccountRequestsQueryKey() } });
+  const exportsQuery = useGetSupportAccountRequests({ type: 'export' }, { query: {
+    enabled: enabled && section === 'requests',
+    queryKey: [...getGetSupportAccountRequestsQueryKey(), 'export'],
+  } });
   const messagesQuery = useGetSupportLifecycleMessages({ status: 'failed' }, { query: { enabled: enabled && section === 'messages', queryKey: getGetSupportLifecycleMessagesQueryKey({ status: 'failed' }) } });
   const decide = useDecideSupportAccountRequest();
   const resend = useResendSupportLifecycleMessage();
@@ -138,6 +142,7 @@ export function AccountSupportPanel({ section, enabled }: { section: 'requests' 
   };
 
   const requests = requestsQuery.data?.requests ?? [];
+  const exportRequests = exportsQuery.data?.exportRequests ?? [];
   const messages = messagesQuery.data?.messages ?? [];
 
   const dialogDescription = () => {
@@ -149,6 +154,12 @@ export function AccountSupportPanel({ section, enabled }: { section: 'requests' 
 
   return (
     <div className="space-y-6" data-testid={`support-${section}`}>
+      {section === 'requests' && exportRequests.map(item =>
+        <Card key={`export-${item.reference}`} data-testid={`support-export-${item.reference}`}>
+          <CardHeader><CardTitle className="text-lg">{copy.type.export} · {copy.request} #{item.reference}</CardTitle>
+            <CardDescription>{item.status} · {copy.created} {formatDate(item.requestedAt, language)}</CardDescription>
+          </CardHeader>
+        </Card>)}
       {section === 'requests' && (
         requestsQuery.isLoading ? <QueueSkeleton /> : requests.length === 0 ? <EmptyState title={copy.emptyRequests} /> : (
           requests.map((request) => {

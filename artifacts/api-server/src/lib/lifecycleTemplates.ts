@@ -70,6 +70,10 @@ function wrapEn(lines: string[]): string {
 }
 
 const TEMPLATES: Record<LifecycleEventCode, Record<LifecycleLocale, Template>> = {
+  "account.export_ready": {
+    nl: { subject: () => "Je gegevensexport is beschikbaar", body: (v) => wrapNl([`Je aangevraagde gegevensexport #${v.requestId} is beschikbaar via je account. De download verloopt na 72 uur.`]) },
+    en: { subject: () => "Your data export is ready", body: (v) => wrapEn([`Your requested data export #${v.requestId} is available in your account. The download expires after 72 hours.`]) },
+  },
   "account.product_update": {
     nl: { subject: (v) => v.subject, body: (v) => v.body },
     en: { subject: (v) => v.subject, body: (v) => v.body },

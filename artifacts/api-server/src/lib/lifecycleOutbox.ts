@@ -40,6 +40,7 @@ export const LIFECYCLE_EVENT_CODES = [
   "business.suspended",
   "business.closed",
   "account.deletion_received",
+  "account.export_ready",
   "account.deletion_blocked",
   "account.deletion_in_review",
   "account.deletion_completed",

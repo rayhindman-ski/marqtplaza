@@ -6,7 +6,9 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { AccountRequestStatus } from './accountRequestStatus';
+import type { GetSupportAccountRequestsType } from './getSupportAccountRequestsType';
 
 export type GetSupportAccountRequestsParams = {
+type?: GetSupportAccountRequestsType;
 status?: AccountRequestStatus;
 };

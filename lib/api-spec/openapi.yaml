@@ -45,6 +45,75 @@ tags:
       Business onboarding enrichment (v0.5.2). Feature-gated by `businessOnboarding`; every route
       answers 404 `FEATURE_DISABLED` while the gate is closed. Public discovery is unaffected.
 paths:
+  /account/export-requests:
+    post:
+      operationId: createAccountExportRequest
+      tags: [account]
+      responses:
+        "202":
+          description: Accepted or existing open export
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountExportReference"
+    get:
+      operationId: listAccountExportRequests
+      tags: [account]
+      responses:
+        "200":
+          description: Own exports
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [requests]
+                properties:
+                  requests:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/AccountExportStatus"
+  /account/export-requests/{id}:
+    get:
+      operationId: getAccountExportRequest
+      tags: [account]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: number
+      responses:
+        "200":
+          description: Own export
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountExportStatus"
+  /account/export-requests/{id}/download:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: number
+    get:
+      operationId: downloadAccountExportRequest
+      tags: [account]
+      parameters:
+        - in: query
+          name: file
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Private file download
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+        "410":
+          description: Expired
   /healthz:
     get:
       operationId: healthCheck
@@ -519,6 +588,12 @@ paths:
       tags: [account-support]
       summary: Support queue of account requests
       parameters:
+        - name: type
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [deletion, export]
         - name: status
           in: query
           required: false
@@ -3428,6 +3503,43 @@ components:
           schema:
             $ref: "#/components/schemas/ApiError"
   schemas:
+    AccountExportReference:
+      type: object
+      required: [reference, status]
+      properties:
+        reference:
+          type: number
+        status:
+          type: string
+    AccountExportStatus:
+      type: object
+      required: [reference, status, requestedAt, availableAt, expiresAt, downloadedAt, downloads]
+      properties:
+        reference:
+          type: number
+        status:
+          type: string
+          enum: [requested, preparing, available, downloaded, expired, failed]
+        requestedAt:
+          type: string
+        availableAt:
+          type: [string, "null"]
+        expiresAt:
+          type: [string, "null"]
+        downloadedAt:
+          type: [string, "null"]
+        downloads:
+          type: array
+          items:
+            type: object
+            required: [file, size, url]
+            properties:
+              file:
+                type: string
+              size:
+                type: number
+              url:
+                type: string
     ClaimStatus:
       type: string
       description: |
@@ -4535,6 +4647,22 @@ components:
       type: object
       required: [requests]
       properties:
+        exportRequests:
+          type: array
+          items:
+            type: object
+            required: [reference, status, requestedAt, availableAt, expiresAt]
+            properties:
+              reference:
+                type: number
+              status:
+                type: string
+              requestedAt:
+                type: string
+              availableAt:
+                type: [string, "null"]
+              expiresAt:
+                type: [string, "null"]
         requests:
           type: array
           items:

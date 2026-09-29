@@ -21,6 +21,8 @@ import type {
 
 import type {
   AccountConsents,
+  AccountExportReference,
+  AccountExportStatus,
   AccountLastSearch,
   AccountLastSearchInput,
   AccountMe,
@@ -79,6 +81,7 @@ import type {
   DealInput,
   DealUpdate,
   DecideListingCorrectionInput,
+  DownloadAccountExportRequestParams,
   EditorialQueueItem,
   EditorialQueuePage,
   EventReviewDecision,
@@ -108,6 +111,7 @@ import type {
   HealthStatus,
   InspectConsumerRegistrationLinkParams,
   LifecycleMessages,
+  ListAccountExportRequests200,
   ListingCorrectionReceipt,
   ListingCorrectionReviewItem,
   ListingDetailResponse,
@@ -179,6 +183,296 @@ const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKe
   }
   return result;
 };
+
+export const getCreateAccountExportRequestUrl = () => {
+
+
+
+
+  return `/api/account/export-requests`
+}
+
+export const createAccountExportRequest = async ( options?: Parameters<typeof customFetch>[1]): Promise<AccountExportReference> => {
+
+  return customFetch<AccountExportReference>(getCreateAccountExportRequestUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getCreateAccountExportRequestMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createAccountExportRequest>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createAccountExportRequest>>, TError,void, TContext> => {
+
+const mutationKey = ['createAccountExportRequest'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createAccountExportRequest>>, void> = () => {
+
+
+          return  createAccountExportRequest(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateAccountExportRequestMutationResult = NonNullable<Awaited<ReturnType<typeof createAccountExportRequest>>>
+
+    export type CreateAccountExportRequestMutationError = ErrorType<unknown>
+
+    export const useCreateAccountExportRequest = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createAccountExportRequest>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createAccountExportRequest>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getCreateAccountExportRequestMutationOptions(options));
+    }
+
+export const getListAccountExportRequestsUrl = () => {
+
+
+
+
+  return `/api/account/export-requests`
+}
+
+export const listAccountExportRequests = async ( options?: Parameters<typeof customFetch>[1]): Promise<ListAccountExportRequests200> => {
+
+  return customFetch<ListAccountExportRequests200>(getListAccountExportRequestsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListAccountExportRequestsQueryKey = () => {
+    return [
+    `/api/account/export-requests`
+    ] as const;
+    }
+
+
+export const getListAccountExportRequestsQueryOptions = <TData = Awaited<ReturnType<typeof listAccountExportRequests>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAccountExportRequests>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListAccountExportRequestsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listAccountExportRequests>>> = ({ signal }) => listAccountExportRequests({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listAccountExportRequests>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListAccountExportRequestsQueryResult = NonNullable<Awaited<ReturnType<typeof listAccountExportRequests>>>
+export type ListAccountExportRequestsQueryError = ErrorType<unknown>
+
+
+
+export function useListAccountExportRequests<TData = Awaited<ReturnType<typeof listAccountExportRequests>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAccountExportRequests>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListAccountExportRequestsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetAccountExportRequestUrl = (id: number,) => {
+
+
+
+
+  return `/api/account/export-requests/${id}`
+}
+
+export const getAccountExportRequest = async (id: number, options?: Parameters<typeof customFetch>[1]): Promise<AccountExportStatus> => {
+
+  return customFetch<AccountExportStatus>(getGetAccountExportRequestUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetAccountExportRequestQueryKey = (id: number,) => {
+    return [
+    `/api/account/export-requests/${id}`
+    ] as const;
+    }
+
+
+export const getGetAccountExportRequestQueryOptions = <TData = Awaited<ReturnType<typeof getAccountExportRequest>>, TError = ErrorType<unknown>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAccountExportRequest>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetAccountExportRequestQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAccountExportRequest>>> = ({ signal }) => getAccountExportRequest(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAccountExportRequest>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetAccountExportRequestQueryResult = NonNullable<Awaited<ReturnType<typeof getAccountExportRequest>>>
+export type GetAccountExportRequestQueryError = ErrorType<unknown>
+
+
+
+export function useGetAccountExportRequest<TData = Awaited<ReturnType<typeof getAccountExportRequest>>, TError = ErrorType<unknown>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAccountExportRequest>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetAccountExportRequestQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getDownloadAccountExportRequestUrl = (id: number,
+    params: DownloadAccountExportRequestParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/account/export-requests/${id}/download?${stringifiedParams}` : `/api/account/export-requests/${id}/download`
+}
+
+export const downloadAccountExportRequest = async (id: number,
+    params: DownloadAccountExportRequestParams, options?: Parameters<typeof customFetch>[1]): Promise<Blob> => {
+
+  return customFetch<Blob>(getDownloadAccountExportRequestUrl(id,params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getDownloadAccountExportRequestQueryKey = (id: number,
+    params?: DownloadAccountExportRequestParams,) => {
+    return [
+    `/api/account/export-requests/${id}/download`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getDownloadAccountExportRequestQueryOptions = <TData = Awaited<ReturnType<typeof downloadAccountExportRequest>>, TError = ErrorType<void>>(id: number,
+    params: DownloadAccountExportRequestParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof downloadAccountExportRequest>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getDownloadAccountExportRequestQueryKey(id,params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof downloadAccountExportRequest>>> = ({ signal }) => downloadAccountExportRequest(id,params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof downloadAccountExportRequest>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type DownloadAccountExportRequestQueryResult = NonNullable<Awaited<ReturnType<typeof downloadAccountExportRequest>>>
+export type DownloadAccountExportRequestQueryError = ErrorType<void>
+
+
+
+export function useDownloadAccountExportRequest<TData = Awaited<ReturnType<typeof downloadAccountExportRequest>>, TError = ErrorType<void>>(
+ id: number,
+    params: DownloadAccountExportRequestParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof downloadAccountExportRequest>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getDownloadAccountExportRequestQueryOptions(id,params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getHealthCheckUrl = () => {
 

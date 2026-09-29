@@ -3,6 +3,7 @@ import { Router, type IRouter, type NextFunction, type Request, type RequestHand
 
 import {
   accountRequestEventsTable,
+  accountExportsTable,
   accountRequestsTable,
   appUsersTable,
   businessMembersTable,
@@ -87,7 +88,7 @@ const DECISION_FIELDS: ReadonlySet<string> = new Set([
   "businessProfileId",
   "note",
 ]);
-const STATUS_QUERY: ReadonlySet<string> = new Set(["status"]);
+const STATUS_QUERY: ReadonlySet<string> = new Set(["status", "type"]);
 
 /**
  * Publication states that make a sole-owned business a deletion blocker: the
@@ -377,7 +378,7 @@ export function createAccountLifecycleRouter(options: AccountLifecycleRouterOpti
     }
     const { user, identity } = req.account!;
     const existing = await findRequestForUser(user.id, params.data.id);
-    if (!existing) {
+    if (!existing || existing.type !== "deletion") {
       sendApiError(req, res, "NOT_FOUND");
       return;
     }
@@ -436,6 +437,23 @@ export function createAccountLifecycleRouter(options: AccountLifecycleRouterOpti
 
   router.get("/review/account-requests", supportGuarded, async (req: Request, res: Response): Promise<void> => {
     if (rejectClientFields(req, res, NO_FIELDS, STATUS_QUERY)) return;
+    if (req.query.type !== undefined && req.query.type !== "deletion" && req.query.type !== "export") {
+      sendApiError(req, res, "VALIDATION_FAILED"); return;
+    }
+    if (req.query.type === "export") {
+      const exports = await db.select({
+        reference: accountRequestsTable.id, status: accountExportsTable.status,
+        requestedAt: accountRequestsTable.createdAt, availableAt: accountExportsTable.availableAt,
+        expiresAt: accountExportsTable.expiresAt,
+      }).from(accountExportsTable).innerJoin(accountRequestsTable, eq(accountRequestsTable.id, accountExportsTable.requestId))
+        .orderBy(desc(accountRequestsTable.id)).limit(100);
+      res.json({ requests: [], exportRequests: exports.map(row => ({
+        ...row, requestedAt: row.requestedAt.toISOString(),
+        availableAt: row.availableAt?.toISOString() ?? null,
+        expiresAt: row.expiresAt?.toISOString() ?? null,
+      })) });
+      return;
+    }
     const query = GetSupportAccountRequestsQueryParams.safeParse(req.query);
     if (!query.success) {
       sendApiError(req, res, "VALIDATION_FAILED", { fieldErrors: [{ field: "status", code: "invalid" }] });
@@ -445,7 +463,7 @@ export function createAccountLifecycleRouter(options: AccountLifecycleRouterOpti
     const rows = await db
       .select()
       .from(accountRequestsTable)
-      .where(status ? eq(accountRequestsTable.status, status) : inArray(accountRequestsTable.status, [...OPEN_ACCOUNT_REQUEST_STATUSES]))
+      .where(and(eq(accountRequestsTable.type, "deletion"), status ? eq(accountRequestsTable.status, status) : inArray(accountRequestsTable.status, [...OPEN_ACCOUNT_REQUEST_STATUSES])))
       .orderBy(asc(accountRequestsTable.createdAt), asc(accountRequestsTable.id))
       .limit(100);
     const events = await loadEvents(rows.map((row) => row.id));
@@ -474,6 +492,7 @@ export function createAccountLifecycleRouter(options: AccountLifecycleRouterOpti
     const outcome = await db.transaction(async (tx) => {
       const [request] = await tx.select().from(accountRequestsTable).where(eq(accountRequestsTable.id, params.data.id)).for("update");
       if (!request) return { kind: "not_found" as const };
+      if (request.type !== "deletion") return { kind: "not_found" as const };
       const [requester] = await tx
         .select({ clerkUserId: appUsersTable.clerkUserId })
         .from(appUsersTable)

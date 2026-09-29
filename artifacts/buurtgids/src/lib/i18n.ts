@@ -102,6 +102,23 @@ export const newsTranslations = {
   },
 } as const;
 
+export const accountExportTranslations = {
+  nl: {
+    intro: 'Vraag een kopie van je gegevens aan. Dit verwijdert je account niet. Je ontvangt JSON en afzonderlijke CSV-bestanden; downloads blijven 72 uur beschikbaar.',
+    request: 'Gegevens opvragen', error: 'De aanvraag kon niet worden verwerkt.',
+    empty: 'Nog geen aanvragen.', unavailable: 'Gegevensexport is momenteel niet beschikbaar.',
+    until: 'Download tot',
+    status: { requested: 'Aangevraagd', preparing: 'Wordt voorbereid', available: 'Beschikbaar', downloaded: 'Gedownload', expired: 'Verlopen', failed: 'Mislukt' },
+  },
+  en: {
+    intro: 'Request a copy of your data. This does not delete your account. You receive JSON and separate CSV files; downloads remain available for 72 hours.',
+    request: 'Request my data', error: 'The request could not be processed.',
+    empty: 'No requests yet.', unavailable: 'Data export is currently unavailable.',
+    until: 'Download until',
+    status: { requested: 'Requested', preparing: 'Preparing', available: 'Available', downloaded: 'Downloaded', expired: 'Expired', failed: 'Failed' },
+  },
+} as const;
+
 export const accountTranslations = {
   nl: {
     back: 'Terug naar Buurtplaza',

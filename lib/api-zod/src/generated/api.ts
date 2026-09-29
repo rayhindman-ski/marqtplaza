@@ -8,6 +8,59 @@
 import * as zod from 'zod';
 
 
+export const CreateAccountExportRequestResponse = zod.object({
+  "reference": zod.number(),
+  "status": zod.string()
+})
+
+
+export const ListAccountExportRequestsResponse = zod.object({
+  "requests": zod.array(zod.object({
+  "reference": zod.number(),
+  "status": zod.enum(['requested', 'preparing', 'available', 'downloaded', 'expired', 'failed']),
+  "requestedAt": zod.string(),
+  "availableAt": zod.string().nullable(),
+  "expiresAt": zod.string().nullable(),
+  "downloadedAt": zod.string().nullable(),
+  "downloads": zod.array(zod.object({
+  "file": zod.string(),
+  "size": zod.number(),
+  "url": zod.string()
+}))
+}))
+})
+
+
+export const GetAccountExportRequestParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GetAccountExportRequestResponse = zod.object({
+  "reference": zod.number(),
+  "status": zod.enum(['requested', 'preparing', 'available', 'downloaded', 'expired', 'failed']),
+  "requestedAt": zod.string(),
+  "availableAt": zod.string().nullable(),
+  "expiresAt": zod.string().nullable(),
+  "downloadedAt": zod.string().nullable(),
+  "downloads": zod.array(zod.object({
+  "file": zod.string(),
+  "size": zod.number(),
+  "url": zod.string()
+}))
+})
+
+
+export const DownloadAccountExportRequestParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const DownloadAccountExportRequestQueryParams = zod.object({
+  "file": zod.coerce.string()
+})
+
+export const DownloadAccountExportRequestResponse = zod.unknown()
+
+
 /**
  * Returns server health status
  * @summary Health check
@@ -634,10 +687,18 @@ export const GetAccountMessagesResponse = zod.object({
  * @summary Support queue of account requests
  */
 export const GetSupportAccountRequestsQueryParams = zod.object({
+  "type": zod.enum(['deletion', 'export']).optional(),
   "status": zod.enum(['received', 'blocked', 'in_review', 'completed', 'rejected', 'withdrawn']).optional()
 })
 
 export const GetSupportAccountRequestsResponse = zod.object({
+  "exportRequests": zod.array(zod.object({
+  "reference": zod.number(),
+  "status": zod.string(),
+  "requestedAt": zod.string(),
+  "availableAt": zod.string().nullable(),
+  "expiresAt": zod.string().nullable()
+})).optional(),
   "requests": zod.array(zod.object({
   "id": zod.number(),
   "scope": zod.enum(['account', 'business']),

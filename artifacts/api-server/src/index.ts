@@ -8,6 +8,7 @@ import { backfillApprovedRevisions } from "./lib/businessRevisionBackfill";
 import { getFeatureFlags } from "./lib/featureFlags";
 import { startLifecycleDispatcher } from "./lib/lifecycleOutbox";
 import { startAccountRetentionScheduler } from "./lib/accountRetention";
+import { expireAccountExports, prepareAccountExports } from "./lib/accountExport";
 
 const rawPort = process.env["PORT"];
 
@@ -40,7 +41,10 @@ async function startServer(): Promise<void> {
     // Without a configured provider this only logs once; queued rows stay visible as queued.
     startLifecycleDispatcher();
     // Continue enforcing expiry if last-search capture is disabled after rollout.
-    startAccountRetentionScheduler();
+    startAccountRetentionScheduler(undefined, async now => {
+      await expireAccountExports(now);
+      if (getFeatureFlags().accountExport) await prepareAccountExports(now);
+    });
   }
   app.listen(port, (err) => {
     if (err) {

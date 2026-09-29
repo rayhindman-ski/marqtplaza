@@ -302,3 +302,47 @@ working PDF. A live Clerk e-mail-change walk-through (old primary stays until
 verification; then old/new notifications and new verified primary) is
 **deferred to Phase 6** and must be recorded there. Owner must run
 `e2e/legal-documents.spec.ts` and the account privacy browser regression.
+
+## Phase 4 — Account export (2026-09-29 06:48–06:59 UTC, observed `date`)
+
+**Implemented.** Provisioned private Replit App Storage with the storage skill;
+added `account_exports` and applied an additive `drizzle-kit push` from
+`lib/db` (named request FK; no partial-index WHERE diffs). An account's
+recent-authenticated export POST is idempotent while the export remains open.
+The scheduler picks requested records, records each state transition in
+`account_request_events`, writes an inventory-driven, deterministic JSON
+bundle, CSV per array and a ZIP of all those files to private App Storage,
+then queues the NL/EN `account.export_ready` notice (reference only, no data
+or token URL). `fflate` was already in the workspace dependency graph, so
+the ZIP is provided in addition to individual files. Signed-in owner-only
+downloads expire after 72 hours; expiry removes objects and transitions the
+audit; failures become visible to support. Export-specific reviewer results
+expose only reference, status and timestamps. The requester screen has
+distinct export/deletion copy, NL/EN states, recent-auth step-up and an
+unavailable card. The rights and privacy pages link to the export route.
+Format and inventory entry are documented under `doc/md/privacy/`.
+OpenAPI is the contract and codegen was run; generated client hooks power
+the screen.
+
+**Verified.** `account-export.test.ts` 3/3 and touched
+`account-lifecycle.test.ts` 22/22; root `pnpm run typecheck` clean. Browser
+spec `e2e/account-export.spec.ts` (NL/EN, status, download, step-up, axe)
+was written **but not run** (owner to run). No browser was launched, no
+workflow restarted, and no commit made.
+
+**Deviations/notes.** App Storage was provisioned, so no `bytea` fallback.
+Orval emits a Zod path-params symbol with the same name as its generated
+query-params type for the download operation; an explicit export in
+`lib/api-zod/src/index.ts` resolves that codegen collision. Individual
+JSON/CSV files remain available alongside the archive. The inventory and
+retention policy remain provisionally subject to product-owner approval.
+
+### Phase 4 — owner verification (2026-09-29)
+
+- Owner fixes: the export page's axe check is scoped to the page's own
+  content (`account-export-content`) like the sibling specs — the shell's
+  language toggle is the known pre-existing contrast debt; the request button
+  uses the secondary variant so the page's own content has no contrast
+  violation.
+- e2e: account-export 2/2, account-rights + account-privacy green (7 total in
+  the combined run); typecheck clean.
