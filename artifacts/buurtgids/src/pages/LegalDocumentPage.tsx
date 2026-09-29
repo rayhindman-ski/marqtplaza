@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { Link } from 'wouter';
 import { Printer } from 'lucide-react';
+import { jsPDF } from 'jspdf';
 import { Button } from '@/components/ui/button';
 import { LanguageToggle } from '@/components/account/AccountShell';
 import { accountTranslations } from '@/lib/i18n';
@@ -16,7 +17,36 @@ export function LegalDocumentPage({ id, englishAlias = false }: { id: LegalDocum
   const version = language === 'nl' ? 'Versie' : 'Version';
   const date = language === 'nl' ? 'Ingangsdatum' : 'Effective date';
   const unset = language === 'nl' ? 'nog niet vastgesteld' : 'not yet set';
-  const print = language === 'nl' ? 'Download als PDF' : 'Download as PDF';
+  const print = language === 'nl' ? 'Afdrukken' : 'Print';
+  const download = language === 'nl' ? 'Download als PDF' : 'Download as PDF';
+  const downloadPdf = () => {
+    const pdf = new jsPDF({ unit: 'mm', format: 'a4' });
+    const left = 20;
+    const width = 170;
+    let y = 24;
+    const write = (text: string, fontSize: number, bold = false) => {
+      pdf.setFont('helvetica', bold ? 'bold' : 'normal');
+      pdf.setFontSize(fontSize);
+      const lines = pdf.splitTextToSize(text, width) as string[];
+      for (const line of lines) {
+        if (y > 275) { pdf.addPage(); y = 24; }
+        pdf.text(line, left, y);
+        y += fontSize * 0.48;
+      }
+      y += 4;
+    };
+    write(content.title, 20, true);
+    write(`${version}: ${document.version}`, 11);
+    write(`${date}: ${document.effectiveDate ?? unset}`, 11);
+    write(draftBanner, 12, true);
+    for (const section of content.sections) {
+      if (y > 250) { pdf.addPage(); y = 24; }
+      write(section.heading, 14, true);
+      write(section.body, 11);
+    }
+    const filename = `buurtplaza-${id === 'terms' ? (language === 'nl' ? 'voorwaarden' : 'terms') : (language === 'nl' ? 'privacyverklaring' : 'privacy-notice')}-${document.version}-${language}.pdf`;
+    pdf.save(filename);
+  };
   return <main data-testid={`page-legal-${id}`} className="legal-document min-h-screen bg-background px-4 py-8 text-foreground">
     <div className="mx-auto max-w-3xl">
       <nav className="legal-no-print mb-8 flex items-center justify-between gap-4">
@@ -37,8 +67,11 @@ export function LegalDocumentPage({ id, englishAlias = false }: { id: LegalDocum
           </section>)}
         </div>
       </article>
-      <Button type="button" variant="outline" data-testid="button-legal-print" className="legal-no-print mt-6 gap-2"
-        onClick={() => window.print()}><Printer aria-hidden="true" className="h-4 w-4" />{print}</Button>
+      <div className="legal-no-print mt-6 flex flex-wrap gap-3">
+        <Button type="button" variant="outline" data-testid="button-legal-pdf" onClick={downloadPdf}>{download}</Button>
+        <Button type="button" variant="outline" data-testid="button-legal-print" className="gap-2"
+          onClick={() => window.print()}><Printer aria-hidden="true" className="h-4 w-4" />{print}</Button>
+      </div>
     </div>
   </main>;
 }

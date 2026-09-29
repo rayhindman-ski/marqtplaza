@@ -76,7 +76,11 @@ const RECEIPT_SECRET = "whsec_" + Buffer.from(`lifecycle-receipt-secret-${runId}
 const app = express();
 app.use("/api", createLifecycleReceiptsRouter({ env: { LIFECYCLE_RECEIPT_WEBHOOK_SECRET: RECEIPT_SECRET } }));
 app.use(express.json());
-app.use("/api", createAccountLifecycleRouter({ resolveIdentity: identityFromHeaders, flags: () => flags }));
+app.use("/api", createAccountLifecycleRouter({
+  resolveIdentity: identityFromHeaders, flags: () => flags,
+  recentAuth: { now: () => 1_800_000_000_000, claims: (req) =>
+    req.header("x-test-stale-auth") ? { fva: [20, -1] } : { fva: [0, -1] } },
+}));
 // Legacy account-owned routes share the same subject resolution; the listing
 // resolver is injected so claims never call an outbound provider.
 const legacyListingId = `lifecycle-legacy-${runId}`;
@@ -477,6 +481,11 @@ describe("lifecycle outbox", () => {
     const gated = await request("/api/account/deletion-requests", { method: "POST", body: json({ acknowledgedScopes: ALL_SCOPES }) });
     assert.equal(gated.status, 404);
     flags = { ...flags, accounts: true };
+    const stale = await request("/api/account/deletion-requests", {
+      method: "POST", headers: { "x-test-stale-auth": "1" }, body: json({ acknowledgedScopes: ALL_SCOPES }),
+    });
+    assert.equal(stale.status, 401);
+    assert.equal(stale.body.code, "RECENT_AUTH_REQUIRED");
 
     const unverified = await request("/api/account/deletion-requests", {
       method: "POST",
@@ -770,7 +779,7 @@ describe("lifecycle outbox", () => {
       // The registration link and team invitation mails are the documented exceptions (they
       // carry a dispatch-time link); they are covered by the consumer-registration and
       // business-membership suites.
-      if (eventCode === "registration.link" || eventCode === "business.member_invited") continue;
+      if (eventCode === "registration.link" || eventCode === "business.member_invited" || eventCode === "account.product_update") continue;
       const nl = renderLifecycleEmail(eventCode, "nl", payload);
       const en = renderLifecycleEmail(eventCode, "en-GB", payload);
       assert.equal(nl.locale, "nl");
@@ -791,6 +800,10 @@ describe("lifecycle outbox", () => {
         assert.ok(nl.subject.includes(payload.businessName) && en.subject.includes(payload.businessName), eventCode);
       }
     }
+    assert.deepEqual(renderLifecycleEmail("account.product_update", "nl", { subject: "Nieuws", body: "Wijzigingen zijn beschikbaar." }),
+      { locale: "nl", subject: "Nieuws", text: "Wijzigingen zijn beschikbaar." });
+    assert.deepEqual(renderLifecycleEmail("account.product_update", "en", { subject: "News", body: "Changes are available." }),
+      { locale: "en", subject: "News", text: "Changes are available." });
     // Unknown locales fall back to Dutch; injected control characters never reach a header.
     const fallback = renderLifecycleEmail("business.published", "de", { businessName: "Evil\r\nBcc: x" });
     assert.equal(fallback.locale, "nl");

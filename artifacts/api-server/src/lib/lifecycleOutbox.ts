@@ -47,6 +47,7 @@ export const LIFECYCLE_EVENT_CODES = [
   "account.deletion_withdrawn",
   "account.email_change_requested",
   "account.email_changed",
+  "account.product_update",
   /** Consumer registration link (v0.5.1); addressed to a pending registration, not an account. */
   "registration.link",
   /** Business membership (v0.5.2). The invitation is addressed to an invitation row, not an account. */
@@ -73,6 +74,8 @@ const PAYLOAD_ALLOW_LIST: ReadonlySet<string> = new Set([
   "blockerCode",
   "resolutionCode",
   "role",
+  "subject",
+  "body",
 ]);
 
 export class UnsafePayloadError extends Error {
@@ -92,6 +95,8 @@ export type LifecyclePayload = Partial<{
   blockerCode: string;
   resolutionCode: string;
   role: string;
+  subject: string;
+  body: string;
 }>;
 
 /** Returns only allow-listed scalar values; throws when a caller passes anything else. */
@@ -102,6 +107,11 @@ export function restrictPayload(payload: Record<string, unknown>): Record<string
   for (const [key, value] of Object.entries(payload)) {
     if (value === undefined || value === null) continue;
     if (typeof value !== "string" && typeof value !== "number" && typeof value !== "boolean") {
+      throw new UnsafePayloadError([key]);
+    }
+    if ((key === "subject" || key === "body") && (typeof value !== "string" ||
+      /[\r\n\u0000-\u001f\u007f]/.test(value) || /[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}/.test(value) ||
+      /\b(?:token|password|bearer)\b/i.test(value) || value.trim().length === 0 || value.length > 200)) {
       throw new UnsafePayloadError([key]);
     }
     safe[key] = typeof value === "string" ? value.slice(0, 200) : value;
@@ -127,6 +137,21 @@ export type EnqueueLifecycleMessageInput = {
 };
 
 export type EnqueueOutcome = { id: number; created: boolean };
+
+/** Explicit opt-in product communication. The caller supplies reviewed NL/EN copy;
+ * this helper never drafts or infers marketing claims from account data. */
+export async function enqueueProductUpdate(
+  tx: Tx,
+  input: { recipientClerkUserId: string; idempotencyKey: string; locale: "nl" | "en"; subject: string; body: string },
+): Promise<EnqueueOutcome> {
+  return enqueueLifecycleMessage(tx, {
+    eventCode: "account.product_update",
+    recipientClerkUserId: input.recipientClerkUserId,
+    idempotencyKey: input.idempotencyKey,
+    locale: input.locale,
+    payload: { subject: input.subject, body: input.body },
+  });
+}
 
 export const DEFAULT_MAX_ATTEMPTS = 5;
 
@@ -311,7 +336,7 @@ export type LifecycleDeliveryLoader = (message: OutboundLifecycleMessage) => Pro
 /** Only explicitly mapped optional campaigns need consent; security and transactional mail does not. */
 export const OPTIONAL_TEMPLATE_PURPOSES: Readonly<Record<string, OptionalConsentPurpose>> = {
   "research.survey_invitation": "research_contact",
-  "product.updates": "product_updates",
+  "account.product_update": "product_updates",
 };
 
 let notConfiguredLogged = false;

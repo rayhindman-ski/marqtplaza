@@ -3,7 +3,7 @@ import { withReturnPath } from './returnPath';
 import { accountTranslations, type Language } from './i18n';
 
 /** API step-up errors cannot trigger Clerk's SDK reverification hook automatically;
- * a new sign-in session supplies a fresh verified iat claim. */
+ * a new verified session supplies fresh factor-verification age. */
 export function isRecentAuthError(error: unknown): boolean {
   return (error as { data?: { code?: string } } | null)?.data?.code === 'RECENT_AUTH_REQUIRED';
 }

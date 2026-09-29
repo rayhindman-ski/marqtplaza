@@ -48,6 +48,7 @@ import {
 import type { IdentityResolver } from "../lib/permissions";
 import { requireAppUser } from "../middlewares/requireAppUser";
 import { requireFlag } from "../middlewares/requireFlag";
+import { requireRecentAuth, type RecentAuthOptions } from "../lib/recentAuth";
 
 /**
  * Account lifecycle self-service and its support path.
@@ -62,6 +63,7 @@ export type AccountLifecycleRouterOptions = {
   resolveIdentity?: IdentityResolver;
   flags?: FeatureFlagSource;
   now?: () => Date;
+  recentAuth?: RecentAuthOptions;
 };
 
 type Tx = Pick<typeof db, "insert" | "select" | "update">;
@@ -269,7 +271,7 @@ export function createAccountLifecycleRouter(options: AccountLifecycleRouterOpti
 
   // ------------------------------------------------------------- requester ---
 
-  router.post("/account/deletion-requests", verifiedGuarded, async (req: Request, res: Response): Promise<void> => {
+  router.post("/account/deletion-requests", [...verifiedGuarded, requireRecentAuth(options.recentAuth)], async (req: Request, res: Response): Promise<void> => {
     if (rejectClientFields(req, res, DELETION_FIELDS)) return;
     const body = CreateAccountDeletionRequestBody.safeParse(req.body);
     if (!body.success) {

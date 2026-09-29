@@ -98,3 +98,12 @@ provisional; progress lines below at each phase start and commit.
   green; repaired read-only account consent summary and privacy-panel eyebrow
   contrast. Updated existing browser mock for canonical centre and locale.
   Root typecheck clean; owner to rerun browsers, not launched by worker.
+- 06:42 UTC (observed `date`, 2026-09-29): owner delegated five architect
+  remediation findings: authentication-age proof, deletion step-up, real PDF,
+  real optional template and honest approval/deferred-live evidence.
+- 06:47 UTC (observed `date`, 2026-09-29): implemented fva/session fallback,
+  deletion guard/prompt, jsPDF draft export, real consent-gated template and
+  enqueue-helper test. API recent-auth 3/3, account 17/17, lifecycle 22/22,
+  consent 4/4; root typecheck clean. Browser specs written but not run; live
+  Clerk e-mail-change walk-through deferred to Phase 6; user approval of
+  inventory/legal copy pending. No commit.

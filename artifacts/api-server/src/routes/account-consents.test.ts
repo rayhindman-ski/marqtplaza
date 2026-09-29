@@ -5,24 +5,26 @@ import express from "express";
 import { eq } from "drizzle-orm";
 import { accountConsentEventsTable, appUsersTable, db, lifecycleDeliveryAttemptsTable, lifecycleOutboxTable, pool } from "@workspace/db";
 import { createAccountRouter } from "./account";
-import { dispatchLifecycleOutbox } from "../lib/lifecycleOutbox";
+import { dispatchLifecycleOutbox, enqueueProductUpdate } from "../lib/lifecycleOutbox";
+import { renderLifecycleEmail } from "../lib/lifecycleTemplates";
 import { hasActiveConsent } from "../lib/consentPurposes";
 import { purgeAccountRetention } from "../lib/accountRetention";
 
 const subject = `consent-phase3-${process.pid}-${Date.now()}`;
+const optionalSubject = `${subject}-optional`;
 let enabled = true;
 const app = express();
 app.use(express.json());
 app.use("/api", createAccountRouter({
-  resolveIdentity: () => ({ userId: subject, emailVerified: true, isEditor: false }),
+  resolveIdentity: (req) => ({ userId: req.header("x-test-user-id") ?? subject, emailVerified: true, isEditor: false }),
   flags: () => ({ accounts: true, consentCenter: enabled, lastSearch: true, accountExport: false, accountDeletion: false,
     businessIntake: false, businessPublication: false, consumerRegistration: false, businessOnboarding: false }),
 }));
 let server: ReturnType<typeof app.listen>;
 let base: string;
-async function request(method: string, body?: unknown) {
+async function request(method: string, body?: unknown, userId = subject) {
   const response = await fetch(`${base}/api/account/consents`, {
-    method, headers: { "content-type": "application/json" }, body: body ? JSON.stringify(body) : undefined,
+    method, headers: { "content-type": "application/json", "x-test-user-id": userId }, body: body ? JSON.stringify(body) : undefined,
   });
   return { status: response.status, data: await response.json() as any };
 }
@@ -35,6 +37,7 @@ describe("consent centre ledger and optional delivery", () => {
   });
   after(async () => {
     await db.delete(appUsersTable).where(eq(appUsersTable.clerkUserId, subject));
+    await db.delete(appUsersTable).where(eq(appUsersTable.clerkUserId, optionalSubject));
     await new Promise<void>((resolve) => server.close(() => resolve()));
     await pool.end();
   });
@@ -68,28 +71,33 @@ describe("consent centre ledger and optional delivery", () => {
       assert.equal((await request("POST", { consentType: "research_contact" })).status, 503);
     } finally { enabled = true; }
   });
-  it("skips a withdrawn optional message at send time and retains transactional mail", async () => {
-    const [user] = await db.select().from(appUsersTable).where(eq(appUsersTable.clerkUserId, subject));
-    const [optional] = await db.insert(lifecycleOutboxTable).values({
-      eventCode: "research.survey_invitation", template: "research.survey_invitation",
-      recipientUserId: user.id, locale: "en", payload: {}, status: "queued",
-    }).returning();
-    // The earlier research grant is withdrawn after queueing and before dispatch.
-    await request("POST", { consentType: "research_contact", noticeVersion: "draft-2026-09", granted: false, source: "account_settings", locale: "en" });
+  it("real product template skips without consent, sends after grant, then skips after withdrawal", async () => {
+    assert.equal((await request("GET", undefined, optionalSubject)).data.history.length, 0);
+    const enqueue = async (index: number) => enqueueProductUpdate(db, {
+      recipientClerkUserId: optionalSubject, idempotencyKey: `product-update:${optionalSubject}:${index}`,
+      locale: "en", subject: "Release notice", body: "Changes are available in your account.",
+    });
+    const first = await enqueue(1);
     let delivered = 0;
     await dispatchLifecycleOutbox({ deliver: async () => { delivered++; return { kind: "accepted" }; } });
-    const [row] = await db.select().from(lifecycleOutboxTable).where(eq(lifecycleOutboxTable.id, optional.id));
-    const attempts = await db.select().from(lifecycleDeliveryAttemptsTable).where(eq(lifecycleDeliveryAttemptsTable.outboxId, optional.id));
+    const [row] = await db.select().from(lifecycleOutboxTable).where(eq(lifecycleOutboxTable.id, first.id));
+    const attempts = await db.select().from(lifecycleDeliveryAttemptsTable).where(eq(lifecycleDeliveryAttemptsTable.outboxId, first.id));
     assert.equal(delivered, 0);
     assert.equal(row.status, "cancelled");
     assert.equal(attempts[0]?.outcome, "skipped_consent_withdrawn");
-    const [transactional] = await db.insert(lifecycleOutboxTable).values({
-      eventCode: "account.email_changed", template: "account.email_changed",
-      recipientUserId: user.id, locale: "en", payload: {},
-    }).returning();
+    await request("POST", { consentType: "product_updates", noticeVersion: "draft-2026-09", granted: true, source: "account_settings", locale: "en" }, optionalSubject);
+    const second = await enqueue(2);
+    assert.equal(renderLifecycleEmail("account.product_update", "en", {
+      subject: "Release notice", body: "Changes are available in your account.",
+    }).text, "Changes are available in your account.");
     await dispatchLifecycleOutbox({ deliver: async () => { delivered++; return { kind: "accepted" }; } });
     assert.equal(delivered, 1);
-    assert.equal((await db.select().from(lifecycleOutboxTable).where(eq(lifecycleOutboxTable.id, transactional.id)))[0]?.status, "accepted");
+    assert.equal((await db.select().from(lifecycleOutboxTable).where(eq(lifecycleOutboxTable.id, second.id)))[0]?.status, "accepted");
+    const third = await enqueue(3);
+    await request("POST", { consentType: "product_updates", noticeVersion: "draft-2026-09", granted: false, source: "account_settings", locale: "en" }, optionalSubject);
+    await dispatchLifecycleOutbox({ deliver: async () => { delivered++; return { kind: "accepted" }; } });
+    assert.equal(delivered, 1);
+    assert.equal((await db.select().from(lifecycleDeliveryAttemptsTable).where(eq(lifecycleDeliveryAttemptsTable.outboxId, third.id)))[0]?.outcome, "skipped_consent_withdrawn");
   });
   it("purges only final outbox personal data after 30 days and invokes export hook with the clock", async () => {
     const [user] = await db.select().from(appUsersTable).where(eq(appUsersTable.clerkUserId, subject));

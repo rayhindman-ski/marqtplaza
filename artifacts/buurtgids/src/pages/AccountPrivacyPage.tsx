@@ -24,6 +24,7 @@ import { useAccountAuth } from '@/lib/accountAuth';
 import { featureFlags } from '@/lib/featureFlags';
 import { accountErrorMessage, accountTranslations, formatCopy, type Language } from '@/lib/i18n';
 import { useAppLanguage } from '@/lib/useAppLanguage';
+import { isRecentAuthError, RecentAuthPrompt } from '@/lib/recentAuth';
 import { ConsentPanel } from './AccountPage';
 
 const DELETION_SCOPES: AccountDeletionScope[] = [
@@ -111,6 +112,7 @@ function RequestsPanel({ language, verified }: { language: Language; verified: b
   const queryClient = useQueryClient();
   const [acknowledged, setAcknowledged] = useState<Set<AccountDeletionScope>>(new Set());
   const [error, setError] = useState<string | null>(null);
+  const [needsRecentAuth, setNeedsRecentAuth] = useState(false);
   const [withdrawingId, setWithdrawingId] = useState<number | null>(null);
 
   const requestsQuery = useGetAccountRequests({ query: { queryKey: getGetAccountRequestsQueryKey(), retry: false } });
@@ -130,11 +132,13 @@ function RequestsPanel({ language, verified }: { language: Language; verified: b
 
   const submit = async () => {
     setError(null);
+    setNeedsRecentAuth(false);
     try {
       await createMutation.mutateAsync({ data: { acknowledgedScopes: DELETION_SCOPES } });
       setAcknowledged(new Set());
       await invalidate();
     } catch (cause) {
+      setNeedsRecentAuth(isRecentAuthError(cause));
       setError(accountErrorMessage(cause, language));
     }
   };
@@ -211,7 +215,9 @@ function RequestsPanel({ language, verified }: { language: Language; verified: b
       {!verified ? (
         <p role="status" data-testid="status-deletion-unverified" className="mt-4 text-sm font-bold text-amber-900">{copy.account.unverifiedBody}</p>
       ) : null}
-      {error ? <p role="alert" data-testid="status-deletion-error" className="mt-4 text-sm font-bold text-red-800">{error}</p> : null}
+      {error ? (needsRecentAuth
+        ? <RecentAuthPrompt language={language} returnPath="/account/privacy" />
+        : <p role="alert" data-testid="status-deletion-error" className="mt-4 text-sm font-bold text-red-800">{error}</p>) : null}
       {requestsQuery.isError ? (
         <p role="alert" data-testid="status-requests-error" className="mt-4 text-sm font-bold text-red-800">{accountErrorMessage(requestsQuery.error, language)}</p>
       ) : null}

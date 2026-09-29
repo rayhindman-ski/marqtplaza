@@ -267,3 +267,38 @@ mutations to the canonical privacy centre; adjusted the existing browser
 fixture/expectation for the new catalogue and required locale. Fixed contrast
 on the two privacy-panel eyebrows and consent eyebrow by using
 `text-foreground`. Root typecheck clean. Browser rerun remains with owner.
+
+## Phases 2–3 review remediation (2026-09-29 06:42–06:47 UTC, observed `date`)
+
+**Architect findings addressed.** Recent-authentication no longer treats JWT
+`iat` (token refresh) as an authentication event. The guard checks Clerk
+`fva[0]` age against 10 minutes; a present negative/invalid/stale `fva`
+fails closed. Only when absent, it loads the Clerk backend session by `sid`
+and checks its creation time; missing `sid`, unavailable session or stale
+session gives `401 RECENT_AUTH_REQUIRED`. Clock, claims and session loader
+remain injectable. Deletion-request *creation* now uses this guard, while
+status and withdrawal do not; the privacy UI displays the shared step-up
+prompt after the error.
+
+Legal-document PDF now downloads through jsPDF from the same versioned NL/EN
+draft source as print, including draft banner, version, unset effective date
+and sections, with simple page breaks. Print remains a separate action.
+The browser spec asserts the PDF download name and `%PDF-` signature;
+**browser tests were written, not run by this worker**. Added an actual
+`account.product_update` NL/EN template and enqueue helper, with caller-supplied
+reviewed subject/body, bounded/validated outbox variables and an explicit
+`product_updates` send-time purpose map. Integration tests queue through the
+helper: never granted → final skip, grant → provider acceptance, withdrawal →
+final skip. No invented marketing content.
+
+**Verified.** API suites: `recentAuth.test.ts` 3/3, `account.test.ts`
+17/17, `account-lifecycle.test.ts` 22/22, `account-consents.test.ts` 4/4.
+Root `pnpm run typecheck` clean. No browser launched; no commit.
+
+**Approval and Phase 6 checklist.** The privacy processing inventory and
+NL/EN legal text remain **approval pending by the user**; production/content
+acceptance depends on that approval, not on the presence of draft files or a
+working PDF. A live Clerk e-mail-change walk-through (old primary stays until
+verification; then old/new notifications and new verified primary) is
+**deferred to Phase 6** and must be recorded there. Owner must run
+`e2e/legal-documents.spec.ts` and the account privacy browser regression.

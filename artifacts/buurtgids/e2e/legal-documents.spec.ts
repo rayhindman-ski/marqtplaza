@@ -18,6 +18,19 @@ for (const { route, title, banner, date } of [
     await expect(page.getByTestId('legal-version')).toContainText('draft-2026-09');
     await expect(page.getByTestId('legal-effective-date')).toHaveText(date);
     await expect(page.getByTestId('legal-draft-banner')).toHaveText(banner);
+    const [download] = await Promise.all([
+      page.waitForEvent('download'),
+      page.getByTestId('button-legal-pdf').click(),
+    ]);
+    const documentId = route === '/voorwaarden' ? 'voorwaarden' : route === '/terms' ? 'terms'
+      : route === '/privacy' ? 'privacyverklaring' : 'privacy-notice';
+    const locale = route === '/voorwaarden' || route === '/privacy' ? 'nl' : 'en';
+    expect(download.suggestedFilename()).toBe(`buurtplaza-${documentId}-draft-2026-09-${locale}.pdf`);
+    const stream = await download.createReadStream();
+    expect(stream).not.toBeNull();
+    let prefix = '';
+    for await (const chunk of stream!) { prefix += chunk.toString('latin1'); if (prefix.length >= 5) break; }
+    expect(prefix.slice(0, 5)).toBe('%PDF-');
     await page.getByTestId('button-legal-print').click();
     expect(await page.evaluate(() => (window as any).__printCalled)).toBe(true);
     const results = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze();

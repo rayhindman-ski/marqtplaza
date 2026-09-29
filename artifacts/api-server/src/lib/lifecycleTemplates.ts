@@ -31,6 +31,8 @@ type TemplateVars = {
   role: string;
   invitationUrl: string;
   linkLifetimeDays: string;
+  subject: string;
+  body: string;
 };
 
 type Template = { subject: (v: TemplateVars) => string; body: (v: TemplateVars) => string };
@@ -68,6 +70,10 @@ function wrapEn(lines: string[]): string {
 }
 
 const TEMPLATES: Record<LifecycleEventCode, Record<LifecycleLocale, Template>> = {
+  "account.product_update": {
+    nl: { subject: (v) => v.subject, body: (v) => v.body },
+    en: { subject: (v) => v.subject, body: (v) => v.body },
+  },
   "account.email_change_requested": {
     nl: { subject: () => "Wijziging van e-mailadres aangevraagd", body: () => wrapNl(["Er is een wijziging van het e-mailadres van je account aangevraagd.", "Was jij dit niet? Neem contact op met ondersteuning."]) },
     en: { subject: () => "Email address change requested", body: () => wrapEn(["A change to your account email address was requested.", "Was this not you? Contact support."]) },
@@ -419,6 +425,8 @@ export function renderLifecycleEmail(
     role: payload.role === "owner" ? "owner" : "manager",
     invitationUrl: safeHttpsUrl(payload.invitationUrl),
     linkLifetimeDays: typeof payload.linkLifetimeDays === "number" ? String(payload.linkLifetimeDays) : "7",
+    subject: cleanText(payload.subject, "[onderwerp ontbreekt / subject missing]"),
+    body: cleanText(payload.body, "[inhoud ontbreekt / body missing]"),
   };
   const t = entry[resolvedLocale];
   return { locale: resolvedLocale, subject: t.subject(vars), text: t.body(vars) };

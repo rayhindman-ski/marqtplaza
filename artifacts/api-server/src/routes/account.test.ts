@@ -74,7 +74,7 @@ app.use(
     resolveIdentity: identityFromHeaders,
     flags: () => flags,
     accountOptions: accountOptionsSource,
-    recentAuth: { now: () => 1_800_000_000_000, claims: (req) => ({ iat: Number(req.header("x-test-iat")) }) },
+    recentAuth: { now: () => 1_800_000_000_000, claims: (req) => req.header("x-test-fva") === undefined ? {} : { fva: [Number(req.header("x-test-fva")), -1] } },
     clerkUsers: { getUser: async () => ({
       primaryEmailAddressId: "primary",
       emailAddresses: [{ id: "primary", emailAddress: primaryEmail, verification: { status: "verified" } }],
@@ -613,7 +613,7 @@ describe("account routes", () => {
     const stale = await request("/api/account/email-change/start", { method: "POST", userId });
     assert.equal(stale.status, 401);
     assert.deepEqual(stale.body, { error: "recent_authentication_required", code: "RECENT_AUTH_REQUIRED" });
-    const headers = { "x-test-iat": "1800000000" };
+    const headers = { "x-test-fva": "0" };
     primaryEmail = "old@example.test";
     const started = await request("/api/account/email-change/start", { method: "POST", userId, headers });
     assert.equal(started.status, 204);
