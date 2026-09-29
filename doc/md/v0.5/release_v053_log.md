@@ -475,3 +475,73 @@ Root typecheck clean; **no browser launched**. Owner should rerun
 - 07:43 UTC (observed `date`): closed-account guard also applied to the
   authenticated discovery-query attribution path. Final six suites 92/92,
   typecheck and diff check clean.
+
+## Phase 6 — Live identity-provider evidence (2026-09-29 07:58 UTC, observed `date`)
+
+- **OFF-011 / OFF-012:** Opt-in `accountDeletion.live.test.ts` ran against the
+  real development Clerk backend client and an isolated disposable database.
+  A newly created verified test identity had its deletion request made due;
+  the orchestrator deleted the Clerk user (subsequent `getUser` returned 404),
+  left no active sessions, anonymised and closed the app row, and completed all
+  four processor outcomes. Injected storage and mail delivery (including a
+  delivery receipt) allowed the request to complete with its category report.
+- **OFF-018:** A second Clerk user created with the *same* e-mail received a
+  different Clerk ID; the normal app provisioning function created a new
+  active row instead of reattaching the closed tombstone. Both test identities
+  were subject to finally-block provider cleanup.
+- Observed command from `artifacts/api-server`:
+  `CLERK_LIVE=1 pnpm exec tsx --test src/lib/accountDeletion.live.test.ts`;
+  **1/1 passed**, 0 failed, 0 skipped (2026-09-29 07:58:35 UTC; 4.7 seconds).
+  Root typecheck and `git diff --check` clean. No browser launched, no commit.
+- **PROF-004:** Live e-mail change was **not** exercised. Its coverage remains
+  the offline provider stub and backend-verified e-mail read, not live-provider
+  e-mail-change evidence.
+
+## Phase 6 — Hardening and release evidence (2026-09-29, closed 10:00 CEST)
+
+**Full regression (owner-run).**
+
+- API: all 27 suites run. Green except pre-existing debt unchanged from the
+  baseline: `business-publication` 26/28 (2 freshness failures, pre-existing)
+  and `listings-query.integration` 2/4 (fails identically on the v0.5.2
+  baseline commit; outbound network). `permissions.test.ts` updated for the
+  four new flags (8/8).
+- e2e (all files except the v042/v043 release specs, which are known debt):
+  discovery-regression 11/11 and usability-regression 21/21 with unchanged
+  expectations; account-*, business-*, consumer-registration,
+  credential-lifecycle, clerk-verification-recovery, saved-events-sync,
+  signup-stale-step, last-search, legal-documents — all green in four
+  batches (42 + 21 + 24 + 9). Live Clerk sign-up 1/1 against the running
+  dev server (account-regression workflow set).
+- Live identity-provider deletion evidence: see the section above
+  (`accountDeletion.live.test.ts`, 1/1).
+- Threat-model delta: `doc/md/privacy/threat-model-v053.md`.
+
+**Flag table.**
+
+| Flag | development | production |
+|---|---|---|
+| `LAST_SEARCH_ENABLED` / `VITE_…` | true | **unset (off)** |
+| `CONSENT_CENTER_ENABLED` / `VITE_…` | true | **unset (off)** |
+| `ACCOUNT_EXPORT_ENABLED` / `VITE_…` | true | **unset (off)** |
+| `ACCOUNT_DELETION_ENABLED` / `VITE_…` | true | **unset (off)** |
+
+Production enablement is a separate recorded decision by the user; nothing
+was published.
+
+**Production schema push notes.** Additive only: `account_last_search`,
+`account_exports`, `account_request_processor_outcomes`; new nullable columns
+on `account_consent_events`, `consumer_preferences`, `account_requests`,
+`app_users` (`closed_at`, e-mail-change marker, claim columns). Run the
+`doc/md/onboarding-release.md` push procedure; the preflight's numeric-format
+warning is the known false positive.
+
+**Open items for the user (acceptance prerequisites, not code gaps).**
+
+1. Approve or replace the draft Terms/privacy text and set an effective date
+   (`PRIV-004`; also `PRIV-001`–`PRIV-003` from v0.5.2).
+2. Approve `doc/md/privacy/processing-inventory.md` (`PRIV-016`).
+3. Confirm or change the provisional §15 values (Phase 0 table).
+4. Decide production flag enablement.
+5. `PROF-004`: live e-mail-change walk-through not performed (offline stub +
+   backend-verified read only).

@@ -155,3 +155,21 @@ provisional; progress lines below at each phase start and commit.
 - 07:43 UTC (observed `date`, 2026-09-29): prevented closed Clerk subjects
   from being attributed to public discovery queries; six suites 92/92 and
   root typecheck clean again. No browser or commit.
+
+### Progress — Phases 1–6
+
+- 07:25–08:05 Phase 1 built, architect review failed (race, partial restore,
+  no purge) → remediated, committed.
+- 08:05–08:40 Phase 2 built; owner fixed return-path allow-list, language
+  toggle sync, contrast budget; committed.
+- 08:40–09:05 Phase 3 built; two e2e fixes; combined architect review of
+  Phases 2–3 failed (iat-based gate, no real PDF, synthetic consent test) →
+  remediated, committed.
+- 09:05–09:25 Phase 4 built; axe scoping fix; committed.
+- 09:25–09:50 Phase 5 built; localisation/glob/regression fixes; architect
+  review of Phases 4–5 failed (sole-owner bypass, double execution, mail
+  outcome, anonymisation gaps, redaction) → remediated, committed.
+- 09:50–10:00 Phase 6: full regression, live Clerk deletion evidence,
+  threat-model delta, flag table, push.
+
+**Closed:** 2026-09-29 10:00 CEST. Total observed elapsed ≈ 2 h 45 min.
