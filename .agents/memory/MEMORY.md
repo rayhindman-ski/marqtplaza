@@ -45,3 +45,6 @@
 - [Business closure and invitation tokens](business-closure-and-invitation-tokens.md) — closed_at is terminal across publish/edit routes; HMAC per-outbox-row tokens; return paths strip `token`, browser parks it.
 - [Research survey deferral](research-survey-deferral.md) — survey only after 14 days counted from the registration row; never at sign-up; absent answers never overwrite stored ones.
 - [Business listing → profile link](business-listing-profile-link.md) — popup resolves claimed profiles lazily by (city, source, id); show a non-link placeholder until it settles.
+- [Recent-authentication gate](recent-auth-gate.md) — use Clerk `fva` (fallback session createdAt), never JWT `iat`; new step-up routes go in both return-path allow-lists.
+- [Lifecycle scheduler claims](lifecycle-scheduler-claims.md) — durable per-request claims, sole-owner recheck and e-mail snapshot before provider deletion; mail outcome only on confirmed delivery.
+- [Account e2e axe scope](account-e2e-axe-scope.md) — scope axe to the page panel; shell eyebrow/language toggle are budgeted contrast debt.
