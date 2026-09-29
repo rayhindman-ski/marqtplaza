@@ -86,7 +86,7 @@ export default function AccountPrivacyPage() {
         </div>
       ) : me ? (
         <>
-          <ConsentPanel language={language} enabled={accountsOn} verified={me.capabilities.isVerified} />
+          {featureFlags.consentCenter ? <ConsentPanel language={language} enabled={accountsOn} verified={me.capabilities.isVerified} /> : <AccountUnavailable language={language} />}
           <RequestsPanel language={language} verified={me.capabilities.isVerified} />
           <MessagesPanel language={language} />
         </>
@@ -155,7 +155,7 @@ function RequestsPanel({ language, verified }: { language: Language; verified: b
 
   return (
     <section data-testid="account-deletion-panel" className="mb-6 rounded-3xl border border-border/80 bg-card p-6 shadow-sm sm:p-8">
-      <p className="flex items-center gap-2 text-xs font-extrabold uppercase tracking-[0.16em] text-primary">
+      <p className="flex items-center gap-2 text-xs font-extrabold uppercase tracking-[0.16em] text-foreground">
         <Trash2 className="h-4 w-4" aria-hidden="true" />
         {privacy.scopesTitle}
       </p>
@@ -291,7 +291,7 @@ function MessagesPanel({ language }: { language: Language }) {
 
   return (
     <section data-testid="account-messages-panel" className="mb-6 rounded-3xl border border-border/80 bg-card p-6 shadow-sm sm:p-8">
-      <p className="flex items-center gap-2 text-xs font-extrabold uppercase tracking-[0.16em] text-primary">
+      <p className="flex items-center gap-2 text-xs font-extrabold uppercase tracking-[0.16em] text-foreground">
         <Inbox className="h-4 w-4" aria-hidden="true" />
         {privacy.messagesTitle}
       </p>

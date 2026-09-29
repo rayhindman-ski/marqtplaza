@@ -98,7 +98,10 @@ async function installAccountServer(page: Page, initial: Partial<Me> = {}): Prom
     for (const event of state.consentHistory) latest.set(event.consentType, event);
     return {
       currentNoticeVersion: 'draft-2026-09',
-      purposes: ['marketing_updates', 'research_contact'],
+      purposes: [
+        { id: 'marketing_updates', labels: { nl: 'Buurtplaza-updates (bestaande keuze)', en: 'Buurtplaza updates (existing choice)' }, descriptions: { nl: 'Buurtupdates', en: 'Neighbourhood updates' }, lawfulBasis: 'consent', noticeVersion: 'draft-2026-09', defaultGranted: false },
+        { id: 'research_contact', labels: { nl: 'Onderzoekscontact', en: 'Research contact' }, descriptions: { nl: 'Productonderzoek', en: 'Product research' }, lawfulBasis: 'consent', noticeVersion: 'draft-2026-09', defaultGranted: false },
+      ],
       current: [...latest.values()].map((event) => ({
         consentType: event.consentType,
         granted: event.granted,
@@ -463,11 +466,14 @@ test.describe('consumer account journey', () => {
     await expect(page.getByTestId('link-registration')).toBeVisible();
     await expect(page.getByTestId('consent-state-marketing_updates')).toHaveText('Not chosen yet');
 
+    await page.getByTestId('link-consent-centre').click();
+    await expect(page).toHaveURL(/\/account\/privacy$/);
     await page.getByTestId('button-consent-marketing_updates-on').click();
     await expect(page.getByTestId('consent-state-marketing_updates')).toContainText('On');
     const consent = server.requests.find((request) => request.method === 'POST' && request.path.endsWith('/consents'));
-    expect(consent?.body).toEqual({ consentType: 'marketing_updates', noticeVersion: 'draft-2026-09', granted: true, source: 'account_settings' });
+    expect(consent?.body).toEqual({ consentType: 'marketing_updates', noticeVersion: 'draft-2026-09', granted: true, source: 'account_settings', locale: 'en' });
 
+    await page.goto('/account?e2eAccountAuth=1');
     await page.getByTestId('link-edit-preferences').click();
     await expect(page).toHaveURL(/\/account\/voorkeuren$/);
   });

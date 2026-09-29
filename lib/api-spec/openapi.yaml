@@ -331,6 +331,8 @@ paths:
                 $ref: "#/components/schemas/ApiError"
         "404":
           $ref: "#/components/responses/FeatureDisabled"
+        "503":
+          $ref: "#/components/responses/FeatureDisabled"
     post:
       operationId: recordAccountConsent
       tags: [account]
@@ -372,6 +374,8 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
         "404":
+          $ref: "#/components/responses/FeatureDisabled"
+        "503":
           $ref: "#/components/responses/FeatureDisabled"
 
   /account/deletion-requests:
@@ -4237,7 +4241,7 @@ components:
         Purpose-specific consents that are asked separately from account creation and from
         the research registration. `marketing_updates`: occasional product and neighbourhood
         updates by e-mail. `research_contact`: may be contacted about product research.
-      enum: [marketing_updates, research_contact]
+      enum: [product_updates, research_contact, marketing_updates]
 
     UpdateAccountPreferencesInput:
       type: object
@@ -4270,13 +4274,15 @@ components:
     RecordAccountConsentInput:
       type: object
       additionalProperties: false
-      required: [consentType, noticeVersion, granted, source]
+      required: [consentType, noticeVersion, granted, source, locale]
       properties:
         consentType:
           $ref: "#/components/schemas/ConsentPurpose"
         noticeVersion:
           type: string
           maxLength: 80
+        locale:
+          $ref: "#/components/schemas/AccountLocale"
         granted:
           type: boolean
         source:
@@ -4308,7 +4314,7 @@ components:
           type: array
           description: All purposes that can be asked; a purpose without a current entry has never been asked.
           items:
-            $ref: "#/components/schemas/ConsentPurpose"
+            $ref: "#/components/schemas/ConsentCatalogueEntry"
         current:
           type: array
           items:
@@ -4317,6 +4323,33 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/ConsentEvent"
+
+    ConsentCatalogueEntry:
+      type: object
+      required: [id, labels, descriptions, lawfulBasis, noticeVersion, defaultGranted]
+      properties:
+        id:
+          $ref: "#/components/schemas/ConsentPurpose"
+        labels:
+          $ref: "#/components/schemas/ConsentLocalizedText"
+        descriptions:
+          $ref: "#/components/schemas/ConsentLocalizedText"
+        lawfulBasis:
+          type: string
+          enum: [consent]
+        noticeVersion:
+          type: string
+        defaultGranted:
+          type: boolean
+
+    ConsentLocalizedText:
+      type: object
+      required: [nl, en]
+      properties:
+        nl:
+          type: string
+        en:
+          type: string
 
     ConsentEvent:
       type: object
@@ -4329,6 +4362,13 @@ components:
           type: string
         noticeVersion:
           type: string
+        locale:
+          type: string
+          nullable: true
+          enum: [nl, en]
+        purposeLawfulBasis:
+          type: string
+          nullable: true
         granted:
           type: boolean
         source:

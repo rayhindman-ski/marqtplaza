@@ -141,6 +141,8 @@ export const accountConsentEventsTable = pgTable(
       .references(() => appUsersTable.id, { onDelete: "cascade" }),
     consentType: text("consent_type").notNull(),
     noticeVersion: text("notice_version").notNull(),
+    locale: text("locale"),
+    purposeLawfulBasis: text("purpose_lawful_basis"),
     granted: boolean("granted").notNull(),
     source: text("source").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

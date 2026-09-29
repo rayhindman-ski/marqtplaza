@@ -214,3 +214,56 @@ their pass status is unclaimed. No commit.
   preferences "failed save" test when run in a large combined batch (active
   language-toggle button, pre-existing element); 4/4 green when repeated in
   isolation. Not changed; watch in Phase 6.
+
+## Phase 3 — consent centre and processing inventory (2026-09-29 06:26–06:34 UTC, observed `date`)
+
+**Changed.** Added a static NL/EN catalogue for `product_updates` and
+`research_contact` (consent, default off), retaining existing
+`marketing_updates` ledger values as an explicitly labelled legacy purpose.
+The append-only ledger now stores nullable locale and lawful-basis columns for
+old-row compatibility; account GET includes catalogue metadata, per-purpose
+current state and history, while POST requires a validated locale, catalogue
+purpose and current notice version. Both routes use the effective
+`consentCenter` gate (503 when accounts are active but consent centre is
+disabled). The canonical consent UI lives on `/account/privacy`, with a link
+from account home, independent choices, bilingual withdrawal explanation and
+an unavailable card. Optional outbox templates are explicitly mapped to
+purposes and checked immediately before provider dispatch; withdrawn choices
+create a final `skipped_consent_withdrawn` attempt. Transactional/security mail
+is not gated. There is no existing survey-invitation template: the future
+`research.survey_invitation` mapping is explicit and tested with a queued row.
+
+The processing inventory is a draft covering personal-data tables, routes,
+processors and provisional retention; owner/region/basis approval remains
+pending. The hourly scheduler retains last-search expiry, scrubs payload and
+recipient-email snapshots from *final* outbox rows after 30 days, and accepts
+an injected Phase 4 export-expiry hook. Request events remain immutable audit
+rows; their future anonymisation belongs to Phase 5, and no arbitrary deletion
+period was fabricated. A static CI test scans GET query parameters for
+sensitive names (with reviewed existing registration-token and listings
+coordinate exceptions), and asserts no web analytics/telemetry emitters exist.
+OpenAPI regenerated and additive `drizzle-kit push` applied to development.
+
+**Suite results.** `account.test.ts` 17/17,
+`account-consents.test.ts` 4/4, `privacy-scan.test.ts` 2/2,
+`account-lifecycle.test.ts` 22/22; root `pnpm run typecheck` clean.
+Browser spec extended: `account-privacy.spec.ts` (consent independence,
+NL/EN, axe). Browser not launched by this worker; owner must run it and the
+frozen map/usability/account regressions. No commit.
+
+**Deviations / review.** The preflight reports an already-documented
+`numeric(6,3)` versus `numeric(6, 3)` formatting false-positive for last
+search; direct non-force `pnpm run push` succeeded with additive columns only.
+Existing `marketing_updates` remains a separate legacy purpose rather than
+silently rewriting old decisions. Exact processor hosting regions, legal
+bases, audit duration and inventory approval await the product owner. Export
+expiry cannot execute until Phase 4 registers its hook. Phase 3 architect
+review remains for the owner.
+
+**Owner browser follow-up (2026-09-29 06:37 UTC, observed `date`).** Owner
+reported 27/29 browser checks passing. Restored a read-only consent state
+summary on account home, preserving `consent-state-*` test IDs while linking
+mutations to the canonical privacy centre; adjusted the existing browser
+fixture/expectation for the new catalogue and required locale. Fixed contrast
+on the two privacy-panel eyebrows and consent eyebrow by using
+`text-foreground`. Root typecheck clean. Browser rerun remains with owner.

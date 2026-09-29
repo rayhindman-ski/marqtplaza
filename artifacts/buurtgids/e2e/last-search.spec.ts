@@ -44,7 +44,7 @@ test('captured search stays private, restores public URL and clears authoritativ
       ],
       interests: [{ id: 'category:retail-and-shopping', label: { nl: 'Winkelen', en: 'Retail & Shopping' } }],
     });
-    if (path.endsWith('/consents')) return json({ currentNoticeVersion: 'draft-2026-09', purposes: ['marketing_updates', 'research_contact'], current: [], history: [] });
+    if (path.endsWith('/consents')) return json({ currentNoticeVersion: 'draft-2026-09', purposes: [], current: [], history: [] });
     if (req.method() === 'PUT') {
       const body = req.postDataJSON() as Record<string, unknown>;
       puts.push(body);

@@ -15,6 +15,7 @@ export type ConsentPurpose = typeof ConsentPurpose[keyof typeof ConsentPurpose];
 
 
 export const ConsentPurpose = {
-  marketing_updates: 'marketing_updates',
+  product_updates: 'product_updates',
   research_contact: 'research_contact',
+  marketing_updates: 'marketing_updates',
 } as const;

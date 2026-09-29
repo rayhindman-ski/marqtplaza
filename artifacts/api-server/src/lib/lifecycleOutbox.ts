@@ -9,6 +9,7 @@ import {
 } from "@workspace/db";
 
 import { createEmailDeliveryLoader, createResendTransport } from "./lifecycleEmailProvider";
+import { hasActiveConsent, type OptionalConsentPurpose } from "./consentPurposes";
 import { logger } from "./logger";
 
 /**
@@ -307,6 +308,12 @@ export type DeliveryResult =
 
 export type LifecycleDeliveryLoader = (message: OutboundLifecycleMessage) => Promise<DeliveryResult>;
 
+/** Only explicitly mapped optional campaigns need consent; security and transactional mail does not. */
+export const OPTIONAL_TEMPLATE_PURPOSES: Readonly<Record<string, OptionalConsentPurpose>> = {
+  "research.survey_invitation": "research_contact",
+  "product.updates": "product_updates",
+};
+
 let notConfiguredLogged = false;
 
 /** Default loader: logs `lifecycle_provider_not_configured` once and leaves rows queued. */
@@ -487,6 +494,22 @@ export async function dispatchLifecycleOutbox(options: DispatchOptions = {}): Pr
     }
     const attempt = row.attempts + 1;
     const attemptStartedAt = now();
+    const optionalPurpose = OPTIONAL_TEMPLATE_PURPOSES[row.template];
+    if (optionalPurpose && (!row.recipientUserId || !await hasActiveConsent(db, row.recipientUserId, optionalPurpose))) {
+      await db.transaction(async (tx) => {
+        const [updated] = await tx.update(lifecycleOutboxTable)
+          .set({ status: "cancelled", attempts: attempt, claimedAt: null, cancelledAt: now(),
+            lastErrorCode: "skipped_consent_withdrawn", lastErrorAt: now() })
+          .where(and(eq(lifecycleOutboxTable.id, row.id), eq(lifecycleOutboxTable.status, "sending")))
+          .returning({ id: lifecycleOutboxTable.id });
+        if (updated) await tx.insert(lifecycleDeliveryAttemptsTable).values({
+          outboxId: row.id, attempt, outcome: "skipped_consent_withdrawn",
+          startedAt: attemptStartedAt, finishedAt: now(),
+        });
+      });
+      summary.skipped += 1;
+      continue;
+    }
     let result: DeliveryResult;
     try {
       result = await deliver({

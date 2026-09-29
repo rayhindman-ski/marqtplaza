@@ -221,7 +221,7 @@ export default function AccountPage() {
               ) : null}
             </section>
           ) : null}
-          {me ? <ConsentPanel language={language} enabled={accountsOn} verified={me.capabilities.isVerified} /> : null}
+          {me ? <ConsentSummary language={language} enabled={accountsOn && featureFlags.consentCenter} /> : null}
           {featureFlags.businessOnboarding ? (
             <section data-testid="account-business-panel" className="mb-6 rounded-3xl border border-border/80 bg-card p-6 shadow-sm sm:p-8">
               <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -412,10 +412,28 @@ function ScopeItem({ icon, title, body, testId }: { icon: React.ReactNode; title
   );
 }
 
-const PURPOSE_COPY_KEY: Record<ConsentPurpose, 'consentPurposeMarketing' | 'consentPurposeResearch'> = {
-  marketing_updates: 'consentPurposeMarketing',
-  research_contact: 'consentPurposeResearch',
-};
+function ConsentSummary({ language, enabled }: { language: Language; enabled: boolean }) {
+  const copy = accountTranslations[language].account;
+  const consents = useGetAccountConsents({
+    query: { enabled, queryKey: getGetAccountConsentsQueryKey(), retry: false },
+  });
+  return (
+    <section data-testid="account-consent-summary" className="mb-6 rounded-3xl border border-border/80 bg-card p-6 shadow-sm sm:p-8">
+      <Link href="/account/privacy" data-testid="link-consent-centre" className="font-bold text-primary underline">{copy.consentsTitle}</Link>
+      {!enabled ? <AccountUnavailable language={language} /> : null}
+      {consents.data?.purposes.map((entry) => {
+        const current = consents.data.current.find((state) => state.consentType === entry.id);
+        return (
+          <p key={entry.id} className="mt-2 text-sm text-muted-foreground">
+            {entry.labels[language]}: <span data-testid={`consent-state-${entry.id}`}>
+              {current ? (current.granted ? copy.consentGranted : copy.consentWithdrawn) : copy.consentNeverAsked}
+            </span>
+          </p>
+        );
+      })}
+    </section>
+  );
+}
 
 export function ConsentPanel({ language, enabled, verified }: { language: Language; enabled: boolean; verified: boolean }) {
   const copy = accountTranslations[language].account;
@@ -435,7 +453,7 @@ export function ConsentPanel({ language, enabled, verified }: { language: Langua
     setPendingPurpose(purpose);
     try {
       const next = await record.mutateAsync({
-        data: { consentType: purpose, noticeVersion: consents.currentNoticeVersion, granted, source: 'account_settings' },
+        data: { consentType: purpose, noticeVersion: consents.currentNoticeVersion, granted, source: 'account_settings', locale: language },
       });
       queryClient.setQueryData<AccountConsents>(getGetAccountConsentsQueryKey(), next);
     } catch (failure) {
@@ -447,11 +465,12 @@ export function ConsentPanel({ language, enabled, verified }: { language: Langua
 
   return (
     <section data-testid="account-consents-panel" className="mb-6 rounded-3xl border border-border/80 bg-card p-6 shadow-sm sm:p-8">
-      <p className="flex items-center gap-2 text-xs font-extrabold uppercase tracking-[0.16em] text-primary">
+      <p className="flex items-center gap-2 text-xs font-extrabold uppercase tracking-[0.16em] text-foreground">
         <Mail className="h-4 w-4" aria-hidden="true" />
         {copy.consentsTitle}
       </p>
       <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">{copy.consentIntro}</p>
+      <p data-testid="consent-withdrawal-explanation" className="mt-2 text-sm leading-6 text-muted-foreground">{copy.consentWithdrawalExplanation}</p>
       {consentsQuery.isError ? (
         <p role="alert" data-testid="status-consents-error" className="mt-4 text-sm font-bold text-red-800">{accountErrorMessage(consentsQuery.error, language)}</p>
       ) : null}
@@ -459,19 +478,21 @@ export function ConsentPanel({ language, enabled, verified }: { language: Langua
       {consents ? (
         <>
           <ul className="mt-5 divide-y divide-border/70">
-            {consents.purposes.map((purpose) => {
+            {consents.purposes.map((entry) => {
+              const purpose = entry.id;
               const state = consents.current.find((item) => item.consentType === purpose);
               const busy = pendingPurpose === purpose;
               return (
                 <li key={purpose} data-testid={`consent-${purpose}`} className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
                   <div>
-                    <p className="text-sm font-bold text-foreground">{copy[PURPOSE_COPY_KEY[purpose]]}</p>
+                    <p className="text-sm font-bold text-foreground">{entry.labels[language]}</p>
+                    <p className="text-xs text-muted-foreground">{entry.descriptions[language]}</p>
                     <p data-testid={`consent-state-${purpose}`} className="mt-1 text-xs text-muted-foreground">
                       {busy ? copy.consentSaving : state ? (state.granted ? copy.consentGranted : copy.consentWithdrawn) : copy.consentNeverAsked}
                       {state ? ` · ${new Date(state.recordedAt).toLocaleDateString(language === 'nl' ? 'nl-NL' : 'en-GB')}` : ''}
                     </p>
                   </div>
-                  <div role="group" aria-label={copy[PURPOSE_COPY_KEY[purpose]]} className="inline-flex rounded-full border border-border p-1 text-xs font-bold">
+                  <div role="group" aria-label={entry.labels[language]} className="inline-flex rounded-full border border-border p-1 text-xs font-bold">
                     <button
                       type="button"
                       data-testid={`button-consent-${purpose}-on`}

@@ -42,7 +42,7 @@ const users = {
 };
 const allUserIds = Object.values(users);
 
-let flags = { accounts: true, businessIntake: false, businessPublication: false, consumerRegistration: false, businessOnboarding: false };
+let flags = { accounts: true, consentCenter: true, businessIntake: false, businessPublication: false, consumerRegistration: false, businessOnboarding: false };
 // The routes read the taxonomy through this source on every request, so a
 // test can roll out a new version exactly the way a deploy would: the served
 // option lists change while stored preference rows are left untouched.
@@ -92,6 +92,9 @@ async function request(
   init: RequestInit & { userId?: string | null } = {},
 ): Promise<{ status: number; body: any }> {
   const { userId = users.plain, headers, ...rest } = init;
+  if (path === "/api/account/consents" && rest.method === "POST" && typeof rest.body === "string") {
+    rest.body = JSON.stringify({ ...JSON.parse(rest.body), locale: "nl" });
+  }
   const result = await fetch(`${baseUrl}${path}`, {
     ...rest,
     headers: {
@@ -129,10 +132,10 @@ describe("account routes", () => {
   });
 
   it("reports readiness gates and hides account routes while accounts are disabled", async () => {
-    flags = { accounts: false, businessIntake: false, businessPublication: false, consumerRegistration: false, businessOnboarding: false };
+    flags = { accounts: false, consentCenter: false, businessIntake: false, businessPublication: false, consumerRegistration: false, businessOnboarding: false };
     const readiness = await request("/api/readiness", { userId: null });
     assert.equal(readiness.status, 200);
-    assert.deepEqual(readiness.body, flags);
+    assert.deepEqual(readiness.body, { accounts: false, businessIntake: false, businessPublication: false, consumerRegistration: false, businessOnboarding: false });
 
     const me = await request("/api/account/me");
     assert.equal(me.status, 404);
@@ -144,7 +147,7 @@ describe("account routes", () => {
 
     const [row] = await db.select().from(appUsersTable).where(eq(appUsersTable.clerkUserId, users.plain));
     assert.equal(row, undefined, "a disabled gate must not provision accounts");
-    flags = { accounts: true, businessIntake: false, businessPublication: false, consumerRegistration: false, businessOnboarding: false };
+    flags = { accounts: true, consentCenter: true, businessIntake: false, businessPublication: false, consumerRegistration: false, businessOnboarding: false };
   });
 
   it("requires authentication with the stable error shape", async () => {
@@ -556,7 +559,7 @@ describe("account routes", () => {
   it("records purpose-specific consents append-only against the current notice version", async () => {
     const before = await request("/api/account/consents", { userId: users.saver });
     assert.equal(before.status, 200);
-    assert.deepEqual(before.body.purposes, ["marketing_updates", "research_contact"]);
+    assert.deepEqual(before.body.purposes.map((purpose: any) => purpose.id), ["product_updates", "research_contact", "marketing_updates"]);
     assert.deepEqual(before.body.current, []);
     const noticeVersion = before.body.currentNoticeVersion;
 
@@ -683,7 +686,7 @@ describe("account routes", () => {
     });
     assert.deepEqual(
       research.body.current.map((s: any) => [s.consentType, s.granted]),
-      [["marketing_updates", false], ["research_contact", true]],
+      [["research_contact", true], ["marketing_updates", false]],
     );
   });
 });

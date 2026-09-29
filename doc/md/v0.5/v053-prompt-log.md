@@ -86,3 +86,15 @@ provisional; progress lines below at each phase start and commit.
   Root typecheck clean, i18n 13/13; owner must run Playwright (its server startup is
   outside this subagent's execution scope). Content acceptance still awaits
   approved legal copy/effective date. No commit.
+- 06:26 UTC (observed `date`, 2026-09-29): Phase 3 delegated — consent catalogue,
+  locale/basis ledger, privacy UI, send-time outbox guard, inventory, retention,
+  telemetry scan, tests. Discovery and browser launch forbidden.
+- 06:34 UTC (observed `date`, 2026-09-29): implementation complete; API suites
+  account 17/17, account-consents 4/4, privacy-scan 2/2, lifecycle 22/22,
+  root typecheck clean. Additive push applied; numeric formatting preflight
+  false-positive documented. Owner to run Playwright and review draft inventory
+  and legacy-purpose policy. No commit.
+- 06:37 UTC (observed `date`, 2026-09-29): owner reported 27/29 browser checks
+  green; repaired read-only account consent summary and privacy-panel eyebrow
+  contrast. Updated existing browser mock for canonical centre and locale.
+  Root typecheck clean; owner to rerun browsers, not launched by worker.

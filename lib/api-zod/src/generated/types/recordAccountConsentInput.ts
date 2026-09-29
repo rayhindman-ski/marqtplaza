@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { AccountLocale } from './accountLocale';
 import type { ConsentPurpose } from './consentPurpose';
 import type { RecordAccountConsentInputSource } from './recordAccountConsentInputSource';
 
@@ -12,6 +13,7 @@ export interface RecordAccountConsentInput {
   consentType: ConsentPurpose;
   /** @maxLength 80 */
   noticeVersion: string;
+  locale: AccountLocale;
   granted: boolean;
   /** Where the user made the choice; support and system entries are never accepted from clients. */
   source: RecordAccountConsentInputSource;

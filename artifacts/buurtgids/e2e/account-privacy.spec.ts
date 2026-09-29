@@ -1,3 +1,4 @@
+import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page, type Route } from '@playwright/test';
 
 type Recorded = { method: string; path: string; body: unknown };
@@ -47,10 +48,10 @@ const me = (verified = true) => ({
   createdAt: '2026-09-01T00:00:00.000Z',
 });
 
-type FakeServer = { requests: Recorded[]; accountRequests: AccountRequest[]; messages: Message[]; soleOwnerBlock: boolean };
+type FakeServer = { requests: Recorded[]; accountRequests: AccountRequest[]; messages: Message[]; soleOwnerBlock: boolean; consents: Array<{ consentType: string; granted: boolean; noticeVersion: string; recordedAt: string }>; history: unknown[] };
 
 async function installServer(page: Page, options: { verified?: boolean; soleOwnerBlock?: boolean; messages?: Message[] } = {}): Promise<FakeServer> {
-  const state: FakeServer = { requests: [], accountRequests: [], messages: options.messages ?? [], soleOwnerBlock: options.soleOwnerBlock ?? false };
+  const state: FakeServer = { requests: [], accountRequests: [], messages: options.messages ?? [], soleOwnerBlock: options.soleOwnerBlock ?? false, consents: [], history: [] };
   const json = (route: Route, body: unknown, status = 200) =>
     route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
 
@@ -63,7 +64,16 @@ async function installServer(page: Page, options: { verified?: boolean; soleOwne
     }
     if (path.endsWith('/account/me')) return json(route, me(options.verified ?? true));
     if (path.endsWith('/account/consents')) {
-      return json(route, { currentNoticeVersion: 'draft-2026-09', purposes: ['marketing_updates', 'research_contact'], current: [], history: [] });
+      if (request.method() === 'POST') {
+        const body = request.postDataJSON();
+        state.consents = state.consents.filter((item) => item.consentType !== body.consentType);
+        state.consents.push({ consentType: body.consentType, granted: body.granted, noticeVersion: body.noticeVersion, recordedAt: new Date().toISOString() });
+        state.history.push({ id: state.history.length + 1, ...body, purposeLawfulBasis: 'consent', createdAt: new Date().toISOString() });
+      }
+      return json(route, { currentNoticeVersion: 'draft-2026-09', purposes: [
+        { id: 'product_updates', labels: { nl: 'Productupdates', en: 'Product updates' }, descriptions: { nl: 'Buurtupdates', en: 'Neighbourhood updates' }, lawfulBasis: 'consent', noticeVersion: 'draft-2026-09', defaultGranted: false },
+        { id: 'research_contact', labels: { nl: 'Onderzoekscontact', en: 'Research contact' }, descriptions: { nl: 'Productonderzoek', en: 'Product research' }, lawfulBasis: 'consent', noticeVersion: 'draft-2026-09', defaultGranted: false },
+      ], current: state.consents, history: state.history });
     }
     if (path.endsWith('/account/messages')) return json(route, { messages: state.messages });
     if (path.endsWith('/account/requests')) return json(route, { requests: state.accountRequests });
@@ -132,6 +142,29 @@ async function signIn(page: Page, userId = 'user-e2e') {
 const SCOPES = ['account_profile', 'preferences', 'consents', 'saved_events', 'business_memberships'];
 
 test.describe('account privacy and deletion', () => {
+  test('consent choices are independent, withdrawal copy is bilingual and accessible', async ({ page }) => {
+    await signIn(page);
+    const server = await installServer(page);
+    await page.goto('/account/privacy?e2eAccountAuth=1');
+    await expect(page.getByTestId('account-consents-panel')).toBeVisible();
+    await page.getByTestId('button-language-nl').click();
+    await expect(page.getByTestId('consent-withdrawal-explanation')).toContainText('Eerdere rechtmatige verwerking blijft geldig');
+    await page.getByTestId('button-consent-product_updates-on').click();
+    await page.getByTestId('button-consent-research_contact-on').click();
+    await page.getByTestId('button-consent-product_updates-off').click();
+    await expect(page.getByTestId('consent-state-product_updates')).toContainText('Uit');
+    await expect(page.getByTestId('consent-state-research_contact')).toContainText('Aan');
+    expect(server.requests.filter((entry) => entry.method === 'POST' && entry.path.endsWith('/account/consents')).map((entry) => entry.body))
+      .toEqual([
+        { consentType: 'product_updates', granted: true, noticeVersion: 'draft-2026-09', source: 'account_settings', locale: 'nl' },
+        { consentType: 'research_contact', granted: true, noticeVersion: 'draft-2026-09', source: 'account_settings', locale: 'nl' },
+        { consentType: 'product_updates', granted: false, noticeVersion: 'draft-2026-09', source: 'account_settings', locale: 'nl' },
+      ]);
+    await page.getByTestId('button-language-en').click();
+    await expect(page.getByTestId('consent-withdrawal-explanation')).toContainText('does not invalidate earlier lawful processing');
+    const accessibility = await new AxeBuilder({ page }).include('[data-testid="account-consents-panel"]').withTags(['wcag2a', 'wcag2aa']).analyze();
+    expect(accessibility.violations).toEqual([]);
+  });
   test('requires every scope acknowledgement, files the request, and tracks it truthfully', async ({ page }) => {
     await signIn(page);
     const server = await installServer(page, {

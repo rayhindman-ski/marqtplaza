@@ -406,9 +406,22 @@ export const CompleteAccountOnboardingResponse = zod.object({
  */
 export const GetAccountConsentsResponse = zod.object({
   "currentNoticeVersion": zod.string().describe('Version of the consent notice text the client must show before recording a choice.'),
-  "purposes": zod.array(zod.enum(['marketing_updates', 'research_contact']).describe('Purpose-specific consents that are asked separately from account creation and from\nthe research registration. `marketing_updates`: occasional product and neighbourhood\nupdates by e-mail. `research_contact`: may be contacted about product research.\n')).describe('All purposes that can be asked; a purpose without a current entry has never been asked.'),
+  "purposes": zod.array(zod.object({
+  "id": zod.enum(['product_updates', 'research_contact', 'marketing_updates']).describe('Purpose-specific consents that are asked separately from account creation and from\nthe research registration. `marketing_updates`: occasional product and neighbourhood\nupdates by e-mail. `research_contact`: may be contacted about product research.\n'),
+  "labels": zod.object({
+  "nl": zod.string(),
+  "en": zod.string()
+}),
+  "descriptions": zod.object({
+  "nl": zod.string(),
+  "en": zod.string()
+}),
+  "lawfulBasis": zod.enum(['consent']),
+  "noticeVersion": zod.string(),
+  "defaultGranted": zod.boolean()
+})).describe('All purposes that can be asked; a purpose without a current entry has never been asked.'),
   "current": zod.array(zod.object({
-  "consentType": zod.enum(['marketing_updates', 'research_contact']).describe('Purpose-specific consents that are asked separately from account creation and from\nthe research registration. `marketing_updates`: occasional product and neighbourhood\nupdates by e-mail. `research_contact`: may be contacted about product research.\n'),
+  "consentType": zod.enum(['product_updates', 'research_contact', 'marketing_updates']).describe('Purpose-specific consents that are asked separately from account creation and from\nthe research registration. `marketing_updates`: occasional product and neighbourhood\nupdates by e-mail. `research_contact`: may be contacted about product research.\n'),
   "granted": zod.boolean(),
   "noticeVersion": zod.string(),
   "recordedAt": zod.string()
@@ -417,6 +430,8 @@ export const GetAccountConsentsResponse = zod.object({
   "id": zod.number(),
   "consentType": zod.string(),
   "noticeVersion": zod.string(),
+  "locale": zod.enum(['nl', 'en']).nullish(),
+  "purposeLawfulBasis": zod.string().nullish(),
   "granted": zod.boolean(),
   "source": zod.enum(['onboarding', 'account_settings', 'support', 'system']),
   "createdAt": zod.string()
@@ -436,17 +451,31 @@ export const recordAccountConsentBodyNoticeVersionMax = 80;
 
 
 export const RecordAccountConsentBody = zod.object({
-  "consentType": zod.enum(['marketing_updates', 'research_contact']).describe('Purpose-specific consents that are asked separately from account creation and from\nthe research registration. `marketing_updates`: occasional product and neighbourhood\nupdates by e-mail. `research_contact`: may be contacted about product research.\n'),
+  "consentType": zod.enum(['product_updates', 'research_contact', 'marketing_updates']).describe('Purpose-specific consents that are asked separately from account creation and from\nthe research registration. `marketing_updates`: occasional product and neighbourhood\nupdates by e-mail. `research_contact`: may be contacted about product research.\n'),
   "noticeVersion": zod.string().max(recordAccountConsentBodyNoticeVersionMax),
+  "locale": zod.enum(['nl', 'en']),
   "granted": zod.boolean(),
   "source": zod.enum(['onboarding', 'account_settings']).describe('Where the user made the choice; support and system entries are never accepted from clients.')
 })
 
 export const RecordAccountConsentResponse = zod.object({
   "currentNoticeVersion": zod.string().describe('Version of the consent notice text the client must show before recording a choice.'),
-  "purposes": zod.array(zod.enum(['marketing_updates', 'research_contact']).describe('Purpose-specific consents that are asked separately from account creation and from\nthe research registration. `marketing_updates`: occasional product and neighbourhood\nupdates by e-mail. `research_contact`: may be contacted about product research.\n')).describe('All purposes that can be asked; a purpose without a current entry has never been asked.'),
+  "purposes": zod.array(zod.object({
+  "id": zod.enum(['product_updates', 'research_contact', 'marketing_updates']).describe('Purpose-specific consents that are asked separately from account creation and from\nthe research registration. `marketing_updates`: occasional product and neighbourhood\nupdates by e-mail. `research_contact`: may be contacted about product research.\n'),
+  "labels": zod.object({
+  "nl": zod.string(),
+  "en": zod.string()
+}),
+  "descriptions": zod.object({
+  "nl": zod.string(),
+  "en": zod.string()
+}),
+  "lawfulBasis": zod.enum(['consent']),
+  "noticeVersion": zod.string(),
+  "defaultGranted": zod.boolean()
+})).describe('All purposes that can be asked; a purpose without a current entry has never been asked.'),
   "current": zod.array(zod.object({
-  "consentType": zod.enum(['marketing_updates', 'research_contact']).describe('Purpose-specific consents that are asked separately from account creation and from\nthe research registration. `marketing_updates`: occasional product and neighbourhood\nupdates by e-mail. `research_contact`: may be contacted about product research.\n'),
+  "consentType": zod.enum(['product_updates', 'research_contact', 'marketing_updates']).describe('Purpose-specific consents that are asked separately from account creation and from\nthe research registration. `marketing_updates`: occasional product and neighbourhood\nupdates by e-mail. `research_contact`: may be contacted about product research.\n'),
   "granted": zod.boolean(),
   "noticeVersion": zod.string(),
   "recordedAt": zod.string()
@@ -455,6 +484,8 @@ export const RecordAccountConsentResponse = zod.object({
   "id": zod.number(),
   "consentType": zod.string(),
   "noticeVersion": zod.string(),
+  "locale": zod.enum(['nl', 'en']).nullish(),
+  "purposeLawfulBasis": zod.string().nullish(),
   "granted": zod.boolean(),
   "source": zod.enum(['onboarding', 'account_settings', 'support', 'system']),
   "createdAt": zod.string()

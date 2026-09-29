@@ -27,7 +27,8 @@ import {
 } from "@workspace/api-zod";
 
 import { getAccountOptions, type AccountOptionsSource } from "../lib/accountOptions";
-import { sendApiError, unknownFieldErrors } from "../lib/apiError";
+import { buildApiError, correlationIdFor, sendApiError, unknownFieldErrors } from "../lib/apiError";
+import { CONSENT_CATALOGUE, CONSENT_NOTICE_VERSION, consentPurpose } from "../lib/consentPurposes";
 import { listBusinessesForUser } from "../lib/businessMembership";
 import { getFeatureFlags, type FeatureFlagSource } from "../lib/featureFlags";
 import { enqueueLifecycleMessage } from "../lib/lifecycleOutbox";
@@ -74,6 +75,7 @@ const CONSENT_FIELDS: ReadonlySet<string> = new Set([
   "noticeVersion",
   "granted",
   "source",
+  "locale",
 ]);
 
 /**
@@ -82,8 +84,8 @@ const CONSENT_FIELDS: ReadonlySet<string> = new Set([
  * must echo the version they displayed so a choice is never recorded against
  * text the user has not seen.
  */
-export const CONSENT_NOTICE_VERSION = "draft-2026-09";
-export const CONSENT_PURPOSES: readonly ConsentPurpose[] = ["marketing_updates", "research_contact"];
+export { CONSENT_NOTICE_VERSION } from "../lib/consentPurposes";
+export const CONSENT_PURPOSES: readonly ConsentPurpose[] = CONSENT_CATALOGUE.map((purpose) => purpose.id);
 
 function rejectClientFields(
   req: Request,
@@ -125,6 +127,8 @@ function serialiseConsentEvent(event: AccountConsentEvent) {
     id: event.id,
     consentType: event.consentType,
     noticeVersion: event.noticeVersion,
+    locale: event.locale,
+    purposeLawfulBasis: event.purposeLawfulBasis,
     granted: event.granted,
     source: event.source as "onboarding" | "account_settings" | "support" | "system",
     createdAt: event.createdAt.toISOString(),
@@ -157,7 +161,8 @@ async function buildAccountConsents(userId: number) {
   const history = [...newestFirst].reverse();
   return {
     currentNoticeVersion: CONSENT_NOTICE_VERSION,
-    purposes: [...CONSENT_PURPOSES],
+    purposes: CONSENT_CATALOGUE.map(({ id, labels, descriptions, lawfulBasis, noticeVersion, defaultGranted }) =>
+      ({ id, labels, descriptions, lawfulBasis, noticeVersion, defaultGranted })),
     current: CONSENT_PURPOSES.flatMap((purpose) => {
       const event = latest.get(purpose);
       if (!event) return [];
@@ -239,6 +244,13 @@ export async function buildAccountMe(
 
 export function createAccountRouter(options: AccountRouterOptions = {}): IRouter {
   const flags = options.flags ?? getFeatureFlags;
+  const requireConsentCenter = (req: Request, res: Response, next: () => void): void => {
+    if (!flags().consentCenter) {
+      res.status(503).json(buildApiError("FEATURE_DISABLED", correlationIdFor(req)));
+      return;
+    }
+    next();
+  };
   const accountOptions = options.accountOptions ?? getAccountOptions;
   const isKnownNeighborhoodId = (id: string): boolean =>
     accountOptions().neighborhoods.some((option) => option.id === id);
@@ -506,12 +518,12 @@ export function createAccountRouter(options: AccountRouterOptions = {}): IRouter
     res.json(CompleteAccountOnboardingResponse.parse(me));
   });
 
-  router.get("/account/consents", async (req, res): Promise<void> => {
+  router.get("/account/consents", requireConsentCenter, async (req, res): Promise<void> => {
     if (rejectClientFields(req, res)) return;
     res.json(GetAccountConsentsResponse.parse(await buildAccountConsents(req.account!.user.id)));
   });
 
-  router.post("/account/consents", async (req, res): Promise<void> => {
+  router.post("/account/consents", requireConsentCenter, async (req, res): Promise<void> => {
     if (rejectClientFields(req, res, CONSENT_FIELDS)) return;
     if (rejectUnverified(req, res)) return;
     const account = req.account!;
@@ -525,6 +537,11 @@ export function createAccountRouter(options: AccountRouterOptions = {}): IRouter
       });
       return;
     }
+    const purpose = consentPurpose(parsed.data.consentType);
+    if (!purpose) {
+      sendApiError(req, res, "VALIDATION_FAILED", { fieldErrors: [{ field: "consentType", code: "unknown_purpose" }] });
+      return;
+    }
     if (parsed.data.noticeVersion !== CONSENT_NOTICE_VERSION) {
       sendApiError(req, res, "VALIDATION_FAILED", {
         fieldErrors: [{ field: "noticeVersion", code: "stale_notice_version" }],
@@ -535,6 +552,8 @@ export function createAccountRouter(options: AccountRouterOptions = {}): IRouter
       userId: account.user.id,
       consentType: parsed.data.consentType,
       noticeVersion: parsed.data.noticeVersion,
+      locale: parsed.data.locale,
+      purposeLawfulBasis: purpose.lawfulBasis,
       granted: parsed.data.granted,
       source: parsed.data.source,
     });

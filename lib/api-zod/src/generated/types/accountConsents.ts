@@ -5,15 +5,15 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { ConsentCatalogueEntry } from './consentCatalogueEntry';
 import type { ConsentEvent } from './consentEvent';
-import type { ConsentPurpose } from './consentPurpose';
 import type { ConsentState } from './consentState';
 
 export interface AccountConsents {
   /** Version of the consent notice text the client must show before recording a choice. */
   currentNoticeVersion: string;
   /** All purposes that can be asked; a purpose without a current entry has never been asked. */
-  purposes: ConsentPurpose[];
+  purposes: ConsentCatalogueEntry[];
   current: ConsentState[];
   history: ConsentEvent[];
 }

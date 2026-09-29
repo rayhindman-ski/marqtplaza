@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { ConsentEventLocale } from './consentEventLocale';
 import type { ConsentEventSource } from './consentEventSource';
 
 /**
@@ -14,6 +15,8 @@ export interface ConsentEvent {
   id: number;
   consentType: string;
   noticeVersion: string;
+  locale?: ConsentEventLocale;
+  purposeLawfulBasis?: string | null;
   granted: boolean;
   source: ConsentEventSource;
   createdAt: string;

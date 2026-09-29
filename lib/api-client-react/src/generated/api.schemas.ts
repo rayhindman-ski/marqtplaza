@@ -829,8 +829,9 @@ export type ConsentPurpose = typeof ConsentPurpose[keyof typeof ConsentPurpose];
 
 
 export const ConsentPurpose = {
-  marketing_updates: 'marketing_updates',
+  product_updates: 'product_updates',
   research_contact: 'research_contact',
+  marketing_updates: 'marketing_updates',
 } as const;
 
 export interface UpdateAccountPreferencesInput {
@@ -869,6 +870,7 @@ export interface RecordAccountConsentInput {
   consentType: ConsentPurpose;
   /** @maxLength 80 */
   noticeVersion: string;
+  locale: AccountLocale;
   granted: boolean;
   /** Where the user made the choice; support and system entries are never accepted from clients. */
   source: RecordAccountConsentInputSource;
@@ -880,6 +882,35 @@ export interface ConsentState {
   noticeVersion: string;
   recordedAt: string;
 }
+
+export interface ConsentLocalizedText {
+  nl: string;
+  en: string;
+}
+
+export type ConsentCatalogueEntryLawfulBasis = typeof ConsentCatalogueEntryLawfulBasis[keyof typeof ConsentCatalogueEntryLawfulBasis];
+
+
+export const ConsentCatalogueEntryLawfulBasis = {
+  consent: 'consent',
+} as const;
+
+export interface ConsentCatalogueEntry {
+  id: ConsentPurpose;
+  labels: ConsentLocalizedText;
+  descriptions: ConsentLocalizedText;
+  lawfulBasis: ConsentCatalogueEntryLawfulBasis;
+  noticeVersion: string;
+  defaultGranted: boolean;
+}
+
+export type ConsentEventLocale = typeof ConsentEventLocale[keyof typeof ConsentEventLocale] | null;
+
+
+export const ConsentEventLocale = {
+  nl: 'nl',
+  en: 'en',
+} as const;
 
 export type ConsentEventSource = typeof ConsentEventSource[keyof typeof ConsentEventSource];
 
@@ -898,6 +929,8 @@ export interface ConsentEvent {
   id: number;
   consentType: string;
   noticeVersion: string;
+  locale?: ConsentEventLocale;
+  purposeLawfulBasis?: string | null;
   granted: boolean;
   source: ConsentEventSource;
   createdAt: string;
@@ -907,7 +940,7 @@ export interface AccountConsents {
   /** Version of the consent notice text the client must show before recording a choice. */
   currentNoticeVersion: string;
   /** All purposes that can be asked; a purpose without a current entry has never been asked. */
-  purposes: ConsentPurpose[];
+  purposes: ConsentCatalogueEntry[];
   current: ConsentState[];
   history: ConsentEvent[];
 }

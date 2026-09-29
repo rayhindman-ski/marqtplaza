@@ -126,6 +126,7 @@ export const DELIVERY_ATTEMPT_OUTCOMES = [
   "accepted",
   "transient_failure",
   "permanent_failure",
+  "skipped_consent_withdrawn",
 ] as const;
 export type DeliveryAttemptOutcome = (typeof DELIVERY_ATTEMPT_OUTCOMES)[number];
 
