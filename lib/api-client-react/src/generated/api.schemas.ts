@@ -670,6 +670,7 @@ export interface AccountCapabilities {
  */
 export interface ConsumerPreferences {
   revision: number;
+  retainLastSearch: boolean;
   /** @maxItems 20 */
   neighborhoodIds: string[];
   /** @maxItems 20 */
@@ -709,6 +710,72 @@ export interface AccountMe {
   createdAt: string;
 }
 
+export type AccountLastSearchInputFilters = {
+  openNow?: boolean;
+};
+
+export type AccountLastSearchInputSourceScope = typeof AccountLastSearchInputSourceScope[keyof typeof AccountLastSearchInputSourceScope];
+
+
+export const AccountLastSearchInputSourceScope = {
+  local: 'local',
+  web: 'web',
+} as const;
+
+export type AccountLastSearchInputSelectedListing = {
+  /** @maxLength 60 */
+  source: string;
+  /** @maxLength 120 */
+  id: string;
+};
+
+export type AccountLastSearchInputPresentationMode = typeof AccountLastSearchInputPresentationMode[keyof typeof AccountLastSearchInputPresentationMode];
+
+
+export const AccountLastSearchInputPresentationMode = {
+  map: 'map',
+  list: 'list',
+} as const;
+
+export interface AccountLastSearchInput {
+  /** @maxLength 80 */
+  cityId: string;
+  /** @maxItems 20 */
+  neighborhoodIds: string[];
+  /** @maxItems 20 */
+  categoryIds: string[];
+  /** @maxLength 120 */
+  query?: string;
+  filters?: AccountLastSearchInputFilters;
+  locale: AccountLocale;
+  sourceScope: AccountLastSearchInputSourceScope;
+  selectedListing?: AccountLastSearchInputSelectedListing;
+  presentationMode: AccountLastSearchInputPresentationMode;
+  /**
+     * @minimum 1
+     * @maximum 22
+     */
+  zoom?: number;
+  /**
+     * @minimum -90
+     * @maximum 90
+     */
+  centerLat?: number;
+  /**
+     * @minimum -180
+     * @maximum 180
+     */
+  centerLng?: number;
+  /** @maxLength 80 */
+  scrollContext?: string;
+}
+
+export type AccountLastSearch = AccountLastSearchInput & {
+  summary: string;
+  capturedAt: string;
+  expiresAt: string;
+};
+
 /**
  * Purpose-specific consents that are asked separately from account creation and from
  * the research registration. `marketing_updates`: occasional product and neighbourhood
@@ -728,6 +795,7 @@ export interface UpdateAccountPreferencesInput {
      * @minimum 0
      */
   expectedRevision: number;
+  retainLastSearch?: boolean;
   locale?: AccountLocale;
   /**
      * @maxItems 20

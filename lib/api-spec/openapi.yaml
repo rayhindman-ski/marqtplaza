@@ -131,6 +131,55 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
 
+  /account/last-search:
+    get:
+      operationId: getAccountLastSearch
+      tags: [account]
+      summary: Read the signed-in account's unexpired last search
+      responses:
+        "200":
+          description: Last search or null
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/AccountLastSearch"
+                  - type: "null"
+        "401":
+          description: Authentication required
+    put:
+      operationId: putAccountLastSearch
+      tags: [account]
+      summary: Replace the last search when retention is enabled
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AccountLastSearchInput"
+      responses:
+        "200":
+          description: Saved last search
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountLastSearch"
+        "204":
+          description: Retention disabled; no write
+        "400":
+          description: Unknown or invalid field
+        "401":
+          description: Authentication required
+    delete:
+      operationId: deleteAccountLastSearch
+      tags: [account]
+      summary: Clear the signed-in account's last search
+      responses:
+        "204":
+          description: Cleared
+        "401":
+          description: Authentication required
+
   /account/preferences:
     patch:
       operationId: updateAccountPreferences
@@ -4031,10 +4080,12 @@ components:
     ConsumerPreferences:
       type: object
       description: Optional controlled preferences owned by exactly one account. Updates require expectedRevision and return 409 VERSION_CONFLICT on mismatch. Unresolved IDs are stored legacy choices that no longer occur in the current taxonomy; they remain in the ID arrays until the user removes them.
-      required: [revision, neighborhoodIds, interestIds, unresolvedNeighborhoodIds, unresolvedInterestIds, updatedAt]
+      required: [revision, neighborhoodIds, interestIds, unresolvedNeighborhoodIds, unresolvedInterestIds, retainLastSearch, updatedAt]
       properties:
         revision:
           type: number
+        retainLastSearch:
+          type: boolean
         neighborhoodIds:
           type: array
           maxItems: 20
@@ -4060,6 +4111,81 @@ components:
         updatedAt:
           type: string
 
+    AccountLastSearchInput:
+      type: object
+      additionalProperties: false
+      required: [cityId, neighborhoodIds, categoryIds, locale, sourceScope, presentationMode]
+      properties:
+        cityId:
+          type: string
+          maxLength: 80
+        neighborhoodIds:
+          type: array
+          maxItems: 20
+          items:
+            type: string
+        categoryIds:
+          type: array
+          maxItems: 20
+          items:
+            type: string
+        query:
+          type: string
+          maxLength: 120
+        filters:
+          type: object
+          additionalProperties: false
+          properties:
+            openNow:
+              type: boolean
+        locale:
+          $ref: "#/components/schemas/AccountLocale"
+        sourceScope:
+          type: string
+          enum: [local, web]
+        selectedListing:
+          type: object
+          additionalProperties: false
+          required: [source, id]
+          properties:
+            source:
+              type: string
+              maxLength: 60
+            id:
+              type: string
+              maxLength: 120
+        presentationMode:
+          type: string
+          enum: [map, list]
+        zoom:
+          type: number
+          minimum: 1
+          maximum: 22
+        centerLat:
+          type: number
+          minimum: -90
+          maximum: 90
+        centerLng:
+          type: number
+          minimum: -180
+          maximum: 180
+        scrollContext:
+          type: string
+          maxLength: 80
+
+    AccountLastSearch:
+      allOf:
+        - $ref: "#/components/schemas/AccountLastSearchInput"
+        - type: object
+          required: [summary, capturedAt, expiresAt]
+          properties:
+            summary:
+              type: string
+            capturedAt:
+              type: string
+            expiresAt:
+              type: string
+
     ConsentPurpose:
       type: string
       description: |
@@ -4077,6 +4203,8 @@ components:
           type: number
           minimum: 0
           description: Current stored revision, or 0 when no preferences exist yet.
+        retainLastSearch:
+          type: boolean
         locale:
           $ref: "#/components/schemas/AccountLocale"
         neighborhoodIds:

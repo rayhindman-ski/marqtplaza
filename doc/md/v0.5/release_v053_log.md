@@ -35,3 +35,46 @@ API (the v0.5.2 security page relies on the identity provider's own step-up).
 Phase 2 adds one (`requireRecentAuth`, based on the session's last
 authentication age from the identity-provider claims, default 10 minutes) and
 Phases 4–5 reuse it.
+
+## Phase 1 — Last search (2026-09-29 07:24 → 07:32 CEST; observed via `date` in UTC)
+
+**Changed.** Added an additive `account_last_search` table with a named FK,
+unique user key, 90-day expiry and three-decimal centre; an opt-out column on
+`consumer_preferences`; account-authenticated GET/PUT/DELETE behind the
+effective `LAST_SEARCH_ENABLED && ACCOUNTS_ENABLED` gate. Bodies reject unknown
+fields, live taxonomy IDs are revalidated on write and read, and opt-out
+deletes stored context and refuses writes (204). OpenAPI was updated before
+codegen. A debounced, signed-in-only side-effect reads the discovery URL and
+existing selected map context without changing discovery component contracts.
+The account quick link uses catalogue labels rather than raw query text; clear
+requires confirmation and removes the user-keyed cache. Development schema:
+`push-preflight` passed and `drizzle-kit push` applied changes.
+
+**Suite counts.** `last-search.test.ts`: 6/6; unchanged `account.test.ts`:
+16/16 (run independently; combined execution against the shared database
+collided). Root `pnpm run typecheck`: clean. Browser suites
+`last-search.spec.ts`, `discovery-regression.spec.ts` and
+`usability-regression.spec.ts` were not run by this subagent: the owning agent
+handles application/browser runs. No browser pass claimed.
+
+**Deviation / follow-up.** No supported existing navigation API re-applies
+selected listing or zoom across account→discovery routes without using
+browser-local restore state; restoration is limited to validated public URL
+criteria and forces stored-only local scope. The new expiry purge is invoked
+on GET/PUT; a periodic scheduler is not yet installed. Existing development
+flags are configured in `.replit`, not a `.env`; direct edits to `.replit`
+were rejected by the environment's validation policy, so the owning agent
+must add `LAST_SEARCH_ENABLED` and `VITE_LAST_SEARCH_ENABLED` there via the
+validated replacement tool before development UI verification. The Playwright
+web-server command explicitly enables the VITE mirror.
+
+**Follow-up verification (2026-09-29 07:38 CEST, observed via `date`
+05:38 UTC).** The owner enabled both development flags and ran the unchanged
+discovery regression suite: 11/11. The first browser run of
+`last-search.spec.ts` failed because its mock server omitted the weather
+response; this is test setup, not a discovery regression. Added the same
+weather/listings/map network stubs used by frozen discovery tests plus the
+account consent response needed by account home. Rerun:
+`last-search.spec.ts` 1/1, unchanged `usability-regression.spec.ts` 21/21
+with `PW_PORT=22580`, and root typecheck clean. No frozen discovery
+components or expectations changed.

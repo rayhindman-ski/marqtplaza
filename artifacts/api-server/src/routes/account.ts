@@ -3,6 +3,7 @@ import { Router, type IRouter, type Request, type Response } from "express";
 
 import {
   accountConsentEventsTable,
+  accountLastSearchTable,
   appUsersTable,
   consumerPreferencesTable,
   db,
@@ -19,6 +20,7 @@ import {
   RecordAccountConsentResponse,
   UpdateAccountPreferencesBody,
   UpdateAccountPreferencesResponse,
+  PutAccountLastSearchBody,
   type ApiFieldError,
   type ConsentPurpose,
 } from "@workspace/api-zod";
@@ -27,6 +29,7 @@ import { getAccountOptions, type AccountOptionsSource } from "../lib/accountOpti
 import { sendApiError, unknownFieldErrors } from "../lib/apiError";
 import { listBusinessesForUser } from "../lib/businessMembership";
 import { getFeatureFlags, type FeatureFlagSource } from "../lib/featureFlags";
+import { LAST_SEARCH_RETENTION_DAYS, purgeExpiredLastSearch, serializeLastSearch, validateLastSearch } from "../lib/lastSearch";
 import {
   countBusinessMemberships,
   deriveCapabilities,
@@ -54,6 +57,7 @@ const PREFERENCE_FIELDS: ReadonlySet<string> = new Set([
   "locale",
   "neighborhoodIds",
   "interestIds",
+  "retainLastSearch",
 ]);
 const CONSENT_FIELDS: ReadonlySet<string> = new Set([
   "consentType",
@@ -170,6 +174,7 @@ function serialisePreferences(
     revision: preferences.revision,
     neighborhoodIds: preferences.neighborhoodIds,
     interestIds: preferences.interestIds,
+    retainLastSearch: preferences.retainLastSearch,
     unresolvedNeighborhoodIds: preferences.neighborhoodIds.filter((id) => !neighborhoodIds.has(id)),
     unresolvedInterestIds: preferences.interestIds.filter((id) => !interestIds.has(id)),
     updatedAt: preferences.updatedAt.toISOString(),
@@ -232,6 +237,56 @@ export function createAccountRouter(options: AccountRouterOptions = {}): IRouter
 
   router.use("/account", requireFlag("accounts", flags));
   router.use("/account", requireAppUser({ resolveIdentity: options.resolveIdentity }));
+
+  router.get("/account/last-search", requireFlag("lastSearch", flags), async (req, res): Promise<void> => {
+    if (rejectClientFields(req, res)) return;
+    const [preference] = await db.select().from(consumerPreferencesTable).where(eq(consumerPreferencesTable.userId, req.account!.user.id)).limit(1);
+    if (preference?.retainLastSearch === false) {
+      await db.delete(accountLastSearchTable).where(eq(accountLastSearchTable.userId, req.account!.user.id));
+      res.json(null);
+      return;
+    }
+    await purgeExpiredLastSearch();
+    const [row] = await db.select().from(accountLastSearchTable).where(eq(accountLastSearchTable.userId, req.account!.user.id)).limit(1);
+    res.json(row ? serializeLastSearch(row, accountOptions) : null);
+  });
+
+  router.put("/account/last-search", requireFlag("lastSearch", flags), async (req, res): Promise<void> => {
+    const allowed = new Set(["cityId", "neighborhoodIds", "categoryIds", "query", "filters", "locale", "sourceScope", "selectedListing", "presentationMode", "zoom", "centerLat", "centerLng", "scrollContext"]);
+    if (rejectClientFields(req, res, allowed)) return;
+    const parsed = PutAccountLastSearchBody.safeParse(req.body);
+    if (!parsed.success || (req.body?.filters && unknownFieldErrors(req.body.filters, new Set(["openNow"])).length > 0)
+      || (req.body?.selectedListing && unknownFieldErrors(req.body.selectedListing, new Set(["source", "id"])).length > 0)
+      || req.body?.cityId !== "dhg" || (req.body?.zoom !== undefined && !Number.isInteger(req.body.zoom))) {
+      sendApiError(req, res, "VALIDATION_FAILED");
+      return;
+    }
+    const userId = req.account!.user.id;
+    const [preference] = await db.select().from(consumerPreferencesTable).where(eq(consumerPreferencesTable.userId, userId)).limit(1);
+    if (preference?.retainLastSearch === false) {
+      await db.delete(accountLastSearchTable).where(eq(accountLastSearchTable.userId, userId));
+      res.status(204).end();
+      return;
+    }
+    const now = new Date();
+    await purgeExpiredLastSearch(now);
+    const [row] = await db.insert(accountLastSearchTable).values({
+      ...validateLastSearch(parsed.data, accountOptions),
+      userId,
+      capturedAt: now,
+      expiresAt: new Date(now.getTime() + LAST_SEARCH_RETENTION_DAYS * 86_400_000),
+    }).onConflictDoUpdate({
+      target: accountLastSearchTable.userId,
+      set: { ...validateLastSearch(parsed.data, accountOptions), capturedAt: now, expiresAt: new Date(now.getTime() + LAST_SEARCH_RETENTION_DAYS * 86_400_000) },
+    }).returning();
+    res.json(serializeLastSearch(row, accountOptions));
+  });
+
+  router.delete("/account/last-search", requireFlag("lastSearch", flags), async (req, res): Promise<void> => {
+    if (rejectClientFields(req, res)) return;
+    await db.delete(accountLastSearchTable).where(eq(accountLastSearchTable.userId, req.account!.user.id));
+    res.status(204).end();
+  });
 
   router.get("/account/me", async (req, res): Promise<void> => {
     if (rejectClientFields(req, res)) return;
@@ -311,6 +366,7 @@ export function createAccountRouter(options: AccountRouterOptions = {}): IRouter
             revision: current.revision + 1,
             ...(neighborhoodIds ? { neighborhoodIds } : {}),
             ...(interestIds ? { interestIds } : {}),
+             ...(input.retainLastSearch !== undefined ? { retainLastSearch: input.retainLastSearch } : {}),
             updatedAt: new Date(),
           })
           .where(
@@ -325,6 +381,7 @@ export function createAccountRouter(options: AccountRouterOptions = {}): IRouter
           revision: 1,
           neighborhoodIds: neighborhoodIds ?? [],
           interestIds: interestIds ?? [],
+           retainLastSearch: input.retainLastSearch ?? true,
         });
       }
       if (input.locale && input.locale !== account.user.locale) {
@@ -332,6 +389,9 @@ export function createAccountRouter(options: AccountRouterOptions = {}): IRouter
           .update(appUsersTable)
           .set({ locale: input.locale, updatedAt: new Date() })
           .where(eq(appUsersTable.id, account.user.id));
+      }
+      if (input.retainLastSearch === false) {
+        await tx.delete(accountLastSearchTable).where(eq(accountLastSearchTable.userId, account.user.id));
       }
       return { conflict: null, fieldErrors: [] as ApiFieldError[] };
     });

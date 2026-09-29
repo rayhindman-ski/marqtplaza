@@ -115,6 +115,7 @@ import {
 } from './lib/listingPresentation';
 import { isPointInsideNeighborhoods } from '@workspace/geo';
 import { parseDiscoveryUrlState, serializeDiscoveryUrlState } from './lib/discoveryUrlState';
+import { useLastSearchCapture } from './hooks/useLastSearchCapture';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -2578,6 +2579,14 @@ function DiscoveryState({
     ...localSelectedListings.map((listing) => toMarker(listing, 'local')),
     ...webSelectedListings.map((listing) => toMarker(listing, 'web')),
   ];
+  const selectedForCapture = selectedMarker ? allMarkers.find((marker) => marker.id === selectedMarker) : null;
+  useLastSearchCapture({
+    cityId: locationId,
+    viewport: mapViewportRef.current,
+    selectedListing: selectedForCapture?.source ? { source: selectedForCapture.source, id: selectedForCapture.id } : null,
+    neighborhoodNames: selectedNeighborhoods,
+    categoryNames: selectedBusinessCategories,
+  });
 
   const selectedAreas = selectedNeighborhoods
     .map((neighborhood) => location.neighborhoodCoords[neighborhood])

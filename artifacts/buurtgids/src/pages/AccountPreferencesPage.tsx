@@ -31,6 +31,7 @@ type Draft = {
   locale: AccountLocale;
   neighborhoodIds: string[];
   interestIds: string[];
+  retainLastSearch: boolean;
 };
 
 type Outcome = { kind: 'saved' } | { kind: 'skipped' } | null;
@@ -51,6 +52,7 @@ function readDraft(userId: string): Draft | null {
       locale: parsed.locale === 'nl' || parsed.locale === 'en' ? parsed.locale : 'nl',
       neighborhoodIds: parsed.neighborhoodIds.filter((id): id is string => typeof id === 'string'),
       interestIds: parsed.interestIds.filter((id): id is string => typeof id === 'string'),
+      retainLastSearch: parsed.retainLastSearch !== false,
     };
   } catch {
     return null;
@@ -71,6 +73,7 @@ function draftFromAccount(me: AccountMe): Draft {
     locale: me.locale,
     neighborhoodIds: me.preferences?.neighborhoodIds ?? [],
     interestIds: me.preferences?.interestIds ?? [],
+    retainLastSearch: me.preferences?.retainLastSearch ?? true,
   };
 }
 
@@ -343,6 +346,13 @@ export default function AccountPreferencesPage() {
             </div>
           </fieldset>
 
+          {featureFlags.lastSearch ? (
+            <label className="flex items-center gap-3 rounded-3xl border border-border/80 bg-card p-5 text-sm font-bold">
+              <input type="checkbox" data-testid="toggle-retain-last-search" checked={draft.retainLastSearch}
+                onChange={(event) => setDraft({ ...draft, retainLastSearch: event.target.checked })} />
+              {copy.preferences.retainLastSearch}
+            </label>
+          ) : null}
           {optionsQuery.isLoading ? (
             <p data-testid="status-options-loading" role="status" className="text-sm text-muted-foreground">{copy.preferences.loading}</p>
           ) : null}

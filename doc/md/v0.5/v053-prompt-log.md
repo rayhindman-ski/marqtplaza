@@ -30,3 +30,24 @@ provisional; progress lines below at each phase start and commit.
   relation is keyed on e-mail. Closed.
 - 07:24 finding: the plan's assumed shared recent-authentication gate does not
   exist in the API; it is built in Phase 2 and reused by Phases 4–5.
+
+### Progress — Phase 1 (last search)
+
+- 07:24 start (observed `date`, 05:24 UTC). Read route, schema, OpenAPI,
+  discovery URL and account-page patterns.
+- 07:29 added schema/service/flag/API contract, ran codegen, applied additive
+  schema via preflight and `drizzle-kit push`; wired account UI and a
+  discovery-only capture side effect, without changing discovery contracts.
+- 07:32 API last-search 6/6 and existing account 16/16 individually green;
+  root typecheck clean. Browser suites delegated to owning agent (not run
+  from this subagent). `.replit` flag configuration needs validated replacement.
+- 07:32 response: Phase 1 implementation handed off; selected listing/zoom
+  restoration and scheduler documented as unresolved deviations.
+
+### Progress — Phase 1 browser follow-up
+
+- 07:38 CEST (observed `date` 05:38 UTC): owner reported unchanged discovery
+  regression 11/11 and missing weather mock in new browser test. Mirrored
+  existing discovery fixture weather/listings/map stubs and account consent
+  stub; `last-search.spec.ts` now 1/1, unchanged usability suite 21/21
+  (`PW_PORT=22580`), root typecheck clean. No discovery implementation edits.

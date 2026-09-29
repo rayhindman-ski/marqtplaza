@@ -61,6 +61,7 @@ export const GetAccountMeResponse = zod.object({
 })).describe('Businesses the account belongs to (v0.5.2), for the account home Business section. Never preference data.'),
   "preferences": zod.union([zod.object({
   "revision": zod.number(),
+  "retainLastSearch": zod.boolean(),
   "neighborhoodIds": zod.array(zod.string()).max(getAccountMeResponsePreferencesOneNeighborhoodIdsMax),
   "interestIds": zod.array(zod.string()).max(getAccountMeResponsePreferencesOneInterestIdsMax),
   "unresolvedNeighborhoodIds": zod.array(zod.string()).max(getAccountMeResponsePreferencesOneUnresolvedNeighborhoodIdsMax).describe('Subset of neighborhoodIds that no longer resolves in the current account option taxonomy.'),
@@ -97,6 +98,163 @@ export const GetAccountOptionsResponse = zod.object({
 
 
 /**
+ * @summary Read the signed-in account's unexpired last search
+ */
+export const getAccountLastSearchResponseOneOneCityIdMax = 80;
+
+export const getAccountLastSearchResponseOneOneNeighborhoodIdsMax = 20;
+
+export const getAccountLastSearchResponseOneOneCategoryIdsMax = 20;
+
+export const getAccountLastSearchResponseOneOneQueryMax = 120;
+
+export const getAccountLastSearchResponseOneOneSelectedListingSourceMax = 60;
+
+export const getAccountLastSearchResponseOneOneSelectedListingIdMax = 120;
+
+export const getAccountLastSearchResponseOneOneZoomMax = 22;
+
+export const getAccountLastSearchResponseOneOneCenterLatMin = -90;
+export const getAccountLastSearchResponseOneOneCenterLatMax = 90;
+
+export const getAccountLastSearchResponseOneOneCenterLngMin = -180;
+export const getAccountLastSearchResponseOneOneCenterLngMax = 180;
+
+export const getAccountLastSearchResponseOneOneScrollContextMax = 80;
+
+
+
+export const GetAccountLastSearchResponse = zod.union([zod.object({
+  "cityId": zod.string().max(getAccountLastSearchResponseOneOneCityIdMax),
+  "neighborhoodIds": zod.array(zod.string()).max(getAccountLastSearchResponseOneOneNeighborhoodIdsMax),
+  "categoryIds": zod.array(zod.string()).max(getAccountLastSearchResponseOneOneCategoryIdsMax),
+  "query": zod.string().max(getAccountLastSearchResponseOneOneQueryMax).optional(),
+  "filters": zod.object({
+  "openNow": zod.boolean().optional()
+}).optional(),
+  "locale": zod.enum(['nl', 'en']),
+  "sourceScope": zod.enum(['local', 'web']),
+  "selectedListing": zod.object({
+  "source": zod.string().max(getAccountLastSearchResponseOneOneSelectedListingSourceMax),
+  "id": zod.string().max(getAccountLastSearchResponseOneOneSelectedListingIdMax)
+}).optional(),
+  "presentationMode": zod.enum(['map', 'list']),
+  "zoom": zod.number().min(1).max(getAccountLastSearchResponseOneOneZoomMax).optional(),
+  "centerLat": zod.number().min(getAccountLastSearchResponseOneOneCenterLatMin).max(getAccountLastSearchResponseOneOneCenterLatMax).optional(),
+  "centerLng": zod.number().min(getAccountLastSearchResponseOneOneCenterLngMin).max(getAccountLastSearchResponseOneOneCenterLngMax).optional(),
+  "scrollContext": zod.string().max(getAccountLastSearchResponseOneOneScrollContextMax).optional()
+}).and(zod.object({
+  "summary": zod.string(),
+  "capturedAt": zod.string(),
+  "expiresAt": zod.string()
+})),zod.null()])
+
+
+/**
+ * @summary Replace the last search when retention is enabled
+ */
+export const putAccountLastSearchBodyCityIdMax = 80;
+
+export const putAccountLastSearchBodyNeighborhoodIdsMax = 20;
+
+export const putAccountLastSearchBodyCategoryIdsMax = 20;
+
+export const putAccountLastSearchBodyQueryMax = 120;
+
+export const putAccountLastSearchBodySelectedListingSourceMax = 60;
+
+export const putAccountLastSearchBodySelectedListingIdMax = 120;
+
+export const putAccountLastSearchBodyZoomMax = 22;
+
+export const putAccountLastSearchBodyCenterLatMin = -90;
+export const putAccountLastSearchBodyCenterLatMax = 90;
+
+export const putAccountLastSearchBodyCenterLngMin = -180;
+export const putAccountLastSearchBodyCenterLngMax = 180;
+
+export const putAccountLastSearchBodyScrollContextMax = 80;
+
+
+
+export const PutAccountLastSearchBody = zod.object({
+  "cityId": zod.string().max(putAccountLastSearchBodyCityIdMax),
+  "neighborhoodIds": zod.array(zod.string()).max(putAccountLastSearchBodyNeighborhoodIdsMax),
+  "categoryIds": zod.array(zod.string()).max(putAccountLastSearchBodyCategoryIdsMax),
+  "query": zod.string().max(putAccountLastSearchBodyQueryMax).optional(),
+  "filters": zod.object({
+  "openNow": zod.boolean().optional()
+}).optional(),
+  "locale": zod.enum(['nl', 'en']),
+  "sourceScope": zod.enum(['local', 'web']),
+  "selectedListing": zod.object({
+  "source": zod.string().max(putAccountLastSearchBodySelectedListingSourceMax),
+  "id": zod.string().max(putAccountLastSearchBodySelectedListingIdMax)
+}).optional(),
+  "presentationMode": zod.enum(['map', 'list']),
+  "zoom": zod.number().min(1).max(putAccountLastSearchBodyZoomMax).optional(),
+  "centerLat": zod.number().min(putAccountLastSearchBodyCenterLatMin).max(putAccountLastSearchBodyCenterLatMax).optional(),
+  "centerLng": zod.number().min(putAccountLastSearchBodyCenterLngMin).max(putAccountLastSearchBodyCenterLngMax).optional(),
+  "scrollContext": zod.string().max(putAccountLastSearchBodyScrollContextMax).optional()
+})
+
+export const putAccountLastSearchResponseOneCityIdMax = 80;
+
+export const putAccountLastSearchResponseOneNeighborhoodIdsMax = 20;
+
+export const putAccountLastSearchResponseOneCategoryIdsMax = 20;
+
+export const putAccountLastSearchResponseOneQueryMax = 120;
+
+export const putAccountLastSearchResponseOneSelectedListingSourceMax = 60;
+
+export const putAccountLastSearchResponseOneSelectedListingIdMax = 120;
+
+export const putAccountLastSearchResponseOneZoomMax = 22;
+
+export const putAccountLastSearchResponseOneCenterLatMin = -90;
+export const putAccountLastSearchResponseOneCenterLatMax = 90;
+
+export const putAccountLastSearchResponseOneCenterLngMin = -180;
+export const putAccountLastSearchResponseOneCenterLngMax = 180;
+
+export const putAccountLastSearchResponseOneScrollContextMax = 80;
+
+
+
+export const PutAccountLastSearchResponse = zod.object({
+  "cityId": zod.string().max(putAccountLastSearchResponseOneCityIdMax),
+  "neighborhoodIds": zod.array(zod.string()).max(putAccountLastSearchResponseOneNeighborhoodIdsMax),
+  "categoryIds": zod.array(zod.string()).max(putAccountLastSearchResponseOneCategoryIdsMax),
+  "query": zod.string().max(putAccountLastSearchResponseOneQueryMax).optional(),
+  "filters": zod.object({
+  "openNow": zod.boolean().optional()
+}).optional(),
+  "locale": zod.enum(['nl', 'en']),
+  "sourceScope": zod.enum(['local', 'web']),
+  "selectedListing": zod.object({
+  "source": zod.string().max(putAccountLastSearchResponseOneSelectedListingSourceMax),
+  "id": zod.string().max(putAccountLastSearchResponseOneSelectedListingIdMax)
+}).optional(),
+  "presentationMode": zod.enum(['map', 'list']),
+  "zoom": zod.number().min(1).max(putAccountLastSearchResponseOneZoomMax).optional(),
+  "centerLat": zod.number().min(putAccountLastSearchResponseOneCenterLatMin).max(putAccountLastSearchResponseOneCenterLatMax).optional(),
+  "centerLng": zod.number().min(putAccountLastSearchResponseOneCenterLngMin).max(putAccountLastSearchResponseOneCenterLngMax).optional(),
+  "scrollContext": zod.string().max(putAccountLastSearchResponseOneScrollContextMax).optional()
+}).and(zod.object({
+  "summary": zod.string(),
+  "capturedAt": zod.string(),
+  "expiresAt": zod.string()
+}))
+
+
+/**
+ * @summary Clear the signed-in account's last search
+ */
+export const DeleteAccountLastSearchResponse = zod.void()
+
+
+/**
  * Creates or updates the signed-in user's optional preferences. `expectedRevision` must equal
  * the current stored revision (use 0 when no preferences exist yet); a mismatch returns
  * 409 VERSION_CONFLICT with the current `expectedVersion` so the client can reload while keeping
@@ -121,6 +279,7 @@ export const updateAccountPreferencesBodyInterestIdsMax = 20;
 
 export const UpdateAccountPreferencesBody = zod.object({
   "expectedRevision": zod.number().min(updateAccountPreferencesBodyExpectedRevisionMin).describe('Current stored revision, or 0 when no preferences exist yet.'),
+  "retainLastSearch": zod.boolean().optional(),
   "locale": zod.enum(['nl', 'en']).optional(),
   "neighborhoodIds": zod.array(zod.string().max(updateAccountPreferencesBodyNeighborhoodIdsItemMax)).max(updateAccountPreferencesBodyNeighborhoodIdsMax).optional(),
   "interestIds": zod.array(zod.string().max(updateAccountPreferencesBodyInterestIdsItemMax)).max(updateAccountPreferencesBodyInterestIdsMax).optional()
@@ -162,6 +321,7 @@ export const UpdateAccountPreferencesResponse = zod.object({
 })).describe('Businesses the account belongs to (v0.5.2), for the account home Business section. Never preference data.'),
   "preferences": zod.union([zod.object({
   "revision": zod.number(),
+  "retainLastSearch": zod.boolean(),
   "neighborhoodIds": zod.array(zod.string()).max(updateAccountPreferencesResponsePreferencesOneNeighborhoodIdsMax),
   "interestIds": zod.array(zod.string()).max(updateAccountPreferencesResponsePreferencesOneInterestIdsMax),
   "unresolvedNeighborhoodIds": zod.array(zod.string()).max(updateAccountPreferencesResponsePreferencesOneUnresolvedNeighborhoodIdsMax).describe('Subset of neighborhoodIds that no longer resolves in the current account option taxonomy.'),
@@ -214,6 +374,7 @@ export const CompleteAccountOnboardingResponse = zod.object({
 })).describe('Businesses the account belongs to (v0.5.2), for the account home Business section. Never preference data.'),
   "preferences": zod.union([zod.object({
   "revision": zod.number(),
+  "retainLastSearch": zod.boolean(),
   "neighborhoodIds": zod.array(zod.string()).max(completeAccountOnboardingResponsePreferencesOneNeighborhoodIdsMax),
   "interestIds": zod.array(zod.string()).max(completeAccountOnboardingResponsePreferencesOneInterestIdsMax),
   "unresolvedNeighborhoodIds": zod.array(zod.string()).max(completeAccountOnboardingResponsePreferencesOneUnresolvedNeighborhoodIdsMax).describe('Subset of neighborhoodIds that no longer resolves in the current account option taxonomy.'),

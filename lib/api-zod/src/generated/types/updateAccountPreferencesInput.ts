@@ -13,6 +13,7 @@ export interface UpdateAccountPreferencesInput {
      * @minimum 0
      */
   expectedRevision: number;
+  retainLastSearch?: boolean;
   locale?: AccountLocale;
   /**
      * @maxItems 20

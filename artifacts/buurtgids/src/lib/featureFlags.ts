@@ -5,6 +5,7 @@
  */
 export type FeatureFlags = Readonly<{
   accounts: boolean;
+  lastSearch: boolean;
   businessIntake: boolean;
   businessPublication: boolean;
   consumerRegistration: boolean;
@@ -22,6 +23,7 @@ export function readFeatureFlags(env: Record<string, unknown> = import.meta.env)
   const businessIntake = parseFlag(env.VITE_BUSINESS_INTAKE_ENABLED);
   return {
     accounts,
+    lastSearch: parseFlag(env.VITE_LAST_SEARCH_ENABLED) && accounts,
     businessIntake,
     businessPublication: parseFlag(env.VITE_BUSINESS_PUBLICATION_ENABLED),
     consumerRegistration: parseFlag(env.VITE_CONSUMER_REGISTRATION_ENABLED),

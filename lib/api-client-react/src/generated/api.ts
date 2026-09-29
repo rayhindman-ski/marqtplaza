@@ -21,6 +21,8 @@ import type {
 
 import type {
   AccountConsents,
+  AccountLastSearch,
+  AccountLastSearchInput,
   AccountMe,
   AccountOptions,
   AccountRequest,
@@ -417,6 +419,225 @@ export function useGetAccountOptions<TData = Awaited<ReturnType<typeof getAccoun
 
 
 
+
+export const getGetAccountLastSearchUrl = () => {
+
+
+
+
+  return `/api/account/last-search`
+}
+
+/**
+ * @summary Read the signed-in account's unexpired last search
+ */
+export const getAccountLastSearch = async ( options?: Parameters<typeof customFetch>[1]): Promise<AccountLastSearch | null> => {
+
+  return customFetch<AccountLastSearch | null>(getGetAccountLastSearchUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetAccountLastSearchQueryKey = () => {
+    return [
+    `/api/account/last-search`
+    ] as const;
+    }
+
+
+export const getGetAccountLastSearchQueryOptions = <TData = Awaited<ReturnType<typeof getAccountLastSearch>>, TError = ErrorType<void>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAccountLastSearch>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetAccountLastSearchQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAccountLastSearch>>> = ({ signal }) => getAccountLastSearch({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAccountLastSearch>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetAccountLastSearchQueryResult = NonNullable<Awaited<ReturnType<typeof getAccountLastSearch>>>
+export type GetAccountLastSearchQueryError = ErrorType<void>
+
+
+/**
+ * @summary Read the signed-in account's unexpired last search
+ */
+
+export function useGetAccountLastSearch<TData = Awaited<ReturnType<typeof getAccountLastSearch>>, TError = ErrorType<void>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAccountLastSearch>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetAccountLastSearchQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getPutAccountLastSearchUrl = () => {
+
+
+
+
+  return `/api/account/last-search`
+}
+
+/**
+ * @summary Replace the last search when retention is enabled
+ */
+export const putAccountLastSearch = async (accountLastSearchInput: AccountLastSearchInput, options?: Parameters<typeof customFetch>[1]): Promise<AccountLastSearch | void> => {
+
+  return customFetch<AccountLastSearch | void>(getPutAccountLastSearchUrl(),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(accountLastSearchInput)
+  }
+);}
+
+
+
+
+
+export const getPutAccountLastSearchMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof putAccountLastSearch>>, TError,{data: BodyType<AccountLastSearchInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof putAccountLastSearch>>, TError,{data: BodyType<AccountLastSearchInput>}, TContext> => {
+
+const mutationKey = ['putAccountLastSearch'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof putAccountLastSearch>>, {data: BodyType<AccountLastSearchInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  putAccountLastSearch(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PutAccountLastSearchMutationResult = NonNullable<Awaited<ReturnType<typeof putAccountLastSearch>>>
+    export type PutAccountLastSearchMutationBody = BodyType<AccountLastSearchInput>
+    export type PutAccountLastSearchMutationError = ErrorType<void>
+
+    /**
+ * @summary Replace the last search when retention is enabled
+ */
+export const usePutAccountLastSearch = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof putAccountLastSearch>>, TError,{data: BodyType<AccountLastSearchInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof putAccountLastSearch>>,
+        TError,
+        {data: BodyType<AccountLastSearchInput>},
+        TContext
+      > => {
+      return useMutation(getPutAccountLastSearchMutationOptions(options));
+    }
+
+export const getDeleteAccountLastSearchUrl = () => {
+
+
+
+
+  return `/api/account/last-search`
+}
+
+/**
+ * @summary Clear the signed-in account's last search
+ */
+export const deleteAccountLastSearch = async ( options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+
+  return customFetch<void>(getDeleteAccountLastSearchUrl(),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeleteAccountLastSearchMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteAccountLastSearch>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteAccountLastSearch>>, TError,void, TContext> => {
+
+const mutationKey = ['deleteAccountLastSearch'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteAccountLastSearch>>, void> = () => {
+
+
+          return  deleteAccountLastSearch(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteAccountLastSearchMutationResult = NonNullable<Awaited<ReturnType<typeof deleteAccountLastSearch>>>
+
+    export type DeleteAccountLastSearchMutationError = ErrorType<void>
+
+    /**
+ * @summary Clear the signed-in account's last search
+ */
+export const useDeleteAccountLastSearch = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteAccountLastSearch>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteAccountLastSearch>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getDeleteAccountLastSearchMutationOptions(options));
+    }
 
 export const getUpdateAccountPreferencesUrl = () => {
 

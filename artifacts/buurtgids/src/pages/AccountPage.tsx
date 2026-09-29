@@ -8,10 +8,13 @@ import {
   getGetAccountConsentsQueryKey,
   getGetAccountMeQueryKey,
   getGetAccountOptionsQueryKey,
+  getGetAccountLastSearchQueryKey,
   getGetRegistrationQueryKey,
   useGetAccountConsents,
   useGetAccountMe,
   useGetAccountOptions,
+  useGetAccountLastSearch,
+  useDeleteAccountLastSearch,
   useGetRegistration,
   useRecordAccountConsent,
   type AccountConsents,
@@ -27,6 +30,7 @@ import { businessIntentRef } from '@/lib/businessIntent';
 import { accountErrorMessage, accountTranslations, formatCopy, type Language } from '@/lib/i18n';
 import { resolveReturnPath, withReturnPath } from '@/lib/returnPath';
 import { useAppLanguage } from '@/lib/useAppLanguage';
+import { serializeDiscoveryUrlState } from '@/lib/discoveryUrlState';
 import { PreferenceSummary } from './AccountPreferencesPage';
 import { isSurveyDue } from './OnboardingPage';
 
@@ -44,6 +48,7 @@ export default function AccountPage() {
   const auth = useAccountAuth();
   const search = useSearch();
   const { signOut } = useClerk();
+  const queryClient = useQueryClient();
   const signedIn = auth.isLoaded && auth.isSignedIn;
   const accountsOn = featureFlags.accounts && signedIn;
   const returnPath = resolveReturnPath(search);
@@ -57,6 +62,24 @@ export default function AccountPage() {
   const optionsQuery = useGetAccountOptions({
     query: { enabled: accountsOn, queryKey: getGetAccountOptionsQueryKey(), staleTime: 5 * 60_000 },
   });
+  const lastSearchKey = [...getGetAccountLastSearchQueryKey(), auth.userId];
+  const lastSearchQuery = useGetAccountLastSearch({
+    query: { enabled: featureFlags.lastSearch && accountsOn, queryKey: lastSearchKey, retry: false },
+  });
+  const clearLastSearch = useDeleteAccountLastSearch();
+  const [lastSearchError, setLastSearchError] = useState(false);
+  const lastSearch = lastSearchQuery.data;
+  const neighborhoodName = lastSearch?.neighborhoodIds[0]
+    ? optionsQuery.data?.neighborhoods.find((option) => option.id === lastSearch.neighborhoodIds[0])?.label.nl
+    : undefined;
+  const lastSearchUrl = lastSearch ? `/activiteiten/den-haag?${serializeDiscoveryUrlState({
+    city: 'den-haag',
+    locale: lastSearch.locale,
+    section: 'events',
+    scope: meQuery.data?.preferences?.retainLastSearch === false ? 'local' : 'local',
+    ...(neighborhoodName ? { neighborhood: neighborhoodName } : {}),
+    ...(lastSearch.query && /^\d{4}[A-Z]{2}$/.test(lastSearch.query) ? { postcode: lastSearch.query } : {}),
+  })}` : '';
 
   if (!auth.isLoaded) return <AccountLoading label={copy.account.loading} />;
   if (!auth.isSignedIn) return <Redirect to="/sign-in" />;
@@ -71,7 +94,10 @@ export default function AccountPage() {
       variant="outline"
       className="gap-2"
       data-testid="button-sign-out"
-      onClick={() => void signOut({ redirectUrl: basePath || '/' })}
+      onClick={() => {
+        queryClient.removeQueries({ queryKey: getGetAccountLastSearchQueryKey() });
+        void signOut({ redirectUrl: basePath || '/' });
+      }}
     >
       <LogOut className="h-4 w-4" aria-hidden="true" />
       {copy.account.signOut}
@@ -93,6 +119,27 @@ export default function AccountPage() {
         <div className="mb-6"><AccountUnavailable language={language} /></div>
       ) : (
         <>
+          {featureFlags.lastSearch && lastSearch ? (
+            <section data-testid="account-last-search" className="mb-6 rounded-3xl border border-border/80 bg-card p-6 shadow-sm">
+              <h2 className="font-bold">{copy.account.lastSearchTitle}</h2>
+              <p data-testid="last-search-summary" className="mt-2 text-sm text-muted-foreground">{lastSearch.summary}</p>
+              <div className="mt-4 flex gap-4">
+                <Link data-testid="link-restore-last-search" href={lastSearchUrl}
+                  onClick={() => window.sessionStorage.setItem('buurtplaza-discovery-live-mode', 'false')}
+                  className="font-bold text-primary underline">{copy.account.lastSearchRestore}</Link>
+                <Button type="button" variant="outline" data-testid="button-clear-last-search" disabled={clearLastSearch.isPending} onClick={() => {
+                  if (!window.confirm(copy.account.lastSearchConfirm)) return;
+                  void clearLastSearch.mutateAsync().then(() => {
+                    queryClient.removeQueries({ queryKey: lastSearchKey });
+                    queryClient.setQueryData(lastSearchKey, null);
+                  }).catch(() => setLastSearchError(true));
+                }}>{copy.account.lastSearchClear}</Button>
+              </div>
+            </section>
+          ) : null}
+          {featureFlags.lastSearch && (lastSearchError || lastSearchQuery.isError) ? (
+            <p role="alert" className="mb-6 text-red-800">{copy.account.lastSearchError}</p>
+          ) : null}
           {meQuery.isLoading ? (
             <p data-testid="status-account-summary-loading" role="status" className="mb-6 text-sm text-muted-foreground">{copy.account.loading}</p>
           ) : null}

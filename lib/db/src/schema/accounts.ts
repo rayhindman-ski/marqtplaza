@@ -1,10 +1,13 @@
 import {
   boolean,
+  foreignKey,
   index,
   integer,
   jsonb,
+  numeric,
   pgTable,
   serial,
+  smallint,
   text,
   timestamp,
   uniqueIndex,
@@ -77,6 +80,7 @@ export const consumerPreferencesTable = pgTable(
     revision: integer("revision").notNull().default(1),
     neighborhoodIds: jsonb("neighborhood_ids").$type<string[]>().notNull().default([]),
     interestIds: jsonb("interest_ids").$type<string[]>().notNull().default([]),
+    retainLastSearch: boolean("retain_last_search").notNull().default(true),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true })
       .notNull()
@@ -84,6 +88,35 @@ export const consumerPreferencesTable = pgTable(
       .$onUpdate(() => new Date()),
   },
   (table) => [uniqueIndex("consumer_preferences_user_unique").on(table.userId)],
+);
+
+/** Private, expiring, single most recent discovery context per account. */
+export const accountLastSearchTable = pgTable(
+  "account_last_search",
+  {
+    id: serial("id").primaryKey(),
+    userId: integer("user_id").notNull(),
+    cityId: text("city_id").notNull(),
+    neighborhoodIds: jsonb("neighborhood_ids").$type<string[]>().notNull().default([]),
+    query: text("query"),
+    categoryIds: jsonb("category_ids").$type<string[]>().notNull().default([]),
+    filters: jsonb("filters").$type<Record<string, boolean>>().notNull().default({}),
+    locale: text("locale").notNull().default("nl"),
+    sourceScope: text("source_scope").notNull().default("local"),
+    selectedListing: jsonb("selected_listing").$type<{ source: string; id: string } | null>(),
+    presentationMode: text("presentation_mode").notNull().default("map"),
+    zoom: smallint("zoom"),
+    centerLat: numeric("center_lat", { precision: 6, scale: 3 }),
+    centerLng: numeric("center_lng", { precision: 6, scale: 3 }),
+    scrollContext: text("scroll_context"),
+    capturedAt: timestamp("captured_at", { withTimezone: true }).notNull().defaultNow(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  },
+  (table) => [
+    foreignKey({ columns: [table.userId], foreignColumns: [appUsersTable.id], name: "account_last_search_user_fk" }).onDelete("cascade"),
+    uniqueIndex("account_last_search_user_unique").on(table.userId),
+    index("account_last_search_expires_idx").on(table.expiresAt),
+  ],
 );
 
 export const CONSENT_SOURCES = ["onboarding", "account_settings", "support", "system"] as const;

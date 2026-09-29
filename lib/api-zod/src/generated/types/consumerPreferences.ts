@@ -11,6 +11,7 @@
  */
 export interface ConsumerPreferences {
   revision: number;
+  retainLastSearch: boolean;
   /** @maxItems 20 */
   neighborhoodIds: string[];
   /** @maxItems 20 */

@@ -5,12 +5,13 @@
  * operator environment once its release gate is recorded in the Spec Kit
  * convergence record; nothing in code may turn one on by default.
  */
-export type FeatureFlagName = "accounts" | "businessIntake" | "businessPublication" | "consumerRegistration" | "businessOnboarding";
+export type FeatureFlagName = "accounts" | "businessIntake" | "businessPublication" | "consumerRegistration" | "businessOnboarding" | "lastSearch";
 
-export type FeatureFlags = Readonly<Record<FeatureFlagName, boolean>>;
+export type FeatureFlags = Readonly<Record<Exclude<FeatureFlagName, "lastSearch">, boolean> & { lastSearch?: boolean }>;
 
 export const FEATURE_FLAG_ENV_VARS: Readonly<Record<FeatureFlagName, string>> = {
   accounts: "ACCOUNTS_ENABLED",
+  lastSearch: "LAST_SEARCH_ENABLED",
   businessIntake: "BUSINESS_INTAKE_ENABLED",
   businessPublication: "BUSINESS_PUBLICATION_ENABLED",
   /** v0.5.1 registration foundation; independent of `accounts` so it can stay off on its own. */
@@ -32,6 +33,7 @@ export function readFeatureFlags(
   const businessIntake = parseFlag(env[FEATURE_FLAG_ENV_VARS.businessIntake]);
   return {
     accounts,
+    lastSearch: parseFlag(env[FEATURE_FLAG_ENV_VARS.lastSearch]) && accounts,
     businessIntake,
     businessPublication: parseFlag(env[FEATURE_FLAG_ENV_VARS.businessPublication]),
     consumerRegistration: parseFlag(env[FEATURE_FLAG_ENV_VARS.consumerRegistration]),
