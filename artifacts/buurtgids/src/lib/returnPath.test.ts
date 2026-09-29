@@ -65,7 +65,7 @@ describe('carryReturnPath', () => {
   });
 
   it('leaves other navigations, existing parameters, unsafe and default destinations alone', () => {
-    assert.equal(carryReturnPath('/account/voorkeuren', '?terug=%2Fdeals'), '/account/voorkeuren');
+    assert.equal(carryReturnPath('/account/preferences', '?terug=%2Fdeals'), '/account/preferences');
     assert.equal(carryReturnPath('/sign-up-other', '?terug=%2Fdeals'), '/sign-up-other');
     assert.equal(carryReturnPath('/sign-up?terug=%2Fnieuws', '?terug=%2Fdeals'), '/sign-up?terug=%2Fnieuws');
     assert.equal(carryReturnPath('/sign-up/verify-email-address', '?terug=https%3A%2F%2Fevil.example'), '/sign-up/verify-email-address');

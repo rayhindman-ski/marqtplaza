@@ -207,7 +207,7 @@ test.describe('live Clerk expired and consumed credentials', () => {
     await codeInput.click();
     await page.keyboard.press('Control+A');
     await page.keyboard.type(TEST_CODE, { delay: 40 });
-    await page.waitForURL((url) => url.pathname === '/account/voorkeuren', { timeout: 60_000 });
+    await page.waitForURL((url) => url.pathname === '/account/preferences', { timeout: 60_000 });
     await page.evaluate(() => (window as ClerkWindow).Clerk!.signOut());
     await page.waitForFunction(() => (window as ClerkWindow).Clerk?.session == null);
 

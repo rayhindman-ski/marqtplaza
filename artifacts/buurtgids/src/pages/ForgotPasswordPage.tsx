@@ -65,7 +65,7 @@ export default function ForgotPasswordPage() {
     );
   }
   // A signed-in person changes the password from the security page instead (AUTH-014).
-  if (auth.isSignedIn && !done && !completingRef.current) return <Redirect to={withReturnPath('/account/beveiliging', returnPath)} />;
+  if (auth.isSignedIn && !done && !completingRef.current) return <Redirect to={withReturnPath('/account/security', returnPath)} />;
 
   const signInHref = withReturnPath('/sign-in', returnPath);
 

@@ -23,7 +23,7 @@ export default function AccountEmailChangePage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const [done, setDone] = useState(false);
-  if (auth.isLoaded && !auth.isSignedIn) return <Redirect to={withReturnPath('/sign-in', '/account/e-mail-wijzigen')} />;
+  if (auth.isLoaded && !auth.isSignedIn) return <Redirect to={withReturnPath('/sign-in', '/account/change-email')} />;
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -53,7 +53,7 @@ export default function AccountEmailChangePage() {
   return <AuthPageFrame testId="page-account-email-change" language={language} onLanguageChange={setLanguage}><section className="w-full max-w-xl">
     <h1 data-testid="heading-account-email-change" className="mb-4 font-serif text-4xl font-semibold">{copy.title}</h1>
     <p className="mb-6 text-sm text-muted-foreground">{copy.intro}</p>
-    {isRecentAuthError(error) ? <RecentAuthPrompt language={language} returnPath="/account/e-mail-wijzigen" /> :
+    {isRecentAuthError(error) ? <RecentAuthPrompt language={language} returnPath="/account/change-email" /> :
       error ? <p role="alert" className="text-destructive">{copy.error}</p> : null}
     {done ? <p role="status">{copy.done}</p> :
       <form onSubmit={(event) => void submit(event)} className="max-w-md space-y-4 rounded-3xl border border-border bg-card p-6">

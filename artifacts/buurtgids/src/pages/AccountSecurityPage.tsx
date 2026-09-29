@@ -68,7 +68,7 @@ export default function AccountSecurityPage() {
       </AccountShell>
     );
   }
-  if (!auth.isSignedIn || !user) return <Redirect to={withReturnPath('/sign-in', '/account/beveiliging')} />;
+  if (!auth.isSignedIn || !user) return <Redirect to={withReturnPath('/sign-in', '/account/security')} />;
 
   const hasPassword = user.passwordEnabled;
 

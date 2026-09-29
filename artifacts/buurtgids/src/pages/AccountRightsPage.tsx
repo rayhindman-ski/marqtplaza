@@ -17,8 +17,8 @@ export default function AccountRightsPage() {
   if (!auth.isLoaded) return <AccountLoading label={accountTranslations[language].account.loading} />;
   if (!auth.isSignedIn) return <Redirect to="/sign-in" />;
   const links = [
-    ['access', '/account'], ['correction', '/account/voorkeuren'],
-    ['export', '/account/gegevens-export'], ['deletion', '/account/privacy'],
+    ['access', '/account'], ['correction', '/account/preferences'],
+    ['export', '/account/data-export'], ['deletion', '/account/privacy'],
     ['restriction', '/account/privacy'], ['objection', '/account/privacy'],
     ['contact', '/account'],
   ] as const;
@@ -46,7 +46,7 @@ export function AccountExportUnavailablePage() {
   if (!auth.isSignedIn) return <Redirect to="/sign-in" />;
   return <AccountShell language={language} onLanguageChange={setLanguage}
     eyebrow={accountTranslations[language].rights.export} title={accountTranslations[language].rights.export}
-    backHref="/account/privacy/rechten" testId="page-account-export" headingTestId="heading-account-export">
+    backHref="/account/privacy/rights" testId="page-account-export" headingTestId="heading-account-export">
     {!featureFlags.accountExport ? <p role="status">{copy.unavailable}</p> : <div data-testid="account-export-content" className="space-y-5">
       <p>{copy.intro}</p>
       <Button type="button" variant="secondary" data-testid="button-request-export" disabled={create.isPending} onClick={() => {
@@ -56,7 +56,7 @@ export function AccountExportUnavailablePage() {
           onError: cause => { setRecentAuth(isRecentAuthError(cause)); setError(true); },
         });
       }}>{copy.request}</Button>
-      {error && (recentAuth ? <RecentAuthPrompt language={language} returnPath="/account/gegevens-export" /> : <p role="alert">{copy.error}</p>)}
+      {error && (recentAuth ? <RecentAuthPrompt language={language} returnPath="/account/data-export" /> : <p role="alert">{copy.error}</p>)}
       {query.isError && <p role="alert">{copy.error}</p>}
       {query.data?.requests.length === 0 && <p>{copy.empty}</p>}
       <ul className="space-y-3">{query.data?.requests.map(item => <li key={item.reference} className="rounded-xl border p-4" data-testid={`export-${item.reference}`}>

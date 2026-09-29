@@ -6,7 +6,7 @@ test('email-change page frames provider verification in Dutch and English', asyn
     window.localStorage.setItem('buurtplaza-language', 'nl');
     (window as any).__accountTestAuth = { userId: 'email-e2e' };
   });
-  await page.goto('/account/e-mail-wijzigen?e2eAccountAuth=1');
+  await page.goto('/account/change-email?e2eAccountAuth=1');
   await expect(page.getByTestId('heading-account-email-change')).toHaveText('E-mailadres wijzigen');
   await expect(page.getByLabel('Nieuw e-mailadres')).toBeVisible();
   await page.getByTestId('button-language-en').click();
@@ -29,7 +29,7 @@ test('recent-auth API denial presents a localized return-to-sign-in prompt', asy
   await page.route(/\/api\/account\/email-change\/start$/, (route) =>
     route.fulfill({ status: 401, contentType: 'application/json',
       body: JSON.stringify({ error: 'recent_authentication_required', code: 'RECENT_AUTH_REQUIRED' }) }));
-  await page.goto('/account/e-mail-wijzigen?e2eAccountAuth=1');
+  await page.goto('/account/change-email?e2eAccountAuth=1');
   await page.getByLabel('Nieuw e-mailadres').fill('new@example.test');
   await page.getByRole('button', { name: 'Verificatiecode versturen' }).click();
   await expect(page.getByTestId('prompt-recent-auth')).toContainText('Log opnieuw in');

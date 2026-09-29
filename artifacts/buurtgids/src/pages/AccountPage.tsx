@@ -205,7 +205,7 @@ export default function AccountPage() {
                   </p>
                 </div>
                 <Link
-                  href={withReturnPath('/account/voorkeuren', returnPath)}
+                  href={withReturnPath('/account/preferences', returnPath)}
                   data-testid="link-edit-preferences"
                   className="inline-flex shrink-0 items-center justify-center rounded-full bg-primary px-4 py-2 text-sm font-bold text-primary-foreground hover:bg-primary/90"
                 >
@@ -283,14 +283,14 @@ export default function AccountPage() {
               <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">{copy.security.linkBody}</p>
             </div>
             <Link
-              href="/account/beveiliging"
+              href="/account/security"
               data-testid="link-account-security"
               className="inline-flex shrink-0 items-center justify-center rounded-full border border-border px-4 py-2 text-sm font-bold text-foreground hover:border-primary/50 hover:text-primary"
             >
               {copy.security.link}
             </Link>
           </section>
-          <Link href="/account/e-mail-wijzigen" data-testid="link-account-email-change"
+          <Link href="/account/change-email" data-testid="link-account-email-change"
             className="mb-6 inline-flex rounded-full border border-border px-4 py-2 text-sm font-bold text-primary">
             {copy.emailChange.title}
           </Link>
@@ -313,7 +313,7 @@ export default function AccountPage() {
             </section>
           ) : null}
           <nav aria-label={language === 'nl' ? 'Juridische documenten' : 'Legal documents'} className="mb-6 flex flex-wrap gap-4 text-sm">
-            <Link href="/voorwaarden" data-testid="link-account-terms" className="font-bold text-primary underline">{legalDocuments.terms[language].title}</Link>
+            <Link href="/terms" data-testid="link-account-terms" className="font-bold text-primary underline">{legalDocuments.terms[language].title}</Link>
             <Link href="/privacy" data-testid="link-account-privacy-notice" className="font-bold text-primary underline">{legalDocuments.privacy[language].title}</Link>
           </nav>
         </>

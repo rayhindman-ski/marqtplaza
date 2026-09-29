@@ -5,7 +5,7 @@
 hosting provider; identity-provider records at Clerk; outbound mail at the
 configured mail provider. Confirm regions, subprocessors, legal bases and
 retention with the owner before production enablement. “Account rights” means
-`/account/privacy/rechten`; export is scheduled for Phase 4 and deletion for
+`/account/privacy/rights`; export is scheduled for Phase 4 and deletion for
 Phase 5. A request-event audit is retained in minimal/anonymised form after
 deletion; no retention period has been approved for the other rows marked
 “policy pending”. This document does not imply that current deletion routes
@@ -13,15 +13,15 @@ already erase every downstream copy.
 
 | Table | Purpose; data categories | Lawful basis (provisional) | Source | Recipients/processors; location | Retention | Deletion route; rights route |
 |---|---|---|---|---|---|---|
-| `app_users` | Account access; subject id, email, locale, status | Contract | Clerk identity provider | Clerk, hosting; provider region pending | Account lifetime; audit minimum after deletion | `/account/verwijderen`; account rights |
-| `consumer_preferences` | Personalisation; interests, area, scope | Contract | Account user | Hosting; region pending | Account lifetime or until changed | `/account/voorkeuren`, `/account/verwijderen`; account rights |
+| `app_users` | Account access; subject id, email, locale, status | Contract | Clerk identity provider | Clerk, hosting; provider region pending | Account lifetime; audit minimum after deletion | `/account/deletion`; account rights |
+| `consumer_preferences` | Personalisation; interests, area, scope | Contract | Account user | Hosting; region pending | Account lifetime or until changed | `/account/preferences`, `/account/deletion`; account rights |
 | `account_last_search` | Resume search; criteria, coarse location | Consent/optional account setting (basis review pending) | Account user | Hosting; region pending | 90 days or opt-out/clear | `DELETE /account/last-search`; account rights |
-| `account_consent_events` | Evidence of optional choices; purpose, version, locale, decision | Legal obligation / consent evidence (review pending) | Account user | Hosting; region pending | Audit minimum after deletion; period pending | `/account/verwijderen` anonymisation planned; account rights |
-| `account_requests` | Process rights requests; status, scope, blocker | Legal obligation | Account user/support | Hosting; region pending | Audit minimum after deletion; period pending | `/account/verwijderen`; account rights |
-| `account_request_events` | Immutable rights-request audit; actor, note, status | Legal obligation | Account user/support/system | Hosting; region pending | Audit events retained, anonymised after deletion | `/account/verwijderen` anonymisation planned; account rights |
-| `account_exports` | Export lifecycle, private storage keys, size and expiry | Legal obligation / contract (review pending) | Account user | Private App Storage and hosting; regions pending | Files 72 hours after availability; status metadata audit period pending | `/account/gegevens-export`; account rights |
-| `lifecycle_outbox` | Transactional delivery; recipient, template, rendered variables | Contract / legitimate interests (security) | Account and business actions | Mail provider, hosting; regions pending | Final outbox body/recipient scrubbed after 30 days; metadata pending | `/account/verwijderen` planned; account rights |
-| `lifecycle_delivery_attempts` | Delivery trace; attempt and provider reference | Legitimate interests / legal obligation | Mail provider | Mail provider, hosting; regions pending | Audit metadata, period pending | `/account/verwijderen` planned; account rights |
+| `account_consent_events` | Evidence of optional choices; purpose, version, locale, decision | Legal obligation / consent evidence (review pending) | Account user | Hosting; region pending | Audit minimum after deletion; period pending | `/account/deletion` anonymisation planned; account rights |
+| `account_requests` | Process rights requests; status, scope, blocker | Legal obligation | Account user/support | Hosting; region pending | Audit minimum after deletion; period pending | `/account/deletion`; account rights |
+| `account_request_events` | Immutable rights-request audit; actor, note, status | Legal obligation | Account user/support/system | Hosting; region pending | Audit events retained, anonymised after deletion | `/account/deletion` anonymisation planned; account rights |
+| `account_exports` | Export lifecycle, private storage keys, size and expiry | Legal obligation / contract (review pending) | Account user | Private App Storage and hosting; regions pending | Files 72 hours after availability; status metadata audit period pending | `/account/data-export`; account rights |
+| `lifecycle_outbox` | Transactional delivery; recipient, template, rendered variables | Contract / legitimate interests (security) | Account and business actions | Mail provider, hosting; regions pending | Final outbox body/recipient scrubbed after 30 days; metadata pending | `/account/deletion` planned; account rights |
+| `lifecycle_delivery_attempts` | Delivery trace; attempt and provider reference | Legitimate interests / legal obligation | Mail provider | Mail provider, hosting; regions pending | Audit metadata, period pending | `/account/deletion` planned; account rights |
 | `user_registrations` | Research enrolment; identity and contact | Consent | Registrant | Hosting, mail provider; regions pending | Until withdrawal; audit minimum pending | Registration unsubscribe/support; account rights |
 | `consumer_registrations` | Pending consumer signup; contact and preferences | Contract (steps at user request) | Registrant | Clerk, mail provider, hosting; regions pending | Pending verification expiry policy pending | Registration support; account rights |
 | `consumer_registration_tokens` | Verify pending registration; token digest | Contract | System | Hosting; region pending | Token expiry; purge policy pending | Registration support; account rights |

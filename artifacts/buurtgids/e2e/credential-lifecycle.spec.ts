@@ -40,9 +40,9 @@ test.describe('credential lifecycle (v0.5.2)', () => {
   });
 
   test('the security page requires a session and returns to itself after sign-in', async ({ page }) => {
-    await page.goto('/account/beveiliging');
-    await expect(page).toHaveURL(/\/sign-in\?terug=%2Faccount%2Fbeveiliging$/);
-    await expect(page.getByTestId('link-forgot-password')).toHaveAttribute('href', /wachtwoord-vergeten\?terug=%2Faccount%2Fbeveiliging$/);
+    await page.goto('/account/security');
+    await expect(page).toHaveURL(/\/sign-in\?terug=%2Faccount%2Fsecurity$/);
+    await expect(page.getByTestId('link-forgot-password')).toHaveAttribute('href', /wachtwoord-vergeten\?terug=%2Faccount%2Fsecurity$/);
   });
 
   test('the sign-up card is prefilled from the tab-scoped handoff and never from the URL', async ({ page }) => {

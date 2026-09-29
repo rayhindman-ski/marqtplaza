@@ -83,7 +83,7 @@ test.describe('live Clerk sign-up', () => {
     await codeInput.click();
     await page.keyboard.type(TEST_CODE, { delay: 40 });
 
-    await page.waitForURL((url) => url.pathname === '/account/voorkeuren', { timeout: 60_000 });
+    await page.waitForURL((url) => url.pathname === '/account/preferences', { timeout: 60_000 });
     const landed = new URL(page.url());
     expect(landed.searchParams.get('terug')).toBe(returnPath);
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
@@ -125,7 +125,7 @@ test.describe('live Clerk sign-up', () => {
       // (current password = recent-auth proof), sign out, recover with the
       // reset code, and confirm the retired password no longer signs in.
       const changed = `${password}-v2`;
-      await page.goto(`${liveBase}/account/beveiliging`);
+      await page.goto(`${liveBase}/account/security`);
       await expect(page.getByTestId('heading-account-security')).toBeVisible({ timeout: 30_000 });
       await page.getByTestId('input-current-password').fill(password);
       await page.getByTestId('input-new-password').fill(changed);
@@ -171,7 +171,7 @@ test.describe('live Clerk sign-up', () => {
       await page.waitForURL((url) => url.pathname === '/activiteiten/den-haag/zeeheldenkwartier', { timeout: 30_000 });
 
       // The reset signed this browser in; other sessions were revoked on request.
-      await page.goto(`${liveBase}/account/beveiliging`);
+      await page.goto(`${liveBase}/account/security`);
       await expect(page.getByTestId('heading-account-security')).toBeVisible({ timeout: 30_000 });
       await expect(page.getByTestId('status-sessions-count')).toBeVisible({ timeout: 30_000 });
       await page.evaluate(async () => {

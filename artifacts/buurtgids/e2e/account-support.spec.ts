@@ -151,6 +151,15 @@ async function signIn(page: Page, auth: { userId: string | null; role?: string |
 const MODERATION_URL = '/redactie/bedrijven?e2eEditorAuth=1';
 
 test.describe('account support screen', () => {
+  test('review account-requests URL opens the requests tab', async ({ page }) => {
+    const server = installServer(page);
+    await server.install();
+    await signIn(page, { userId: 'user-editor', role: 'editor' });
+    await page.goto('/review/account-requests?e2eEditorAuth=1');
+    await expect(page.getByTestId('tab-account-requests')).toHaveAttribute('data-state', 'active');
+    await expect(page.getByTestId('support-requests')).toBeVisible();
+  });
+
   test('non-editors never see the support tabs or call the support API', async ({ page }) => {
     const server = installServer(page);
     await server.install();

@@ -265,7 +265,7 @@ export default function ConsumerRegisterPage() {
           <Link href="/privacy" data-testid="link-register-privacy" className="mt-4 inline-flex text-sm font-bold text-primary underline-offset-2 hover:underline">
             {register.privacyLink}
           </Link>
-          <Link href="/voorwaarden" data-testid="link-register-terms" className="ml-4 mt-4 inline-flex text-sm font-bold text-foreground underline underline-offset-2">
+          <Link href="/terms" data-testid="link-register-terms" className="ml-4 mt-4 inline-flex text-sm font-bold text-foreground underline underline-offset-2">
             {legalDocuments.terms[language].title}
           </Link>
         </aside>

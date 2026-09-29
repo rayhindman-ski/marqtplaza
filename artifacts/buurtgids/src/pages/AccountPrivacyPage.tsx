@@ -90,7 +90,7 @@ export default function AccountPrivacyPage() {
       ) : me ? (
         <>
           {featureFlags.consentCenter ? <ConsentPanel language={language} enabled={accountsOn} verified={me.capabilities.isVerified} /> : <AccountUnavailable language={language} />}
-          {featureFlags.accountDeletion ? <Link href="/account/verwijderen" data-testid="link-privacy-deletion" className="mb-3 block font-bold text-primary underline">
+          {featureFlags.accountDeletion ? <Link href="/account/deletion" data-testid="link-privacy-deletion" className="mb-3 block font-bold text-primary underline">
             {accountOffboardingLabels[language].deleteAccount}
           </Link> : null}
           <RequestsPanel language={language} verified={me.capabilities.isVerified} showPolicy={false} />
@@ -99,18 +99,18 @@ export default function AccountPrivacyPage() {
       ) : (
         <p role="status" className="mb-6 text-sm text-muted-foreground">{copy.account.loading}</p>
       )}
-      <Link href="/account/privacy/rechten" data-testid="link-privacy-rights" className="mb-6 inline-block font-bold text-primary underline">
+      <Link href="/account/privacy/rights" data-testid="link-privacy-rights" className="mb-6 inline-block font-bold text-primary underline">
         {accountTranslations[language].rights.title}
       </Link>
-      <Link href="/account/gegevens-export" data-testid="link-privacy-export" className="mb-6 ml-4 inline-block font-bold text-primary underline">
+      <Link href="/account/data-export" data-testid="link-privacy-export" className="mb-6 ml-4 inline-block font-bold text-primary underline">
         {accountTranslations[language].rights.export}
       </Link>
       <nav aria-label={language === 'nl' ? 'Afzonderlijke accountacties' : 'Separate account actions'} className="mb-6 flex flex-wrap gap-3 text-sm">
         {([
-          ['signOut', '/account'], ['revokeSessions', '/account/beveiliging'],
-          ['withdrawConsent', '/account/privacy'], ['clearPreferences', '/account/voorkeuren'],
-          ['clearLastSearch', '/account'], ['exportData', '/account/gegevens-export'],
-          ['deleteAccount', '/account/verwijderen'],
+          ['signOut', '/account'], ['revokeSessions', '/account/security'],
+          ['withdrawConsent', '/account/privacy'], ['clearPreferences', '/account/preferences'],
+          ['clearLastSearch', '/account'], ['exportData', '/account/data-export'],
+          ['deleteAccount', '/account/deletion'],
         ] as const).map(([action, href]) => <Link key={action} href={href} className="font-semibold text-primary underline">{accountOffboardingLabels[language][action]}</Link>)}
       </nav>
       <div className="mt-2">
@@ -249,7 +249,7 @@ export function RequestsPanel({ language, verified, showPolicy = false }: { lang
         <p role="status" data-testid="status-deletion-unverified" className="mt-4 text-sm font-bold text-amber-900">{copy.account.unverifiedBody}</p>
       ) : null}
       {error ? (needsRecentAuth
-        ? <RecentAuthPrompt language={language} returnPath={featureFlags.accountDeletion ? "/account/verwijderen" : "/account/privacy"} />
+        ? <RecentAuthPrompt language={language} returnPath={featureFlags.accountDeletion ? "/account/deletion" : "/account/privacy"} />
         : <p role="alert" data-testid="status-deletion-error" className="mt-4 text-sm font-bold text-red-800">{error}</p>) : null}
       {requestsQuery.isError ? (
         <p role="alert" data-testid="status-requests-error" className="mt-4 text-sm font-bold text-red-800">{accountErrorMessage(requestsQuery.error, language)}</p>

@@ -13,6 +13,7 @@ export const DEFAULT_RETURN_PATH = '/account';
 const EXACT_PATHS = new Set([
   '/',
   '/account',
+  '/account/preferences',
   '/account/voorkeuren',
   '/onboarding',
   '/activiteiten/den-haag',
@@ -25,13 +26,18 @@ const EXACT_PATHS = new Set([
   '/bedrijf-nieuw',
   '/bedrijf-claim',
   '/mijn-bedrijf',
+  '/account/security',
   '/account/beveiliging',
   '/account/bedrijf/toevoegen',
   '/account/uitnodiging',
   '/account/privacy',
+  '/account/privacy/rights',
   '/account/privacy/rechten',
+  '/account/change-email',
   '/account/e-mail-wijzigen',
+  '/account/data-export',
   '/account/gegevens-export',
+  '/account/deletion',
   '/account/verwijderen',
 ]);
 

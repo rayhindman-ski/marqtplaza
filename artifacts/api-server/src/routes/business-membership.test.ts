@@ -557,7 +557,7 @@ describe("business membership routes", () => {
   it("invitation return refs are stored without the token", () => {
     assert.equal(sanitizeReturnRef("/account/uitnodiging?token=abc123&x=1"), "/account/uitnodiging?x=1");
     assert.equal(sanitizeReturnRef("/account/uitnodiging"), "/account/uitnodiging");
-    assert.equal(sanitizeReturnRef("/account/uitnodiging/../beveiliging?token=abc"), "/account/beveiliging");
+    assert.equal(sanitizeReturnRef("/account/uitnodiging/../security?token=abc"), "/account/security");
   });
 
   it("BMEM-T07: membership changes leave consumer preferences untouched", async () => {

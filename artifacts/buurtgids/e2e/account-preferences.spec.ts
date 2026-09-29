@@ -276,8 +276,8 @@ test.describe('consumer account journey', () => {
   });
 
   test('signed-out visitors are sent to sign-in with a safe return path', async ({ page }) => {
-    await page.goto('/account/voorkeuren?e2eAccountAuth=1&terug=%2Fdeals');
-    await expect(page).toHaveURL(/\/sign-in\?terug=%2Faccount%2Fvoorkeuren/);
+    await page.goto('/account/preferences?e2eAccountAuth=1&terug=%2Fdeals');
+    await expect(page).toHaveURL(/\/sign-in\?terug=%2Faccount%2Fpreferences/);
   });
 
   test('keeps the originating route when account links open preferences', async ({ page }) => {
@@ -291,15 +291,15 @@ test.describe('consumer account journey', () => {
     await expect(page).toHaveURL(/\/account\?terug=%2F%3Fe2eAccountAuth%3D1$/);
 
     const preferencesLink = page.getByTestId('link-edit-preferences');
-    await expect(preferencesLink).toHaveAttribute('href', '/account/voorkeuren?terug=%2F%3Fe2eAccountAuth%3D1');
+    await expect(preferencesLink).toHaveAttribute('href', '/account/preferences?terug=%2F%3Fe2eAccountAuth%3D1');
     await preferencesLink.click();
-    await expect(page).toHaveURL(/\/account\/voorkeuren\?terug=%2F%3Fe2eAccountAuth%3D1$/);
+    await expect(page).toHaveURL(/\/account\/preferences\?terug=%2F%3Fe2eAccountAuth%3D1$/);
   });
 
   test('saves controlled preferences, keeps the draft across language switch and refresh, and resumes', async ({ page }) => {
     await signIn(page);
     const server = await installAccountServer(page);
-    await page.goto('/account/voorkeuren?e2eAccountAuth=1&terug=%2Fdeals');
+    await page.goto('/account/preferences?e2eAccountAuth=1&terug=%2Fdeals');
 
     await expect(page.getByTestId('heading-account-preferences')).toBeVisible();
     await page.getByTestId('button-language-nl').click();
@@ -341,14 +341,14 @@ test.describe('consumer account journey', () => {
 
     await page.getByTestId('button-preferences-continue').click();
     await expect(page).toHaveURL(/\/deals$/);
-    await page.goto('/account/voorkeuren?e2eAccountAuth=1');
+    await page.goto('/account/preferences?e2eAccountAuth=1');
     await expect(page.getByTestId('select-external-search-scope')).toHaveValue('always');
   });
 
   test('skipping completes onboarding without saving anything and ignores unsafe return URLs', async ({ page }) => {
     await signIn(page);
     const server = await installAccountServer(page);
-    await page.goto('/account/voorkeuren?e2eAccountAuth=1&terug=https%3A%2F%2Fevil.example%2F');
+    await page.goto('/account/preferences?e2eAccountAuth=1&terug=https%3A%2F%2Fevil.example%2F');
     await page.getByTestId('button-preferences-skip').click();
     await expect(page.getByTestId('status-preferences-skipped')).toBeVisible();
     expect(server.requests.some((request) => request.method === 'PATCH')).toBe(false);
@@ -365,7 +365,7 @@ test.describe('consumer account journey', () => {
       onboardingCompletedAt: '2026-09-02T00:00:00.000Z',
       preferences: { revision: 2, neighborhoodIds: ['dhg:statenkwartier'], interestIds: [], updatedAt: '2026-09-02T00:00:00.000Z' },
     });
-    await page.goto('/account/voorkeuren?e2eAccountAuth=1');
+    await page.goto('/account/preferences?e2eAccountAuth=1');
     await expect(page.getByTestId('heading-account-preferences')).toHaveText(/Edit preferences|Voorkeuren aanpassen/);
     await expect(page.getByTestId('checkbox-dhg:statenkwartier')).toBeChecked();
     await expect(page.getByTestId('button-preferences-cancel')).toBeVisible();
@@ -403,7 +403,7 @@ test.describe('consumer account journey', () => {
         updatedAt: '2026-09-02T00:00:00.000Z',
       },
     });
-    await page.goto('/account/voorkeuren?e2eAccountAuth=1');
+    await page.goto('/account/preferences?e2eAccountAuth=1');
 
     await expect(page.getByRole('checkbox', { name: /No longer available|Niet meer beschikbaar/ })).toHaveCount(2);
     await page.locator('input[value="dhg:retired-neighborhood"]').evaluate((element) => (element as HTMLInputElement).click());
@@ -430,7 +430,7 @@ test.describe('consumer account journey', () => {
         fieldErrors: [{ field: 'neighborhoodIds.dhg:zeeheldenkwartier', code: 'not_in_controlled_list' }],
       },
     });
-    await page.goto('/account/voorkeuren?e2eAccountAuth=1');
+    await page.goto('/account/preferences?e2eAccountAuth=1');
     await page.getByTestId('button-language-nl').click();
     await page.getByTestId('checkbox-dhg:zeeheldenkwartier').check();
     await page.getByTestId('button-preferences-save').click();
@@ -475,7 +475,7 @@ test.describe('consumer account journey', () => {
 
     await page.goto('/account?e2eAccountAuth=1');
     await page.getByTestId('link-edit-preferences').click();
-    await expect(page).toHaveURL(/\/account\/voorkeuren$/);
+    await expect(page).toHaveURL(/\/account\/preferences$/);
   });
 
   test('a disabled account gate shows an explicit unavailable state', async ({ page }) => {
@@ -483,7 +483,14 @@ test.describe('consumer account journey', () => {
     await page.route('**/api/account/**', (route) =>
       route.fulfill({ status: 404, contentType: 'application/json', body: JSON.stringify({ code: 'FEATURE_DISABLED', messageKey: 'errors.feature_disabled', correlationId: 'e2e' }) }));
     await page.route('**/api/registration', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ registered: false, registration: null }) }));
-    await page.goto('/account/voorkeuren?e2eAccountAuth=1');
+    await page.goto('/account/preferences?e2eAccountAuth=1');
     await expect(page.getByTestId('status-account-unavailable')).toBeVisible();
+  });
+
+  test('Dutch preference URL redirects without losing the return query', async ({ page }) => {
+    await installAccountServer(page);
+    await signIn(page);
+    await page.goto('/account/voorkeuren?terug=/account&e2eAccountAuth=1');
+    await expect(page).toHaveURL(/\/account\/preferences\?terug=\/account&e2eAccountAuth=1$/);
   });
 });

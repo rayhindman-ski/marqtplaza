@@ -46,7 +46,7 @@ async function stub(page: Page) {
 
 test('policy from API, confirmation, status, cutoff, cancellation and NL/EN', async ({ page }) => {
   const server = await stub(page);
-  await page.goto('/account/verwijderen?e2eAccountAuth=1');
+  await page.goto('/account/deletion?e2eAccountAuth=1');
   await page.getByTestId('button-language-nl').click();
   await expect(page.getByTestId('deletion-policy')).toContainText('14 dagen');
   await expect(page.getByTestId('deletion-policy')).toContainText('Persoonlijke voorkeuren');
@@ -69,7 +69,7 @@ test('policy from API, confirmation, status, cutoff, cancellation and NL/EN', as
 test('recent authentication error offers the step-up path', async ({ page }) => {
   const server = await stub(page);
   server.stepUp();
-  await page.goto('/account/verwijderen?e2eAccountAuth=1');
+  await page.goto('/account/deletion?e2eAccountAuth=1');
   for (const scope of scopes) await page.getByTestId(`checkbox-scope-${scope}`).check();
   await page.getByTestId('checkbox-deletion-confirm').check();
   await page.getByTestId('button-request-deletion').click();
@@ -78,7 +78,7 @@ test('recent authentication error offers the step-up path', async ({ page }) => 
 
 test('cancellation is available until cutoff', async ({ page }) => {
   await stub(page);
-  await page.goto('/account/verwijderen?e2eAccountAuth=1');
+  await page.goto('/account/deletion?e2eAccountAuth=1');
   await page.getByTestId('button-language-nl').click();
   for (const scope of scopes) await page.getByTestId(`checkbox-scope-${scope}`).check();
   await page.getByTestId('checkbox-deletion-confirm').check();

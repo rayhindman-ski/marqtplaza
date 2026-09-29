@@ -545,3 +545,19 @@ warning is the known false positive.
 4. Decide production flag enablement.
 5. `PROF-004`: live e-mail-change walk-through not performed (offline stub +
    backend-verified read only).
+
+### Route naming: English canonical paths
+
+| Previous path (redirect) | Canonical path |
+|---|---|
+| `/account/voorkeuren` | `/account/preferences` |
+| `/account/privacy/rechten` | `/account/privacy/rights` |
+| `/account/gegevens-export` | `/account/data-export` |
+| `/account/verwijderen` | `/account/deletion` |
+| `/account/e-mail-wijzigen` | `/account/change-email` |
+| `/account/beveiliging` | `/account/security` |
+| `/voorwaarden` | `/terms` |
+
+Legacy URLs redirect client-side with their query string intact. `/privacy`
+remains canonical; `/privacy-notice` remains an alias. Account requests are
+reachable at `/review/account-requests` from the existing moderation workspace.

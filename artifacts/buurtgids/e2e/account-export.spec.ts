@@ -46,7 +46,7 @@ async function stub(page: Page) {
 
 test('request, status, expiring download, NL/EN and accessibility', async ({ page }) => {
   const server = await stub(page);
-  await page.goto('/account/gegevens-export?e2eAccountAuth=1');
+  await page.goto('/account/data-export?e2eAccountAuth=1');
   await page.getByTestId('button-language-nl').click();
   await expect(page.getByText('Dit verwijdert je account niet.', { exact: false })).toBeVisible();
   await page.getByTestId('button-request-export').click();
@@ -63,7 +63,7 @@ test('request, status, expiring download, NL/EN and accessibility', async ({ pag
 test('recent-auth rejection offers step-up without creating an export', async ({ page }) => {
   const server = await stub(page);
   server.requireRecentAuth();
-  await page.goto('/account/gegevens-export?e2eAccountAuth=1');
+  await page.goto('/account/data-export?e2eAccountAuth=1');
   await page.getByTestId('button-request-export').click();
   await expect(page.getByTestId('prompt-recent-auth')).toBeVisible();
   await expect(page.getByTestId('export-1')).toHaveCount(0);

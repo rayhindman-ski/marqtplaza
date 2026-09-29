@@ -327,7 +327,7 @@ export default function OnboardingPage() {
                 {featureFlags.accounts && (
                   <p data-testid="text-onboarding-account-scope" className="rounded-xl border border-border/70 bg-background/60 px-4 py-3 text-xs leading-5 text-muted-foreground">
                     {accountTranslations[language].account.onboardingScopeBefore}{' '}
-                    <Link href="/account/voorkeuren" data-testid="link-onboarding-preferences" className="font-bold text-primary underline-offset-4 hover:underline">
+                    <Link href="/account/preferences" data-testid="link-onboarding-preferences" className="font-bold text-primary underline-offset-4 hover:underline">
                       {accountTranslations[language].account.onboardingScopeLink}
                     </Link>
                     .

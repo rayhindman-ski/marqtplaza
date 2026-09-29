@@ -2,9 +2,8 @@ import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
 
 for (const { route, title, banner, date } of [
-  { route: '/voorwaarden', title: 'Voorwaarden', banner: 'Concepttekst — nog niet goedgekeurd', date: 'Ingangsdatum: nog niet vastgesteld' },
   { route: '/privacy', title: 'Privacyverklaring', banner: 'Concepttekst — nog niet goedgekeurd', date: 'Ingangsdatum: nog niet vastgesteld' },
-  { route: '/terms', title: 'Terms', banner: 'Draft — not yet approved', date: 'Effective date: not yet set' },
+  { route: '/terms', title: 'Voorwaarden', banner: 'Concepttekst — nog niet goedgekeurd', date: 'Ingangsdatum: nog niet vastgesteld' },
   { route: '/privacy-notice', title: 'Privacy notice', banner: 'Draft — not yet approved', date: 'Effective date: not yet set' },
 ]) {
   test(`${route} renders the versioned draft and prints the same document`, async ({ page }) => {
@@ -22,9 +21,9 @@ for (const { route, title, banner, date } of [
       page.waitForEvent('download'),
       page.getByTestId('button-legal-pdf').click(),
     ]);
-    const documentId = route === '/voorwaarden' ? 'voorwaarden' : route === '/terms' ? 'terms'
+    const documentId = route === '/terms' ? 'voorwaarden'
       : route === '/privacy' ? 'privacyverklaring' : 'privacy-notice';
-    const locale = route === '/voorwaarden' || route === '/privacy' ? 'nl' : 'en';
+    const locale = route === '/privacy-notice' ? 'en' : 'nl';
     expect(download.suggestedFilename()).toBe(`buurtplaza-${documentId}-draft-2026-09-${locale}.pdf`);
     const stream = await download.createReadStream();
     expect(stream).not.toBeNull();
@@ -42,3 +41,8 @@ for (const { route, title, banner, date } of [
       }) ) ?? []).toEqual([]);
   });
 }
+
+test('Dutch terms path redirects to the canonical terms URL', async ({ page }) => {
+  await page.goto('/voorwaarden?terug=/account');
+  await expect(page).toHaveURL(/\/terms\?terug=\/account$/);
+});

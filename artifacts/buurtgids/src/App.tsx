@@ -76,7 +76,7 @@ import AccountPrivacyPage from './pages/AccountPrivacyPage';
 import AccountDeletionPage from './pages/AccountDeletionPage';
 import AccountEmailChangePage from './pages/AccountEmailChangePage';
 import AccountRightsPage, { AccountExportUnavailablePage } from './pages/AccountRightsPage';
-import { TermsPage, PrivacyNoticePage, EnglishTermsPage, EnglishPrivacyNoticePage } from './pages/LegalDocumentPage';
+import { TermsPage, PrivacyNoticePage, EnglishPrivacyNoticePage } from './pages/LegalDocumentPage';
 import ConsumerRegisterPage from './pages/ConsumerRegisterPage';
 import ConsumerRegisterCheckEmailPage from './pages/ConsumerRegisterCheckEmailPage';
 import ConsumerRegisterCompletePage from './pages/ConsumerRegisterCompletePage';
@@ -3790,6 +3790,14 @@ function CaptureRoute() {
   return <CaptureView language={language} />;
 }
 
+function RedirectRoute({ to }: { to: string }) {
+  return <Redirect to={`${to}${window.location.search}`} replace />;
+}
+
+function AccountRequestsReviewRoute() {
+  return <BusinessModerationView initialTab="account-requests" />;
+}
+
 export default function App() {
   return (
     <WouterRouter base={basePath}>
@@ -3817,20 +3825,26 @@ export default function App() {
           <Route path="/account/register" component={ConsumerRegisterPage} />
           <Route path="/account/register/check-email" component={ConsumerRegisterCheckEmailPage} />
           <Route path="/account/register/complete" component={ConsumerRegisterCompletePage} />
-          <Route path="/account/voorkeuren" component={AccountPreferencesPage} />
+          <Route path="/account/preferences" component={AccountPreferencesPage} />
+          <Route path="/account/voorkeuren"><RedirectRoute to="/account/preferences" /></Route>
           <Route path={FORGOT_PASSWORD_PATH} component={ForgotPasswordPage} />
           <Route path={RESET_PASSWORD_PATH} component={ForgotPasswordPage} />
-          <Route path="/account/beveiliging" component={AccountSecurityPage} />
-          <Route path="/account/e-mail-wijzigen" component={AccountEmailChangePage} />
+          <Route path="/account/security" component={AccountSecurityPage} />
+          <Route path="/account/beveiliging"><RedirectRoute to="/account/security" /></Route>
+          <Route path="/account/change-email" component={AccountEmailChangePage} />
+          <Route path="/account/e-mail-wijzigen"><RedirectRoute to="/account/change-email" /></Route>
           <Route path={BUSINESS_ONBOARDING_PATH} component={BusinessOnboardingIntroPage} />
           <Route path="/account/privacy" component={AccountPrivacyPage} />
-          <Route path="/account/verwijderen" component={AccountDeletionPage} />
-          <Route path="/voorwaarden" component={TermsPage} />
+          <Route path="/account/deletion" component={AccountDeletionPage} />
+          <Route path="/account/verwijderen"><RedirectRoute to="/account/deletion" /></Route>
+          <Route path="/voorwaarden"><RedirectRoute to="/terms" /></Route>
           <Route path="/privacy" component={PrivacyNoticePage} />
-          <Route path="/terms" component={EnglishTermsPage} />
+          <Route path="/terms" component={TermsPage} />
           <Route path="/privacy-notice" component={EnglishPrivacyNoticePage} />
-          <Route path="/account/privacy/rechten" component={AccountRightsPage} />
-          <Route path="/account/gegevens-export" component={AccountExportUnavailablePage} />
+          <Route path="/account/privacy/rights" component={AccountRightsPage} />
+          <Route path="/account/privacy/rechten"><RedirectRoute to="/account/privacy/rights" /></Route>
+          <Route path="/account/data-export" component={AccountExportUnavailablePage} />
+          <Route path="/account/gegevens-export"><RedirectRoute to="/account/data-export" /></Route>
           <Route path={BUSINESS_INVITATION_PATH} component={BusinessInvitationPage} />
           <Route path="/account/bedrijf/:id/team" component={BusinessMembersPage} />
           <Route path="/account/bedrijf/:id/sluiten" component={BusinessClosePage} />
@@ -3845,6 +3859,7 @@ export default function App() {
           <Route path="/bedrijf-claim" component={BusinessClaimView} />
           <Route path="/correctie" component={ListingCorrectionView} />
           <Route path="/mijn-bedrijf" component={MyBusinessWorkspace} />
+          <Route path="/review/account-requests" component={AccountRequestsReviewRoute} />
           <Route path="/mijn-bedrijf/:id/profiel" component={BusinessRevisionPage} />
           <Route path="/redactie/bedrijven" component={BusinessModerationView} />
           <Route component={NotFoundRoute} />
@@ -4517,7 +4532,7 @@ function useClerkRedirects() {
   const returnPath = resolveReturnPath(search, '');
   const signInTarget = `${basePath}${returnPath}`;
   const signUpTarget = featureFlags.accounts
-    ? `${basePath}${withReturnPath('/account/voorkeuren', returnPath)}`
+    ? `${basePath}${withReturnPath('/account/preferences', returnPath)}`
     : `${basePath}/onboarding`;
   const carry = search ? `?${search}` : '';
   return {

@@ -6,7 +6,7 @@ test('privacy rights are linked in both languages', async ({ page }) => {
     window.localStorage.setItem('buurtplaza-language', 'nl');
     (window as any).__accountTestAuth = { userId: 'rights-e2e' };
   });
-  await page.goto('/account/privacy/rechten?e2eAccountAuth=1');
+  await page.goto('/account/privacy/rights?e2eAccountAuth=1');
   await expect(page.getByTestId('heading-account-rights')).toHaveText('Jouw privacyrechten');
   for (const right of ['access', 'correction', 'export', 'deletion', 'restriction', 'objection', 'contact']) {
     await expect(page.getByTestId(`link-right-${right}`)).toBeVisible();

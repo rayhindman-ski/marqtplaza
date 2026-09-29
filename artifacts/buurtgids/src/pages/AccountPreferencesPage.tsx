@@ -222,7 +222,7 @@ export default function AccountPreferencesPage() {
   }
   if (!auth.isLoaded) return <AccountLoading label={copy.account.loading} />;
   if (!auth.isSignedIn) {
-    return <Redirect to={withReturnPath('/sign-in', `/account/voorkeuren${search ? `?${search}` : ''}`)} />;
+    return <Redirect to={withReturnPath('/sign-in', `/account/preferences${search ? `?${search}` : ''}`)} />;
   }
 
   const meError = apiErrorFrom(meQuery.error);

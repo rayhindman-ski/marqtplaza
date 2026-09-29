@@ -38,12 +38,12 @@ import { useAppLanguage } from '@/lib/useAppLanguage';
 // Minimal editor check based on role - assuming editor access checks are done elsewhere, 
 // but we just render if logged in as per requirement.
 
-export default function BusinessModerationView() {
+export default function BusinessModerationView({ initialTab = 'claims' }: { initialTab?: string; params?: unknown }) {
   const { isSignedIn, isLoaded, isEditor } = useEditorAccess();
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
 
-  const [activeTab, setActiveTab] = useState('claims');
+  const [activeTab, setActiveTab] = useState(initialTab);
   const [reviewLanguage] = useAppLanguage();
   const supportCopy = accountSupportTranslations[reviewLanguage];
   const workspaceCopy = reviewWorkspaceTranslations[reviewLanguage];

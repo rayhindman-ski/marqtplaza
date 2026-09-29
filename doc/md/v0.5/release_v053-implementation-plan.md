@@ -62,13 +62,13 @@ these rather than creating parallel structures.
 
 ```text
 /account                         quick link "Verder met je laatste zoekopdracht" (SRCH-010)
-/account/voorkeuren              + discovery preferences block (PROF-006)
+/account/preferences              + discovery preferences block (PROF-006)
 /account/privacy                 consent centre per purpose, rights page links (PRIV-011..015)
-/account/privacy/rechten         access / correction / export / deletion / restriction / objection / contact (PRIV-015)
-/account/gegevens-export         request, status, expiring download (OFF-003..006)
-/account/verwijderen             explanation, confirmation, reauth, status, cancel (OFF-007..010)
-/account/e-mail-wijzigen         Clerk e-mail change framed in AuthPageFrame (PROF-004)
-/voorwaarden, /privacy           + print / PDF (PRIV-004)
+/account/privacy/rights          access / correction / export / deletion / restriction / objection / contact (PRIV-015)
+/account/data-export              request, status, expiring download (OFF-003..006)
+/account/deletion                 explanation, confirmation, reauth, status, cancel (OFF-007..010)
+/account/change-email             Clerk e-mail change framed in AuthPageFrame (PROF-004)
+/terms, /privacy                  + print / PDF (PRIV-004)
 /review/account-requests         + export requests, processor outcomes (OFF-020)
 ```
 
@@ -163,7 +163,7 @@ a migration ticket opened.
 
 1. `consumer_preferences` extension; preferences page block (`PROF-006`,
    `SRCH-016`, `SRCH-021`).
-2. `/account/e-mail-wijzigen` framing Clerk's e-mail change with verification
+2. `/account/change-email` framing Clerk's e-mail change with verification
    (`PROF-004`); app record updates only after Clerk reports the new verified
    primary; templates `account.email_change_requested` (old) and
    `account.email_changed` (old + new) (`PROF-005`); recent-auth gate
@@ -263,7 +263,7 @@ Legend — *Approach*: where it is built; *Test*: suite that proves it;
 | BUS-005 | Phase 1 quick link + restoration | `last-search.spec.ts` | Restored view equals captured public criteria; map suites unchanged |
 | BUS-006 | Evidence from v0.5.2 recovery suites, no new code | `clerk-live-signup.spec.ts` recovery steps | Log cites the run; support procedure text reviewed |
 | BUS-007 | Consent ledger + versioned legal docs | `account-consents.test.ts` | Every grant/withdraw row has version, locale, time |
-| BUS-008 | Profile (existing) + export + consent + deletion | Phases 3–5 suites | All six rights reachable from `/account/privacy/rechten` |
+| BUS-008 | Profile (existing) + export + consent + deletion | Phases 3–5 suites | All six rights reachable from `/account/privacy/rights` |
 | BUS-010 | Support views keyed by reference, `OPS-004` logging | `account-lifecycle.test.ts` support DTO assertions | No e-mail/phone/token in support DTOs or logs |
 
 ### 5.2 Profile and contact

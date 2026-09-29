@@ -116,6 +116,7 @@ export function normalizePhone(raw: string, defaultCountryCode = "31"): string |
 const RETURN_REF_EXACT_PATHS: ReadonlySet<string> = new Set([
   "/",
   "/account",
+  "/account/preferences",
   "/account/voorkeuren",
   "/onboarding",
   "/activiteiten/den-haag",
@@ -128,13 +129,18 @@ const RETURN_REF_EXACT_PATHS: ReadonlySet<string> = new Set([
   "/bedrijf-nieuw",
   "/bedrijf-claim",
   "/mijn-bedrijf",
+  "/account/security",
   "/account/beveiliging",
   "/account/bedrijf/toevoegen",
   "/account/uitnodiging",
   "/account/privacy",
+  "/account/privacy/rights",
   "/account/privacy/rechten",
+  "/account/change-email",
   "/account/e-mail-wijzigen",
+  "/account/data-export",
   "/account/gegevens-export",
+  "/account/deletion",
   "/account/verwijderen",
 ]);
 /** Query parameters that are secrets in transit and must never be persisted with a return ref. */
